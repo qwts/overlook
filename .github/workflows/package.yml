@@ -174,8 +174,15 @@ jobs:
               # electron-builder only *warns* when signing is misconfigured, so
               # verify the Authenticode signature and timestamp explicitly — a
               # signed release must never ship unsigned installers (#683).
+              # Get-AuthenticodeSignature over signtool.exe: the latter ships
+              # with the Windows SDK but isn't on windows-latest's PATH, while
+              # Get-AuthenticodeSignature is a builtin PowerShell cmdlet.
               for installer in release/Overlook-*-"$WIN_ARCH".exe; do
-                signtool verify //pa //v "$installer"
+                pwsh -NoProfile -Command "
+                  \$sig = Get-AuthenticodeSignature -FilePath '$installer'
+                  Write-Host \"Status: \$(\$sig.Status) — \$(\$sig.StatusMessage)\"
+                  if (\$sig.Status -ne 'Valid') { exit 1 }
+                "
               done
             fi
           else

@@ -78,9 +78,13 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     // call inside it.
     assert.match(workflow, /npx --no-install electron-builder --publish never --win --"\$WIN_ARCH" \\\s+-c\.win\.azureSignOptions=null/u);
     // Signature verification is guarded by secret presence and targets the
-    // arch-qualified installer(s) with signtool.
+    // arch-qualified installer(s). Get-AuthenticodeSignature, not signtool.exe
+    // -- the latter ships with the Windows SDK but isn't on windows-latest's
+    // PATH, while Get-AuthenticodeSignature is a builtin PowerShell cmdlet.
     assert.match(workflow, /for installer in release\/Overlook-\*-"\$WIN_ARCH"\.exe; do/u);
-    assert.match(workflow, /signtool verify \/\/pa \/\/v "\$installer"/u);
+    assert.match(workflow, /Get-AuthenticodeSignature -FilePath '\$installer'/u);
+    assert.match(workflow, /if \(\\\$sig\.Status -ne 'Valid'\) \{ exit 1 \}/u);
+    assert.doesNotMatch(workflow, /signtool verify/u);
     // electron-builder.yml carries the Trusted Signing account coordinates,
     // never a local certificate.
     assert.match(builder, /azureSignOptions:/u);
