@@ -98,9 +98,9 @@ win:
   # digest default to SHA-256 and the timestamp server defaults to Microsoft's
   # own RFC 3161 endpoint, so neither needs overriding here.
   azureSignOptions:
-    publisherName: <PUBLISHER_NAME> # must match the Trusted Signing cert's CN exactly
-    endpoint: <TRUSTED_SIGNING_ENDPOINT> # e.g. https://eus.codesigning.azure.net/ — region-specific
-    codeSigningAccountName: <CODE_SIGNING_ACCOUNT_NAME>
-    certificateProfileName: <CERTIFICATE_PROFILE_NAME>
+    publisherName: Christopher Kane # must match the Trusted Signing cert's CN exactly
+    endpoint: https://eus.codesigning.azure.net/ # region-specific
+    codeSigningAccountName: zts1
+    certificateProfileName: overlook
   target:
     - nsis
