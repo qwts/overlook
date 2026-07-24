@@ -65,11 +65,18 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /unset CSC_LINK CSC_KEY_PASSWORD/u);
     // The Windows branch is its own arm.
     assert.match(workflow, /elif \[ "\$RUNNER_OS" = "Windows" \]; then/u);
-    // Azure Trusted Signing has no opportunistic-cert fallback, so the
+    // Azure Trusted Signing has no opportunistic-cert fallback, so the full
     // service principal's absence must force it off via CLI override rather
-    // than let electron-builder fail the build outright.
-    assert.match(workflow, /if \[ -n "\$AZURE_TENANT_ID" \]; then/u);
-    assert.match(workflow, /npm run "package:win:\$WIN_ARCH" -- -c\.win\.azureSignOptions=null/u);
+    // than let electron-builder fail the build outright. Gated on all three
+    // secrets, not just AZURE_TENANT_ID, so a partially-configured principal
+    // doesn't get mislabeled as signed.
+    const azureGate = 'if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then';
+    assert.strictEqual(workflow.split(azureGate).length - 1, 2);
+    // The override is applied to a direct electron-builder invocation, not
+    // routed through the compound package:win:* npm script -- `npm run x --
+    // args` appends args to the whole script rather than the electron-builder
+    // call inside it.
+    assert.match(workflow, /npx --no-install electron-builder --publish never --win --"\$WIN_ARCH" \\\s+-c\.win\.azureSignOptions=null/u);
     // Signature verification is guarded by secret presence and targets the
     // arch-qualified installer(s) with signtool.
     assert.match(workflow, /for installer in release\/Overlook-\*-"\$WIN_ARCH"\.exe; do/u);
@@ -88,7 +95,10 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
 
   test('release asset labels use the Windows signing gate independently', () => {
     const release = source('.github/workflows/release.yml');
-    assert.match(release, /WINDOWS_SIGNED: \$\{\{ secrets\.AZURE_TENANT_ID != '' \}\}/u);
+    assert.match(
+      release,
+      /WINDOWS_SIGNED: \$\{\{ secrets\.AZURE_TENANT_ID != '' && secrets\.AZURE_CLIENT_ID != '' && secrets\.AZURE_CLIENT_SECRET != '' \}\}/u,
+    );
     assert.match(release, /if \[ "\$WINDOWS_SIGNED" = "true" \]; then status=signed; else status=unsigned; fi/u);
   });
 });

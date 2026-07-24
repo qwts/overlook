@@ -152,17 +152,25 @@ jobs:
             # skipping when unconfigured. Force it off via CLI override when
             # the service-principal secrets are absent, so the build still
             # ships unsigned rather than failing outright.
-            if [ -n "$AZURE_TENANT_ID" ]; then
+            if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
               npm run "package:win:$WIN_ARCH"
             else
-              npm run "package:win:$WIN_ARCH" -- -c.win.azureSignOptions=null
+              # package:win:$WIN_ARCH is "npm run build && electron-builder ... &&
+              # npm run licenses:sbom" -- `npm run x -- args` appends args to the
+              # whole script, not just the electron-builder call inside it, so the
+              # override has to be applied to a direct electron-builder invocation
+              # instead of routed through that compound script.
+              npm run build
+              npx --no-install electron-builder --publish never --win --"$WIN_ARCH" \
+                -c.win.azureSignOptions=null
+              npm run licenses:sbom
             fi
             # Prove the cross-compiled payloads are genuinely the target arch:
             # the installed executable and every native .node, not the i386 NSIS
             # stub. Auto-locates the arch's unpacked dir (win-unpacked for x64,
             # win-arm64-unpacked for arm64). Fails on any host-arch leak (#683).
             node scripts/verify-windows-arch.mjs "$WIN_ARCH"
-            if [ -n "$AZURE_TENANT_ID" ]; then
+            if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
               # electron-builder only *warns* when signing is misconfigured, so
               # verify the Authenticode signature and timestamp explicitly — a
               # signed release must never ship unsigned installers (#683).

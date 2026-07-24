@@ -57,5 +57,6 @@ Get-AuthenticodeSignature .\Overlook-<version>-<arch>.exe
 
 Expect `Status: Valid`, a signer subject matching `publisherName`, and an RFC
 3161 countersignature timestamp. `NotSigned` or `HashMismatch` means signing
-failed or was skipped — check the Package workflow run for the
-`AZURE_TENANT_ID`-gated branch it took.
+failed or was skipped — check the Package workflow run for which branch it
+took, gated on all three `AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/
+`AZURE_CLIENT_SECRET` secrets being present.
