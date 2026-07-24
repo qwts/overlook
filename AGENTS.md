@@ -261,11 +261,13 @@ this file in the same PR as the change — never after the fact.
   gated post-build by `verify-windows-arch.mjs`, which fails the leg if any
   payload (`Overlook.exe` or a shipped `*.node`) is not the target PE machine
   type (#683). Signing is env-gated on repo secrets (#128, #683): `CSC_LINK`
-  plus `APPLE_API_KEY` signs + notarizes the mac build; `WIN_CSC_LINK`
-  Authenticode-signs the Windows installers (verified with `signtool`);
-  restricted Touch ID identity entitlements are included only when
-  `MAC_PROVISIONING_PROFILE` is also present and validated. Every tag publishes
-  as a GitHub prerelease regardless of signing availability. Each clickable mac
+  plus `APPLE_API_KEY` signs + notarizes the mac build; `AZURE_TENANT_ID` /
+  `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` drive Azure Trusted Signing for the
+  Windows installers (verified with `signtool`; see
+  [`SIGNING.md`](SIGNING.md)); restricted Touch ID identity entitlements are
+  included only when `MAC_PROVISIONING_PROFILE` is also present and
+  validated. Every tag publishes as a GitHub prerelease regardless of signing
+  availability. Each clickable mac
   and Windows installer asset is labeled `signed` or `unsigned` from its own
   platform gate; signing state never changes the release title or prerelease
   status. The macOS release gate extracts the generated ZIP and launches it in

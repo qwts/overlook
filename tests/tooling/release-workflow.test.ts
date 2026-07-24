@@ -27,7 +27,7 @@ describe('release workflow publication', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 
     assert.match(workflow, /MAC_SIGNED: \$\{\{ secrets\.CSC_LINK != '' && secrets\.APPLE_API_KEY != '' \}\}/u);
-    assert.match(workflow, /WINDOWS_SIGNED: \$\{\{ secrets\.WIN_CSC_LINK != '' \}\}/u);
+    assert.match(workflow, /WINDOWS_SIGNED: \$\{\{ secrets\.AZURE_TENANT_ID != '' \}\}/u);
     assert.match(workflow, /\*\.dmg\|\*-mac\.zip\)/u);
     assert.match(workflow, /\*\.exe\)/u);
     assert.match(workflow, /asset_specs\+=\("\$asset#\$name \(\$status\)"\)/u);
