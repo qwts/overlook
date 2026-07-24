@@ -18,8 +18,9 @@ Microsoft Entra ID as a service principal via
 | `AZURE_CLIENT_ID`     | App registration (service principal) client ID |
 | `AZURE_CLIENT_SECRET` | Client secret for that app registration        |
 
-The service principal needs the **Trusted Signing Certificate Profile Signer**
-role on the Certificate Profile referenced by
+The service principal needs the **Artifact Signing Certificate Profile Signer**
+role (Trusted Signing was rebranded to Artifact Signing; this is the current
+role name) on the Certificate Profile referenced by
 `win.azureSignOptions.certificateProfileName`.
 
 When these secrets are absent, the Windows legs still build — the workflow
