@@ -86,9 +86,9 @@ jobs:
           # Mirror package.yml's platform gates so each clickable installer
           # states its own signing status. A mac cert without notarization
           # credentials cannot produce a signed release artifact; Windows uses
-          # its separate Authenticode secret (#128, #683, #735).
+          # its own Azure Trusted Signing service principal (#128, #683, #735).
           MAC_SIGNED: ${{ secrets.CSC_LINK != '' && secrets.APPLE_API_KEY != '' }}
-          WINDOWS_SIGNED: ${{ secrets.WIN_CSC_LINK != '' }}
+          WINDOWS_SIGNED: ${{ secrets.AZURE_TENANT_ID != '' && secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' }}
         run: |
           title="Overlook $TAG"
           asset_specs=()

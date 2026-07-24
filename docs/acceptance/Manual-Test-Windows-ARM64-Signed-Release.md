@@ -39,7 +39,8 @@ while testing.
    `HashMismatch` fails acceptance.
 
 3. Install. Windows SmartScreen must not report an unknown/untrusted publisher
-   for a correctly signed EV/OV certificate.
+   for a correctly signed Azure Trusted Signing (individual identity
+   validation) certificate.
 
 ## Smoke checklist (installed ARM64 app)
 

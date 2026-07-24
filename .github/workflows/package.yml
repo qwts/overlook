@@ -5,8 +5,10 @@
 #
 # Signing is env-gated (#128, #683): when the CSC_LINK secret exists, the mac leg
 # signs (Developer ID + hardened runtime) and notarizes (notarytool via the
-# APPLE_API_* secrets); when WIN_CSC_LINK exists, the Windows legs sign with
-# Authenticode. Without secrets the builds are unsigned, as before.
+# APPLE_API_* secrets); when AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET
+# exist, the Windows legs sign via Azure Trusted Signing (individual-identity
+# validation, no local certificate). Without secrets the builds are unsigned,
+# as before.
 #
 # Windows ships two architectures (#683): the matrix runs the x64 and arm64
 # legs on windows-latest (arm64 cross-compiled from the x64 runner), each
@@ -74,10 +76,12 @@ jobs:
           APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          # Windows Authenticode material (#683), kept separate from the mac
-          # CSC_* secrets so a mac-only .p12 never reaches the Windows signer.
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # Azure Trusted Signing service principal (#683), kept separate from
+          # the mac CSC_* secrets so a mac-only .p12 never reaches the Windows
+          # signer.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           WIN_ARCH: ${{ matrix.win-arch }}
         run: |
           if [ "$RUNNER_OS" = "macOS" ] && [ -n "$CSC_LINK" ]; then
@@ -113,14 +117,10 @@ jobs:
             node scripts/verify-macos-app-launch.mjs "$archive"
           elif [ "$RUNNER_OS" = "Windows" ]; then
             # The mac CSC_* secrets must never reach the Windows signer (a
-            # mac-only .p12 would fail Authenticode). Windows signing draws from
-            # its own WIN_CSC_* secrets, mapped onto the CSC_* names that
-            # electron-builder reads. Absent WIN_CSC_LINK, the build is unsigned.
+            # mac-only .p12 would fail Authenticode); Windows signing no
+            # longer consults CSC_LINK at all now that it's Azure Trusted
+            # Signing, but clear it anyway as cheap insurance.
             unset CSC_LINK CSC_KEY_PASSWORD
-            if [ -n "$WIN_CSC_LINK" ]; then
-              export CSC_LINK="$WIN_CSC_LINK"
-              export CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"
-            fi
             # sharp ships its native binary as per-arch @img/sharp-win32-<arch>
             # optional deps; npm ci on the x64 runner installs only the host
             # (x64) one, so a cross-compiled arm64 build would bundle the x64
@@ -146,13 +146,31 @@ jobs:
               # Drop the host-arch sharp binaries so only the target payload ships.
               find node_modules/@img -maxdepth 1 -type d -name 'sharp-win32-*' ! -name "$pkg" -exec rm -rf {} +
             fi
-            npm run "package:win:$WIN_ARCH"
+            # azureSignOptions is a hard requirement in electron-builder.yml —
+            # unlike signtool's CSC_LINK, Azure Trusted Signing has no
+            # opportunistic-cert fallback, so it errors out instead of
+            # skipping when unconfigured. Force it off via CLI override when
+            # the service-principal secrets are absent, so the build still
+            # ships unsigned rather than failing outright.
+            if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
+              npm run "package:win:$WIN_ARCH"
+            else
+              # package:win:$WIN_ARCH is "npm run build && electron-builder ... &&
+              # npm run licenses:sbom" -- `npm run x -- args` appends args to the
+              # whole script, not just the electron-builder call inside it, so the
+              # override has to be applied to a direct electron-builder invocation
+              # instead of routed through that compound script.
+              npm run build
+              npx --no-install electron-builder --publish never --win --"$WIN_ARCH" \
+                -c.win.azureSignOptions=null
+              npm run licenses:sbom
+            fi
             # Prove the cross-compiled payloads are genuinely the target arch:
             # the installed executable and every native .node, not the i386 NSIS
             # stub. Auto-locates the arch's unpacked dir (win-unpacked for x64,
             # win-arm64-unpacked for arm64). Fails on any host-arch leak (#683).
             node scripts/verify-windows-arch.mjs "$WIN_ARCH"
-            if [ -n "$WIN_CSC_LINK" ]; then
+            if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
               # electron-builder only *warns* when signing is misconfigured, so
               # verify the Authenticode signature and timestamp explicitly — a
               # signed release must never ship unsigned installers (#683).

@@ -55,29 +55,50 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /find node_modules\/@img .* -name 'sharp-win32-\*' ! -name "\$pkg"/u);
   });
 
-  test('Windows signing is env-gated and isolated from the mac certificate', () => {
+  test('Windows signing uses Azure Trusted Signing, isolated from the mac certificate', () => {
     const workflow = source('.github/workflows/package.yml');
     const builder = source('electron-builder.yml');
-    // Separate secrets, mapped onto electron-builder's CSC_* only on Windows.
-    assert.match(workflow, /WIN_CSC_LINK: \$\{\{ secrets\.WIN_CSC_LINK \}\}/u);
-    assert.match(workflow, /WIN_CSC_KEY_PASSWORD: \$\{\{ secrets\.WIN_CSC_KEY_PASSWORD \}\}/u);
-    assert.match(workflow, /export CSC_LINK="\$WIN_CSC_LINK"/u);
-    // The Windows branch is its own arm, and scrubs the mac cert unconditionally
-    // before deciding whether the Windows cert is present.
+    // Separate secrets: the Azure service principal, never the mac CSC_*.
+    assert.match(workflow, /AZURE_TENANT_ID: \$\{\{ secrets\.AZURE_TENANT_ID \}\}/u);
+    assert.match(workflow, /AZURE_CLIENT_ID: \$\{\{ secrets\.AZURE_CLIENT_ID \}\}/u);
+    assert.match(workflow, /AZURE_CLIENT_SECRET: \$\{\{ secrets\.AZURE_CLIENT_SECRET \}\}/u);
+    assert.match(workflow, /unset CSC_LINK CSC_KEY_PASSWORD/u);
+    // The Windows branch is its own arm.
     assert.match(workflow, /elif \[ "\$RUNNER_OS" = "Windows" \]; then/u);
-    assert.match(workflow, /export CSC_KEY_PASSWORD="\$WIN_CSC_KEY_PASSWORD"/u);
-    // Signature verification is guarded by cert presence and targets the
+    // Azure Trusted Signing has no opportunistic-cert fallback, so the full
+    // service principal's absence must force it off via CLI override rather
+    // than let electron-builder fail the build outright. Gated on all three
+    // secrets, not just AZURE_TENANT_ID, so a partially-configured principal
+    // doesn't get mislabeled as signed.
+    const azureGate = 'if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then';
+    assert.strictEqual(workflow.split(azureGate).length - 1, 2);
+    // The override is applied to a direct electron-builder invocation, not
+    // routed through the compound package:win:* npm script -- `npm run x --
+    // args` appends args to the whole script rather than the electron-builder
+    // call inside it.
+    assert.match(workflow, /npx --no-install electron-builder --publish never --win --"\$WIN_ARCH" \\\s+-c\.win\.azureSignOptions=null/u);
+    // Signature verification is guarded by secret presence and targets the
     // arch-qualified installer(s) with signtool.
     assert.match(workflow, /for installer in release\/Overlook-\*-"\$WIN_ARCH"\.exe; do/u);
     assert.match(workflow, /signtool verify \/\/pa \/\/v "\$installer"/u);
-    // SHA-256 Authenticode + RFC 3161 timestamp configured for the signed path.
-    assert.match(builder, /signingHashAlgorithms:\s+- sha256/u);
-    assert.match(builder, /rfc3161TimeStampServer: http/u);
+    // electron-builder.yml carries the Trusted Signing account coordinates,
+    // never a local certificate.
+    assert.match(builder, /azureSignOptions:/u);
+    assert.match(builder, /publisherName:/u);
+    assert.match(builder, /endpoint:/u);
+    assert.match(builder, /codeSigningAccountName:/u);
+    assert.match(builder, /certificateProfileName:/u);
+    assert.doesNotMatch(builder, /signtoolOptions:/u);
+    assert.doesNotMatch(builder, /certificateFile:/u);
+    assert.doesNotMatch(builder, /certificatePassword:/u);
   });
 
   test('release asset labels use the Windows signing gate independently', () => {
     const release = source('.github/workflows/release.yml');
-    assert.match(release, /WINDOWS_SIGNED: \$\{\{ secrets\.WIN_CSC_LINK != '' \}\}/u);
+    assert.match(
+      release,
+      /WINDOWS_SIGNED: \$\{\{ secrets\.AZURE_TENANT_ID != '' && secrets\.AZURE_CLIENT_ID != '' && secrets\.AZURE_CLIENT_SECRET != '' \}\}/u,
+    );
     assert.match(release, /if \[ "\$WINDOWS_SIGNED" = "true" \]; then status=signed; else status=unsigned; fi/u);
   });
 });

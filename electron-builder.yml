@@ -7,10 +7,14 @@
 # `npm run package:signed:provisioned` validates and embeds a Developer ID
 # profile before enabling the restricted Touch ID and iCloud Documents
 # entitlements.
-# Windows signing is env-gated like macOS (#128, #683): electron-builder signs
-# only when CSC_LINK/CSC_KEY_PASSWORD are set, which the Package workflow maps
-# from the WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD secrets on the Windows legs. Until
-# those secrets exist the Windows build is produced unsigned, exactly as before.
+# Windows signing uses Azure Trusted Signing (#683), individual-identity
+# validation — no local .pfx/.p12. electron-builder authenticates to
+# Microsoft Entra ID via AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET
+# (an EnvironmentCredential-compatible service principal; see SIGNING.md). The
+# Package workflow forces `-c.win.azureSignOptions=null` on the Windows legs
+# when those secrets are absent, so the build stays unsigned rather than
+# failing outright. azureSignOptions and signtoolOptions are mutually
+# exclusive in electron-builder 25+ — only one may be set under `win`.
 appId: com.zts1.overlook
 productName: Overlook
 directories:
@@ -87,13 +91,16 @@ win:
   # publish into the same release, so the arch MUST be in the filename or the
   # two NSIS installers overwrite each other on download-merge.
   artifactName: ${productName}-${version}-${arch}.${ext}
-  # Signtool config lives under signtoolOptions in electron-builder 25+ (the
-  # top-level win.* signing keys were removed). Consulted only on the signed
-  # path (CSC_LINK present); ignored otherwise. SHA-256 Authenticode plus an
-  # RFC 3161 timestamp so signatures stay valid after the cert expires (#683).
-  signtoolOptions:
-    signingHashAlgorithms:
-      - sha256
-    rfc3161TimeStampServer: http://timestamp.digicert.com
+  # Azure Trusted Signing (#683). electron-builder drives the `TrustedSigning`
+  # PowerShell module against this Trusted Signing Account + Certificate
+  # Profile, authenticating with the AZURE_TENANT_ID/AZURE_CLIENT_ID/
+  # AZURE_CLIENT_SECRET service principal (see SIGNING.md). File/timestamp
+  # digest default to SHA-256 and the timestamp server defaults to Microsoft's
+  # own RFC 3161 endpoint, so neither needs overriding here.
+  azureSignOptions:
+    publisherName: Christopher Kane # must match the Trusted Signing cert's CN exactly
+    endpoint: https://eus.codesigning.azure.net/ # region-specific
+    codeSigningAccountName: zts1
+    certificateProfileName: overlook
   target:
     - nsis
