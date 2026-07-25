@@ -731,6 +731,38 @@ const SCHEMA_V20: Migration = {
   },
 };
 
+const SCHEMA_V21: Migration = {
+  version: 21,
+  name: 'encrypted-photo-embeddings',
+  // #391 / ADR-0018 §4: metadata and vec0 pages live in the same SQLCipher
+  // database. The relational owner supplies composite uniqueness + FK
+  // invalidation; the virtual table owns only fixed-width int8 vectors.
+  up(db) {
+    db.exec(`
+      CREATE TABLE photo_embeddings (
+        embedding_id INTEGER PRIMARY KEY,
+        photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        content_hash TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        embedded_at TEXT NOT NULL,
+        UNIQUE (photo_id, model_version)
+      );
+      CREATE INDEX idx_photo_embeddings_model
+        ON photo_embeddings (model_version, photo_id);
+
+      CREATE VIRTUAL TABLE photo_embedding_vectors USING vec0(
+        embedding_id INTEGER PRIMARY KEY,
+        embedding int8[512]
+      );
+
+      CREATE TRIGGER photo_embeddings_ad AFTER DELETE ON photo_embeddings BEGIN
+        DELETE FROM photo_embedding_vectors
+          WHERE embedding_id = old.embedding_id;
+      END;
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -752,6 +784,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V18,
   SCHEMA_V19,
   SCHEMA_V20,
+  SCHEMA_V21,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

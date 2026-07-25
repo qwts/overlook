@@ -44,6 +44,9 @@ npmRebuild: true
 # signed Touch ID bridge beside the archive where Electron can dlopen it.
 asarUnpack:
   - '**/*.node'
+  - '**/*.dylib'
+  - '**/*.so'
+  - '**/*.dll'
 # Production runtime hardening (#460). electron-builder flips these fuses on the
 # packaged binary before signing, so signed and notarized builds ship with them
 # baked in:

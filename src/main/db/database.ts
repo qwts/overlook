@@ -2,6 +2,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { migrate } from './migrations.js';
+import { loadVectorExtension } from './vector-extension.js';
 
 // Library database per ADR-0004 (whole-DB SQLCipher) + ADR-0005 (#69). The
 // DB key arrives as bytes (wrapped/unwrapped by #68's KeyStore at
@@ -31,6 +32,9 @@ export function openLibraryDatabase(options: OpenLibraryOptions): BetterSqlite3.
     db.pragma('foreign_keys = ON');
     // Fails here (not on first query) when the key is wrong.
     db.prepare('SELECT count(*) FROM sqlite_master').get();
+    // ADR-0018: vec0 tables share the SQLCipher connection and therefore the
+    // library's page-level encryption, WAL, and lifecycle boundary.
+    loadVectorExtension(db);
     migrate(db);
     return db;
   } catch (error) {
