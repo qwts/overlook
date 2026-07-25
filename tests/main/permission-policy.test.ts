@@ -16,7 +16,7 @@ test('permission policy denies every renderer permission request', () => {
   installDenyAllPermissionRequestHandler(defaultSession);
   assert.notEqual(handler, undefined);
 
-  for (const permission of ['media', 'geolocation', 'notifications', 'clipboard-read']) {
+  for (const permission of ['media', 'geolocation', 'notifications', 'clipboard-read'] as const) {
     let allowed: boolean | undefined;
     handler?.(
       {} as never,
