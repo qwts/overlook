@@ -10,6 +10,7 @@ import type { LibraryParts } from '../library/library-parts.js';
 import { InboundMoveController } from './inbound-move-controller.js';
 import type { InboundMoveRuntime } from './inbound-move-runtime.js';
 import { createInboundMoveRuntime } from './inbound-move-runtime-factory.js';
+import { createInteropProtocolRuntime, type InteropProtocolRuntime } from './protocol-runtime.js';
 import { getInteropRuntime } from './runtime.js';
 
 interface ProductionOptions {
@@ -21,6 +22,7 @@ interface ProductionOptions {
 
 class ProductionInboundMove {
   #runtime: InboundMoveRuntime | undefined;
+  #protocols: InteropProtocolRuntime | undefined;
   #controller: InboundMoveController | undefined;
 
   constructor(private readonly options: ProductionOptions) {}
@@ -44,6 +46,7 @@ class ProductionInboundMove {
   async closeLibrary(): Promise<void> {
     await this.#controller?.shutdown();
     this.#runtime = undefined;
+    this.#protocols = undefined;
   }
 
   private runtime(): InboundMoveRuntime {
@@ -52,6 +55,7 @@ class ProductionInboundMove {
     const imports = this.options.imports();
     if (imports === undefined) throw new Error('Library import runtime is unavailable for inbound Move.');
     const authority = getInteropRuntime();
+    this.#protocols ??= createInteropProtocolRuntime(library.db);
     this.#runtime = createInboundMoveRuntime({
       db: library.db,
       blobs: library.blobStore,
@@ -74,6 +78,7 @@ class ProductionInboundMove {
           authority.workChanged(-1);
         };
       },
+      protocols: this.#protocols,
     });
     return this.#runtime;
   }
