@@ -45,7 +45,38 @@ export class SyncLedger {
       throw new LedgerTransitionError(`no ledger row for ${photoId}`);
     }
     assertTransition(from, to);
+    // Durable local bytes regain authority only on offloaded → synced. The
+    // binding is provenance for a sole-remote original and must disappear in
+    // this same transaction, never after a crash window.
+    if (from === 'offloaded' && to === 'synced') {
+      run(this.db, 'UPDATE sync_ledger SET status = ?, custody_authority_id = NULL WHERE photo_id = ?', to, photoId);
+      return;
+    }
     run(this.db, 'UPDATE sync_ledger SET status = ? WHERE photo_id = ?', to, photoId);
+  }
+
+  /** Enter sole-remote custody only with a verified named authority. The
+   * account-identity slice supplies the authority; callers cannot silently
+   * create a new bound row from whichever provider is selected. */
+  markOffloaded(photoId: string, custodyAuthorityId: number): void {
+    const from = this.status(photoId);
+    if (from === undefined) throw new LedgerTransitionError(`no ledger row for ${photoId}`);
+    assertTransition(from, 'offloaded');
+    const authority = queryAll<{ state: 'bound' | 'provider-required' }>(this.db, 'SELECT state FROM custody_authorities WHERE id = @id', {
+      id: custodyAuthorityId,
+    })[0];
+    if (authority?.state !== 'bound') {
+      throw new LedgerTransitionError(`custody authority ${String(custodyAuthorityId)} is not bound`);
+    }
+    this.db.transaction(() => {
+      run(
+        this.db,
+        'UPDATE sync_ledger SET status = ?, custody_authority_id = ? WHERE photo_id = ?',
+        'offloaded',
+        custodyAuthorityId,
+        photoId,
+      );
+    })();
   }
 
   markDirty(photoId: string): void {

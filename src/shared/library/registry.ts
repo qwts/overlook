@@ -17,6 +17,20 @@ export const libraryEntrySchema = z
     path: z.string().min(1),
     createdAt: z.string().datetime(),
     lastOpenedAt: z.string().datetime().nullable(),
+    /** Conservative non-secret summary used while this library is sealed.
+     * Omitted for pre-ADR-0028 registry entries. */
+    custodyHints: z
+      .array(
+        z
+          .object({
+            providerId: z.string().min(1),
+            accountId: z.string().min(1),
+            soleCustodyItems: z.number().int().nonnegative(),
+            soleCustodyBytes: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 
