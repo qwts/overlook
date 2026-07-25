@@ -23,6 +23,7 @@ const SCOPE = {
   pairingId: 'f03e92fd-ad4a-41e6-aeaf-a65abde4c853',
   transferId: '35d06972-7453-4c53-8a32-e531e4ab43ed',
 };
+const RELEASED_EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
 
 function inputUrl(input: Parameters<typeof fetch>[0]): URL {
   if (input instanceof URL) return input;
@@ -204,7 +205,7 @@ describe('signed iCloud native host (#335)', () => {
       verify: () => Promise.resolve({ sha256: randomBytes(32).toString('hex'), bytes: 0 }),
     };
     const host = new ICloudNativeHost({
-      expectedExtensionId: 'released-extension-id',
+      expectedExtensionId: RELEASED_EXTENSION_ID,
       platform: 'darwin',
       signed: true,
       entitled: true,
@@ -216,21 +217,21 @@ describe('signed iCloud native host (#335)', () => {
         await host.handle({
           schemaVersion: 1,
           operation: 'put-file',
-          extensionId: 'released-extension-id',
+          extensionId: RELEASED_EXTENSION_ID,
           path: 'pairings/a/object.bin',
-          sourceFile: 'staging/encrypted.bin',
+          sourceFile: 'source-reference-1',
         })
       ).ok,
       true,
     );
-    assert.deepEqual(calls, ['pairings/a/object.bin:staging/encrypted.bin']);
+    assert.deepEqual(calls, ['pairings/a/object.bin:source-reference-1']);
     assert.equal(
       (
         await host.handle({
           schemaVersion: 1,
           operation: 'put-file',
-          extensionId: 'released-extension-id',
-          sourceFile: 'staging/encrypted.bin',
+          extensionId: RELEASED_EXTENSION_ID,
+          sourceFile: 'source-reference-1',
         })
       ).ok,
       false,
@@ -240,21 +241,17 @@ describe('signed iCloud native host (#335)', () => {
         await host.handle({
           schemaVersion: 1,
           operation: 'materialize-file',
-          extensionId: 'released-extension-id',
-          destinationFile: 'staging/encrypted.bin',
+          extensionId: RELEASED_EXTENSION_ID,
+          destinationFile: 'destination-reference-1',
         })
       ).ok,
       false,
     );
-    assert.deepEqual(calls, ['pairings/a/object.bin:staging/encrypted.bin']);
+    assert.deepEqual(calls, ['pairings/a/object.bin:source-reference-1']);
     assert.equal((await host.handle({ schemaVersion: 1, operation: 'status', extensionId: 'wrong' })).ok, false);
-    assert.equal(
-      (await host.handle({ schemaVersion: 1, operation: 'status', extensionId: 'released-extension-id', bytes: [1] })).ok,
-      false,
-    );
-    assert.deepEqual(
-      nativeHostManifest('/Applications/Overlook.app/Contents/MacOS/overlook-interop', 'released-extension-id').allowed_origins,
-      ['chrome-extension://released-extension-id/'],
-    );
+    assert.equal((await host.handle({ schemaVersion: 1, operation: 'status', extensionId: RELEASED_EXTENSION_ID, bytes: [1] })).ok, false);
+    assert.deepEqual(nativeHostManifest('/Applications/Overlook.app/Contents/MacOS/Overlook', RELEASED_EXTENSION_ID).allowed_origins, [
+      `chrome-extension://${RELEASED_EXTENSION_ID}/`,
+    ]);
   });
 });

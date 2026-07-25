@@ -70,6 +70,9 @@ jobs:
           # the client ID it is extractable installed-app metadata, but it is
           # kept out of source and injected only into the main-process bundle.
           OVERLOOK_GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          # Public Chrome Web Store identity used for the exact native-host
+          # allowed_origins entry. Empty pre-release builds fail closed.
+          OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: ${{ vars.IMAGE_TRAIL_EXTENSION_ID }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           MAC_PROVISIONING_PROFILE_B64: ${{ secrets.MAC_PROVISIONING_PROFILE }}

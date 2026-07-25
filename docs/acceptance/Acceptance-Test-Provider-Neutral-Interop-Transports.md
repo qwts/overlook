@@ -1,6 +1,7 @@
 # Acceptance Test: Provider-Neutral Interop Transports
 
-Issues: [#335](https://github.com/qwts/photos/issues/335) and
+Issues: [#335](https://github.com/qwts/photos/issues/335),
+[#467](https://github.com/qwts/overlook/issues/467), and
 [qwts/image-trail#588](https://github.com/qwts/image-trail/issues/588)
 
 1. Transfer multi-chunk encrypted bytes, interrupt, and retry. Verified chunks
@@ -22,10 +23,22 @@ Issues: [#335](https://github.com/qwts/photos/issues/335) and
    bytes. Original ciphertext moves by opaque file reference only.
 8. Live contracts remain explicitly environment-gated; deterministic pCloud,
    Drive, and iCloud fakes run in CI.
+9. On packaged macOS startup, Overlook atomically installs or repairs
+   user-level Chrome, Chromium, Brave, and Edge manifests. Each manifest points
+   directly at the signed Overlook app executable; no unsigned shell helper is
+   accepted. Builds without the exact 32-character Image Trail extension
+   identity install nothing.
+10. A native-message invocation bypasses the desktop single-instance and
+    renderer bootstrap, processes exactly one length-prefixed request, drains
+    the iCloud bridge, and exits. iCloud paths stay below
+    `Overlook-Interop/v1`; staging references are opaque tokens below the
+    profile-owned interop staging directory.
 
 Automated evidence:
 
 - `tests/interop/transport.test.ts`
+- `tests/interop/native-host-runtime.test.ts`
+- `tests/interop/protocol-runtime.test.ts`
 - `tests/backup/pcloud-provider.test.ts`
 - `tests/backup/google-drive-provider.test.ts`
 
