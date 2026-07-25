@@ -37,7 +37,6 @@ Issues: [#335](https://github.com/qwts/photos/issues/335),
 Automated evidence:
 
 - `tests/interop/transport.test.ts`
-- `tests/interop/native-host-runtime.test.ts`
 - `tests/interop/protocol-runtime.test.ts`
 - `tests/backup/pcloud-provider.test.ts`
 - `tests/backup/google-drive-provider.test.ts`

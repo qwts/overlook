@@ -5,8 +5,9 @@ import { imageTrailExtensionId, pcloudFeatureConfig, type PCloudFeatureConfig } 
 import { pickSafeStorage } from '../crypto/safe-storage-runtime.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
+import { runICloudNativeHost } from './icloud-native-runtime.js';
 import { nativeHostInvocation } from './icloud-native-registration.js';
-import { runICloudNativeHost, startProductionInterop } from './production-runtime.js';
+import { startProductionInterop } from './production-runtime.js';
 
 export interface ProductionInteropAppOptions {
   readonly harnessEnv: (name: string) => string | undefined;
