@@ -1,4 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+
+const AUTH_TAG_BYTES = 16;
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -65,7 +67,7 @@ function legacyNonceStart(): bigint {
 
 function wrapKey(masterKey: Buffer, keyId: number, keyBytes: Buffer): string {
   const nonce = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', masterKey, nonce);
+  const cipher = createCipheriv('aes-256-gcm', masterKey, nonce, { authTagLength: AUTH_TAG_BYTES });
   const aad = Buffer.alloc(4);
   aad.writeUInt32BE(keyId, 0);
   cipher.setAAD(aad);
@@ -98,7 +100,7 @@ function unwrapKey(masterKey: Buffer, keyId: number, wrapped: string): Buffer {
   if (raw.length < 12 + 16) {
     throw new KeyCustodyError(`wrapped key ${String(keyId)} is malformed`);
   }
-  const decipher = createDecipheriv('aes-256-gcm', masterKey, raw.subarray(0, 12));
+  const decipher = createDecipheriv('aes-256-gcm', masterKey, raw.subarray(0, 12), { authTagLength: AUTH_TAG_BYTES });
   const aad = Buffer.alloc(4);
   aad.writeUInt32BE(keyId, 0);
   decipher.setAAD(aad);
