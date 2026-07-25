@@ -40,13 +40,15 @@ invalidate only those candidates.
 
 - `photos.content_hash` remains unique.
 - Import continues suppressing an exact plaintext hash before encryption.
-- Separate photo IDs never share encrypted blob custody.
+- Separate imported originals never share encrypted blob custody.
 - The policy creates no perceptual fingerprints, duplicate scanner, result
   store, or automatic merge/delete behavior. Perceptual review belongs to
   [#650](https://github.com/qwts/photos/issues/650).
-- Sidecar-based non-destructive variants belong to
-  [#496](https://github.com/qwts/photos/issues/496) and reference one owning
-  Original rather than duplicating its blob custody.
+- Intentional variants are the explicit exception: under
+  [ADR-0031 §3](./adr/ADR-0031-Editing-Variants-Provenance-And-Export-Boundary.md#3-variants-share-custody-through-durable-references),
+  independent variant identities reference one original asset rather than
+  duplicating its encrypted blob. Duplicate does not copy the Original marker,
+  and shared custody cannot bypass a marked variant's deletion ceremony.
 
 Protected albums remain a separate encrypted custody domain; this ordinary
 library classification does not alter their schema or migration protocol.
