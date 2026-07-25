@@ -30,7 +30,6 @@ prefix_rule(
             "mv",
             "notes",
             "pull",
-            "push",
             "range-diff",
             "rebase",
             "reflog",
@@ -56,12 +55,13 @@ prefix_rule(
     match = [
         "git status --short --branch",
         "git commit -m example",
-        "git push --set-upstream origin example",
+        "git fetch origin",
         "git reset --hard HEAD",
     ],
     not_match = [
         "git -c alias.x='!sh -c id' x",
         "git config alias.x '!sh -c id'",
+        "git push --force origin example",
         "git x",
     ],
 )
@@ -90,7 +90,7 @@ prefix_rule(
     not_match = [
         "gh alias set unsafe '!sh -c id'",
         "gh extension exec arbitrary-extension",
-        "gh api --method DELETE /repos/qwts/photos",
+        "gh api --method DELETE /repos/qwts/example",
     ],
 )
 
@@ -170,8 +170,8 @@ prefix_rule(
     pattern = ["gh", "repo", ["clone", "list", "set-default", "view"]],
     decision = "allow",
     justification = "Non-destructive repository development operations are trusted.",
-    match = ["gh repo view qwts/photos", "gh repo clone qwts/photos"],
-    not_match = ["gh repo delete qwts/photos --yes"],
+    match = ["gh repo view qwts/example", "gh repo clone qwts/example"],
+    not_match = ["gh repo delete qwts/example --yes"],
 )
 
 prefix_rule(
@@ -246,8 +246,8 @@ prefix_rule(
     ],
 )
 
-# Git commits need Node on PATH for the repository hooks. Allow only the
-# protected zsh wrapper that loads nvm and then dispatches the Git allowlist.
+# Node-backed repository hooks may need nvm on PATH. The protected wrapper also
+# rejects destructive push forms so those commands retain normal approval.
 prefix_rule(
     pattern = ["/bin/zsh", ".codex/scripts/git-with-nvm.zsh"],
     decision = "allow",
@@ -259,12 +259,13 @@ prefix_rule(
     ],
     not_match = [
         "/bin/zsh -lc 'git status'",
+        "/bin/zsh .codex/scripts/git-with-nvm.zsh push --force origin example",
         "/bin/zsh .codex/scripts/nvm.zsh use",
     ],
 )
 
-# nvm is loaded by environment.toml. Trust version-management operations while
-# keeping its arbitrary command runners under the normal approval policy.
+# Node repositories load nvm through environment.toml. Trust version-management
+# operations while keeping arbitrary command runners under normal approval.
 prefix_rule(
     pattern = [
         "nvm",

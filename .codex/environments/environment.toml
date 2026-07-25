@@ -1,7 +1,7 @@
-# Codex environment for this repo. Adapted from image-trail's; maintained BY HAND here —
-# edit freely and keep it in review like any other tooling config.
+# Shared Codex development environment for governed repositories. Keep changes
+# in review like any other agent-facing configuration.
 version = 1
-name = "photos"
+name = "agent-developer"
 
 [setup]
 script = '''
