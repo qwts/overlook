@@ -79,8 +79,19 @@ install_dev_package() {
   local apt_package="$3"
   local dnf_package="$4"
   local apk_package="$5"
+  local windows_install_command="${6:-}"
 
   echo "==> $label not found; installing"
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+      echo "ERROR: $label is a prerequisite on native Windows."
+      if [ -n "$windows_install_command" ]; then
+        echo "Install it first: $windows_install_command"
+      fi
+      exit 1
+      ;;
+  esac
+
   if command -v brew >/dev/null 2>&1; then
     brew install "$brew_package"
   elif command -v apt-get >/dev/null 2>&1; then
@@ -139,7 +150,13 @@ esac
 
 # GitHub CLI is part of the expected development environment.
 if ! command -v gh >/dev/null 2>&1; then
-  install_dev_package "GitHub CLI" "gh" "gh" "gh" "github-cli"
+  install_dev_package \
+    "GitHub CLI" \
+    "gh" \
+    "gh" \
+    "gh" \
+    "github-cli" \
+    "winget install --id GitHub.cli --exact --source winget"
 fi
 
 echo "==> GitHub CLI: $(gh --version | head -n 1)"

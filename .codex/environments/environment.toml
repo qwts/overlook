@@ -12,10 +12,17 @@ bash .codex/scripts/setup.sh
 script = '''
 $gitExe = (Get-Command git -ErrorAction Stop).Source
 $gitRoot = Split-Path -Parent (Split-Path -Parent $gitExe)
-$bash = Join-Path $gitRoot 'bin\bash.exe'
+$gitExecPath = & $gitExe --exec-path
+$bash = @(
+  (Join-Path $gitRoot 'bin\bash.exe')
+  (Join-Path $gitExecPath '..\..\..\bin\bash.exe')
+) |
+  Where-Object { Test-Path -LiteralPath $_ } |
+  ForEach-Object { (Get-Item -LiteralPath $_).FullName } |
+  Select-Object -First 1
 
-if (-not (Test-Path -LiteralPath $bash)) {
-  throw "Git Bash was not found at $bash"
+if (-not $bash) {
+  throw "Git Bash was not found from git.exe ($gitExe) or git --exec-path ($gitExecPath)"
 }
 
 & $bash --noprofile --norc -c 'export PATH="/usr/bin:/bin:$PATH"; exec bash .codex/scripts/setup.sh'
@@ -31,10 +38,17 @@ bash .codex/scripts/cleanup.sh
 script = '''
 $gitExe = (Get-Command git -ErrorAction Stop).Source
 $gitRoot = Split-Path -Parent (Split-Path -Parent $gitExe)
-$bash = Join-Path $gitRoot 'bin\bash.exe'
+$gitExecPath = & $gitExe --exec-path
+$bash = @(
+  (Join-Path $gitRoot 'bin\bash.exe')
+  (Join-Path $gitExecPath '..\..\..\bin\bash.exe')
+) |
+  Where-Object { Test-Path -LiteralPath $_ } |
+  ForEach-Object { (Get-Item -LiteralPath $_).FullName } |
+  Select-Object -First 1
 
-if (-not (Test-Path -LiteralPath $bash)) {
-  throw "Git Bash was not found at $bash"
+if (-not $bash) {
+  throw "Git Bash was not found from git.exe ($gitExe) or git --exec-path ($gitExecPath)"
 }
 
 & $bash --noprofile --norc -c 'export PATH="/usr/bin:/bin:$PATH"; exec bash .codex/scripts/cleanup.sh'
