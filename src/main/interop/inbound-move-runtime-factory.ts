@@ -7,10 +7,8 @@ import type { ThumbnailService } from '../import/thumbnail-service.js';
 import { InboundMoveObjectJournal } from './inbound-move-object-journal.js';
 import { InboundPhotoImporter } from './inbound-photo-importer.js';
 import { InboundMoveRuntime } from './inbound-move-runtime.js';
-import { InteropRepository } from './interop-repository.js';
-import { MoveJournalRepository } from './move-journal-repository.js';
 import type { InteropKeyCustody } from './pairing-custody.js';
-import { InteropTranslationService } from './translation-service.js';
+import { createInteropProtocolRuntime, type InteropProtocolRuntime } from './protocol-runtime.js';
 import type { InteropObjectStore } from './transport.js';
 
 export interface InboundMoveRuntimeFactoryOptions {
@@ -24,15 +22,15 @@ export interface InboundMoveRuntimeFactoryOptions {
   readonly custody: () => InteropKeyCustody;
   readonly photoChanged: (photoId: string) => void;
   readonly beginWork: () => () => void;
+  readonly protocols?: InteropProtocolRuntime | undefined;
 }
 
 export function createInboundMoveRuntime(options: InboundMoveRuntimeFactoryOptions): InboundMoveRuntime {
-  const photos = new PhotosRepository(options.db);
-  const interop = new InteropRepository(options.db);
+  const protocols = options.protocols ?? createInteropProtocolRuntime(options.db);
   const importer = new InboundPhotoImporter({
     db: options.db,
-    photos,
-    interop,
+    photos: new PhotosRepository(options.db),
+    interop: protocols.interop,
     blobs: {
       putOriginal: async (plaintext, key, photoId) => {
         await options.blobsReady;
@@ -47,9 +45,9 @@ export function createInboundMoveRuntime(options: InboundMoveRuntimeFactoryOptio
   return new InboundMoveRuntime({
     store: options.store,
     custody: options.custody,
-    translation: new InteropTranslationService(interop, photos),
+    translation: protocols.translation,
     importer,
-    journals: new MoveJournalRepository(options.db),
+    journals: protocols.moveJournals,
     objects: new InboundMoveObjectJournal(options.db),
     onPhotoChanged: options.photoChanged,
     beginWork: options.beginWork,
