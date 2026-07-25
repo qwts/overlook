@@ -120,6 +120,13 @@ independent. Imported sidecars and byte-subject provenance belong to the
 original asset; variant-authored declarations and lineage belong to the
 variant or a particular revision.
 
+The user-declared Original marker remains variant metadata under the
+[Original Preservation Policy](../Original-Preservation-Policy.md). Duplicate
+does not copy it. An unmarked sibling may be purged normally without affecting
+a marked variant, while a marked variant retains its stronger deletion
+ceremony. Original custody cannot reach its last-reference deletion while a
+marked variant survives, so shared custody does not bypass that protection.
+
 Variant-family operations are:
 
 - **Promote:** choose the family representative for default navigation and
