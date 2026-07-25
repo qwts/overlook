@@ -41,6 +41,63 @@ rather than passed as secrets:
 - `codeSigningAccountName` — the Trusted Signing Account name.
 - `certificateProfileName` — the Certificate Profile name under that account.
 
+## First-time setup
+
+`scripts/setup-azure-trusted-signing.sh` automates the steps below. It is
+interactive and idempotent — run it from a shell where `az login` and
+`gh auth login` have already succeeded. This section documents what it does
+and, more usefully, the non-obvious parts that are easy to get stuck on.
+
+**The CLI surface.** Account-level verbs are `az trustedsigning list|show` —
+there is no `az trustedsigning account ...` subgroup, and asking for one
+reports `'account' is misspelled or not recognized`. `certificate-profile` is
+the only subgroup.
+
+**`MissingSubscription` has two unrelated causes.** Both surface as the same
+error on `az role assignment create`:
+
+1. No active subscription in context — fix with `az account set --subscription`.
+2. The `Microsoft.CodeSigning` resource provider is unregistered. Read calls
+   through the extension succeed while registration is pending, so this only
+   fails later, at role assignment. Fix with
+   `az provider register --namespace Microsoft.CodeSigning --wait`.
+
+**Git Bash mangles ARM scope strings.** MSYS2 rewrites arguments starting with
+`/` into Windows paths, turning `--scope /subscriptions/...` into
+`UserskksilCode...` before `az` ever sees it — which also reports as
+`MissingSubscription`. Export `MSYS_NO_PATHCONV=1`. Not an issue on
+macOS/Linux.
+
+**Identity validation is portal-only** and cannot be scripted: for an
+individual it is a real ID/liveness check performed by Microsoft. Choose
+**Public Trust** (chains to a publicly trusted root, required for public
+downloads; Private Trust only validates inside a private PKI you control) and
+**Individual** (the Organization path is the one that requires a DUNS number).
+The portal blocks this until your own user account holds the **Artifact
+Signing Identity Verifier** role — separate from the signing role the service
+principal needs.
+
+**Certificate profile creation** needs the GUID of a _completed_ identity
+validation. Supplying one that has not finished fails with
+`(BadResourceOperation) ... identity validation details not found for Tenant`.
+
+**Both role names begin with "Artifact Signing"**, not "Trusted Signing" — the
+service was rebranded and the older names no longer resolve
+(`Role ... doesn't exist`).
+
+**Reading the config values back out.** The signing endpoint is exposed as
+`accountUri`, _not_ `endpoint`; querying `endpoint` returns an empty string
+instead of erroring, which quietly yields a blank value in
+`electron-builder.yml`. `publisherName` comes from the profile's `commonName`
+and, for NSIS, is the bare CN with no `CN=` prefix (only AppX/Store packages
+want the prefix):
+
+```sh
+az trustedsigning show -g <rg> -n <account> --query accountUri -o tsv
+az trustedsigning certificate-profile show -g <rg> --account-name <account> \
+  --name <profile> --query commonName -o tsv
+```
+
 ## Verifying a signed binary
 
 From an elevated PowerShell prompt on Windows, against a downloaded installer:
