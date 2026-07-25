@@ -1,5 +1,11 @@
 # photos
 
+## 0.62.0
+
+### Minor Changes
+
+- c6954b9: Add durable source-custody provenance for cloud-only originals.
+
 ## 0.61.7
 
 ### Patch Changes
