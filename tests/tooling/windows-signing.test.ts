@@ -44,6 +44,17 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /node scripts\/verify-windows-arch\.mjs "\$WIN_ARCH"/u);
   });
 
+  test('the NSIS payload uses a filter the installer can actually decode', () => {
+    const workflow = source('.github/workflows/package.yml');
+    // electron-builder's downloaded 7-Zip 24.x auto-applies its ARM64 branch
+    // filter (method 0A) to ARM64 binaries, but the nsis7z plugin unpacking
+    // the payload at install time predates that filter and silently skips
+    // every file using it -- shipping an arm64 installer that installed
+    // everything except Overlook.exe and 10 ARM64 DLLs (#683). Pinning an
+    // older filter keeps the payload decodable; extracted bytes are identical.
+    assert.match(workflow, /export ELECTRON_BUILDER_7Z_FILTER=BCJ2/u);
+  });
+
   test('cross-compiled legs re-resolve sharp for the target arch and drop host binaries', () => {
     const workflow = source('.github/workflows/package.yml');
     // npm ci installs only the host sharp binary; the arm64 leg must pull the
