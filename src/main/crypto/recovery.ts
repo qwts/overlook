@@ -53,7 +53,7 @@ export function sealRecoveryKey(masterKey: Buffer, password: string): Buffer {
   const salt = randomBytes(SALT_LEN);
   const nonce = randomBytes(NONCE_LEN);
   const header = Buffer.concat([MAGIC, Buffer.from([VERSION]), salt, nonce]);
-  const cipher = createCipheriv('aes-256-gcm', deriveKey(password, salt), nonce);
+  const cipher = createCipheriv('aes-256-gcm', deriveKey(password, salt), nonce, { authTagLength: TAG_LEN });
   cipher.setAAD(header);
   const ciphertext = Buffer.concat([cipher.update(masterKey), cipher.final()]);
   return Buffer.concat([header, ciphertext, cipher.getAuthTag()]);
@@ -68,7 +68,7 @@ export function openRecoveryKey(data: Buffer, password: string): Buffer {
   }
   const salt = data.subarray(MAGIC.length + 1, MAGIC.length + 1 + SALT_LEN);
   const nonce = data.subarray(MAGIC.length + 1 + SALT_LEN, HEADER_LEN);
-  const decipher = createDecipheriv('aes-256-gcm', deriveKey(password, salt), nonce);
+  const decipher = createDecipheriv('aes-256-gcm', deriveKey(password, salt), nonce, { authTagLength: TAG_LEN });
   decipher.setAAD(data.subarray(0, HEADER_LEN));
   decipher.setAuthTag(data.subarray(FILE_LEN - TAG_LEN));
   try {

@@ -76,7 +76,7 @@ export function sealProtectedPhotoMetadata(
   try {
     if (plaintext.length + TAG_BYTES > MAX_RECORD_BYTES) throw new ProtectedPhotoMetadataError('protected photo metadata is too large');
     const nonce = randomBytes(NONCE_BYTES);
-    const cipher = createCipheriv('aes-256-gcm', albumKey, nonce);
+    const cipher = createCipheriv('aes-256-gcm', albumKey, nonce, { authTagLength: TAG_BYTES });
     cipher.setAAD(aad(context.libraryId, context.albumId, context.photoId));
     const ciphertextAndTag = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
     const sealed = {
@@ -106,7 +106,7 @@ export function openProtectedPhotoMetadata(
     const sealed = sealedSchema.parse(JSON.parse(json) as unknown);
     if (JSON.stringify(sealed) !== json) throw new ProtectedPhotoMetadataError('invalid protected photo metadata');
     const bytes = Buffer.from(sealed.ciphertextAndTag, 'base64');
-    const decipher = createDecipheriv('aes-256-gcm', albumKey, Buffer.from(sealed.nonce, 'base64'));
+    const decipher = createDecipheriv('aes-256-gcm', albumKey, Buffer.from(sealed.nonce, 'base64'), { authTagLength: TAG_BYTES });
     decipher.setAAD(aad(context.libraryId, context.albumId, context.photoId));
     decipher.setAuthTag(bytes.subarray(-TAG_BYTES));
     plaintext = Buffer.concat([decipher.update(bytes.subarray(0, -TAG_BYTES)), decipher.final()]);

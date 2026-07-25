@@ -91,7 +91,7 @@ export function sealRecoveryBootstrap(input: RecoveryBootstrap, masterKey: Buffe
   const bootstrap = recoveryBootstrapSchema.parse(input);
   const nonce = randomBytes(NONCE_LENGTH);
   const header = Buffer.concat([MAGIC, Buffer.from([FORMAT_VERSION]), nonce]);
-  const cipher = createCipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce);
+  const cipher = createCipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce, { authTagLength: TAG_LENGTH });
   cipher.setAAD(header);
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(bootstrap), 'utf8'), cipher.final()]);
   const sealed = Buffer.concat([header, ciphertext, cipher.getAuthTag()]);
@@ -141,7 +141,7 @@ export function openRecoveryBootstrap(sealed: Buffer, masterKey: Buffer): Recove
   const nonce = sealed.subarray(MAGIC.length + 1, HEADER_LENGTH);
   const ciphertext = sealed.subarray(HEADER_LENGTH, sealed.length - TAG_LENGTH);
   const tag = sealed.subarray(sealed.length - TAG_LENGTH);
-  const decipher = createDecipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce);
+  const decipher = createDecipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce, { authTagLength: TAG_LENGTH });
   decipher.setAAD(header);
   decipher.setAuthTag(tag);
   let plaintext: Buffer;

@@ -18,8 +18,9 @@ export const ENVELOPE_FORMAT_VERSION = 1;
 export const CHUNK_SIZE = 4 * 1024 * 1024;
 
 const MAGIC = Buffer.from('OVLK', 'ascii');
+const AUTH_TAG_BYTES = 16;
 const HEADER_LENGTH = MAGIC.length + 1 + 4 + 8;
-const CHUNK_PREFIX_LENGTH = 1 + 4 + 4 + 16;
+const CHUNK_PREFIX_LENGTH = 1 + 4 + 4 + AUTH_TAG_BYTES;
 const FLAG_FINAL = 0b0000_0001;
 // Decrypt-side guard: a forged length cannot make us buffer unbounded input.
 const MAX_CHUNK_LENGTH = 2 * CHUNK_SIZE;
@@ -82,7 +83,7 @@ function sealChunk(
   totalChunks: number,
 ): Buffer {
   const flags = final ? FLAG_FINAL : 0;
-  const cipher = createCipheriv('aes-256-gcm', key.key, nonceFor(noncePrefix, chunkIndex));
+  const cipher = createCipheriv('aes-256-gcm', key.key, nonceFor(noncePrefix, chunkIndex), { authTagLength: AUTH_TAG_BYTES });
   cipher.setAAD(aadFor(context, key.id, chunkIndex, flags, totalChunks));
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const prefix = Buffer.alloc(CHUNK_PREFIX_LENGTH);
@@ -215,7 +216,7 @@ export function createDecryptStream(resolveKey: KeyResolver, context: EnvelopeCo
     if (key === undefined) {
       throw new EnvelopeError('decrypt reached a chunk before the header');
     }
-    const decipher = createDecipheriv('aes-256-gcm', key, nonceFor(noncePrefix, chunkIndex));
+    const decipher = createDecipheriv('aes-256-gcm', key, nonceFor(noncePrefix, chunkIndex), { authTagLength: AUTH_TAG_BYTES });
     decipher.setAAD(aadFor(context, keyId, chunkIndex, flags, totalChunks));
     decipher.setAuthTag(tag);
     let plaintext: Buffer;

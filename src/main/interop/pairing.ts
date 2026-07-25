@@ -124,7 +124,7 @@ export async function createInteropPairingBundle(
     });
     plaintext = Buffer.from(JSON.stringify(payload), 'utf8');
     pairingKey = await derivePairingKey(password, salt);
-    const cipher = createCipheriv('aes-256-gcm', pairingKey, iv);
+    const cipher = createCipheriv('aes-256-gcm', pairingKey, iv, { authTagLength: AUTH_TAG_BYTES });
     cipher.setAAD(pairingAad(header));
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
     return interopPairingBundleSchema.parse({
@@ -165,7 +165,7 @@ export async function openInteropPairingBundle(bundleValue: unknown, password: s
     const ciphertext = sealed.subarray(0, sealed.length - AUTH_TAG_BYTES);
     const authTag = sealed.subarray(sealed.length - AUTH_TAG_BYTES);
     pairingKey = await derivePairingKey(password, salt);
-    const decipher = createDecipheriv('aes-256-gcm', pairingKey, iv);
+    const decipher = createDecipheriv('aes-256-gcm', pairingKey, iv, { authTagLength: AUTH_TAG_BYTES });
     decipher.setAAD(pairingAad({ ...bundle, cipher: { name: bundle.cipher.name, iv: bundle.cipher.iv } }));
     decipher.setAuthTag(authTag);
     plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);

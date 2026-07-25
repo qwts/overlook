@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { buffer } from 'node:stream/consumers';
-
 import { app, dialog, session, shell } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';

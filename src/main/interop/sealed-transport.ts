@@ -122,7 +122,7 @@ export function sealInteropMessage(envelopeInput: InteropEnvelope, key: InteropK
       cipher: { name: 'AES-GCM' as const, iv: iv.toString('base64') },
     } as const;
     aad = messageAad(authenticated);
-    const cipher = createCipheriv('aes-256-gcm', key.interopKey, iv);
+    const cipher = createCipheriv('aes-256-gcm', key.interopKey, iv, { authTagLength: AES_TAG_BYTES });
     cipher.setAAD(aad);
     ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
     const sealed = interopSealedMessageSchema.parse({
@@ -153,7 +153,7 @@ export function openInteropMessage(sealedBytes: Uint8Array, key: InteropKeyCusto
   const aad = messageAad({ ...sealed, cipher: { name: sealed.cipher.name, iv: sealed.cipher.iv } });
   let plaintext: Buffer | null = null;
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key.interopKey, iv);
+    const decipher = createDecipheriv('aes-256-gcm', key.interopKey, iv, { authTagLength: AES_TAG_BYTES });
     decipher.setAAD(aad);
     decipher.setAuthTag(authTag);
     plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
@@ -239,7 +239,7 @@ export function sealInteropBlob(input: {
       throw new SealedInteropError('Encrypted interop blob metadata is too large.', 'corrupt');
     }
     plaintext = encodeFrame(descriptorBytes, input.bytes);
-    const cipher = createCipheriv('aes-256-gcm', input.key.interopKey, iv);
+    const cipher = createCipheriv('aes-256-gcm', input.key.interopKey, iv, { authTagLength: AES_TAG_BYTES });
     cipher.setAAD(headerBytes);
     ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
     return encodeFrame(headerBytes, ciphertext);
@@ -275,7 +275,7 @@ export function openInteropBlob(
     iv = Buffer.from(header.cipher.iv, 'base64');
     const ciphertext = outer.payload.subarray(0, outer.payload.length - AES_TAG_BYTES);
     const authTag = outer.payload.subarray(outer.payload.length - AES_TAG_BYTES);
-    const decipher = createDecipheriv('aes-256-gcm', key.interopKey, iv);
+    const decipher = createDecipheriv('aes-256-gcm', key.interopKey, iv, { authTagLength: AES_TAG_BYTES });
     decipher.setAAD(outer.header);
     decipher.setAuthTag(authTag);
     plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);

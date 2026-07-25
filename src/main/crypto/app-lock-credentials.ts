@@ -127,7 +127,7 @@ function aad(record: Pick<AppLockRecord, 'libraryId' | 'generation'>, slot: 'pas
 
 function seal(key: Buffer, plaintext: Buffer, associatedData: Buffer): SealedSlot {
   const nonce = randomBytes(NONCE_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', key, nonce);
+  const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_BYTES });
   cipher.setAAD(associatedData);
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
   return { algorithm: 'AES-256-GCM', nonce: nonce.toString('base64'), ciphertextAndTag: ciphertext.toString('base64') };
@@ -137,7 +137,7 @@ function open(key: Buffer, slot: SealedSlot, associatedData: Buffer): Buffer {
   const nonce = Buffer.from(slot.nonce, 'base64');
   const sealed = Buffer.from(slot.ciphertextAndTag, 'base64');
   const ciphertext = sealed.subarray(0, -TAG_BYTES);
-  const decipher = createDecipheriv('aes-256-gcm', key, nonce);
+  const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_BYTES });
   decipher.setAAD(associatedData);
   decipher.setAuthTag(sealed.subarray(-TAG_BYTES));
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);

@@ -161,7 +161,7 @@ function aad(context: ProtectedAlbumContext, purpose: 'password' | 'recovery' | 
 function seal(key: Buffer, plaintext: Buffer, associatedData: Buffer): KeySlot {
   validateKey(key, 'sealing key');
   const nonce = randomBytes(NONCE_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', key, nonce);
+  const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_BYTES });
   cipher.setAAD(associatedData);
   const ciphertextAndTag = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
   return { algorithm: 'AES-256-GCM', nonce: nonce.toString('base64'), ciphertextAndTag: ciphertextAndTag.toString('base64') };
@@ -171,7 +171,7 @@ function open(key: Buffer, slot: KeySlot, associatedData: Buffer): Buffer {
   validateKey(key, 'opening key');
   const nonce = Buffer.from(slot.nonce, 'base64');
   const sealed = Buffer.from(slot.ciphertextAndTag, 'base64');
-  const decipher = createDecipheriv('aes-256-gcm', key, nonce);
+  const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_BYTES });
   decipher.setAAD(associatedData);
   decipher.setAuthTag(sealed.subarray(-TAG_BYTES));
   return Buffer.concat([decipher.update(sealed.subarray(0, -TAG_BYTES)), decipher.final()]);
