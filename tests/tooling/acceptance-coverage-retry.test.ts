@@ -28,3 +28,14 @@ test('E2E report freshness does not depend on the pull-request metadata API (#35
   assert.match(workflow, /git ls-remote/u);
   assert.doesNotMatch(workflow, /current=\$\(gh api/u);
 });
+
+test('E2E report freshness treats fork head refs as data, not shell source (#715)', () => {
+  const workflow = readFileSync(join(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+  const freshnessStep = workflow.match(/- name: Check this run is for the PR's current head\n(?<step>.*?)(?=\n {6}- name: Deploy report)/su)
+    ?.groups?.['step'];
+
+  assert.ok(freshnessStep);
+  assert.match(freshnessStep, /HEAD_REF: \$\{\{ github\.head_ref \}\}/u);
+  assert.match(freshnessStep, /"refs\/heads\/\$HEAD_REF"/u);
+  assert.doesNotMatch(freshnessStep, /run:[\s\S]*\$\{\{ github\.head_ref \}\}/u);
+});
