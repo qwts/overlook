@@ -44,6 +44,28 @@ function world() {
 }
 
 describe('custody authority provenance (#729)', () => {
+  test('authority records are stable, queryable, and cannot bind a provider-required source', () => {
+    const { db, insert, ledger, authorities } = world();
+    insert('A');
+    ledger.setStatus('A', 'syncing');
+    ledger.markBackedUp('A', '2026-07-25T01:00:00.000Z');
+    const input = {
+      providerId: 'pcloud',
+      accountId: '42',
+      accountLabel: 'account@example.test',
+      remoteRoot: '/Overlook/01ARZ3NDEKTSV4RRFFQ69G5FAA/',
+      createdAt: '2026-07-25T01:00:01.000Z',
+    };
+    const authority = authorities.create(input);
+    assert.deepEqual(authorities.get(authority.id), authority);
+    assert.equal(authorities.get(999), undefined);
+    assert.equal(authorities.find('pcloud', 'other', input.remoteRoot), undefined);
+    assert.deepEqual(authorities.create(input), authority, 'the authority triple is stable across retries');
+
+    run(db, `UPDATE custody_authorities SET state = 'provider-required' WHERE id = ?`, authority.id);
+    assert.throws(() => ledger.markOffloaded('A', authority.id), /not bound/u);
+  });
+
   test('an offload binds a named authority, errors retain it, and verified local recovery clears it', () => {
     const { db, insert, ledger, authorities } = world();
     insert('A', 42);
