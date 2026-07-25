@@ -146,6 +146,21 @@ jobs:
               # Drop the host-arch sharp binaries so only the target payload ships.
               find node_modules/@img -maxdepth 1 -type d -name 'sharp-win32-*' ! -name "$pkg" -exec rm -rf {} +
             fi
+            # electron-builder compresses the NSIS payload with a downloaded
+            # 7-Zip 24.x, which auto-applies its ARM64 branch filter (method
+            # 0A) to ARM64 binaries — but the nsis7z plugin that unpacks that
+            # payload at install time is far older and cannot decode it. It
+            # fails per-file and keeps going, so the arm64 installer produced a
+            # complete install MINUS every ARM64 binary: Overlook.exe plus 10
+            # DLLs (ffmpeg, libEGL, libGLESv2, vulkan-1, libvips, …). The
+            # install looked successful and then had no executable (#683).
+            # Pin a filter old enough for nsis7z to decode; electron-builder
+            # allows BCJ/BCJ2/ARM/ARMT/IA64/PPC/SPARC/DELTA (notably not
+            # ARM64). Filters are reversible transforms — extracted bytes are
+            # identical either way, this only costs ~8% compression ratio.
+            # Set for both arches: 7-Zip already picks BCJ2 for x64 on its
+            # own, so this just makes the choice explicit instead of implicit.
+            export ELECTRON_BUILDER_7Z_FILTER=BCJ2
             # azureSignOptions is a hard requirement in electron-builder.yml —
             # unlike signtool's CSC_LINK, Azure Trusted Signing has no
             # opportunistic-cert fallback, so it errors out instead of
