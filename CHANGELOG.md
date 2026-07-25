@@ -1,5 +1,11 @@
 # photos
 
+## 0.61.7
+
+### Patch Changes
+
+- 941cae4: Harden AES-GCM authentication tags and renderer permission handling.
+
 ## 0.61.6
 
 ### Patch Changes
