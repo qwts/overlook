@@ -54,6 +54,16 @@ describe('library registry (#384)', () => {
     assert.equal(reborn.get(ULID_A)?.name, 'My Library');
   });
 
+  test('custody hints persist conservatively for sealed-library preflight (#729)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'overlook-registry-'));
+    const registry = registryIn(dir);
+    registry.register(entry());
+    registry.updateCustodyHints(ULID_A, [{ providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 }]);
+    assert.deepEqual(registryIn(dir).get(ULID_A)?.custodyHints, [
+      { providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 },
+    ]);
+  });
+
   test('EXIT CRITERIA: a corrupt registry fails loud — never self-heals to empty', () => {
     const dir = mkdtempSync(join(tmpdir(), 'overlook-registry-'));
     writeFileSync(join(dir, 'libraries.json'), '{ not json', 'utf8');

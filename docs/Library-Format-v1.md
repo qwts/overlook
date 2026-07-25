@@ -17,7 +17,8 @@ failure. Written as a byproduct of
 Related decisions: [ADR-0004](./adr/ADR-0004-Encryption-And-Key-Management.md) (crypto and
 custody), [ADR-0005](./adr/ADR-0005-Library-Data-Model.md) (layout),
 [ADR-0008](./adr/ADR-0008-Recovery-Key-Format.md), [ADR-0013](./adr/ADR-0013-App-Lock-Key-Release-And-Protected-Albums.md),
-[ADR-0017](./adr/ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle.md).
+[ADR-0017](./adr/ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle.md), and
+[ADR-0028](./adr/ADR-0028-Remote-Custody-Binding-And-Custody-Safe-Disconnect.md).
 
 ## Conventions
 
@@ -79,6 +80,16 @@ treated as absent and replaced — it never named a valid remote home.
 
 The library id is bound into app-lock AAD (§4.2) and protected-photo AAD
 (§10.2), so it is security-relevant, not just bookkeeping.
+
+### 2.1 Registry custody hints
+
+`userData/libraries.json` entries may contain a `custodyHints` array. Each
+non-secret hint records `providerId`, `accountId`, `soleCustodyItems`, and
+`soleCustodyBytes` for a remote authority used by that library. It lets a
+profile-wide credential-removal preflight account for libraries whose encrypted
+databases are closed. A non-zero hint is written before the first database
+binding; it is cleared only after a verified zero recount. Hints contain no
+tokens, remote paths, or encryption material.
 
 ## 3. Key hierarchy
 
@@ -387,7 +398,11 @@ foreign key to `photos`**: deleting a photo leaves an "unavailable" placement
 rather than cascading the layout away. Migration 19 (#741) adds
 `backup_manifest_debt` — a single-row flag recording that the remote is owed a
 manifest generation, durable across restart so an interrupted or fail-closed
-backup run never forgets the stale remote manifest.
+backup run never forgets the stale remote manifest. Migration 20 (#729) adds
+`custody_authorities` and the nullable `sync_ledger.custody_authority_id`
+foreign key. The binding records a sole-remote original's non-secret provider,
+account subject, and namespace; existing offloaded rows remain `NULL`
+(legacy-unbound) until a later verified reconciliation proves their home.
 
 **10 migrations**, forward-only with no down path, each applied in its own
 transaction and tracked in `schema_migrations(version, applied_at)` — _not_

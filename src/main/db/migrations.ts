@@ -700,6 +700,37 @@ const SCHEMA_V19: Migration = {
   },
 };
 
+const SCHEMA_V20: Migration = {
+  version: 20,
+  name: 'custody-authorities',
+  // #729 / ADR-0028 §1, §7: sole-remote-custody provenance is library
+  // scoped. Existing offloaded rows stay deliberately unbound; the later
+  // reconciliation verifies their home instead of guessing from credentials.
+  up(db) {
+    db.exec(`
+      CREATE TABLE custody_authorities (
+        id INTEGER PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        account_label TEXT NOT NULL,
+        remote_root TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('bound', 'provider-required')),
+        created_at TEXT NOT NULL,
+        last_verified_at TEXT,
+        UNIQUE (provider_id, account_id, remote_root)
+      );
+      CREATE INDEX idx_custody_authorities_provider_account
+        ON custody_authorities (provider_id, account_id);
+
+      ALTER TABLE sync_ledger ADD COLUMN custody_authority_id INTEGER
+        REFERENCES custody_authorities(id);
+      CREATE INDEX idx_ledger_custody_authority
+        ON sync_ledger (custody_authority_id)
+        WHERE custody_authority_id IS NOT NULL;
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -720,6 +751,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V17,
   SCHEMA_V18,
   SCHEMA_V19,
+  SCHEMA_V20,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

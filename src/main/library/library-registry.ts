@@ -111,6 +111,18 @@ export class LibraryRegistry {
     return renamed;
   }
 
+  /** ADR-0028 §4's sealed-library preflight hint. Callers write a non-zero
+   * hint before committing the first database binding; zero is recorded only
+   * after a verified recount, so stale data can block but cannot undercount. */
+  updateCustodyHints(id: string, custodyHints: NonNullable<LibraryEntry['custodyHints']>): LibraryEntry {
+    const entry = this.get(id);
+    if (entry === undefined) throw new LibraryRegistryError(`library ${id} is not registered`);
+    const updated = { ...entry, custodyHints };
+    this.file = { ...this.file, entries: this.file.entries.map((e) => (e.id === id ? updated : e)) };
+    this.persist();
+    return updated;
+  }
+
   /** Stamped at successful open — not at close, so a crash never loses it
    * (ADR-0017 §1). */
   touchOpened(id: string): LibraryEntry {
