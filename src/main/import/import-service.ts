@@ -289,6 +289,10 @@ export class ImportService {
     this.controller?.abort();
   }
 
+  busy(): boolean {
+    return this.controller !== null || this.scans.size > 0 || this.googlePickScanController !== null;
+  }
+
   /** Permanently stops this library-bound instance. Queued batches observe
    * the flag when their serialized turn arrives and never touch custody. */
   close(): void {

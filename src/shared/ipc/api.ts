@@ -208,6 +208,14 @@ export interface OverlookApi {
     readonly set: (request: Req<typeof channels.settingsSet>) => Promise<Res<typeof channels.settingsSet>>;
     readonly onChanged: (listener: (payload: z.output<typeof events.settingsChanged.payload>) => void) => () => void;
   };
+  readonly embedding: {
+    readonly status: () => Promise<Res<typeof channels.embeddingStatus>>;
+    readonly enable: () => Promise<Res<typeof channels.embeddingEnable>>;
+    readonly disable: () => Promise<Res<typeof channels.embeddingDisable>>;
+    readonly pause: () => Promise<Res<typeof channels.embeddingPause>>;
+    readonly resume: () => Promise<Res<typeof channels.embeddingResume>>;
+    readonly onChanged: (listener: (payload: z.output<typeof events.embeddingStatusChanged.payload>) => void) => () => void;
+  };
   readonly diagnostics: {
     readonly list: () => Promise<Res<typeof channels.diagnosticsList>>;
     readonly delete: (request: Req<typeof channels.diagnosticsDelete>) => Promise<Res<typeof channels.diagnosticsDelete>>;

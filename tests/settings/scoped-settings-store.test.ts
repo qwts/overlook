@@ -125,6 +125,7 @@ describe('scoped settings store (#387, ADR-0017 §6)', () => {
       diagnosticsConsentVersion: 0,
       llmProviderId: null,
       llmQaEnabled: false,
+      semanticSearchEnabled: false,
     });
 
     library = join(root, 'new-library');

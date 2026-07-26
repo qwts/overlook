@@ -7,6 +7,7 @@ import { Field } from './Field';
 import { QuickActionsSettings } from './QuickActionsSettings';
 import { SHIPPED_LOCALES } from '../../../shared/i18n/locales.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
+import { SemanticIndexSettings, semanticIndexHint } from './SemanticIndexSettings';
 
 // General section (#113): sort order and appearance apply live;
 // thumbnails-on-import is locked on with its rationale, matching the schema.
@@ -47,6 +48,7 @@ const messages = defineMessages({
     id: 'settings.general.thumbnails.hint',
     defaultMessage: 'The grid browses thumbnails, even offline. Cannot be disabled.',
   },
+  semantic: { id: 'settings.general.semantic', defaultMessage: 'On-device semantic index' },
 });
 
 export interface GeneralPaneProps {
@@ -130,6 +132,9 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
       </Field>
       <Field label={intl.formatMessage(messages.thumbnails)} hint={intl.formatMessage(messages.thumbnailsHint)}>
         <Switch checked disabled accessibleLabel={intl.formatMessage(messages.thumbnails)} />
+      </Field>
+      <Field wide label={intl.formatMessage(messages.semantic)} hint={intl.formatMessage(semanticIndexHint)}>
+        <SemanticIndexSettings />
       </Field>
     </div>
   );

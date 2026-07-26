@@ -62,6 +62,9 @@ export const settingsSchema = z.object({
   /** Per-feature opt-in for ask-about-this-photo (ADR-0018 §7). Default off:
    * a fresh install makes zero LLM network calls. */
   llmQaEnabled: z.boolean(),
+  /** Explicit opt-in for the one-time local embedding-model download. The
+   * model cache is profile-scoped; derived vectors remain per-library. */
+  semanticSearchEnabled: z.boolean(),
 });
 
 /** The settings:set request shape — every key optional, same rules. */
@@ -79,6 +82,7 @@ export const profileSettingsSchema = settingsSchema.pick({
   diagnosticsConsentVersion: true,
   llmProviderId: true,
   llmQaEnabled: true,
+  semanticSearchEnabled: true,
 });
 
 /** ADR-0017 §6: these policies belong to exactly one library directory. */
@@ -90,6 +94,7 @@ export const librarySettingsSchema = settingsSchema.omit({
   diagnosticsConsentVersion: true,
   llmProviderId: true,
   llmQaEnabled: true,
+  semanticSearchEnabled: true,
 });
 
 export type ProfileSettings = z.output<typeof profileSettingsSchema>;
@@ -114,6 +119,7 @@ export const defaultSettings: AppSettings = {
   providerId: 'mock',
   llmProviderId: null,
   llmQaEnabled: false,
+  semanticSearchEnabled: false,
 };
 
 export const defaultProfileSettings: ProfileSettings = {
@@ -124,6 +130,7 @@ export const defaultProfileSettings: ProfileSettings = {
   diagnosticsConsentVersion: defaultSettings.diagnosticsConsentVersion,
   llmProviderId: defaultSettings.llmProviderId,
   llmQaEnabled: defaultSettings.llmQaEnabled,
+  semanticSearchEnabled: defaultSettings.semanticSearchEnabled,
 };
 
 export const defaultLibrarySettings: LibrarySettings = {
@@ -149,6 +156,7 @@ const profileRecoverySchema = z
     diagnosticsConsentVersion: settingsSchema.shape.diagnosticsConsentVersion.catch(0),
     llmProviderId: settingsSchema.shape.llmProviderId.catch(defaultProfileSettings.llmProviderId),
     llmQaEnabled: settingsSchema.shape.llmQaEnabled.catch(defaultProfileSettings.llmQaEnabled),
+    semanticSearchEnabled: settingsSchema.shape.semanticSearchEnabled.catch(defaultProfileSettings.semanticSearchEnabled),
   })
   .catch(defaultProfileSettings);
 
@@ -189,6 +197,7 @@ export function profileSettingsOf(settings: AppSettings): ProfileSettings {
     diagnosticsConsentVersion: settings.diagnosticsConsentVersion,
     llmProviderId: settings.llmProviderId,
     llmQaEnabled: settings.llmQaEnabled,
+    semanticSearchEnabled: settings.semanticSearchEnabled,
   };
 }
 
@@ -260,5 +269,6 @@ export function mergeSettings(current: AppSettings, patch: SettingsPatch): AppSe
     providerId: patch.providerId !== undefined ? patch.providerId : current.providerId,
     llmProviderId: patch.llmProviderId !== undefined ? patch.llmProviderId : current.llmProviderId,
     llmQaEnabled: patch.llmQaEnabled ?? current.llmQaEnabled,
+    semanticSearchEnabled: patch.semanticSearchEnabled ?? current.semanticSearchEnabled,
   };
 }

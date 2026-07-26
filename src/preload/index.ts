@@ -36,6 +36,11 @@ const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
+const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
+const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
+const embeddingDisable = createInvoker(channels.embeddingDisable, invokeTransport);
+const embeddingPause = createInvoker(channels.embeddingPause, invokeTransport);
+const embeddingResume = createInvoker(channels.embeddingResume, invokeTransport);
 const diagnosticsList = createInvoker(channels.diagnosticsList, invokeTransport);
 const diagnosticsPurge = createInvoker(channels.diagnosticsPurge, invokeTransport);
 const llmProviders = createInvoker(llmChannels.llmProviders, invokeTransport);
@@ -260,6 +265,14 @@ const overlook: OverlookApi = {
     get: async () => settingsGet({}),
     set: createInvoker(channels.settingsSet, invokeTransport),
     onChanged: createSubscriber(events.settingsChanged, subscribeTransport),
+  }),
+  embedding: Object.freeze({
+    status: async () => embeddingStatus({}),
+    enable: async () => embeddingEnable({ consent: true }),
+    disable: async () => embeddingDisable({}),
+    pause: async () => embeddingPause({}),
+    resume: async () => embeddingResume({}),
+    onChanged: createSubscriber(events.embeddingStatusChanged, subscribeTransport),
   }),
   diagnostics: Object.freeze({
     list: async () => diagnosticsList({}),

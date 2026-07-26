@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { buffer } from 'node:stream/consumers';
-import { app, dialog, session, shell } from 'electron';
+import { app, dialog, powerMonitor, session, shell } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
 import { activityBackupSnapshot, createActivityFacade } from './activity/activity-publication.js';
@@ -74,6 +74,8 @@ import { configurePCloudInteropFeature } from './interop/feature-runtime.js';
 import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
 import { pcloudFeatureConfig } from './build-config.js';
+import { createEmbeddingRuntime, executionProviders, type EmbeddingRuntime } from './embedding/embedding-runtime.js';
+import type { EmbeddingService } from './embedding/embedding-service.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 function harnessEnv(name: string): string | undefined {
@@ -195,6 +197,7 @@ function getLibraryService(): LibraryService {
       },
     });
     startupMaintenance.schedule();
+    if (getSettingsStore().get().semanticSearchEnabled) getEmbeddingService();
   }
   return libraryService;
 }
@@ -253,6 +256,7 @@ function getImportService(): ImportService {
           // not only on the next launch. The service coalesces concurrent calls.
           ensureMaintenanceServices();
           void posterCaptureService?.capture().catch(() => undefined);
+          embeddingRuntime?.service.notifyWorkAvailable();
         },
       },
       fixtureSource: () => harnessEnv('OVERLOOK_IMPORT_SOURCE'),
@@ -260,6 +264,7 @@ function getImportService(): ImportService {
       resumed: () => {
         getBackupEngine();
         autoBackupTrigger?.();
+        embeddingRuntime?.service.notifyWorkAvailable();
       },
     });
   }
@@ -348,8 +353,42 @@ let providerRuntime: ProviderRuntime | undefined;
 const providerWork = new WorkTracker(refreshApplicationMenu);
 
 const custodyWorkActive = (): boolean => providerWork.busy() || interopRuntimeBusy();
-const changeProviderWork = (delta: 1 | -1): void => providerWork.change(delta);
+const changeProviderWork = (delta: 1 | -1): void => {
+  providerWork.change(delta);
+  embeddingRuntime?.service.notifyWorkAvailable();
+};
 const providerIdle = (): Promise<void> => providerWork.idle();
+
+let embeddingRuntime: EmbeddingRuntime | undefined;
+
+function getEmbeddingService(): EmbeddingService {
+  if (embeddingRuntime === undefined) {
+    const parts = requireParts('embedding service');
+    const emitStatus = createEmitter(events.embeddingStatusChanged, (name, payload) => {
+      broadcast((win) => win.webContents.send(name, payload));
+    });
+    embeddingRuntime = createEmbeddingRuntime({
+      db: parts.db,
+      blobs: parts.blobStore,
+      resolveKey: parts.keyStore.resolver(),
+      modelCacheRoot: path.join(app.getPath('userData'), 'models'),
+      workerUrl: new URL('./embedding-worker.js', import.meta.url),
+      providers: executionProviders(),
+      enabled: () => getSettingsStore().get().semanticSearchEnabled,
+      setEnabled: (semanticSearchEnabled) => {
+        getSettingsStore().set({ semanticSearchEnabled });
+      },
+      pauseReason: () => {
+        if (importRuntime?.service.busy() === true) return 'import';
+        if (custodyWorkActive()) return 'backup';
+        if (powerMonitor.isOnBatteryPower()) return 'battery';
+        return null;
+      },
+      emit: emitStatus,
+    });
+  }
+  return embeddingRuntime.service;
+}
 
 function getProviderRuntime(): ProviderRuntime {
   providerRuntime ??= createProviderRuntime({
@@ -681,6 +720,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     exportFacade?.drain() ?? Promise.resolve(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
     purgeRuntime?.drain() ?? Promise.resolve(),
+    embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
     Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
     full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
@@ -715,6 +755,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
   consistencyChecker = undefined;
+  embeddingRuntime = undefined;
   exportFacade = undefined;
   if (full) restoreRuntime = undefined;
   releaseLibraryLock?.();
@@ -864,6 +905,7 @@ void externalOpen.whenReady().then(async () => {
     getThumbs: getThumbService,
     getFull: getFullService,
     getImport: getImportService,
+    getEmbedding: getEmbeddingService,
     getExport: getExportFacade,
     getKeyStore: () => {
       return requireParts('key store').keyStore;
@@ -881,6 +923,7 @@ void externalOpen.whenReady().then(async () => {
     onImported: () => {
       getBackupEngine();
       autoBackupTrigger?.();
+      embeddingRuntime?.service.notifyWorkAvailable();
     },
     onImportRendererReady: externalOpen.rendererReady,
     broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),

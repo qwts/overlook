@@ -19,6 +19,10 @@ interface EmbeddingIdRow {
   readonly embeddingId: number;
 }
 
+export class EmbeddingCandidateStaleError extends Error {
+  override readonly name = 'EmbeddingCandidateStaleError';
+}
+
 function embeddingBytes(embedding: Int8Array): Buffer {
   if (embedding.length !== EMBEDDING_DIMENSIONS) {
     throw new RangeError(`embedding must contain ${String(EMBEDDING_DIMENSIONS)} dimensions`);
@@ -85,7 +89,9 @@ export class EmbeddingRepository {
          RETURNING embedding_id AS embeddingId`,
         { ...candidate, modelVersion, embeddedAt },
       );
-      if (inserted === undefined) throw new Error(`photo ${candidate.photoId} is not eligible for embedding`);
+      if (inserted === undefined) {
+        throw new EmbeddingCandidateStaleError(`photo ${candidate.photoId} is not eligible for embedding anymore`);
+      }
       // sqlite-vec distinguishes INTEGER from REAL bindings; better-sqlite3
       // numbers bind as REAL, so the vec0 integer primary key is explicit.
       this.db

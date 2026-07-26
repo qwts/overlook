@@ -199,6 +199,9 @@ export class ProtectedPhotoMigrationRepository {
             hasMid: item.hasMid ? 1 : 0,
           },
         );
+        if (input.operation === 'protect') {
+          run(this.db, 'DELETE FROM photo_embeddings WHERE photo_id = ?', item.photoId);
+        }
       }
     })();
     const journal = this.get(input.migrationId);

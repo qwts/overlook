@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { openLibraryDatabase } from '../../src/main/db/database.js';
+import { EmbeddingRepository, EMBEDDING_DIMENSIONS } from '../../src/main/db/embedding-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import {
   ProtectedPhotoMigrationRepository,
@@ -82,6 +83,12 @@ describe('ProtectedPhotoMigrationRepository', () => {
       photoId: 'photo-a',
     });
     photos.addToAlbum('ordinary-a', ['photo-a']);
+    const embeddings = new EmbeddingRepository(db);
+    embeddings.put(
+      { photoId: 'photo-a', contentHash: 'a'.repeat(64) },
+      'fixture-model',
+      new Int8Array(EMBEDDING_DIMENSIONS),
+    );
     migrations.prepare({
       migrationId: 'migration-a',
       operation: 'protect',
@@ -89,6 +96,7 @@ describe('ProtectedPhotoMigrationRepository', () => {
       targetAlbumId: 'protected-a',
       items: [item('photo-a')],
     });
+    assert.equal(embeddings.vectorCount(), 0, 'protect preparation removes the unlocked content fingerprint atomically');
     assert.equal(photos.get('photo-a'), undefined);
     assert.deepEqual(migrations.listProtected('protected-a'), []);
     for (const source of ['all', 'favorites', 'recent', 'offloaded', 'deleted'] as const) {
