@@ -161,8 +161,9 @@ The deterministic prototype records:
 user-scoped Unix rendezvous and loopback WebSocket. It transfers 16 MiB as
 bounded binary frames with an 8 MiB producer window, sustains more than the
 1 MiB/s floor, observes cancellation within 250 ms, and closes every threat
-listed above. The Windows seam emits the current-user-only SDDL but remains a
-production platform gate.
+in the [threat table](../Live-Local-Interop-Threat-Model.md#threats-and-controls).
+The Windows seam emits the current-user-only SDDL but remains a production
+platform gate.
 
 The prototype is evidence, not a production transport. #544 owns bootstrap and
 packaging; #545 owns durable transport-journal composition. The complete
