@@ -21,7 +21,8 @@ import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
-import { createDriveImport, createImportRuntime, type ImportRuntime, type ImportService } from './import/import-runtime.js';
+import type { ImportRuntime, ImportService } from './import/import-runtime.js';
+import { createImportApplicationRuntime } from './import/import-application-runtime.js';
 import type { RawRepairService } from './import/raw-repair-service.js';
 import type { PosterCaptureService } from './import/poster-capture-service.js';
 import { buildMaintenanceServices } from './import/maintenance-runtime.js';
@@ -73,6 +74,9 @@ import { closeProductionInboundMoveLibrary } from './interop/inbound-move-produc
 import { createProductionInteropAppRuntime } from './interop/production-app-runtime.js';
 import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
+import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
+import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
+import type { EmbeddingService } from './embedding/embedding-service.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
@@ -170,7 +174,10 @@ function getLibraryService(): LibraryService {
       repairFailure: () => console.error('[overlook] protected migration repair failed'),
       workflowProgress: (progress) => broadcast((win) => win.webContents.send(events.protectedWorkflowProgress.name, progress)),
       workflowChanged: () => broadcast((win) => win.webContents.send(events.protectedAlbumsChanged.name, {})),
-      ordinaryChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds] }),
+      ordinaryChanged: (photoIds) => {
+        emitLibraryChanged({ photoIds: [...photoIds] });
+        notifyEmbeddingEligibilityChanged(photoIds);
+      },
     });
     libraryParts = {
       db,
@@ -185,6 +192,7 @@ function getLibraryService(): LibraryService {
     libraryService = new LibraryService(db, {
       libraryChanged: (photoIds) => {
         emitLibraryChanged({ photoIds: [...photoIds] });
+        notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {
         broadcast((win) => win.webContents.send(events.originalClassificationChanged.name, { photoIds: [...photoIds] }));
@@ -200,6 +208,7 @@ function getLibraryService(): LibraryService {
       },
     });
     startupMaintenance.schedule();
+    if (getSettingsStore().get().semanticSearchEnabled) getEmbeddingService();
   }
   return libraryService;
 }
@@ -218,53 +227,20 @@ let posterCaptureService: PosterCaptureService | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
-    const repo = new PhotosRepository(parts.db);
-    const emitScanProgress = createEmitter(events.scanProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitCopyProgress = createEmitter(events.importCopyProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitThumbProgress = createEmitter(events.importThumbProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitChanged = createEmitter(events.libraryChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    importRuntime = createImportRuntime({
+    importRuntime = createImportApplicationRuntime({
       dataDir: libraryDataDir(),
-      workerUrl: new URL('./thumbnail-worker.js', import.meta.url),
-      repo,
-      blobs: parts.blobStore,
-      blobsReady: parts.blobStoreReady,
-      currentKey: () => parts.keyStore.currentKey(),
-      resolveKey: parts.keyStore.resolver(),
-      events: {
-        scanProgress: (scanPath, progress) => emitScanProgress({ path: scanPath, ...progress }),
-        copyProgress: (done, total) => {
-          emitCopyProgress({ done, total });
-        },
-        thumbProgress: (done, total) => {
-          emitThumbProgress({ done, total });
-        },
-        imported: (photoIds) => {
-          emitChanged({ photoIds: [...photoIds] });
-          emitPending({ count: repo.stats().pending });
-          // Poster capture is a post-import background pass (§6): kick it after
-          // each batch so a freshly imported video gains its tile poster now,
-          // not only on the next launch. The service coalesces concurrent calls.
-          ensureMaintenanceServices();
-          void posterCaptureService?.capture().catch(() => undefined);
-        },
+      parts,
+      harnessEnv,
+      broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
+      imported: () => {
+        ensureMaintenanceServices();
+        void posterCaptureService?.capture().catch(() => undefined);
+        embeddingRuntime?.service.notifyWorkAvailable();
       },
-      fixtureSource: () => harnessEnv('OVERLOOK_IMPORT_SOURCE'),
-      googleDrive: createDriveImport(libraryDataDir(), () => harnessEnv('OVERLOOK_GOOGLE_DRIVE_IMPORT_SOURCE')),
       resumed: () => {
         getBackupEngine();
         autoBackupTrigger?.();
+        embeddingRuntime?.service.notifyWorkAvailable();
       },
     });
   }
@@ -290,6 +266,7 @@ function ensureMaintenanceServices(): void {
     emitThumbsChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
+    embeddingEligible: notifyEmbeddingEligibilityChanged,
   });
   rawRepairService = services.rawRepair;
   posterCaptureService = services.posterCapture;
@@ -353,8 +330,27 @@ let providerRuntime: ProviderRuntime | undefined;
 const providerWork = new WorkTracker(refreshApplicationMenu);
 
 const custodyWorkActive = (): boolean => providerWork.busy() || interopRuntimeBusy();
-const changeProviderWork = (delta: 1 | -1): void => providerWork.change(delta);
+const changeProviderWork = (delta: 1 | -1): void => {
+  providerWork.change(delta);
+  embeddingRuntime?.service.notifyWorkAvailable();
+};
 const providerIdle = (): Promise<void> => providerWork.idle();
+
+let embeddingRuntime: EmbeddingRuntime | undefined;
+
+function notifyEmbeddingEligibilityChanged(photoIds: readonly string[]): void {
+  embeddingRuntime?.service.notifyEligibilityChanged(photoIds);
+}
+
+function getEmbeddingService(): EmbeddingService {
+  embeddingRuntime ??= createEmbeddingApplicationRuntime({
+    parts: requireParts('embedding service'),
+    importBusy: () => importRuntime?.service.busy() === true,
+    custodyBusy: custodyWorkActive,
+    broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
+  });
+  return embeddingRuntime.service;
+}
 
 function getProviderRuntime(): ProviderRuntime {
   providerRuntime ??= createProviderRuntime({
@@ -686,6 +682,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     exportFacade?.drain() ?? Promise.resolve(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
     purgeRuntime?.drain() ?? Promise.resolve(),
+    embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
     Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
     full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
@@ -720,6 +717,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
   consistencyChecker = undefined;
+  embeddingRuntime = undefined;
   exportFacade = undefined;
   if (full) restoreRuntime = undefined;
   releaseLibraryLock?.();
@@ -860,6 +858,7 @@ void externalOpen.whenReady().then(async () => {
     getThumbs: getThumbService,
     getFull: getFullService,
     getImport: getImportService,
+    getEmbedding: getEmbeddingService,
     getExport: getExportFacade,
     getKeyStore: () => {
       return requireParts('key store').keyStore;
@@ -877,6 +876,7 @@ void externalOpen.whenReady().then(async () => {
     onImported: () => {
       getBackupEngine();
       autoBackupTrigger?.();
+      embeddingRuntime?.service.notifyWorkAvailable();
     },
     onImportRendererReady: externalOpen.rendererReady,
     broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),

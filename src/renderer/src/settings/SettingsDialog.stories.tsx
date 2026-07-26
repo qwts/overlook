@@ -6,6 +6,7 @@ import { defaultSettings, mergeSettings, type AppSettings } from '../../../share
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import { AppStateProvider } from '../state/app-state-context';
 import type { QuickActionCommandId } from '../../../shared/commands/registry.js';
+import { createEmbeddingStoryController } from '../../../../.storybook/embedding-story-controller';
 
 // #112–#114 exit criteria: the 640px two-pane frame (Storage & Backup opens
 // by default, nav switches panes, keyboard-operable, Esc closes), the
@@ -99,6 +100,7 @@ function installStub(options?: {
       return () => listeners.delete(listener);
     },
   };
+  const embeddingApi = createEmbeddingStoryController().api;
   const initialProviderStatus =
     options?.deferInitialProviderStatus === true
       ? new Promise<void>((resolve) => {
@@ -391,6 +393,7 @@ function installStub(options?: {
   };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     settings: settingsApi,
+    embedding: embeddingApi,
     backup: backupApi,
     keys: keysApi,
     restore: restoreApi,

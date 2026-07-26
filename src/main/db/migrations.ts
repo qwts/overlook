@@ -731,6 +731,51 @@ const SCHEMA_V20: Migration = {
   },
 };
 
+const SCHEMA_V21: Migration = {
+  version: 21,
+  name: 'encrypted-photo-embeddings',
+  // #391 / ADR-0018 §4: portable metadata lives in SQLCipher on every target.
+  // database.ts creates the vec0 table after migration when the exact-pinned
+  // native extension is available. This keeps Windows ARM64 libraries usable
+  // while upstream lacks that one prebuilt binary.
+  up(db) {
+    db.exec(`
+      CREATE TABLE photo_embeddings (
+        embedding_id INTEGER PRIMARY KEY,
+        photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        content_hash TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        embedded_at TEXT NOT NULL,
+        UNIQUE (photo_id, model_version)
+      );
+      CREATE INDEX idx_photo_embeddings_model
+        ON photo_embeddings (model_version, photo_id);
+    `);
+  },
+};
+
+const SCHEMA_V22: Migration = {
+  version: 22,
+  name: 'embedding-derivative-deferrals',
+  // A missing/corrupt derivative is a per-photo condition, not a reason to
+  // poison the whole query-backed sweep. Keep the retry marker inside the
+  // encrypted library and clear it when an eligibility-changing repair lands.
+  up(db) {
+    db.exec(`
+      CREATE TABLE photo_embedding_deferrals (
+        photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        content_hash TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('derivative-unavailable')),
+        deferred_at TEXT NOT NULL,
+        PRIMARY KEY (photo_id, model_version)
+      ) WITHOUT ROWID;
+      CREATE INDEX idx_photo_embedding_deferrals_model
+        ON photo_embedding_deferrals (model_version, photo_id);
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -752,6 +797,8 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V18,
   SCHEMA_V19,
   SCHEMA_V20,
+  SCHEMA_V21,
+  SCHEMA_V22,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

@@ -107,6 +107,7 @@ describe('settings store (#111)', () => {
       diagnosticsConsentVersion: 0,
       llmProviderId: null,
       llmQaEnabled: false,
+      semanticSearchEnabled: false,
     });
     assert.equal((JSON.parse(readFileSync(libraryPath(dir), 'utf8')) as { sortOrder: string }).sortOrder, 'name');
     assert.equal(existsSync(`${profilePath(dir)}.tmp`), false);

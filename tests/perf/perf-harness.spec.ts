@@ -82,7 +82,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
   {
     const seeder = await electron.launch({ args: ['.'], env: { ...env, OVERLOOK_SEED_SYNTHETIC: String(LIBRARY_SIZE) } });
     const seedPage = await seeder.firstWindow();
-    await expect(seedPage.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} PHOTOS ·`, {
+    await expect(seedPage.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} photos ·`, {
       timeout: 180_000,
     });
     await seeder.close();
@@ -94,7 +94,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     const page = await app.firstWindow();
 
     // Cold start: launch → the existing 200K grid is interactive.
-    await expect(page.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} PHOTOS ·`, {
+    await expect(page.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} photos ·`, {
       timeout: 120_000,
     });
     await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell').first()).toBeVisible();

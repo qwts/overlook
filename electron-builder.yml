@@ -40,10 +40,13 @@ files:
 # native modules must land in "dependencies" so npmRebuild picks them up
 # (ADR-0006's prebuilt-only policy — better-sqlite3/sharp arrive with M03).
 npmRebuild: true
-# Native Node-API binaries cannot execute from inside app.asar. Keep the
-# signed Touch ID bridge beside the archive where Electron can dlopen it.
+# Native Node-API binaries cannot execute from inside app.asar. Keep those
+# bindings beside the archive, but unpack shared libraries only for the two
+# exact-pinned runtimes that dlopen them.
 asarUnpack:
   - '**/*.node'
+  - 'node_modules/onnxruntime-node/**/*.{dylib,so,dll}'
+  - 'node_modules/sqlite-vec*/**/*.{dylib,so,dll}'
 # Production runtime hardening (#460). electron-builder flips these fuses on the
 # packaged binary before signing, so signed and notarized builds ship with them
 # baked in:

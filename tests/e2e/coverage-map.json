@@ -74,7 +74,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+          "path": "src/renderer/src/settings/SemanticIndexSettings.stories.tsx"
         },
         {
           "type": "unit-dom",
@@ -1868,6 +1868,30 @@
         {
           "type": "manual",
           "reason": "The relaunch-into-lock-screen custody check (restored library unlocks with the same app password) is owner-verified on the packaged build; the record + anchor semantics are covered by app-lock-credentials.test.ts and the engine seam by restore-engine.test.ts."
+        }
+      ]
+    },
+    {
+      "id": "391-semantic-embedding-index",
+      "wiki": "Acceptance-Test-Semantic-Embedding-Index",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/embedding/model-assets.test.ts",
+            "tests/embedding/embedding-service.test.ts",
+            "tests/embedding/embedding-runtime.test.ts",
+            "tests/db/embedding-repository.test.ts",
+            "tests/db/protected-photo-migration-repository.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Embedding-Index.md on packaged macOS and Windows builds to verify native execution-provider fallback, battery transitions, and relaunch behavior that unit and Storybook lanes cannot observe."
         }
       ]
     }

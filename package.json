@@ -82,6 +82,7 @@
     "seed:dev": "OVERLOOK_SEED=96 electron-vite dev",
     "seed:perf": "OVERLOOK_SEED_SYNTHETIC=200000 electron-vite dev",
     "benchmark:cold-storage": "node scripts/benchmark-cold-storage.mjs",
+    "benchmark:embedding": "node scripts/run-guarded.mjs --label benchmark:embedding --rss-mb 4096 --timeout-s 900 -- node scripts/benchmark-embedding-model.mjs",
     "postinstall": "node scripts/ensure-electron-binary.mjs && electron-builder install-app-deps"
   },
   "devDependencies": {
@@ -159,15 +160,18 @@
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
     "better-sqlite3-multiple-ciphers@12.11.1": true,
-    "electron@42.6.1": true
+    "electron@42.6.1": true,
+    "onnxruntime-node@1.27.0": true
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.112.4",
     "better-sqlite3-multiple-ciphers": "12.11.1",
     "exifr": "7.1.3",
     "mpegts.js": "1.8.0",
+    "onnxruntime-node": "1.27.0",
     "openai": "6.48.0",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "sqlite-vec": "0.1.9"
   },
   "optionalDependencies": {
     "@overlook/touch-id": "0.1.0"

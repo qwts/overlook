@@ -1,0 +1,53 @@
+{
+  "id": "openclip-vit-b32-int8",
+  "version": "openclip-vit-b32-int8-d15189d7028b43f1d3e65039190477f6af591c2a",
+  "family": "CLIP ViT-B/32",
+  "sourceRevision": "d15189d7028b43f1d3e65039190477f6af591c2a",
+  "dimensions": 512,
+  "imageSize": 224,
+  "license": "MIT",
+  "assets": [
+    {
+      "name": "config.json",
+      "path": "config.json",
+      "bytes": 4524,
+      "sha256": "493ef57ff783e42d1530c91b53469b7fdf8db8a9c1408e86998fcb7899a4f495",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/config.json?download=true"
+    },
+    {
+      "name": "preprocessor_config.json",
+      "path": "preprocessor_config.json",
+      "bytes": 520,
+      "sha256": "6f638fb9401a6d6296feff533ee7efe657b787c49f954f82f5906b36ef2a1b1f",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/preprocessor_config.json?download=true"
+    },
+    {
+      "name": "tokenizer.json",
+      "path": "tokenizer.json",
+      "bytes": 2224119,
+      "sha256": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/tokenizer.json?download=true"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "bytes": 775,
+      "sha256": "60ba2912bc6344c94bc16bbdec27fa1209409167b6f2fdf3cfe9e65462ea3967",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/tokenizer_config.json?download=true"
+    },
+    {
+      "name": "text_model_int8.onnx",
+      "path": "onnx/text_model_int8.onnx",
+      "bytes": 64070791,
+      "sha256": "18845f2ccc35223bb7fec403383a131154b11ac0918df25cf51986df5efd3a21",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/onnx/text_model_int8.onnx?download=true"
+    },
+    {
+      "name": "vision_model_int8.onnx",
+      "path": "onnx/vision_model_int8.onnx",
+      "bytes": 88648877,
+      "sha256": "0ab0c1b3ace708e539633af1744d5a95247fe4e14d3e08ff197ef82a6cb9bd93",
+      "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/onnx/vision_model_int8.onnx?download=true"
+    }
+  ]
+}

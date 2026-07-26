@@ -31,6 +31,7 @@ existing links resolve — never add content there.
 - [Localization Workflow](./Localization.md) — adding and reviewing catalogs, pseudo-locales, and RTL evidence
 - [Architecture Decision Records](./adr/Architecture-Decision-Records.md) — ADR index + template
 - [Deterministic Reviewed Sync acceptance](./acceptance/Acceptance-Test-Deterministic-Reviewed-Sync.md) — replay, conflict, tombstone, and restart evidence
+- [Semantic embedding index acceptance](./acceptance/Acceptance-Test-Semantic-Embedding-Index.md) — #391 model checkpoint, encrypted lifecycle, scheduler, and packaged evidence
 - [Security Review M11](./Security-Review-M11.md) — crypto/IPC/plaintext audit (#129) + accepted deviations
 - [M20 Privacy Lock, Touch ID & Protected Albums](./stories/User-Story-M20-Privacy-lock-protected-albums.md) — app-lock, biometric, recovery, and protected-domain contract
 - [Protected Albums acceptance](./acceptance/Acceptance-Test-Protected-Albums.md) — #325–#329 custody, migration, leakage, lifecycle, and UI evidence

@@ -51,6 +51,8 @@ import { OriginalDeletionService } from './library/original-deletion-service.js'
 import type { AppLockState, AppAuthorizationResult } from './crypto/app-lock-controller.js';
 import { registerInboundMoveHandlers } from './interop/inbound-move-ipc.js';
 import { getProductionInboundMoveController } from './interop/inbound-move-production.js';
+import { registerEmbeddingHandlers } from './embedding/embedding-ipc.js';
+import type { EmbeddingService } from './embedding/embedding-service.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -65,6 +67,7 @@ export interface AppServicesOptions {
   readonly getThumbs: () => ThumbService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
+  readonly getEmbedding: () => EmbeddingService;
   readonly getExport: () => DrainableExportFacade;
   readonly getKeyStore: () => KeyStore;
   readonly safeStorage: Parameters<typeof createRecoveryKeyFacade>[0]['safeStorage'];
@@ -134,6 +137,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     options.onImportRendererReady,
     options.getActivity,
   );
+  registerEmbeddingHandlers(options.getEmbedding, options.requireContentAccess);
   registerExportHandlers(options.getExport, options.getActivity);
   registerKeysHandlers(() =>
     createRecoveryKeyFacade({
