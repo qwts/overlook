@@ -64,6 +64,9 @@ export default defineConfig({
           // The #86 thumbnail worker boots via new Worker(url) at runtime,
           // so it needs its own bundle entry next to index.js.
           'thumbnail-worker': 'src/main/import/thumbnail-worker.ts',
+          // ADR-0018 uses the same dedicated-entry shape for the embedding
+          // worker so native inference never runs on the main thread.
+          'embedding-worker': 'src/main/embedding/embedding-worker.ts',
         },
       },
     },

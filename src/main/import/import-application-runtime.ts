@@ -22,7 +22,9 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
   const emitPending = createEmitter(events.pendingCountChanged, options.broadcast);
   return createImportRuntime({
     dataDir: options.dataDir,
-    workerUrl: new URL('../thumbnail-worker.js', import.meta.url),
+    // electron-vite bundles this module into out/main/index.js; the dedicated
+    // worker entry is emitted beside that bundle.
+    workerUrl: new URL('./thumbnail-worker.js', import.meta.url),
     repo,
     blobs: options.parts.blobStore,
     blobsReady: options.parts.blobStoreReady,
