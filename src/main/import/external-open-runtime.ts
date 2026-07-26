@@ -25,6 +25,18 @@ export interface ExternalOpenRuntimeOptions {
   readonly isolatedHarnessProfile?: boolean;
 }
 
+/** Native messaging runs inside the signed app executable without renderer,
+ * document-intake, or single-instance side effects. */
+export function createHeadlessExternalOpenRuntime(): ExternalOpenRuntime {
+  return {
+    whenReady: () => app.whenReady(),
+    rendererReady: () => undefined,
+    followAuthorization: () => undefined,
+    finishBootstrap: () => undefined,
+    close: () => undefined,
+  };
+}
+
 /** Installs pre-ready OS document handlers before Electron can dispatch macOS
  * open-file events. Every path then enters one coalesced renderer queue. */
 export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = {}): ExternalOpenRuntime {

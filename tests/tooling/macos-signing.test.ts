@@ -89,6 +89,7 @@ describe('macOS release signing safety (#357)', () => {
     const provisionedVerifier = source('scripts/verify-macos-provisioned-app.mjs');
     assert.match(workflow, /verify-macos-provisioned-app\.mjs/u);
     assert.match(workflow, /verify-macos-app-launch\.mjs/u);
+    assert.match(workflow, /OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: \$\{\{ vars\.IMAGE_TRAIL_EXTENSION_ID \}\}/u);
     assert.match(workflow, /\*-mac\.zip/u);
     for (const contract of [
       'embedded.provisionprofile',
@@ -107,6 +108,21 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(provisionedVerifier, /codesign/u);
     assert.match(source('scripts/verify-macos-app-launch.mjs'), /ditto/u);
     for (const binary of ['ditto', 'plutil', 'security']) assert.match(knip, new RegExp(binary, 'u'));
+  });
+
+  test('the signed app executable is the native messaging host and registration is build-identity gated', () => {
+    const config = source('src/main/build-config.ts');
+    const vite = source('electron.vite.config.ts');
+    const appRuntime = source('src/main/interop/production-app-runtime.ts');
+    const host = source('src/main/interop/icloud-native-host.ts');
+    const registration = source('src/main/interop/icloud-native-registration.ts');
+    assert.match(config, /__OVERLOOK_IMAGE_TRAIL_EXTENSION_ID__/u);
+    assert.ok(config.includes('const CHROMIUM_EXTENSION_ID = /^[a-p]{32}$/u;'));
+    assert.match(vite, /OVERLOOK_IMAGE_TRAIL_EXTENSION_ID/u);
+    assert.match(appRuntime, /executablePath: app\.getPath\('exe'\)/u);
+    assert.match(host, /allowed_origins/u);
+    assert.match(registration, /NativeMessagingHosts/u);
+    assert.doesNotMatch(registration, /\\.sh['"`]/u);
   });
 });
 

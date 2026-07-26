@@ -5,16 +5,17 @@ import { InteropTransportError, assertBoundedControlFrame, assertSafeInteropPath
 
 export { OVERLOOK_ICLOUD_NATIVE_HOST } from '../../shared/app-identity.js';
 
+const extensionIdSchema = z.string().regex(/^[a-p]{32}$/u);
 const fileReferenceSchema = z
   .string()
-  .min(1)
-  .max(512)
-  .regex(/^[A-Za-z0-9._/-]+$/u);
+  .min(8)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/u);
 const requestSchema = z
   .object({
     schemaVersion: z.literal(1),
     operation: z.enum(['status', 'put-file', 'materialize-file', 'list', 'delete', 'quota', 'verify']),
-    extensionId: z.string().min(1),
+    extensionId: extensionIdSchema,
     path: z.string().optional(),
     sourceFile: fileReferenceSchema.optional(),
     destinationFile: fileReferenceSchema.optional(),
@@ -69,12 +70,13 @@ export interface NativeHostManifest {
 
 export function nativeHostManifest(executablePath: string, releasedExtensionId: string): NativeHostManifest {
   if (!executablePath.startsWith('/')) throw new InteropTransportError('Native host executable path must be absolute.', 'corrupt', false);
+  const extensionId = extensionIdSchema.parse(releasedExtensionId);
   return {
     name: OVERLOOK_ICLOUD_NATIVE_HOST,
     description: 'Signed Overlook iCloud interoperability host',
     path: executablePath,
     type: 'stdio',
-    allowed_origins: [`chrome-extension://${releasedExtensionId}/`],
+    allowed_origins: [`chrome-extension://${extensionId}/`],
   };
 }
 
