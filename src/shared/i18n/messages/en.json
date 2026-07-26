@@ -1064,6 +1064,54 @@
   "settings.general.quickActions.up": {
     "defaultMessage": "Up"
   },
+  "settings.general.semantic": {
+    "defaultMessage": "On-device semantic index"
+  },
+  "settings.general.semantic.download": {
+    "defaultMessage": "Downloads a 148 MB on-device model once. Photos and embeddings never leave this device."
+  },
+  "settings.general.semantic.downloading": {
+    "defaultMessage": "Downloading model… {percent}%"
+  },
+  "settings.general.semantic.failed": {
+    "defaultMessage": "Indexing needs attention"
+  },
+  "settings.general.semantic.indexing": {
+    "defaultMessage": "Indexing {completed} of {total} photos"
+  },
+  "settings.general.semantic.off": {
+    "defaultMessage": "Off"
+  },
+  "settings.general.semantic.pause": {
+    "defaultMessage": "Pause"
+  },
+  "settings.general.semantic.paused": {
+    "defaultMessage": "Indexing paused: {reason}"
+  },
+  "settings.general.semantic.ready": {
+    "defaultMessage": "Index up to date"
+  },
+  "settings.general.semantic.reason.backup": {
+    "defaultMessage": "backup in progress"
+  },
+  "settings.general.semantic.reason.battery": {
+    "defaultMessage": "running on battery"
+  },
+  "settings.general.semantic.reason.import": {
+    "defaultMessage": "import in progress"
+  },
+  "settings.general.semantic.reason.user": {
+    "defaultMessage": "you paused it"
+  },
+  "settings.general.semantic.resume": {
+    "defaultMessage": "Resume"
+  },
+  "settings.general.semantic.toggle": {
+    "defaultMessage": "Enable semantic indexing"
+  },
+  "settings.general.semantic.unavailable": {
+    "defaultMessage": "Unavailable on Windows ARM64 until the vector runtime adds support"
+  },
   "settings.general.sort.date": {
     "defaultMessage": "Date"
   },

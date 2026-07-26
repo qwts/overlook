@@ -5,6 +5,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 
 import { MIGRATIONS, migrate } from '../../src/main/db/migrations.js';
 import { queryAll, queryGet, run } from '../../src/main/db/sql.js';
+import { loadVectorExtension } from '../../src/main/db/vector-extension.js';
 
 test('migration v20 creates custody provenance on fresh libraries and preserves v18 offloaded rows as legacy-unbound (#729)', () => {
   const db = new Database(':memory:');
@@ -21,7 +22,10 @@ test('migration v20 creates custody provenance on fresh libraries and preserves 
   );
   run(db, `INSERT INTO sync_ledger (photo_id, status, dirty) VALUES ('P1', 'offloaded', 0)`);
 
-  migrate(db);
+  migrate(
+    db,
+    MIGRATIONS.filter((migration) => migration.version <= 20),
+  );
 
   const columns = queryAll<{ name: string }>(db, 'PRAGMA table_info(sync_ledger)').map(({ name }) => name);
   assert.ok(columns.includes('custody_authority_id'));
@@ -34,5 +38,17 @@ test('migration v20 creates custody provenance on fresh libraries and preserves 
     null,
   );
   assert.equal(queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version, 20);
+
+  migrate(db);
+  assert.equal(
+    queryGet<{ name: string }>(db, `SELECT name FROM sqlite_master WHERE name = 'photo_embedding_vectors'`)?.name,
+    undefined,
+    'the portable migration does not require a native vec0 module',
+  );
+  loadVectorExtension(db);
+  assert.equal(
+    queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version,
+    Math.max(...MIGRATIONS.map(({ version }) => version)),
+  );
   db.close();
 });

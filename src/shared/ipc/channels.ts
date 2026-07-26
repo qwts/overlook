@@ -27,6 +27,7 @@ import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
+import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -465,6 +466,7 @@ export const channels = {
   // the ledger (manifest-relevant, ADR-0007).
   ...albumChannels,
   ...boardChannels,
+  ...embeddingChannels,
   // Import sources (#84): discovery + the source-card scan. Copying is #87.
   importListSources: defineChannel('import:list-sources', z.object({}), z.object({ sources: z.array(importSourceSchema).readonly() })),
   importScanSource: defineChannel('import:scan-source', z.object({ path: z.string() }), scanSummarySchema),
@@ -807,6 +809,7 @@ export const events = {
   appLockTouchIdChanged: defineEvent('app-lock:touch-id-changed', touchIdStatusSchema),
   ...interopEvents,
   ...boardEvents,
+  ...embeddingEvents,
   // Targeted library pushes (#71) — never refetch-the-world signals.
   // `derivativeOnly` marks a change that only regenerated a thumb/poster
   // derivative (a captured video poster, a repaired preview) with no membership

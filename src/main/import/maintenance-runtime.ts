@@ -23,6 +23,7 @@ export interface MaintenanceContext {
   readonly emitThumbsChanged: (photoIds: readonly string[]) => void;
   readonly emitPending: (count: number) => void;
   readonly scheduleAutoBackup: () => void;
+  readonly embeddingEligible: (photoIds: readonly string[]) => void;
 }
 
 export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: RawRepairService; posterCapture: PosterCaptureService } {
@@ -46,6 +47,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: 
       ctx.emitChanged(ids);
       ctx.emitPending(repo.stats().pending);
       ctx.scheduleAutoBackup();
+      ctx.embeddingEligible(ids);
     },
   });
   const posterCapture = createPosterCaptureRuntime({
@@ -57,6 +59,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: 
       // Poster capture only regenerates a derivative — refresh the tiles, never
       // refetch the page (#744 review).
       ctx.emitThumbsChanged(ids);
+      ctx.embeddingEligible(ids);
     },
   });
   return { rawRepair, posterCapture };
