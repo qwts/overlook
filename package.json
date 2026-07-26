@@ -82,6 +82,7 @@
     "seed:dev": "OVERLOOK_SEED=96 electron-vite dev",
     "seed:perf": "OVERLOOK_SEED_SYNTHETIC=200000 electron-vite dev",
     "benchmark:cold-storage": "node scripts/benchmark-cold-storage.mjs",
+    "benchmark:embedding": "node scripts/run-guarded.mjs --label benchmark:embedding --rss-mb 4096 --timeout-s 900 -- node scripts/benchmark-embedding-model.mjs",
     "postinstall": "node scripts/ensure-electron-binary.mjs && electron-builder install-app-deps"
   },
   "devDependencies": {

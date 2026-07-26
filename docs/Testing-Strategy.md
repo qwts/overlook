@@ -209,6 +209,8 @@ budget.
 | Import throughput (100 files, full pipeline)   | > 3 photos/s | 4.20 photos/s                                          |
 | Main-process RSS after the workout             | < 1,500 MB   | 524 MB                                                 |
 | Renderer JS heap after the workout             | < 512 MB     | 20.7 MB                                                |
+| CPU image embedding (4-image labeled fixture)  | > 5 photos/s | 127.59 photos/s (#391, Apple Silicon)                  |
+| CPU text embedding median                      | < 40 ms      | 6.20 ms (#391, Apple Silicon)                          |
 
 #124 outcomes: `counts()` rewritten as ONE FILTER-clause pass over the
 ledger join (689 → 378 ms; ratchet tightened to 500 ms). Zoom-96 scroll

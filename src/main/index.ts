@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { buffer } from 'node:stream/consumers';
-import { app, dialog, powerMonitor, session, shell } from 'electron';
+import { app, dialog, session, shell } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
 import { activityBackupSnapshot, createActivityFacade } from './activity/activity-publication.js';
@@ -21,7 +21,8 @@ import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime } from './import/external-open-runtime.js';
-import { createDriveImport, createImportRuntime, type ImportRuntime, type ImportService } from './import/import-runtime.js';
+import type { ImportRuntime, ImportService } from './import/import-runtime.js';
+import { createImportApplicationRuntime } from './import/import-application-runtime.js';
 import type { RawRepairService } from './import/raw-repair-service.js';
 import type { PosterCaptureService } from './import/poster-capture-service.js';
 import { buildMaintenanceServices } from './import/maintenance-runtime.js';
@@ -74,7 +75,8 @@ import { configurePCloudInteropFeature } from './interop/feature-runtime.js';
 import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
 import { pcloudFeatureConfig } from './build-config.js';
-import { createEmbeddingRuntime, executionProviders, type EmbeddingRuntime } from './embedding/embedding-runtime.js';
+import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
+import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
@@ -216,51 +218,16 @@ let posterCaptureService: PosterCaptureService | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
-    const repo = new PhotosRepository(parts.db);
-    const emitScanProgress = createEmitter(events.scanProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitCopyProgress = createEmitter(events.importCopyProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitThumbProgress = createEmitter(events.importThumbProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitChanged = createEmitter(events.libraryChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    importRuntime = createImportRuntime({
+    importRuntime = createImportApplicationRuntime({
       dataDir: libraryDataDir(),
-      workerUrl: new URL('./thumbnail-worker.js', import.meta.url),
-      repo,
-      blobs: parts.blobStore,
-      blobsReady: parts.blobStoreReady,
-      currentKey: () => parts.keyStore.currentKey(),
-      resolveKey: parts.keyStore.resolver(),
-      events: {
-        scanProgress: (scanPath, progress) => emitScanProgress({ path: scanPath, ...progress }),
-        copyProgress: (done, total) => {
-          emitCopyProgress({ done, total });
-        },
-        thumbProgress: (done, total) => {
-          emitThumbProgress({ done, total });
-        },
-        imported: (photoIds) => {
-          emitChanged({ photoIds: [...photoIds] });
-          emitPending({ count: repo.stats().pending });
-          // Poster capture is a post-import background pass (§6): kick it after
-          // each batch so a freshly imported video gains its tile poster now,
-          // not only on the next launch. The service coalesces concurrent calls.
-          ensureMaintenanceServices();
-          void posterCaptureService?.capture().catch(() => undefined);
-          embeddingRuntime?.service.notifyWorkAvailable();
-        },
+      parts,
+      harnessEnv,
+      broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
+      imported: () => {
+        ensureMaintenanceServices();
+        void posterCaptureService?.capture().catch(() => undefined);
+        embeddingRuntime?.service.notifyWorkAvailable();
       },
-      fixtureSource: () => harnessEnv('OVERLOOK_IMPORT_SOURCE'),
-      googleDrive: createDriveImport(libraryDataDir(), () => harnessEnv('OVERLOOK_GOOGLE_DRIVE_IMPORT_SOURCE')),
       resumed: () => {
         getBackupEngine();
         autoBackupTrigger?.();
@@ -362,31 +329,12 @@ const providerIdle = (): Promise<void> => providerWork.idle();
 let embeddingRuntime: EmbeddingRuntime | undefined;
 
 function getEmbeddingService(): EmbeddingService {
-  if (embeddingRuntime === undefined) {
-    const parts = requireParts('embedding service');
-    const emitStatus = createEmitter(events.embeddingStatusChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    embeddingRuntime = createEmbeddingRuntime({
-      db: parts.db,
-      blobs: parts.blobStore,
-      resolveKey: parts.keyStore.resolver(),
-      modelCacheRoot: path.join(app.getPath('userData'), 'models'),
-      workerUrl: new URL('./embedding-worker.js', import.meta.url),
-      providers: executionProviders(),
-      enabled: () => getSettingsStore().get().semanticSearchEnabled,
-      setEnabled: (semanticSearchEnabled) => {
-        getSettingsStore().set({ semanticSearchEnabled });
-      },
-      pauseReason: () => {
-        if (importRuntime?.service.busy() === true) return 'import';
-        if (custodyWorkActive()) return 'backup';
-        if (powerMonitor.isOnBatteryPower()) return 'battery';
-        return null;
-      },
-      emit: emitStatus,
-    });
-  }
+  embeddingRuntime ??= createEmbeddingApplicationRuntime({
+    parts: requireParts('embedding service'),
+    importBusy: () => importRuntime?.service.busy() === true,
+    custodyBusy: custodyWorkActive,
+    broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
+  });
   return embeddingRuntime.service;
 }
 

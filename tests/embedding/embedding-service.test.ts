@@ -53,8 +53,9 @@ function world(
     },
     assets: {
       installed: () => Promise.resolve(options.installed ?? true),
-      ensureInstalled: async (_consent, progress) => {
+      ensureInstalled: (_consent, progress) => {
         progress?.({ downloadedBytes: 4, totalBytes: 4, asset: 'model.onnx' });
+        return Promise.resolve();
       },
     },
     enabled: () => enabled,
@@ -123,7 +124,7 @@ describe('EmbeddingService', () => {
         attempts += 1;
         if (attempts > 1) return Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS));
         return new Promise<Int8Array>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          signal.addEventListener('abort', () => reject(new Error('fixture aborted')), { once: true });
         });
       },
     });
@@ -168,7 +169,7 @@ describe('EmbeddingService', () => {
       candidates: CANDIDATES.slice(0, 1),
       embed: (_candidate, signal) =>
         new Promise<Int8Array>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          signal.addEventListener('abort', () => reject(new Error('fixture aborted')), { once: true });
         }),
     });
     subject.service.enable();

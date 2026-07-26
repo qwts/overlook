@@ -29,7 +29,7 @@ export class ModelAssetIntegrityError extends Error {
 
 async function digestFile(path: string): Promise<string> {
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
   return hash.digest('hex');
 }
 

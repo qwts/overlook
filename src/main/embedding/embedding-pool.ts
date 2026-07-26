@@ -13,6 +13,10 @@ interface ActiveJob {
   readonly removeAbort: (() => void) | undefined;
 }
 
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('embedding job aborted');
+}
+
 /** One worker by construction: indexing never competes with the import pool. */
 export class EmbeddingPool {
   private worker: Worker | undefined;
@@ -25,7 +29,7 @@ export class EmbeddingPool {
   embed(bytes: Buffer, signal?: AbortSignal): Promise<Int8Array> {
     if (this.closed) return Promise.reject(new Error('embedding pool is closed'));
     if (this.active !== undefined) return Promise.reject(new Error('embedding pool accepts one job at a time'));
-    if (signal?.aborted === true) return Promise.reject(signal.reason);
+    if (signal?.aborted === true) return Promise.reject(abortError(signal));
     const worker = this.getWorker();
     const id = this.nextId++;
     return new Promise<Int8Array>((resolve, reject) => {
@@ -67,7 +71,7 @@ export class EmbeddingPool {
       if (response.ok) job.resolve(new Int8Array(response.embedding));
       else job.reject(new Error(response.error));
     });
-    worker.on('error', (error) => {
+    worker.on('error', (error: Error) => {
       this.fail(error);
     });
     worker.on('exit', (code) => {

@@ -64,6 +64,6 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
 
 export function executionProviders(platform = process.platform): readonly string[] {
   if (platform === 'darwin') return ['coreml', 'cpu'];
-  if (platform === 'win32') return ['directml', 'cpu'];
+  if (platform === 'win32') return ['dml', 'cpu'];
   return ['cpu'];
 }
