@@ -354,6 +354,20 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     assert.deepEqual(await registerICloudNativeHost({ ...options, extensionId: null }), []);
   });
 
+  test('continues registration when one browser profile is damaged', async () => {
+    const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-'));
+    await writeFile(join(appSupport, 'Google'), 'occupied');
+    const installed = await registerICloudNativeHost({
+      platform: 'darwin',
+      packaged: true,
+      applicationSupportDirectory: appSupport,
+      executablePath: '/Applications/Overlook.app/Contents/MacOS/Overlook',
+      extensionId: RELEASED_EXTENSION_ID,
+    });
+    assert.equal(installed.length, 3);
+    assert.ok(installed.every((path) => !path.includes('/Google/Chrome/')));
+  });
+
   test('gates iCloud authority on the process origin before native access', async () => {
     const input = { schemaVersion: 1, operation: 'status', extensionId: RELEASED_EXTENSION_ID };
     const output = new PassThrough();
@@ -495,9 +509,10 @@ describe('iCloud native authority production adapter (#467)', () => {
     assert.deepEqual(await authority.delete('pairings/p/transfers/t/object.bin'), { deleted: true });
     await assert.rejects(authority.putFile('pairings/p/transfers/t/missing.bin', 'missing-reference'), InteropTransportError);
     bridge.changeAccount();
-    await assert.rejects(
-      authority.delete('pairings/p/transfers/t/object.bin'),
-      (error: unknown) => error instanceof InteropTransportError && error.code === 'auth-expired',
-    );
+    const accountExpired = (error: unknown): boolean =>
+      error instanceof InteropTransportError && error.code === 'auth-expired' && !error.retryable;
+    await assert.rejects(authority.quota(), accountExpired);
+    await assert.rejects(authority.verify('pairings/p/transfers/t/object.bin'), accountExpired);
+    await assert.rejects(authority.delete('pairings/p/transfers/t/object.bin'), accountExpired);
   });
 });

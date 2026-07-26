@@ -52,11 +52,16 @@ export async function registerICloudNativeHost(options: NativeHostRegistrationOp
   const manifest = `${JSON.stringify(nativeHostManifest(options.executablePath, options.extensionId), null, 2)}\n`;
   const installed: string[] = [];
   for (const segments of CHROMIUM_HOST_DIRECTORIES) {
-    const directory = join(options.applicationSupportDirectory, ...segments);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    const path = join(directory, `${OVERLOOK_ICLOUD_NATIVE_HOST}.json`);
-    await writeManifest(path, manifest);
-    installed.push(path);
+    try {
+      const directory = join(options.applicationSupportDirectory, ...segments);
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      const path = join(directory, `${OVERLOOK_ICLOUD_NATIVE_HOST}.json`);
+      await writeManifest(path, manifest);
+      installed.push(path);
+    } catch {
+      // A damaged browser profile must not prevent the desktop from starting
+      // or block registration for the remaining installed browsers.
+    }
   }
   return installed;
 }

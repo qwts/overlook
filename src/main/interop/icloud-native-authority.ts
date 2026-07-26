@@ -124,8 +124,9 @@ export class BridgeICloudNativeAuthority implements ICloudNativeAuthority {
     }
   }
 
-  quota(): Promise<unknown> {
-    return Promise.resolve({ usedBytes: 0, totalBytes: null });
+  async quota(): Promise<unknown> {
+    await this.accountToken();
+    return { usedBytes: 0, totalBytes: null };
   }
 
   async verify(path: string): Promise<unknown> {
@@ -136,6 +137,7 @@ export class BridgeICloudNativeAuthority implements ICloudNativeAuthority {
       await this.options.bridge.materializeFile(remotePath(path), destination, await this.accountToken());
       return await digestFile(destination);
     } catch (error) {
+      if (error instanceof InteropTransportError) throw error;
       throw mappedError(error);
     } finally {
       await rm(directory, { recursive: true, force: true });
