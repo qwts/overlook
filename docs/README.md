@@ -33,6 +33,8 @@ existing links resolve — never add content there.
 - [Deterministic Reviewed Sync acceptance](./acceptance/Acceptance-Test-Deterministic-Reviewed-Sync.md) — replay, conflict, tombstone, and restart evidence
 - [Semantic embedding index acceptance](./acceptance/Acceptance-Test-Semantic-Embedding-Index.md) — #391 model checkpoint, encrypted lifecycle, scheduler, and packaged evidence
 - [Security Review M11](./Security-Review-M11.md) — crypto/IPC/plaintext audit (#129) + accepted deviations
+- [Live Local Interop Threat Model](./Live-Local-Interop-Threat-Model.md) — #543 origin, capability, replay, downgrade, and resource-exhaustion boundary
+- [Live Local Interop acceptance](./acceptance/Acceptance-Test-Live-Local-Interop-Transport.md) — #543 rendezvous, capability, loopback, backpressure, and follow-up gates
 - [M20 Privacy Lock, Touch ID & Protected Albums](./stories/User-Story-M20-Privacy-lock-protected-albums.md) — app-lock, biometric, recovery, and protected-domain contract
 - [Protected Albums acceptance](./acceptance/Acceptance-Test-Protected-Albums.md) — #325–#329 custody, migration, leakage, lifecycle, and UI evidence
 - [User Stories](./stories/User-Stories.md) — milestone / user-story planning home
