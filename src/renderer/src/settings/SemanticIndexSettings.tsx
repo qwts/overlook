@@ -13,6 +13,10 @@ const messages = defineMessages({
     defaultMessage: 'Downloads a 148 MB on-device model once. Photos and embeddings never leave this device.',
   },
   off: { id: 'settings.general.semantic.off', defaultMessage: 'Off' },
+  unavailable: {
+    id: 'settings.general.semantic.unavailable',
+    defaultMessage: 'Unavailable on Windows ARM64 until the vector runtime adds support',
+  },
   downloading: { id: 'settings.general.semantic.downloading', defaultMessage: 'Downloading model… {percent}%' },
   indexing: { id: 'settings.general.semantic.indexing', defaultMessage: 'Indexing {completed} of {total} photos' },
   ready: { id: 'settings.general.semantic.ready', defaultMessage: 'Index up to date' },
@@ -45,7 +49,7 @@ export function SemanticIndexSettings(): ReactElement {
     };
   }, []);
 
-  const enabled = status !== null && status.phase !== 'disabled';
+  const enabled = status !== null && status.phase !== 'disabled' && status.phase !== 'unavailable';
   const pauseReason = status?.pauseReason;
   const reason =
     pauseReason === 'user'
@@ -58,17 +62,19 @@ export function SemanticIndexSettings(): ReactElement {
   const progress =
     status === null || status.phase === 'disabled'
       ? intl.formatMessage(messages.off)
-      : status.phase === 'downloading'
-        ? intl.formatMessage(messages.downloading, {
-            percent: status.downloadBytes === 0 ? 0 : Math.min(100, Math.floor((status.downloadedBytes / status.downloadBytes) * 100)),
-          })
-        : status.phase === 'indexing'
-          ? intl.formatMessage(messages.indexing, { completed: status.completed, total: status.total })
-          : status.phase === 'ready'
-            ? intl.formatMessage(messages.ready)
-            : status.phase === 'paused'
-              ? intl.formatMessage(messages.paused, { reason: intl.formatMessage(reason) })
-              : intl.formatMessage(messages.failed);
+      : status.phase === 'unavailable'
+        ? intl.formatMessage(messages.unavailable)
+        : status.phase === 'downloading'
+          ? intl.formatMessage(messages.downloading, {
+              percent: status.downloadBytes === 0 ? 0 : Math.min(100, Math.floor((status.downloadedBytes / status.downloadBytes) * 100)),
+            })
+          : status.phase === 'indexing'
+            ? intl.formatMessage(messages.indexing, { completed: status.completed, total: status.total })
+            : status.phase === 'ready'
+              ? intl.formatMessage(messages.ready)
+              : status.phase === 'paused'
+                ? intl.formatMessage(messages.paused, { reason: intl.formatMessage(reason) })
+                : intl.formatMessage(messages.failed);
 
   const changeEnabled = (next: boolean): void => {
     setBusy(true);
@@ -78,7 +84,12 @@ export function SemanticIndexSettings(): ReactElement {
 
   return (
     <div className="ovl-settings__semantic" data-testid="semantic-index-settings">
-      <Switch checked={enabled} disabled={busy} label={intl.formatMessage(messages.toggle)} onChange={changeEnabled} />
+      <Switch
+        checked={enabled}
+        disabled={busy || status?.phase === 'unavailable'}
+        label={intl.formatMessage(messages.toggle)}
+        onChange={changeEnabled}
+      />
       <span className="ovl-settings__semanticStatus" role="status">
         {progress}
       </span>

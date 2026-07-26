@@ -2,7 +2,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { migrate } from './migrations.js';
-import { loadVectorExtension } from './vector-extension.js';
+import { configureEmbeddingVectorSchema, loadVectorExtension, vectorExtensionSupported } from './vector-extension.js';
 
 // Library database per ADR-0004 (whole-DB SQLCipher) + ADR-0005 (#69). The
 // DB key arrives as bytes (wrapped/unwrapped by #68's KeyStore at
@@ -33,9 +33,13 @@ export function openLibraryDatabase(options: OpenLibraryOptions): BetterSqlite3.
     // Fails here (not on first query) when the key is wrong.
     db.prepare('SELECT count(*) FROM sqlite_master').get();
     // ADR-0018: vec0 tables share the SQLCipher connection and therefore the
-    // library's page-level encryption, WAL, and lifecycle boundary.
-    loadVectorExtension(db);
+    // library's page-level encryption, WAL, and lifecycle boundary. The pinned
+    // upstream package has no Windows ARM64 binary; that target keeps ordinary
+    // library access while the semantic feature reports unavailable.
+    const embeddingVectorsAvailable = vectorExtensionSupported();
+    if (embeddingVectorsAvailable) loadVectorExtension(db);
     migrate(db);
+    configureEmbeddingVectorSchema(db, embeddingVectorsAvailable);
     return db;
   } catch (error) {
     db.close();

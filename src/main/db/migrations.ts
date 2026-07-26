@@ -734,9 +734,10 @@ const SCHEMA_V20: Migration = {
 const SCHEMA_V21: Migration = {
   version: 21,
   name: 'encrypted-photo-embeddings',
-  // #391 / ADR-0018 §4: metadata and vec0 pages live in the same SQLCipher
-  // database. The relational owner supplies composite uniqueness + FK
-  // invalidation; the virtual table owns only fixed-width int8 vectors.
+  // #391 / ADR-0018 §4: portable metadata lives in SQLCipher on every target.
+  // database.ts creates the vec0 table after migration when the exact-pinned
+  // native extension is available. This keeps Windows ARM64 libraries usable
+  // while upstream lacks that one prebuilt binary.
   up(db) {
     db.exec(`
       CREATE TABLE photo_embeddings (
@@ -749,16 +750,6 @@ const SCHEMA_V21: Migration = {
       );
       CREATE INDEX idx_photo_embeddings_model
         ON photo_embeddings (model_version, photo_id);
-
-      CREATE VIRTUAL TABLE photo_embedding_vectors USING vec0(
-        embedding_id INTEGER PRIMARY KEY,
-        embedding int8[512]
-      );
-
-      CREATE TRIGGER photo_embeddings_ad AFTER DELETE ON photo_embeddings BEGIN
-        DELETE FROM photo_embedding_vectors
-          WHERE embedding_id = old.embedding_id;
-      END;
     `);
   },
 };

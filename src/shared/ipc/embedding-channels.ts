@@ -11,7 +11,7 @@ const defineChannel = <TRequest extends z.ZodType, TResponse extends z.ZodType>(
 const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload): EventDefinition<TPayload> => ({ name, payload });
 
 export const embeddingStatusSchema = z.object({
-  phase: z.enum(['disabled', 'downloading', 'indexing', 'paused', 'ready', 'error']),
+  phase: z.enum(['disabled', 'unavailable', 'downloading', 'indexing', 'paused', 'ready', 'error']),
   pauseReason: z.enum(['user', 'import', 'backup', 'battery']).nullable(),
   modelVersion: z.string(),
   total: z.number().int().nonnegative(),

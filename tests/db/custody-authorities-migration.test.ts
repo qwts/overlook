@@ -39,8 +39,13 @@ test('migration v20 creates custody provenance on fresh libraries and preserves 
   );
   assert.equal(queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version, 20);
 
-  loadVectorExtension(db);
   migrate(db);
+  assert.equal(
+    queryGet<{ name: string }>(db, `SELECT name FROM sqlite_master WHERE name = 'photo_embedding_vectors'`)?.name,
+    undefined,
+    'the portable migration does not require a native vec0 module',
+  );
+  loadVectorExtension(db);
   assert.equal(
     queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version,
     Math.max(...MIGRATIONS.map(({ version }) => version)),

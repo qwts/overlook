@@ -374,6 +374,7 @@ export const en: Readonly<Record<string, string>> = {
   "settings.general.semantic.reason.user": "you paused it",
   "settings.general.semantic.resume": "Resume",
   "settings.general.semantic.toggle": "Enable semantic indexing",
+  "settings.general.semantic.unavailable": "Unavailable on Windows ARM64 until the vector runtime adds support",
   "settings.general.sort.date": "Date",
   "settings.general.sort.name": "Name",
   "settings.general.sort.size": "Size",

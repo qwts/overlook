@@ -20,6 +20,8 @@ export interface EmbeddingRuntimeOptions {
   readonly setEnabled: (enabled: boolean) => void;
   readonly pauseReason: () => Exclude<EmbeddingPauseReason, 'user'> | null;
   readonly emit: (status: EmbeddingStatus) => void;
+  readonly available?: boolean;
+  readonly unavailableReason?: string;
 }
 
 export interface EmbeddingRuntime {
@@ -51,6 +53,8 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
     },
     embed: (bytes, signal) => pool.embed(bytes, signal),
     emit: options.emit,
+    ...(options.available === undefined ? {} : { available: options.available }),
+    ...(options.unavailableReason === undefined ? {} : { unavailableReason: options.unavailableReason }),
   });
   service.start();
   return {

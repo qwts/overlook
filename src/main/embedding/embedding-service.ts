@@ -10,7 +10,7 @@ import type { ModelAssetManager, ModelDownloadProgress } from './model-assets.js
 import { EMBEDDING_MODEL_MANIFEST } from './model-manifest.js';
 
 export type EmbeddingPauseReason = 'user' | 'import' | 'backup' | 'battery';
-export type EmbeddingPhase = 'disabled' | 'downloading' | 'indexing' | 'paused' | 'ready' | 'error';
+export type EmbeddingPhase = 'disabled' | 'unavailable' | 'downloading' | 'indexing' | 'paused' | 'ready' | 'error';
 
 export interface EmbeddingStatus extends EmbeddingIndexStatus {
   readonly phase: EmbeddingPhase;
@@ -30,6 +30,8 @@ export interface EmbeddingServiceOptions {
   readonly load: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Buffer>;
   readonly embed: (bytes: Buffer, signal: AbortSignal) => Promise<Int8Array>;
   readonly emit: (status: EmbeddingStatus) => void;
+  readonly available?: boolean;
+  readonly unavailableReason?: string;
   readonly pausePollMs?: number;
 }
 
@@ -49,18 +51,23 @@ export class EmbeddingService {
   status(): EmbeddingStatus {
     const index = this.options.repository.status(EMBEDDING_MODEL_MANIFEST.version);
     const automaticPause = this.options.pauseReason();
+    const available = this.options.available !== false;
     return {
       ...index,
-      phase: this.phase,
+      phase: available ? this.phase : 'unavailable',
       pauseReason: this.userPaused ? 'user' : automaticPause,
       modelVersion: EMBEDDING_MODEL_MANIFEST.version,
       downloadedBytes: this.download.downloadedBytes,
       downloadBytes: this.download.totalBytes,
-      error: this.error,
+      error: available ? this.error : (this.options.unavailableReason ?? 'semantic indexing is unavailable on this system'),
     };
   }
 
   start(): void {
+    if (this.options.available === false) {
+      this.publish();
+      return;
+    }
     if (!this.options.enabled() || this.closed) {
       this.phase = 'disabled';
       this.publish();
@@ -71,6 +78,7 @@ export class EmbeddingService {
 
   enable(): EmbeddingStatus {
     if (this.closed) throw new Error('embedding service is closed');
+    if (this.options.available === false) return this.status();
     this.options.setEnabled(true);
     this.userPaused = false;
     this.phase = 'downloading';
@@ -92,6 +100,7 @@ export class EmbeddingService {
   }
 
   pause(): EmbeddingStatus {
+    if (this.options.available === false) return this.status();
     this.userPaused = true;
     this.restartRequested = false;
     this.controller?.abort();
@@ -101,6 +110,7 @@ export class EmbeddingService {
   }
 
   resume(): EmbeddingStatus {
+    if (this.options.available === false) return this.status();
     if (!this.options.enabled()) throw new Error('semantic indexing is disabled');
     this.userPaused = false;
     this.error = null;
@@ -109,7 +119,7 @@ export class EmbeddingService {
   }
 
   notifyWorkAvailable(): void {
-    if (this.options.enabled() && !this.userPaused) this.schedule();
+    if (this.options.available !== false && this.options.enabled() && !this.userPaused) this.schedule();
   }
 
   async close(): Promise<void> {
@@ -119,7 +129,7 @@ export class EmbeddingService {
   }
 
   private schedule(): void {
-    if (this.closed || this.userPaused || !this.options.enabled()) return;
+    if (this.options.available === false || this.closed || this.userPaused || !this.options.enabled()) return;
     if (this.running !== undefined) {
       this.restartRequested = true;
       return;

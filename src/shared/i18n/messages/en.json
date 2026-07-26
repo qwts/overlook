@@ -1109,6 +1109,9 @@
   "settings.general.semantic.toggle": {
     "defaultMessage": "Enable semantic indexing"
   },
+  "settings.general.semantic.unavailable": {
+    "defaultMessage": "Unavailable on Windows ARM64 until the vector runtime adds support"
+  },
   "settings.general.sort.date": {
     "defaultMessage": "Date"
   },

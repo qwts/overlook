@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
+import Database from 'better-sqlite3-multiple-ciphers';
+
 import { EmbeddingRepository, EMBEDDING_DIMENSIONS } from '../../src/main/db/embedding-repository.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryGet, run } from '../../src/main/db/sql.js';
-import { vectorExtensionPath } from '../../src/main/db/vector-extension.js';
+import { configureEmbeddingVectorSchema, vectorExtensionPath, vectorExtensionSupported } from '../../src/main/db/vector-extension.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 const DB_KEY = randomBytes(32);
@@ -72,6 +74,35 @@ describe('sqlite-vec SQLCipher composition (#391)', () => {
       '/Applications/Overlook.app/Contents/Resources/app.asar.unpacked/node_modules/sqlite-vec/vec0.dylib',
     );
     db.close();
+  });
+
+  test('keeps unsupported targets usable and repairs dormant vector rows later', () => {
+    assert.equal(vectorExtensionSupported('win32', 'arm64'), false);
+    assert.equal(vectorExtensionSupported('win32', 'x64'), true);
+
+    const { path, db, photos, embeddings } = openSeeded();
+    const contentHash = 'f'.repeat(64);
+    photos.insert(photo('P-DORMANT', contentHash));
+    embeddings.put({ photoId: 'P-DORMANT', contentHash }, MODEL_VERSION, vector(2));
+    db.close();
+
+    const unsupported = new Database(path);
+    unsupported.pragma(`cipher='sqlcipher'`);
+    unsupported.pragma(`key="x'${DB_KEY.toString('hex')}'"`);
+    unsupported.pragma('foreign_keys = ON');
+    unsupported.prepare('SELECT count(*) FROM sqlite_master').get();
+    configureEmbeddingVectorSchema(unsupported, false);
+    run(unsupported, 'DELETE FROM photo_embeddings WHERE photo_id = ?', 'P-DORMANT');
+    unsupported.close();
+
+    const reopened = openLibraryDatabase({ path, dbKey: DB_KEY });
+    const repaired = new EmbeddingRepository(reopened);
+    assert.equal(repaired.vectorCount(), 0, 'supported target prunes the dormant orphan before restoring cleanup');
+    assert.equal(
+      queryGet<{ name: string }>(reopened, `SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'photo_embeddings_ad'`)?.name,
+      'photo_embeddings_ad',
+    );
+    reopened.close();
   });
 
   test('stores vectors in the encrypted library and rejects raw inspection', () => {

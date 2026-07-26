@@ -19,6 +19,10 @@ query fusion remains [#392](https://github.com/qwts/overlook/issues/392).
    Library teardown cancels it before SQLCipher and key custody close.
 6. Raw database bytes expose neither a SQLite header nor model-version/content
    metadata, and the wrong library key cannot read the index.
+7. Windows ARM64, the one target without an upstream `sqlite-vec@0.1.9`
+   binary, keeps the library usable and reports semantic indexing unavailable.
+   Moving that library back to a supported target repairs any dormant vector
+   rows before indexing resumes.
 
 Evidence:
 

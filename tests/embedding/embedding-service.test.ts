@@ -21,6 +21,7 @@ function world(
     readonly candidates?: readonly EmbeddingCandidate[];
     readonly installed?: boolean;
     readonly staleFirstPut?: boolean;
+    readonly available?: boolean;
     readonly embed?: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Int8Array>;
   } = {},
 ): ServiceWorld {
@@ -73,6 +74,8 @@ function world(
       return options.embed?.(candidate, signal) ?? new Int8Array(EMBEDDING_DIMENSIONS);
     },
     emit: (status) => statuses.push(status),
+    ...(options.available === undefined ? {} : { available: options.available }),
+    ...(options.available === false ? { unavailableReason: 'fixture runtime unavailable' } : {}),
     pausePollMs: 1,
   });
   return {
@@ -96,6 +99,24 @@ async function waitFor(world: ServiceWorld, phase: EmbeddingStatus['phase']): Pr
 }
 
 describe('EmbeddingService', () => {
+  test('an unsupported native target stays disabled without downloading or indexing', async () => {
+    const subject = world({ available: false, installed: false });
+
+    assert.deepEqual(subject.service.enable(), {
+      phase: 'unavailable',
+      pauseReason: null,
+      modelVersion: subject.service.status().modelVersion,
+      total: 2,
+      completed: 0,
+      pending: 2,
+      downloadedBytes: 0,
+      downloadBytes: 0,
+      error: 'fixture runtime unavailable',
+    });
+    assert.deepEqual(subject.embedded, []);
+    await subject.service.close();
+  });
+
   test('explicit enable downloads once and indexes the resumable query to completion', async () => {
     const subject = world({ installed: false });
 
