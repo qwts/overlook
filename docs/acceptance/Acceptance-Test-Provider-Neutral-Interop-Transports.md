@@ -31,7 +31,7 @@ Issues: [#335](https://github.com/qwts/photos/issues/335),
 10. A native-message invocation bypasses the desktop single-instance and
     renderer bootstrap, processes exactly one length-prefixed request, drains
     the iCloud bridge, and exits. iCloud paths stay below
-    `Overlook-Interop/v1`; staging references are opaque tokens below the
+    `Overlook Interop/v1`; staging references are opaque tokens below the
     profile-owned interop staging directory.
 
 Automated evidence:

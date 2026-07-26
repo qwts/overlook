@@ -316,6 +316,7 @@ describe('native messaging production framing (#467)', () => {
       requestFrame({ bytes: [1] }),
       Buffer.from([3, 0, 0, 0, 123, 125, 0]),
       oversized,
+      Buffer.alloc(INTEROP_CONTROL_FRAME_BYTES + 5),
     ]) {
       await assert.rejects(readNativeMessage(Readable.from([input])), InteropTransportError);
     }
@@ -484,6 +485,7 @@ describe('iCloud native authority production adapter (#467)', () => {
     await writeFile(join(staging, 'source-reference-1.bin'), Buffer.from('ciphertext'));
     assert.deepEqual(await authority.status(), { available: true, provider: 'icloud' });
     assert.deepEqual(await authority.putFile('pairings/p/transfers/t/object.bin', 'source-reference-1'), { stored: true });
+    assert.ok(bridge.objects.has('Overlook Interop/v1/pairings/p/transfers/t/object.bin'));
     assert.deepEqual(await authority.list('pairings/p/transfers/t', null), {
       entries: [
         {
@@ -507,7 +509,10 @@ describe('iCloud native authority production adapter (#467)', () => {
     assert.deepEqual(await readFile(join(staging, 'destination-reference-1.bin')), Buffer.from('ciphertext'));
     assert.deepEqual(await authority.quota(), { usedBytes: 0, totalBytes: null });
     assert.deepEqual(await authority.delete('pairings/p/transfers/t/object.bin'), { deleted: true });
-    await assert.rejects(authority.putFile('pairings/p/transfers/t/missing.bin', 'missing-reference'), InteropTransportError);
+    await assert.rejects(
+      authority.putFile('pairings/p/transfers/t/missing.bin', 'missing-reference'),
+      (error: unknown) => error instanceof InteropTransportError && error.code === 'corrupt' && !error.retryable,
+    );
     bridge.changeAccount();
     const accountExpired = (error: unknown): boolean =>
       error instanceof InteropTransportError && error.code === 'auth-expired' && !error.retryable;

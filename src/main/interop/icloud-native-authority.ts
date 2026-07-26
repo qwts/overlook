@@ -11,7 +11,7 @@ import {
 import type { ICloudNativeAuthority } from './icloud-native-host.js';
 import { InteropTransportError, assertSafeInteropPath } from './transport.js';
 
-const INTEROP_ROOT = 'Overlook-Interop/v1';
+const INTEROP_ROOT = 'Overlook Interop/v1';
 const PAGE_SIZE = 100;
 
 export interface ICloudAccountAuthorityStore {
@@ -66,7 +66,9 @@ export class BridgeICloudNativeAuthority implements ICloudNativeAuthority {
   async putFile(path: string, sourceFile: string): Promise<unknown> {
     try {
       const source = stagingPath(this.options.stagingDirectory, sourceFile);
-      const info = await lstat(source);
+      const info = await lstat(source).catch(() => {
+        throw new InteropTransportError('Invalid encrypted staging file.', 'corrupt', false);
+      });
       if (!info.isFile() || info.isSymbolicLink()) throw new InteropTransportError('Invalid encrypted staging file.', 'corrupt', false);
       await this.options.bridge.replaceFile(remotePath(path), source, await this.accountToken());
       return { stored: true };

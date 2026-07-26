@@ -3,6 +3,7 @@ import type { Readable, Writable } from 'node:stream';
 import { INTEROP_CONTROL_FRAME_BYTES, InteropTransportError, assertBoundedControlFrame } from './transport.js';
 
 const HEADER_BYTES = 4;
+const MAX_BUFFERED_BYTES = INTEROP_CONTROL_FRAME_BYTES + HEADER_BYTES;
 
 export interface NativeMessageResponse {
   readonly schemaVersion: 1;
@@ -25,11 +26,12 @@ export async function readNativeMessage(input: Readable): Promise<unknown> {
     while (pending.length < length) {
       const next = await iterator.next();
       if (next.done === true) throw corrupt('Native messaging frame ended before its declared length.');
-      const chunk = Buffer.isBuffer(next.value) ? next.value : Buffer.from(next.value as Uint8Array);
-      pending = Buffer.concat([pending, chunk], pending.length + chunk.length);
-      if (pending.length > INTEROP_CONTROL_FRAME_BYTES + HEADER_BYTES) {
+      const value = next.value as Uint8Array;
+      if (value.byteLength > MAX_BUFFERED_BYTES - pending.length) {
         throw corrupt('Native messaging frame exceeds the control-frame limit.');
       }
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+      pending = Buffer.concat([pending, chunk], pending.length + chunk.length);
     }
     const value = pending.subarray(0, length);
     pending = pending.subarray(length);
