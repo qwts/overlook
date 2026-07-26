@@ -62,7 +62,7 @@ a durability acknowledgement.
 | Slow or abandoned client             | Bootstrap, redemption, idle, and cancellation deadlines               | Bounded teardown and cancellation latency           |
 | Native host becomes data proxy       | Bootstrap-only response; host exits before bulk stream                | No original-sized reads or writes in host evidence  |
 | Listener escapes loopback            | Explicit `127.0.0.1` bind; no wildcard/hostname bind                  | Bound address assertion                             |
-| Logs leak authority or content       | Closed error vocabulary; no raw frames, URLs, secrets, or paths       | Log-capture assertions                              |
+| Logs leak authority or content       | Closed error vocabulary; no raw frames, URLs, secrets, or paths       | No logs; generic errors omit authority and content  |
 | Desktop is locked                    | Authority check before capability issuance                            | Typed `locked` state, no endpoint capability        |
 | App disappears after acknowledgement | ADR-0014/0015 durable acknowledgement remains authoritative           | Retry only unacknowledged work                      |
 

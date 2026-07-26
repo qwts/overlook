@@ -38,6 +38,8 @@ const redemptionSchema = z
   })
   .strict();
 
+const redemptionIdentitySchema = z.object({ sessionId: z.string().uuid() }).passthrough();
+
 export type LiveLocalBootstrapState = 'running' | 'not-running' | 'locked' | 'incompatible' | 'unavailable';
 export type LiveLocalPrototypeFailure = 'corrupt' | 'replay' | 'expired' | 'unsupported' | 'wrong-authority' | 'over-budget';
 export type LiveLocalBootstrapRequest = z.output<typeof bootstrapRequestSchema>;
@@ -89,11 +91,22 @@ export interface LiveLocalCapabilityBrokerOptions {
 }
 
 function boundedControlValue(value: unknown): void {
-  const encoded = JSON.stringify(value);
+  let encoded: string | undefined;
+  try {
+    encoded = JSON.stringify(value);
+  } catch {
+    throw new LiveLocalPrototypeError('Live local control frame is not JSON.', 'corrupt');
+  }
   if (encoded === undefined) throw new LiveLocalPrototypeError('Live local control frame is not JSON.', 'corrupt');
   const bytes = Buffer.byteLength(encoded, 'utf8');
   if (bytes > LIVE_LOCAL_CONTROL_FRAME_BYTES)
     throw new LiveLocalPrototypeError('Live local control frame exceeds its bound.', 'over-budget');
+}
+
+function parseControlValue<Schema extends z.ZodType>(schema: Schema, value: unknown): z.output<Schema> {
+  const result = schema.safeParse(value);
+  if (!result.success) throw new LiveLocalPrototypeError('Live local control frame is corrupt.', 'corrupt');
+  return result.data;
 }
 
 function secretDigest(secret: string): Buffer {
@@ -132,7 +145,7 @@ export class LiveLocalCapabilityBroker {
 
   issue(state: LiveLocalBootstrapState, value: unknown): LiveLocalBootstrapResult {
     boundedControlValue(value);
-    const request = bootstrapRequestSchema.parse(value);
+    const request = parseControlValue(bootstrapRequestSchema, value);
     if (request.extensionId !== this.expectedExtensionId)
       throw new LiveLocalPrototypeError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
     if (state !== 'running') return { schemaVersion: 1, state };
@@ -170,14 +183,14 @@ export class LiveLocalCapabilityBroker {
 
   redeem(value: unknown): LiveLocalRedemption {
     boundedControlValue(value);
-    const identity = z.object({ sessionId: z.string().uuid() }).passthrough().parse(value);
+    const identity = parseControlValue(redemptionIdentitySchema, value);
     const stored = this.capabilities.get(identity.sessionId);
     if (stored === undefined) throw new LiveLocalPrototypeError('Live local capability was already consumed.', 'replay');
 
     // Lookup and consumption are one synchronous operation. Every failure
     // after a session identifier is recognized burns the capability.
     this.capabilities.delete(identity.sessionId);
-    const redemption = redemptionSchema.parse(value);
+    const redemption = parseControlValue(redemptionSchema, value);
     if (this.now() > stored.expiresAtMs) throw new LiveLocalPrototypeError('Live local capability expired.', 'expired');
     if (
       redemption.extensionId !== stored.extensionId ||

@@ -377,6 +377,43 @@ describe('ADR-0029 capability prototype (#543)', () => {
   });
 });
 
+describe('ADR-0029 corrupt control handling (#543)', () => {
+  test('maps malformed control values into the closed failure vocabulary', () => {
+    const broker = new LiveLocalCapabilityBroker({
+      expectedExtensionId: EXTENSION_ID,
+      endpoint: 'ws://127.0.0.1:49152',
+    });
+    assert.throws(
+      () => broker.issue('running', bootstrapRequest({ schemaVersion: 2 })),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+    );
+    assert.throws(
+      () => broker.issue('running', { value: 1n }),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+    );
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+    assert.throws(
+      () => broker.issue('running', circular),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+    );
+
+    const malformed = runningCapability(broker);
+    assert.throws(
+      () => broker.redeem(redemption(malformed, { schemaVersion: 2 })),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+    );
+    assert.throws(
+      () => broker.redeem(redemption(malformed)),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'replay',
+    );
+    assert.throws(
+      () => broker.redeem({ sessionId: 'not-a-session' }),
+      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+    );
+  });
+});
+
 describe('ADR-0029 user-scoped control seams (#543)', () => {
   test('uses an owned mode-0700 Unix directory and a privacy-safe per-user Windows pipe name', async () => {
     const runtimeDirectory = await mkdtemp('/tmp/ovl-live-local-');
