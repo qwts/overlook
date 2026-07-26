@@ -19,6 +19,8 @@ export interface RunICloudNativeHostOptions {
   readonly bridge: ICloudDriveNativeBridge;
   readonly input: Readable;
   readonly output: Writable;
+  readonly statusTimeoutMs?: number;
+  readonly drainTimeoutMs?: number;
 }
 
 function hostAvailability(status: ICloudDriveNativeStatus): { readonly entitled: boolean; readonly available: boolean } {
@@ -26,6 +28,13 @@ function hostAvailability(status: ICloudDriveNativeStatus): { readonly entitled:
     entitled: status.reason !== 'unentitled',
     available: status.available,
   };
+}
+
+function withDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('native host operation timed out')), timeoutMs);
+    void operation.then(resolve, reject).finally(() => clearTimeout(timeout));
+  });
 }
 
 /** Executes one sendNativeMessage request and exits after the bridge drains.
@@ -42,8 +51,7 @@ export async function runICloudNativeHost(options: RunICloudNativeHostOptions): 
   try {
     await runNativeMessage(options.input, options.output, async (value) => {
       assertAuthorizedNativeHostInvocation(options.invocation);
-      const availability = await options.bridge
-        .status()
+      const availability = await withDeadline(options.bridge.status(), options.statusTimeoutMs ?? 5_000)
         .then(hostAvailability)
         .catch(() => ({ entitled: false, available: false }));
       const host = new ICloudNativeHost({
@@ -57,6 +65,6 @@ export async function runICloudNativeHost(options: RunICloudNativeHostOptions): 
       return host.handle(value);
     });
   } finally {
-    await options.bridge.drain();
+    await withDeadline(options.bridge.drain(), options.drainTimeoutMs ?? 1_000).catch(() => undefined);
   }
 }

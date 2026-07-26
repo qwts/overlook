@@ -418,6 +418,38 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     });
     assert.deepEqual(bridge.calls, ['status', 'status']);
   });
+
+  test('fails closed and exits when native status and drain do not settle', async () => {
+    const output = new PassThrough();
+    const captured = buffer(output);
+    const bridge = new DeterministicICloudDriveBridge();
+    bridge.status = () => new Promise(() => undefined);
+    bridge.drain = () => new Promise(() => undefined);
+    await runICloudNativeHost({
+      invocation: nativeHostInvocation(['Overlook', `chrome-extension://${RELEASED_EXTENSION_ID}/`], RELEASED_EXTENSION_ID),
+      extensionId: RELEASED_EXTENSION_ID,
+      platform: 'darwin',
+      packaged: true,
+      profileDirectory: mkdtempSync(join(tmpdir(), 'overlook-native-profile-')),
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value) => Buffer.from(value, 'utf8'),
+        decryptString: (value) => value.toString('utf8'),
+      },
+      bridge,
+      input: Readable.from([requestFrame({ schemaVersion: 1, operation: 'status', extensionId: RELEASED_EXTENSION_ID })]),
+      output,
+      statusTimeoutMs: 5,
+      drainTimeoutMs: 5,
+    });
+    output.end();
+    assert.deepEqual(decodeFrame(await captured), {
+      schemaVersion: 1,
+      ok: false,
+      code: 'unsupported',
+      retryable: false,
+    });
+  });
 });
 
 describe('iCloud native authority production adapter (#467)', () => {
