@@ -84,11 +84,7 @@ describe('ProtectedPhotoMigrationRepository', () => {
     });
     photos.addToAlbum('ordinary-a', ['photo-a']);
     const embeddings = new EmbeddingRepository(db);
-    embeddings.put(
-      { photoId: 'photo-a', contentHash: 'a'.repeat(64) },
-      'fixture-model',
-      new Int8Array(EMBEDDING_DIMENSIONS),
-    );
+    embeddings.put({ photoId: 'photo-a', contentHash: 'a'.repeat(64) }, 'fixture-model', new Int8Array(EMBEDDING_DIMENSIONS));
     migrations.prepare({
       migrationId: 'migration-a',
       operation: 'protect',
