@@ -1,5 +1,17 @@
 # photos
 
+## 0.63.0
+
+### Minor Changes
+
+- 06f336d: Compose production Move and Sync services and register the signed macOS iCloud native messaging host.
+
+## 0.62.0
+
+### Minor Changes
+
+- c6954b9: Add durable source-custody provenance for cloud-only originals.
+
 ## 0.61.7
 
 ### Patch Changes

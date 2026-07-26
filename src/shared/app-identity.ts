@@ -9,4 +9,6 @@ export const OVERLOOK_LEGACY_MAC_BUNDLE_ID = 'com.qwts.overlook';
 export const OVERLOOK_APP_LOCK_ANCHOR_SERVICE = `${OVERLOOK_MAC_BUNDLE_ID}.app-lock-anchor`;
 export const OVERLOOK_APP_LOCK_ANCHOR_MIGRATION_SERVICE = `${OVERLOOK_MAC_BUNDLE_ID}.app-lock-anchor-migration`;
 export const OVERLOOK_LEGACY_APP_LOCK_ANCHOR_SERVICE = `${OVERLOOK_LEGACY_MAC_BUNDLE_ID}.app-lock-anchor`;
-export const OVERLOOK_ICLOUD_NATIVE_HOST = `${OVERLOOK_MAC_BUNDLE_ID}.interop`;
+// Native Messaging host identity is a cross-product wire contract and retains
+// Image Trail's established name independently of the macOS bundle migration.
+export const OVERLOOK_ICLOUD_NATIVE_HOST = 'com.qwts.overlook.interop';

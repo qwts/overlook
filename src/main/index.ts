@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { buffer } from 'node:stream/consumers';
-import { app, dialog, session, shell } from 'electron';
+import { app, dialog, session } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
 import { activityBackupSnapshot, createActivityFacade } from './activity/activity-publication.js';
@@ -20,7 +20,7 @@ import { boardsSnapshot } from './db/board-repository.js';
 import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
-import { createExternalOpenRuntime } from './import/external-open-runtime.js';
+import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
 import type { ImportRuntime, ImportService } from './import/import-runtime.js';
 import { createImportApplicationRuntime } from './import/import-application-runtime.js';
 import type { RawRepairService } from './import/raw-repair-service.js';
@@ -71,28 +71,33 @@ import { registerEarlyRuntime } from './early-runtime.js';
 import { installApplicationMenu, refreshApplicationMenu } from './application-menu.js';
 import { interopRuntimeBusy, lockInteropRuntime } from './interop/runtime.js';
 import { closeProductionInboundMoveLibrary } from './interop/inbound-move-production.js';
-import { configurePCloudInteropFeature } from './interop/feature-runtime.js';
+import { createProductionInteropAppRuntime } from './interop/production-app-runtime.js';
 import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
-import { pcloudFeatureConfig } from './build-config.js';
 import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
-function harnessEnv(name: string): string | undefined {
-  return app.isPackaged ? undefined : process.env[name];
-}
-
-const pcloud = pcloudFeatureConfig(harnessEnv);
+const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
 
 // Configure the stable profile identity before the first userData lookup.
 const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA']);
 
-const externalOpen = createExternalOpenRuntime({ isolatedHarnessProfile: userDataOverride !== undefined && userDataOverride !== '' });
+const productionInterop = createProductionInteropAppRuntime({
+  harnessEnv,
+  library: () => requireParts('inbound Move'),
+  imports: () => getImportService() && importRuntime,
+  imported: () => scheduleAutoBackup(),
+});
+const externalOpen = productionInterop.nativeHostRequested
+  ? createHeadlessExternalOpenRuntime()
+  : createExternalOpenRuntime({ isolatedHarnessProfile: userDataOverride !== undefined && userDataOverride !== '' });
 
-registerSingleInstance();
-registerEarlyRuntime();
+if (!productionInterop.nativeHostRequested) {
+  registerSingleInstance();
+  registerEarlyRuntime();
+}
 
 // Lazy bootstrap: no keychain or database access before the renderer's first library call.
 let libraryService: LibraryService | undefined;
@@ -790,18 +795,9 @@ function getRestoreRuntime(): RestoreRuntime {
 }
 
 void externalOpen.whenReady().then(async () => {
+  if (await productionInterop.runNativeHost()) return;
   if (await exitForReleaseSmokeIfRequested(app)) return;
-  configurePCloudInteropFeature({
-    config: pcloud,
-    profileDirectory: app.getPath('userData'),
-    safeStorage: pickSafeStorage(),
-    openExternal: (url) => shell.openExternal(url),
-    pcloudFixtureRoot: harnessEnv('OVERLOOK_INTEROP_PCLOUD_ROOT'),
-    library: () => requireParts('inbound Move'),
-    imports: () => getImportService() && importRuntime,
-    pairingFixture: () => harnessEnv('OVERLOOK_INTEROP_PAIRING_BUNDLE'),
-    imported: scheduleAutoBackup,
-  });
+  await productionInterop.startDesktop();
   // Settle relocation journals FIRST (ADR-0022 §2): recovery may re-point the
   // registry (roll a commit forward), so it must run before resolveActive()
   // caches an entry and before anything opens or classifies libraries. A
@@ -866,7 +862,7 @@ void externalOpen.whenReady().then(async () => {
     authorizePassword: (password) => lock.authorize(password),
     safeStorage: pickSafeStorage,
     providerBusy: custodyWorkActive,
-    pcloudEnabled: pcloud.enabled,
+    pcloudEnabled: productionInterop.pcloud.enabled,
     onManifestChanged: markManifestDebt,
     onImported: () => {
       getBackupEngine();
@@ -891,13 +887,14 @@ void externalOpen.whenReady().then(async () => {
   externalOpen.finishBootstrap();
 });
 
-registerWindowAllClosedQuit();
-
-registerQuitTeardown({
-  isLibraryOpen: () => libraryService !== undefined,
-  lockState: () => appLockHost?.snapshot().state,
-  close: closeLibraryForLock,
-});
+if (!productionInterop.nativeHostRequested) {
+  registerWindowAllClosedQuit();
+  registerQuitTeardown({
+    isLibraryOpen: () => libraryService !== undefined,
+    lockState: () => appLockHost?.snapshot().state,
+    close: closeLibraryForLock,
+  });
+}
 
 app.on('will-quit', () => {
   lockInteropRuntime();
