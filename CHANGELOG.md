@@ -1,5 +1,11 @@
 # photos
 
+## 0.64.0
+
+### Minor Changes
+
+- fdbfd83: Add an opt-in on-device photo embedding pipeline with encrypted, resumable vector storage.
+
 ## 0.63.0
 
 ### Minor Changes
