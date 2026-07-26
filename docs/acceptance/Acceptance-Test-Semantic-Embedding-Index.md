@@ -12,14 +12,19 @@ query fusion remains [#392](https://github.com/qwts/overlook/issues/392).
    progress.
 3. Pause cancels the in-flight worker job. Resume queries the encrypted database
    again, so completed rows are not repeated after pause, crash, or relaunch.
-4. Content-hash changes and ordinary deletes requeue or remove vectors.
+4. A missing or corrupt mid derivative is durably deferred inside SQLCipher,
+   never blocks later photos, and is retried when restoration or derivative
+   repair reports that photo eligible again.
+5. Content-hash changes and ordinary deletes requeue or remove vectors.
    Permanent purge cascades vector removal. Starting a protected-photo migration
    removes the unlocked embedding in the same transaction.
-5. Import, backup/provider work, and battery power pause the one-worker queue.
+6. Once the current model sweep completes, rows and deferrals for superseded
+   model versions are removed.
+7. Import, backup/provider work, and battery power pause the one-worker queue.
    Library teardown cancels it before SQLCipher and key custody close.
-6. Raw database bytes expose neither a SQLite header nor model-version/content
+8. Raw database bytes expose neither a SQLite header nor model-version/content
    metadata, and the wrong library key cannot read the index.
-7. Windows ARM64, the one target without an upstream `sqlite-vec@0.1.9`
+9. Windows ARM64, the one target without an upstream `sqlite-vec@0.1.9`
    binary, keeps the library usable and reports semantic indexing unavailable.
    Moving that library back to a supported target repairs any dormant vector
    rows before indexing resumes.

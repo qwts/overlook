@@ -141,6 +141,47 @@ describe('EmbeddingRepository', () => {
     db.close();
   });
 
+  test('per-photo derivative deferrals persist, do not block later candidates, and clear on repair', () => {
+    const { path, db, photos, embeddings } = openSeeded();
+    const first = photo('P-DEFERRED', '7'.repeat(64));
+    const second = photo('P-RUNNABLE', '8'.repeat(64));
+    photos.insert(first);
+    photos.insert(second);
+
+    embeddings.defer({ photoId: first.id, contentHash: first.contentHash }, MODEL_VERSION, 'derivative-unavailable');
+    assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 1, completed: 0, pending: 1 });
+    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [{ photoId: second.id, contentHash: second.contentHash }]);
+    db.close();
+
+    const reopened = openLibraryDatabase({ path, dbKey: DB_KEY });
+    const resumed = new EmbeddingRepository(reopened);
+    assert.deepEqual(resumed.pending(MODEL_VERSION, 10), [{ photoId: second.id, contentHash: second.contentHash }]);
+    assert.equal(resumed.clearDeferred(MODEL_VERSION, [first.id]), 1);
+    assert.deepEqual(resumed.status(MODEL_VERSION), { total: 2, completed: 0, pending: 2 });
+    reopened.close();
+  });
+
+  test('model completion removes superseded vectors and deferrals but retains the current version', () => {
+    const { db, photos, embeddings } = openSeeded();
+    const indexed = photo('P-MODEL', '9'.repeat(64));
+    const deferred = photo('P-MODEL-DEFERRED', 'b'.repeat(64));
+    photos.insert(indexed);
+    photos.insert(deferred);
+    embeddings.put({ photoId: indexed.id, contentHash: indexed.contentHash }, 'old-model', vector(1));
+    embeddings.put({ photoId: indexed.id, contentHash: indexed.contentHash }, MODEL_VERSION, vector(2));
+    embeddings.defer({ photoId: deferred.id, contentHash: deferred.contentHash }, 'old-model', 'derivative-unavailable');
+    embeddings.defer({ photoId: deferred.id, contentHash: deferred.contentHash }, MODEL_VERSION, 'derivative-unavailable');
+
+    assert.equal(embeddings.deleteOtherModels(MODEL_VERSION), 1);
+    assert.equal(embeddings.vectorCount(), 1);
+    assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 1, completed: 1, pending: 0 });
+    assert.deepEqual(embeddings.pending('old-model', 10), [
+      { photoId: indexed.id, contentHash: indexed.contentHash },
+      { photoId: deferred.id, contentHash: deferred.contentHash },
+    ]);
+    db.close();
+  });
+
   test('content changes requeue, replace atomically, and enforce 512 int8 dimensions', () => {
     const { db, photos, embeddings } = openSeeded();
     const originalHash = '3'.repeat(64);

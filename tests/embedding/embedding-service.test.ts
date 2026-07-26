@@ -13,6 +13,8 @@ interface ServiceWorld {
   readonly service: EmbeddingService;
   readonly statuses: EmbeddingStatus[];
   readonly embedded: string[];
+  readonly statusReads: () => number;
+  readonly oldModelPrunes: () => number;
   setAutomaticPause(reason: 'import' | 'backup' | 'battery' | null): void;
 }
 
@@ -22,27 +24,44 @@ function world(
     readonly installed?: boolean;
     readonly staleFirstPut?: boolean;
     readonly available?: boolean;
+    readonly initiallyEnabled?: boolean;
+    readonly initiallyDeferred?: readonly string[];
+    readonly downloadProgressEvents?: number;
+    readonly load?: (candidate: EmbeddingCandidate) => Promise<Buffer | null>;
     readonly embed?: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Int8Array>;
   } = {},
 ): ServiceWorld {
   const candidates = [...(options.candidates ?? CANDIDATES)];
   const completed = new Set<string>();
+  const deferred = new Set(options.initiallyDeferred ?? []);
   const embedded: string[] = [];
   const statuses: EmbeddingStatus[] = [];
-  let enabled = false;
+  let enabled = options.initiallyEnabled ?? false;
   let automaticPause: 'import' | 'backup' | 'battery' | null = null;
   let loaded: EmbeddingCandidate | undefined;
   let staleFirstPut = options.staleFirstPut ?? false;
+  let statusReads = 0;
+  let oldModelPrunes = 0;
   const service = new EmbeddingService({
     repository: {
-      status: () => ({
-        total: candidates.length,
-        completed: completed.size,
-        pending: candidates.length - completed.size,
-      }),
+      status: () => {
+        statusReads += 1;
+        const total = candidates.filter((candidate) => !deferred.has(candidate.photoId)).length;
+        return {
+          total,
+          completed: completed.size,
+          pending: total - completed.size,
+        };
+      },
       deleteStale: () => 0,
-      pending: (_modelVersion, limit) => candidates.filter((candidate) => !completed.has(candidate.photoId)).slice(0, limit),
+      deleteOtherModels: () => {
+        oldModelPrunes += 1;
+        return 0;
+      },
+      pending: (_modelVersion, limit) =>
+        candidates.filter((candidate) => !completed.has(candidate.photoId) && !deferred.has(candidate.photoId)).slice(0, limit),
       put: (candidate) => {
+        deferred.delete(candidate.photoId);
         if (staleFirstPut) {
           staleFirstPut = false;
           completed.add(candidate.photoId);
@@ -51,11 +70,23 @@ function world(
         completed.add(candidate.photoId);
         embedded.push(candidate.photoId);
       },
+      defer: (candidate) => {
+        deferred.add(candidate.photoId);
+      },
+      clearDeferred: (_modelVersion, photoIds) => {
+        const before = deferred.size;
+        if (photoIds === undefined) deferred.clear();
+        else for (const photoId of photoIds) deferred.delete(photoId);
+        return before - deferred.size;
+      },
     },
     assets: {
       installed: () => Promise.resolve(options.installed ?? true),
       ensureInstalled: (_consent, progress) => {
-        progress?.({ downloadedBytes: 4, totalBytes: 4, asset: 'model.onnx' });
+        const events = options.downloadProgressEvents ?? 4;
+        for (let index = 1; index <= events; index += 1) {
+          progress?.({ downloadedBytes: index, totalBytes: events, asset: 'model.onnx' });
+        }
         return Promise.resolve();
       },
     },
@@ -66,7 +97,7 @@ function world(
     pauseReason: () => automaticPause,
     load: (candidate) => {
       loaded = candidate;
-      return Promise.resolve(Buffer.from(candidate.photoId));
+      return options.load?.(candidate) ?? Promise.resolve(Buffer.from(candidate.photoId));
     },
     embed: async (_bytes, signal) => {
       const candidate = loaded;
@@ -82,6 +113,8 @@ function world(
     service,
     statuses,
     embedded,
+    statusReads: () => statusReads,
+    oldModelPrunes: () => oldModelPrunes,
     setAutomaticPause: (reason) => {
       automaticPause = reason;
       service.notifyWorkAvailable();
@@ -134,6 +167,69 @@ describe('EmbeddingService', () => {
       error: null,
     });
     assert.deepEqual(subject.embedded, ['P-1', 'P-2']);
+    await subject.service.close();
+  });
+
+  test('download progress is bounded instead of querying full-library status per chunk', async () => {
+    const subject = world({ installed: false, downloadProgressEvents: 5_000 });
+
+    subject.service.enable();
+    await waitFor(subject, 'ready');
+
+    assert.ok(subject.statusReads() < 30, `download progress performed ${String(subject.statusReads())} status queries`);
+    await subject.service.close();
+  });
+
+  test('a missing derivative is durably deferred without blocking later photos and repair reactivates it', async () => {
+    let firstAvailable = false;
+    const subject = world({
+      load: (candidate) => {
+        if (candidate.photoId === 'P-1' && !firstAvailable) return Promise.resolve(null);
+        return Promise.resolve(Buffer.from(candidate.photoId));
+      },
+    });
+
+    subject.service.enable();
+    assert.deepEqual(await waitFor(subject, 'ready'), {
+      phase: 'ready',
+      pauseReason: null,
+      modelVersion: subject.service.status().modelVersion,
+      total: 1,
+      completed: 1,
+      pending: 0,
+      downloadedBytes: 0,
+      downloadBytes: 0,
+      error: null,
+    });
+    assert.deepEqual(subject.embedded, ['P-2']);
+
+    firstAvailable = true;
+    subject.service.notifyEligibilityChanged(['P-1']);
+    for (let attempt = 0; attempt < 200 && subject.embedded.length < 2; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 2));
+    }
+    assert.deepEqual(subject.embedded, ['P-2', 'P-1']);
+    assert.equal((await waitFor(subject, 'ready')).total, 2);
+    await subject.service.close();
+  });
+
+  test('startup preserves durable deferrals until eligibility changes', async () => {
+    const subject = world({ initiallyEnabled: true, initiallyDeferred: ['P-1'] });
+
+    subject.service.start();
+    await waitFor(subject, 'ready');
+
+    assert.deepEqual(subject.embedded, ['P-2']);
+    await subject.service.close();
+  });
+
+  test('superseded model rows are pruned only after the current sweep completes', async () => {
+    const subject = world();
+
+    subject.service.enable();
+    await waitFor(subject, 'ready');
+
+    assert.equal(subject.oldModelPrunes(), 1);
     await subject.service.close();
   });
 

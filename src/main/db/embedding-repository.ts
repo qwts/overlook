@@ -19,6 +19,10 @@ interface EmbeddingIdRow {
   readonly embeddingId: number;
 }
 
+interface PhotoIdRow {
+  readonly photoId: string;
+}
+
 export class EmbeddingCandidateStaleError extends Error {
   override readonly name = 'EmbeddingCandidateStaleError';
 }
@@ -47,6 +51,12 @@ export class EmbeddingRepository {
                AND e.model_version = @modelVersion
                AND e.content_hash = p.content_hash
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM photo_embedding_deferrals d
+             WHERE d.photo_id = p.id
+               AND d.model_version = @modelVersion
+               AND d.content_hash = p.content_hash
+          )
         ORDER BY p.imported_at, p.id
         LIMIT @limit`,
       { modelVersion, limit },
@@ -63,7 +73,12 @@ export class EmbeddingRepository {
            ON e.photo_id = p.id
           AND e.model_version = @modelVersion
           AND e.content_hash = p.content_hash
-        WHERE p.deleted_at IS NULL`,
+         LEFT JOIN photo_embedding_deferrals d
+           ON d.photo_id = p.id
+          AND d.model_version = @modelVersion
+          AND d.content_hash = p.content_hash
+        WHERE p.deleted_at IS NULL
+          AND d.photo_id IS NULL`,
       { modelVersion },
     ) ?? { total: 0, completed: 0 };
     return { ...row, pending: row.total - row.completed };
@@ -72,6 +87,12 @@ export class EmbeddingRepository {
   put(candidate: EmbeddingCandidate, modelVersion: string, embedding: Int8Array, embeddedAt = new Date().toISOString()): void {
     const bytes = embeddingBytes(embedding);
     this.db.transaction(() => {
+      runNamed(
+        this.db,
+        `DELETE FROM photo_embedding_deferrals
+          WHERE photo_id = @photoId AND model_version = @modelVersion`,
+        { photoId: candidate.photoId, modelVersion },
+      );
       runNamed(
         this.db,
         `DELETE FROM photo_embeddings
@@ -100,6 +121,52 @@ export class EmbeddingRepository {
     })();
   }
 
+  defer(
+    candidate: EmbeddingCandidate,
+    modelVersion: string,
+    reason: 'derivative-unavailable',
+    deferredAt = new Date().toISOString(),
+  ): void {
+    runNamed(
+      this.db,
+      `INSERT INTO photo_embedding_deferrals (
+         photo_id, content_hash, model_version, reason, deferred_at
+       )
+       SELECT @photoId, @contentHash, @modelVersion, @reason, @deferredAt
+        WHERE EXISTS (
+          SELECT 1 FROM ordinary_visible_photos
+           WHERE id = @photoId AND deleted_at IS NULL AND content_hash = @contentHash
+        )
+       ON CONFLICT (photo_id, model_version) DO UPDATE SET
+         content_hash = excluded.content_hash,
+         reason = excluded.reason,
+         deferred_at = excluded.deferred_at`,
+      { ...candidate, modelVersion, reason, deferredAt },
+    );
+  }
+
+  clearDeferred(modelVersion: string, photoIds?: readonly string[]): number {
+    if (photoIds !== undefined && photoIds.length === 0) return 0;
+    const removed =
+      photoIds === undefined
+        ? queryAll<PhotoIdRow>(
+            this.db,
+            `DELETE FROM photo_embedding_deferrals
+              WHERE model_version = @modelVersion
+             RETURNING photo_id AS photoId`,
+            { modelVersion },
+          )
+        : queryAll<PhotoIdRow>(
+            this.db,
+            `DELETE FROM photo_embedding_deferrals
+              WHERE model_version = @modelVersion
+                AND photo_id IN (SELECT value FROM json_each(@photoIds))
+             RETURNING photo_id AS photoId`,
+            { modelVersion, photoIds: JSON.stringify([...new Set(photoIds)]) },
+          );
+    return removed.length;
+  }
+
   deleteStale(modelVersion: string): number {
     return this.db.transaction(() => {
       const stale = queryAll<EmbeddingIdRow>(
@@ -115,6 +182,18 @@ export class EmbeddingRepository {
          RETURNING embedding_id AS embeddingId`,
         { modelVersion },
       );
+      runNamed(
+        this.db,
+        `DELETE FROM photo_embedding_deferrals
+          WHERE model_version = @modelVersion
+            AND NOT EXISTS (
+              SELECT 1 FROM ordinary_visible_photos p
+               WHERE p.id = photo_embedding_deferrals.photo_id
+                 AND p.deleted_at IS NULL
+                 AND p.content_hash = photo_embedding_deferrals.content_hash
+            )`,
+        { modelVersion },
+      );
       return stale.length;
     })();
   }
@@ -128,6 +207,21 @@ export class EmbeddingRepository {
          RETURNING embedding_id AS embeddingId`,
         { modelVersion },
       );
+      runNamed(this.db, 'DELETE FROM photo_embedding_deferrals WHERE model_version = @modelVersion', { modelVersion });
+      return removed.length;
+    })();
+  }
+
+  deleteOtherModels(modelVersion: string): number {
+    return this.db.transaction(() => {
+      const removed = queryAll<EmbeddingIdRow>(
+        this.db,
+        `DELETE FROM photo_embeddings
+          WHERE model_version <> @modelVersion
+         RETURNING embedding_id AS embeddingId`,
+        { modelVersion },
+      );
+      runNamed(this.db, 'DELETE FROM photo_embedding_deferrals WHERE model_version <> @modelVersion', { modelVersion });
       return removed.length;
     })();
   }

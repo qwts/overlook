@@ -22,17 +22,21 @@ export interface EmbeddingStatus extends EmbeddingIndexStatus {
 }
 
 export interface EmbeddingServiceOptions {
-  readonly repository: Pick<EmbeddingRepository, 'status' | 'deleteStale' | 'pending' | 'put'>;
+  readonly repository: Pick<
+    EmbeddingRepository,
+    'status' | 'deleteStale' | 'deleteOtherModels' | 'pending' | 'put' | 'defer' | 'clearDeferred'
+  >;
   readonly assets: Pick<ModelAssetManager, 'installed' | 'ensureInstalled'>;
   readonly enabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => void;
   readonly pauseReason: () => Exclude<EmbeddingPauseReason, 'user'> | null;
-  readonly load: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Buffer>;
-  readonly embed: (bytes: Buffer, signal: AbortSignal) => Promise<Int8Array>;
+  readonly load: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Buffer | null>;
+  readonly embed: (bytes: Buffer, signal: AbortSignal) => Promise<Int8Array | null>;
   readonly emit: (status: EmbeddingStatus) => void;
   readonly available?: boolean;
   readonly unavailableReason?: string;
   readonly pausePollMs?: number;
+  readonly downloadPublishIntervalMs?: number;
 }
 
 /** Query-backed, single-flight indexer. Completed rows are the resume cursor. */
@@ -45,6 +49,7 @@ export class EmbeddingService {
   private running: Promise<void> | undefined;
   private restartRequested = false;
   private closed = false;
+  private lastDownloadPublishAt = Number.NEGATIVE_INFINITY;
 
   constructor(private readonly options: EmbeddingServiceOptions) {}
 
@@ -80,6 +85,7 @@ export class EmbeddingService {
     if (this.closed) throw new Error('embedding service is closed');
     if (this.options.available === false) return this.status();
     this.options.setEnabled(true);
+    this.options.repository.clearDeferred(EMBEDDING_MODEL_MANIFEST.version);
     this.userPaused = false;
     this.phase = 'downloading';
     this.error = null;
@@ -122,6 +128,12 @@ export class EmbeddingService {
     if (this.options.available !== false && this.options.enabled() && !this.userPaused) this.schedule();
   }
 
+  notifyEligibilityChanged(photoIds: readonly string[]): void {
+    if (this.options.available === false || photoIds.length === 0) return;
+    this.options.repository.clearDeferred(EMBEDDING_MODEL_MANIFEST.version, photoIds);
+    this.notifyWorkAvailable();
+  }
+
   async close(): Promise<void> {
     this.closed = true;
     this.controller?.abort();
@@ -148,15 +160,16 @@ export class EmbeddingService {
 
   private async ensureAssets(): Promise<void> {
     this.phase = 'downloading';
-    this.publish();
+    this.publishDownloadProgress(true);
     await this.options.assets.ensureInstalled(
       true,
       (progress) => {
         this.download = progress;
-        this.publish();
+        this.publishDownloadProgress(progress.totalBytes > 0 && progress.downloadedBytes >= progress.totalBytes);
       },
       this.controller?.signal,
     );
+    this.publishDownloadProgress(true);
   }
 
   private async run(): Promise<void> {
@@ -175,6 +188,7 @@ export class EmbeddingService {
         }
         const candidate = this.options.repository.pending(EMBEDDING_MODEL_MANIFEST.version, 1)[0];
         if (candidate === undefined) {
+          this.options.repository.deleteOtherModels(EMBEDDING_MODEL_MANIFEST.version);
           this.phase = 'ready';
           this.publish();
           return;
@@ -182,8 +196,18 @@ export class EmbeddingService {
         this.phase = 'indexing';
         this.publish();
         const bytes = await this.options.load(candidate, controller.signal);
+        if (bytes === null) {
+          this.options.repository.defer(candidate, EMBEDDING_MODEL_MANIFEST.version, 'derivative-unavailable');
+          this.publish();
+          continue;
+        }
         try {
           const embedding = await this.options.embed(bytes, controller.signal);
+          if (embedding === null) {
+            this.options.repository.defer(candidate, EMBEDDING_MODEL_MANIFEST.version, 'derivative-unavailable');
+            this.publish();
+            continue;
+          }
           try {
             this.options.repository.put(candidate, EMBEDDING_MODEL_MANIFEST.version, embedding);
           } catch (error) {
@@ -207,5 +231,12 @@ export class EmbeddingService {
 
   private publish(): void {
     this.options.emit(this.status());
+  }
+
+  private publishDownloadProgress(force: boolean): void {
+    const now = Date.now();
+    if (!force && now - this.lastDownloadPublishAt < (this.options.downloadPublishIntervalMs ?? 250)) return;
+    this.lastDownloadPublishAt = now;
+    this.publish();
   }
 }

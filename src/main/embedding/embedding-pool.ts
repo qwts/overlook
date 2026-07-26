@@ -13,6 +13,10 @@ interface ActiveJob {
   readonly removeAbort: (() => void) | undefined;
 }
 
+export class EmbeddingInputError extends Error {
+  override readonly name = 'EmbeddingInputError';
+}
+
 function abortError(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : new Error('embedding job aborted');
 }
@@ -69,7 +73,7 @@ export class EmbeddingPool {
       this.active = undefined;
       job.removeAbort?.();
       if (response.ok) job.resolve(new Int8Array(response.embedding));
-      else job.reject(new Error(response.error));
+      else job.reject(response.kind === 'input' ? new EmbeddingInputError(response.error) : new Error(response.error));
     });
     worker.on('error', (error: Error) => {
       this.fail(error);

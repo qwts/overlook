@@ -17,7 +17,11 @@ export interface EmbeddingWorkerRequest {
 
 export type EmbeddingWorkerResponse =
   | { readonly jobId: number; readonly ok: true; readonly embedding: Int8Array; readonly provider: string }
-  | { readonly jobId: number; readonly ok: false; readonly error: string };
+  | { readonly jobId: number; readonly ok: false; readonly kind: 'input' | 'runtime'; readonly error: string };
+
+class EmbeddingWorkerInputError extends Error {
+  override readonly name = 'EmbeddingWorkerInputError';
+}
 
 const IMAGE_SIZE = 224;
 const MEAN = [0.481_454_66, 0.457_827_5, 0.408_210_73] as const;
@@ -79,7 +83,12 @@ function quantize(output: ort.Tensor): Int8Array {
 async function embed(bytes: Uint8Array): Promise<{ readonly embedding: Int8Array; readonly provider: string }> {
   session ??= createSession();
   const active = await session;
-  const prepared = await inputTensor(bytes);
+  let prepared: Awaited<ReturnType<typeof inputTensor>>;
+  try {
+    prepared = await inputTensor(bytes);
+  } catch (error) {
+    throw new EmbeddingWorkerInputError(error instanceof Error ? error.message : 'embedding input could not be decoded');
+  }
   try {
     const inputName = active.session.inputNames[0];
     if (inputName === undefined) throw new Error('vision model has no input');
@@ -93,7 +102,7 @@ async function embed(bytes: Uint8Array): Promise<{ readonly embedding: Int8Array
 }
 
 parentPort?.on('message', (request: EmbeddingWorkerRequest) => {
-  const bytes = Buffer.from(request.bytes);
+  const bytes = Buffer.from(request.bytes.buffer, request.bytes.byteOffset, request.bytes.byteLength);
   void embed(bytes)
     .then(({ embedding, provider }) => {
       parentPort?.postMessage({
@@ -107,6 +116,7 @@ parentPort?.on('message', (request: EmbeddingWorkerRequest) => {
       parentPort?.postMessage({
         jobId: request.jobId,
         ok: false,
+        kind: error instanceof EmbeddingWorkerInputError ? 'input' : 'runtime',
         error: error instanceof Error ? error.message : String(error),
       } satisfies EmbeddingWorkerResponse);
     })

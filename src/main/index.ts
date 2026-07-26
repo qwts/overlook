@@ -174,7 +174,10 @@ function getLibraryService(): LibraryService {
       repairFailure: () => console.error('[overlook] protected migration repair failed'),
       workflowProgress: (progress) => broadcast((win) => win.webContents.send(events.protectedWorkflowProgress.name, progress)),
       workflowChanged: () => broadcast((win) => win.webContents.send(events.protectedAlbumsChanged.name, {})),
-      ordinaryChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds] }),
+      ordinaryChanged: (photoIds) => {
+        emitLibraryChanged({ photoIds: [...photoIds] });
+        notifyEmbeddingEligibilityChanged(photoIds);
+      },
     });
     libraryParts = {
       db,
@@ -189,6 +192,7 @@ function getLibraryService(): LibraryService {
     libraryService = new LibraryService(db, {
       libraryChanged: (photoIds) => {
         emitLibraryChanged({ photoIds: [...photoIds] });
+        notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {
         broadcast((win) => win.webContents.send(events.originalClassificationChanged.name, { photoIds: [...photoIds] }));
@@ -262,6 +266,7 @@ function ensureMaintenanceServices(): void {
     emitThumbsChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
+    embeddingEligible: notifyEmbeddingEligibilityChanged,
   });
   rawRepairService = services.rawRepair;
   posterCaptureService = services.posterCapture;
@@ -332,6 +337,10 @@ const changeProviderWork = (delta: 1 | -1): void => {
 const providerIdle = (): Promise<void> => providerWork.idle();
 
 let embeddingRuntime: EmbeddingRuntime | undefined;
+
+function notifyEmbeddingEligibilityChanged(photoIds: readonly string[]): void {
+  embeddingRuntime?.service.notifyEligibilityChanged(photoIds);
+}
 
 function getEmbeddingService(): EmbeddingService {
   embeddingRuntime ??= createEmbeddingApplicationRuntime({

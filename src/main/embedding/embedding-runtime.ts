@@ -5,7 +5,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
 import { EmbeddingRepository } from '../db/embedding-repository.js';
-import { EmbeddingPool } from './embedding-pool.js';
+import { EmbeddingInputError, EmbeddingPool } from './embedding-pool.js';
 import { EmbeddingService, type EmbeddingPauseReason, type EmbeddingStatus } from './embedding-service.js';
 import { ModelAssetManager } from './model-assets.js';
 
@@ -44,14 +44,28 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
     pauseReason: options.pauseReason,
     load: async (candidate, signal) => {
       if (signal.aborted) throw signal.reason;
-      const bytes = await buffer(options.blobs.getThumbStream(candidate.contentHash, 'mid', options.resolveKey, candidate.photoId));
-      if (bytes.length > 32 * 1024 * 1024) {
+      try {
+        const bytes = await buffer(options.blobs.getThumbStream(candidate.contentHash, 'mid', options.resolveKey, candidate.photoId));
+        if (signal.aborted) {
+          bytes.fill(0);
+          throw signal.reason;
+        }
+        if (bytes.length <= 32 * 1024 * 1024) return bytes;
         bytes.fill(0);
-        throw new Error('mid-size derivative exceeds the embedding input limit');
+        return null;
+      } catch (error) {
+        if (signal.aborted) throw error;
+        return null;
       }
-      return bytes;
     },
-    embed: (bytes, signal) => pool.embed(bytes, signal),
+    embed: async (bytes, signal) => {
+      try {
+        return await pool.embed(bytes, signal);
+      } catch (error) {
+        if (error instanceof EmbeddingInputError) return null;
+        throw error;
+      }
+    },
     emit: options.emit,
     ...(options.available === undefined ? {} : { available: options.available }),
     ...(options.unavailableReason === undefined ? {} : { unavailableReason: options.unavailableReason }),
