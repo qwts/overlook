@@ -2,15 +2,19 @@
 
 ## Status
 
-Proposed on [#543](https://github.com/qwts/overlook/issues/543).
+Accepted 2026-07-25 on
+[#543](https://github.com/qwts/overlook/issues/543).
 Production work in [#544](https://github.com/qwts/overlook/issues/544) and
-[#545](https://github.com/qwts/overlook/issues/545) remains gated on acceptance.
+[#545](https://github.com/qwts/overlook/issues/545) must implement this
+contract without semantic changes; changes land here first as an amendment.
 
 Extends
 [ADR-0014](./ADR-0014-Image-Trail-Bidirectional-Interoperability.md) and
 [ADR-0016](./ADR-0016-Isolated-Encrypted-Interop-Transports.md). The companion
 analysis is the
 [live local interop threat model](../Live-Local-Interop-Threat-Model.md).
+Executable evidence is indexed by the
+[live local interop acceptance test](../acceptance/Acceptance-Test-Live-Local-Interop-Transport.md).
 
 ## Context
 
@@ -30,8 +34,9 @@ attack and lifecycle surface for a workflow that requires both apps to be open.
 
 ## Decision
 
-The prototype will validate a three-part transport. Acceptance of this ADR
-depends on the evidence section meeting every bound.
+The accepted design uses a three-part transport. The deterministic prototype
+meets the evidence bounds below without entering a production composition
+root.
 
 ### Bootstrap and rendezvous
 
@@ -140,7 +145,7 @@ control endpoint belongs to #544.
 
 ## Acceptance evidence
 
-The prototype must record:
+The deterministic prototype records:
 
 - startup-state classification and capability issue/redeem latency;
 - rejection of wrong origin, rogue loopback clients, malformed and oversized
@@ -152,8 +157,17 @@ The prototype must record:
 - macOS socket ownership/stale cleanup and Windows named-pipe ACL seams;
 - packaged-host registration and uninstall implications.
 
+`tests/interop/live-local-transport-prototype.test.ts` exercises a real
+user-scoped Unix rendezvous and loopback WebSocket. It transfers 16 MiB as
+bounded binary frames with an 8 MiB producer window, sustains more than the
+1 MiB/s floor, observes cancellation within 250 ms, and closes every threat
+listed above. The Windows seam emits the current-user-only SDDL but remains a
+production platform gate.
+
 The prototype is evidence, not a production transport. #544 owns bootstrap and
-packaging; #545 owns durable transport-journal composition.
+packaging; #545 owns durable transport-journal composition. The complete
+evidence and remaining owner-run gates are in the
+[acceptance test](../acceptance/Acceptance-Test-Live-Local-Interop-Transport.md).
 
 ## Consequences
 
