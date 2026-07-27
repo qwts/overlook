@@ -44,7 +44,7 @@ components; their full license texts ship inside the Electron distribution at
 | `@img/sharp-win32-ia32` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
 | `@img/sharp-win32-x64` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
 | `@stablelib/base64` | 1.0.1 | MIT |
-| `adm-zip` | 0.5.18 | MIT |
+| `adm-zip` | 0.6.0 | MIT |
 | `base64-js` | 1.5.1 | MIT |
 | `better-sqlite3-multiple-ciphers` | 12.11.1 | MIT |
 | `bindings` | 1.5.0 | MIT |
@@ -506,7 +506,7 @@ SOFTWARE.
 
 ---
 
-## adm-zip 0.5.18
+## adm-zip 0.6.0
 
 License: MIT
 
