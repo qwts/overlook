@@ -19,20 +19,28 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const NOTICES_PATH = path.join(ROOT, 'THIRD-PARTY-NOTICES.md');
 const NODE_MODULES_PATH = path.join(ROOT, 'node_modules');
 
-// License texts are read from installed packages, while the closure itself comes
-// from the lockfile. That split is deliberate (see dependency-closure.mjs), but it
-// means an absent or half-populated node_modules yields a closure whose every entry
-// has licenseText === null — which renderNotices turns into the same
-// "_No license text file was found_" note used for packages that genuinely ship
-// none. The result is a notices file with an intact package table and no
-// attribution at all, and --check then agrees with it because it re-renders from
-// the same broken input.
+// License texts are read from installed packages, while the closure itself comes from
+// the lockfile. That split is deliberate (see dependency-closure.mjs), but it means a
+// missing or pruned node_modules yields records whose licenseText is null — which
+// renderNotices turns into the same "_No license text file was found_" note used for
+// packages that genuinely ship none. Attribution is silently replaced by a placeholder,
+// and --check agrees with it because it re-renders from the same input.
 //
-// Observed healthy baseline: 68 of 72 non-conditional packages resolve a license
-// text (the four that do not genuinely ship none). Broken resolves zero. The floor
-// below sits far under the healthy rate so it cannot fire on a legitimate change in
-// the dependency set.
-const MIN_RESOLVED_FRACTION = 0.5;
+// A proportional floor cannot catch this: a production-only install drops `electron`
+// alone — a devDependency whose runtime IS shipped (BUNDLED_RUNTIME_ROOTS) — and one
+// missing record out of ~72 clears any sane threshold while dropping the license of
+// something actually distributed. So the expectation is exact: every shipped package
+// must resolve a text unless it is known to publish none.
+//
+// Verified by inspection against the published tarballs. Adding to this list is a
+// deliberate act — it asserts a package ships no license file, not that resolution
+// happened to fail.
+const PACKAGES_WITHOUT_LICENSE_TEXT = new Set([
+  'onnxruntime-common',
+  'sqlite-vec',
+  'standardwebhooks',
+  'webworkify-webpack',
+]);
 
 export function assertLicenseTextsResolvable(closure) {
   if (!existsSync(NODE_MODULES_PATH)) {
@@ -43,16 +51,19 @@ export function assertLicenseTextsResolvable(closure) {
     );
   }
 
-  const expected = closure.filter((pkg) => !pkg.conditional);
-  if (expected.length === 0) {
-    return;
-  }
-  const resolved = expected.filter((pkg) => pkg.licenseText);
-  if (resolved.length / expected.length < MIN_RESOLVED_FRACTION) {
+  // Optional platform variants (sharp's per-OS binaries) are in the lockfile union but
+  // installed on only one host, so they legitimately resolve nothing here.
+  const unexpected = closure
+    .filter((pkg) => !pkg.conditional && !pkg.licenseText && !PACKAGES_WITHOUT_LICENSE_TEXT.has(pkg.name))
+    .map((pkg) => pkg.name);
+
+  if (unexpected.length > 0) {
     throw new Error(
-      `Only ${resolved.length} of ${expected.length} non-optional packages resolved a ` +
-        'license text, which indicates an incomplete node_modules rather than packages ' +
-        'that ship no license. Run: npm install',
+      `No license text resolved for shipped package(s): ${unexpected.join(', ')}. This ` +
+        'usually means node_modules is pruned or stale — a production-only install omits ' +
+        'electron, whose runtime is shipped. Run a full npm install. If a package genuinely ' +
+        'publishes no license file, add it to PACKAGES_WITHOUT_LICENSE_TEXT after verifying ' +
+        'that against its published tarball.',
     );
   }
 }
@@ -107,8 +118,8 @@ export function currentNotices() {
 
 function main() {
   const closure = resolveShippedClosure();
-  // Guard both paths: a broken environment must not be able to write a stripped
-  // file, nor to certify one as current.
+  // Guard both paths: a broken environment must not be able to write a stripped file,
+  // nor to certify one as current.
   assertLicenseTextsResolvable(closure);
   const rendered = renderNotices(closure);
   const check = process.argv.includes('--check');
