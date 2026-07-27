@@ -74,7 +74,7 @@ jobs:
       e2e: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.e2e }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
       - name: Filter paths
@@ -113,14 +113,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Full history so lint:new-files can compute a merge-base with origin/main;
           # the default single-commit fetch made that gate silently skip in PR runs.
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7
         with:
           # Single source of truth: CI and local resolve Node from the same .nvmrc, so versions
           # never drift. `npm run ci` mirrors this job's gates (lint, format:check, test:cov,
@@ -135,7 +135,7 @@ jobs:
       # repo-wide Photos lint and package-pin scans must not treat Image Trail as
       # local source, while the acceptance gate still reads its pinned evidence.
       - name: Checkout pinned Image Trail acceptance evidence
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           repository: qwts/image-trail
           ref: cf3fe884c7729db73cfe0ddb7c90be6c4d881c09
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload coverage
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: coverage
           path: coverage/lcov.info
@@ -247,10 +247,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -295,7 +295,7 @@ jobs:
 
       - name: Upload runner capacity evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: runner-capacity-${{ github.run_attempt }}-${{ env.OVERLOOK_E2E_WORKERS }}w
           path: test-results/runner-capacity.json
@@ -306,7 +306,7 @@ jobs:
       # that is exactly when it matters. View: download, unzip, `npx playwright show-report <dir>`.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -371,7 +371,7 @@ jobs:
       - name: Download Playwright report
         id: download
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           name: playwright-report
           path: playwright-report
@@ -396,7 +396,7 @@ jobs:
 
       - name: Deploy report to GitHub Pages
         if: ${{ steps.download.outcome == 'success' && steps.freshness.outputs.fresh == 'true' }}
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453  # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: playwright-report
@@ -464,4 +464,4 @@ jobs:
   # deterministic gate like lint/format, so it runs on every trigger including drafts.
   docs-gov:
     name: Docs governance
-    uses: qwts/playbook-engineering/.github/workflows/docs-governance.yml@v1
+    uses: qwts/playbook-engineering/.github/workflows/docs-governance.yml@0ab1396c527536627981b27473d38d5bbdef3138  # v1
