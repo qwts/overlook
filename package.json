@@ -144,7 +144,8 @@
     },
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
-    }
+    },
+    "adm-zip": "0.6.0"
   },
   "lint-staged": {
     "*.{ts,tsx,mjs}": [
