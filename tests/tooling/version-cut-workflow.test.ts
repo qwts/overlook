@@ -18,7 +18,7 @@ describe('version-cut workflow', () => {
     assert.match(workflow, /token: \$\{\{ steps\.chores\.outputs\.token \|\| secrets\.RELEASE_TOKEN \|\| github\.token \}\}/u);
     assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \|\| secrets\.RELEASE_TOKEN \|\| github\.token \}\}/u);
     // The secrets context is unavailable in `if`, so presence is surfaced as env.
-    assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_APP_ID != '' \}\}/u);
+    assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' \}\}/u);
   });
 
   test('never puts a repo credential in reach of a third-party action', () => {
