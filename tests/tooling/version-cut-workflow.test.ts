@@ -21,6 +21,20 @@ describe('version-cut workflow', () => {
     assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' \}\}/u);
   });
 
+  test('a bad App key degrades to the fallback tokens, never a failed job', () => {
+    // continue-on-error on every mint step: a malformed CHORES_DUMB_PRIVATE_KEY
+    // fails the step — and with it the job — before the
+    // `steps.chores.outputs.token || …` fallbacks can apply. Both jobs mint, so
+    // both must be non-fatal (PR #838 review: the tag job was left fatal and
+    // every push to main still died there).
+    const mints = workflow.split(/- name: Mint the chores-dumb token/u).slice(1);
+    assert.equal(mints.length, 2);
+    for (const mint of mints) {
+      const beforeUses = mint.split('uses:')[0] ?? '';
+      assert.match(beforeUses, /continue-on-error: true/u);
+    }
+  });
+
   test('never puts a repo credential in reach of a third-party action', () => {
     // The App key and the token it mints go to actions/* steps and our own run:
     // blocks only — anything else would hand a repo-scoped credential to code
