@@ -98,7 +98,6 @@ describe('openLibraryDatabase', () => {
     assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
     db.close();
   });
-
 });
 
 describe('migrations', () => {

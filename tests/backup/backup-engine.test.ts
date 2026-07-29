@@ -110,7 +110,20 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     hasLocalOriginal: (hash) => store.hasOriginal(hash),
     manifestDebt: createManifestDebtStore(db),
   };
-  return { deps, repo, ledger, store, provider, faulty, sleeps, progress, pendingCounts, audits, syncUpdates, engine: new BackupEngine(deps) };
+  return {
+    deps,
+    repo,
+    ledger,
+    store,
+    provider,
+    faulty,
+    sleeps,
+    progress,
+    pendingCounts,
+    audits,
+    syncUpdates,
+    engine: new BackupEngine(deps),
+  };
 }
 
 describe('backup engine (#105)', () => {
