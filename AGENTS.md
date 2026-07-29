@@ -130,8 +130,15 @@ this file in the same PR as the change — never after the fact.
   `gh pr view <n> --json mergeable` FIRST — GitHub creates no workflow runs for
   a CONFLICTING PR. Merge `main` into the branch (`git merge origin/main`),
   resolve, then push.
-- **Anything that must start another workflow run authenticates with
-  `RELEASE_TOKEN`** (branch/tag pushes, bot-opened PRs, `gh workflow run`).
+- **Anything that must start another workflow run authenticates as
+  `chores-dumb[bot]`** (branch/tag pushes, bot-opened PRs, `gh workflow run`) —
+  a GitHub App whose installation token is minted per run from
+  `CHORES_DUMB_APP_ID` / `CHORES_DUMB_PRIVATE_KEY` by
+  `actions/create-github-app-token`. `RELEASE_TOKEN` remains only as a fallback
+  where the App is not installed. A bot, not a human PAT: a PAT opens the
+  version PR as `qwts`, who cannot approve their own PR, so every release cut
+  needed a ruleset bypass. Repo chores get a bot identity; agents get their own
+  Apps, and the two never share one.
   `GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
   Actions policy authorizes actors explicitly — `github-actions[bot]` is not one
   of them, so its runs die at startup with "Actor is not allowed to trigger

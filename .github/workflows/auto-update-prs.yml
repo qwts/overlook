@@ -14,10 +14,10 @@
 # auto-merge — is exactly what a merge queue does, minus the queue UI. Nobody
 # clicks "update branch" by hand.
 #
-# Why RELEASE_TOKEN instead of GITHUB_TOKEN: pushes made with GITHUB_TOKEN do not
+# Why chores-dumb[bot] instead of GITHUB_TOKEN: pushes made with GITHUB_TOKEN do not
 # trigger downstream workflows, so the old version had to re-dispatch CI by hand
 # (and that manual lane needed workflow-run approval). Updating the branch under a
-# real PAT fires the PR's `synchronize` event normally, so CI runs on its own —
+# an App token fires the PR's `synchronize` event normally, so CI runs on its own —
 # no re-dispatch step, no `actions: write`, no "allow workflow" click. The
 # update-branch API produces GitHub-signed merge commits, so `required_signatures`
 # on main is satisfied without any local signing.
@@ -37,9 +37,9 @@ on:
   # and a PR opened or reopened on an already-stale base — gets an update pass
   # of its own. Draft-opened PRs no-op in the job's non-draft filter.
   #
-  # pull_request_target, NOT pull_request: this job injects the RELEASE_TOKEN
-  # PAT, and a PR that edits this file must not be able to run its modified YAML
-  # with that secret. pull_request_target always runs the workflow definition
+  # pull_request_target, NOT pull_request: this job mints a bot token, and a PR
+  # that edits this file must not be able to run its modified YAML with that
+  # credential. pull_request_target always runs the workflow definition
   # from the base ref (main, i.e. already-reviewed), and this job never checks
   # out or executes PR head code — it only makes API calls — so the usual
   # pull_request_target code-injection risk does not apply.
@@ -48,8 +48,8 @@ on:
   # Manual lever for recovery (e.g. after a conflict was resolved elsewhere).
   workflow_dispatch:
 
-# Normal runs authenticate with RELEASE_TOKEN (a PAT). These scopes exist only
-# for the `|| github.token` fallback below (when the secret is absent): listing
+# Normal runs authenticate as chores-dumb[bot]. These scopes exist only for the
+# `|| github.token` fallback (when neither the App nor the PAT is present): listing
 # PRs needs pull-requests read, and update-branch needs contents write.
 permissions:
   contents: write
@@ -66,17 +66,29 @@ jobs:
     name: Merge main into open PRs
     runs-on: ubuntu-latest
     # Dependabot-triggered runs are not given regular Actions secrets, so
-    # RELEASE_TOKEN would be empty; skip them (their PRs are excluded from the
+    # the App secrets would be empty; skip them (their PRs are excluded from the
     # updater anyway — `@dependabot rebase` maintains those).
     if: github.actor != 'dependabot[bot]'
+    env:
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_APP_ID != '' }}
     steps:
+      - name: Mint the chores-dumb token
+        id: chores
+        # actions/* — first-party, so the App key never reaches a third-party
+        # action (AGENTS.md → Branch And GitHub Hygiene).
+        if: env.HAS_CHORES_DUMB == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.CHORES_DUMB_APP_ID }}
+          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
+
       - name: Update each behind branch by merging main into it
         env:
-          # RELEASE_TOKEN so the resulting push fires each PR's CI automatically;
-          # fall back to the default token so the job never runs with an empty
-          # GH_TOKEN if the secret is ever missing (that path can update branches
-          # but won't auto-trigger CI — a GITHUB_TOKEN limitation, not a bug).
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          # The bot token so the resulting push fires each PR's CI automatically;
+          # fall back to the PAT, then to the default token, so the job never runs
+          # with an empty GH_TOKEN (the last path can update branches but won't
+          # auto-trigger CI — a GITHUB_TOKEN limitation, not a bug).
+          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
           gh pr list --repo "$REPO" --state open \
