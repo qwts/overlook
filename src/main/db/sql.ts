@@ -10,7 +10,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 // statement itself if the schema changes, and the WeakMap lets a closed
 // connection's cache be collected with it. LRU-capped so unbounded dynamic
 // SQL cannot grow the cache without limit.
-const STATEMENT_CACHE_MAX = 100;
+export const STATEMENT_CACHE_MAX = 100;
 const statementCaches = new WeakMap<BetterSqlite3.Database, Map<string, BetterSqlite3.Statement>>();
 
 function prepared(db: BetterSqlite3.Database, sql: string): BetterSqlite3.Statement {

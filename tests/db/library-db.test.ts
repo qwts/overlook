@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 
 import { openLibraryDatabase, LibraryDatabaseError } from '../../src/main/db/database.js';
-import { queryAll, queryGet, run } from '../../src/main/db/sql.js';
+import { queryAll, queryGet, run, STATEMENT_CACHE_MAX } from '../../src/main/db/sql.js';
 import { migrate, MIGRATIONS } from '../../src/main/db/migrations.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
@@ -96,6 +96,52 @@ describe('openLibraryDatabase', () => {
     const db = openLibraryDatabase({ path: tempDbPath(), dbKey: DB_KEY });
     assert.equal(db.pragma('journal_mode', { simple: true }), 'wal');
     assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
+    db.close();
+  });
+
+  test('the page cache is sized for SQLCipher (64MB, 113K-import freeze)', () => {
+    const db = openLibraryDatabase({ path: tempDbPath(), dbKey: DB_KEY });
+    assert.equal(db.pragma('cache_size', { simple: true }), -65536);
+    db.close();
+  });
+});
+
+describe('sql statement cache (113K-import freeze)', () => {
+  type PrepareFn = Database.Database['prepare'];
+
+  function countingDb(): { db: Database.Database; prepares: () => number } {
+    const db = openLibraryDatabase({ path: tempDbPath(), dbKey: DB_KEY });
+    const original = db.prepare.bind(db) as PrepareFn;
+    let prepares = 0;
+    db.prepare = ((source: string) => {
+      prepares += 1;
+      return original(source);
+    }) as PrepareFn;
+    return { db, prepares: () => prepares };
+  }
+
+  test('helpers reuse prepared statements per connection', () => {
+    const { db, prepares } = countingDb();
+    assert.equal(queryGet<{ n: number }>(db, 'SELECT count(*) AS n FROM photos')?.n, 0);
+    assert.equal(queryGet<{ n: number }>(db, 'SELECT count(*) AS n FROM photos')?.n, 0);
+    queryAll<{ n: number }>(db, 'SELECT count(*) AS n FROM photos');
+    assert.equal(prepares(), 1, 'identical SQL prepares once');
+    run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'k', '2026-07-28T00:00:00.000Z')`);
+    run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (1, 'k', '2026-07-28T00:00:00.000Z')`);
+    assert.equal(prepares(), 3, 'distinct SQL prepares separately');
+    db.close();
+  });
+
+  test('the LRU cap evicts the least recently used statement', () => {
+    const { db, prepares } = countingDb();
+    for (let i = 0; i <= STATEMENT_CACHE_MAX; i += 1) {
+      queryGet<{ n: number }>(db, `SELECT ${String(i)} AS n`);
+    }
+    const filled = prepares();
+    queryGet<{ n: number }>(db, `SELECT ${String(STATEMENT_CACHE_MAX)} AS n`);
+    assert.equal(prepares(), filled, 'a recent statement is still cached');
+    assert.equal(queryGet<{ n: number }>(db, 'SELECT 0 AS n')?.n, 0, 'an evicted statement still works');
+    assert.equal(prepares(), filled + 1, 'the oldest statement was evicted and re-prepared');
     db.close();
   });
 });
