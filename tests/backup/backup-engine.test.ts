@@ -12,6 +12,7 @@ import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, type BackupEngineDeps, type BackupSettings, type NetworkKind } from '../../src/main/backup/backup-engine.js';
 import { createManifestDebtStore } from '../../src/main/backup/manifest-debt.js';
 import { FaultInjectingProvider, MockProvider } from '../../src/main/backup/mock-provider.js';
+import { ProviderError } from '../../src/main/backup/provider.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { claimsForContentHashes } from '../../src/main/db/backup-claims.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -100,6 +101,7 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
       return Promise.resolve();
     },
     pendingCountChanged: (count) => pendingCounts.push(count),
+    pendingCount: () => repo.pendingCount(),
     syncStateChanged: (updates) => syncUpdates.push(...updates),
     audit: (line) => audits.push(line),
     integrityScrub: () => Promise.resolve({ checked: 0, repaired: 0, unrecoverable: 0, cycleComplete: false }),
@@ -213,6 +215,36 @@ describe('backup engine (#105)', () => {
     await failing.engine.run();
     assert.deepEqual(failing.pendingCounts, [2, 2], 'failed rows stay pending');
     assert.equal(failing.ledger.pendingCount(), 2, 'emitted count matches the ledger');
+  });
+
+  test('a row dirtied mid-run survives the incremental count: the final emission is the live DB count (PR #831 review)', async () => {
+    const w = await world(3);
+    const originalProgress = w.deps.events.progress.bind(w.deps.events);
+    (w.deps.events).progress = (done, total, photoId) => {
+      originalProgress(done, total, photoId);
+      // An edit lands between uploads — after P0 is synced, its user dirties
+      // it again. The markDirty site emits its own live count in production;
+      // a later per-item emission must not bury it under the stale snapshot.
+      if (done === 2) {
+        w.ledger.markDirty('P0');
+      }
+    };
+    await w.engine.run();
+    assert.equal(w.repo.pendingCount(), 1, 'the mid-run edit is next-run work');
+    assert.deepEqual(w.pendingCounts, [2, 1, 0, 1], 'the run ends by reconciling to the authoritative count');
+  });
+
+  test('object-scoped transient failures never trip the circuit breaker', async () => {
+    const w = await world(12);
+    (w.deps.provider as { put: typeof w.deps.provider.put }).put = () =>
+      Promise.reject(new ProviderError('object busy', 'transient', 'object'));
+    const result = await w.engine.run();
+    assert.deepEqual({ uploaded: result.uploaded, failed: result.failed }, { uploaded: 0, failed: 12 });
+    assert.equal(
+      w.audits.some((line) => line.startsWith('BACKUP-CIRCUIT-BREAKER')),
+      false,
+      'per-object trouble is not provider-outage evidence',
+    );
   });
 
   test('circuit breaker: 10 consecutive transient failures abort the sweep; dirty rows resume next run', async () => {
