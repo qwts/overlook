@@ -74,6 +74,11 @@ jobs:
     steps:
       - name: Mint the chores-dumb token
         id: chores
+        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
+        # then github.token, but a *failed* step aborts the job before any of that
+        # applies — so an unreadable App key took the whole release pipeline down
+        # instead of degrading it (PR #836 follow-up).
+        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
         if: env.HAS_CHORES_DUMB == 'true'
