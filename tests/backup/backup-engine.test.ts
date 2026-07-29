@@ -220,7 +220,7 @@ describe('backup engine (#105)', () => {
   test('a row dirtied mid-run survives the incremental count: the final emission is the live DB count (PR #831 review)', async () => {
     const w = await world(3);
     const originalProgress = w.deps.events.progress.bind(w.deps.events);
-    (w.deps.events).progress = (done, total, photoId) => {
+    w.deps.events.progress = (done, total, photoId) => {
       originalProgress(done, total, photoId);
       // An edit lands between uploads — after P0 is synced, its user dirties
       // it again. The markDirty site emits its own live count in production;
