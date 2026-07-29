@@ -1,5 +1,12 @@
 # photos
 
+## 0.64.1
+
+### Patch Changes
+
+- 6038083: Import journal now appends per-file stage transitions (with periodic compaction) instead of rewriting the whole batch manifest on every transition, and import progress events no longer rescan the batch — importing a 100k-file card no longer costs O(N²) CPU/IO or gigabytes of allocation churn. Crash-safety is unchanged: torn writes never corrupt previously journaled state, and journals written by earlier builds still resume.
+- 7cef492: Fix the performance collapse that froze the app for days after a 113K-file import. The backup sweep re-materialized the entire dirty set (~94K rows) after every item to publish the pending count (O(N²)) and re-queried ledger status twice per item before the first upload; the pending count is now tracked incrementally and the dirty query carries the status. SQL helpers cache prepared statements per connection (statement re-preparation was ~25% of profiled CPU), the SQLCipher page cache is sized to 64MB so B-tree seeks stop re-decrypting pages, and ten consecutive transient upload failures now abort the run (dirty rows resume next run) instead of burning retries on every remaining item while the network is down.
+
 ## 0.64.0
 
 ### Minor Changes
