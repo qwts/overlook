@@ -130,6 +130,15 @@ this file in the same PR as the change — never after the fact.
   `gh pr view <n> --json mergeable` FIRST — GitHub creates no workflow runs for
   a CONFLICTING PR. Merge `main` into the branch (`git merge origin/main`),
   resolve, then push.
+- **Anything that must start another workflow run authenticates with
+  `RELEASE_TOKEN`** (branch/tag pushes, bot-opened PRs, `gh workflow run`).
+  `GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
+  Actions policy authorizes actors explicitly — `github-actions[bot]` is not one
+  of them, so its runs die at startup with "Actor is not allowed to trigger
+  Actions workflows". Give the PAT only to first-party steps: never pass it to a
+  third-party action. If a third-party publishing step is the only way to make a
+  run happen, drop the step (as the E2E-report Pages publish was dropped)
+  instead of widening the token's blast radius.
 
 ## Documentation And Validation
 

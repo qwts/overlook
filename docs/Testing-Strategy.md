@@ -146,10 +146,15 @@ On every PR to `main` and push to `main` (post-merge signal):
 3. **`E2E gate`** — the stable required check: green on E2E success or a
    legitimate filter skip; red if change detection itself failed. The branch
    ruleset requires **this job**, never `E2E` directly.
-4. **`e2e-report`** — on E2E failure only: publishes the HTML report (traces,
-   screenshots, videos) to Pages at a stable per-PR URL,
-   `https://qwts.github.io/photos/reports/pr-<number>/`, with freshness check,
-   serialized gh-pages pushes, and a Pages verify/self-heal step.
+
+The Playwright HTML report (traces, screenshots, videos) ships **only** as the
+run's `playwright-report` artifact — download, unzip,
+`npx playwright show-report <dir>`. The job that also mirrored it to Pages at
+`https://qwts.github.io/photos/reports/pr-<number>/` was removed: publishing
+depended on GitHub's managed _pages build and deployment_ run, which is
+triggered by `github-actions[bot]` and therefore rejected by this repository's
+Actions actor policy — and the only fix would have been handing a repo-scoped
+PAT to a third-party publishing action.
 
 There is no scheduled/nightly run — all automation is PR-triggered, with one
 manual exception:
