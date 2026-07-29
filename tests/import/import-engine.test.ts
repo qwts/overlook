@@ -37,7 +37,7 @@ function harness(overrides?: Partial<ImportEngineDeps>) {
   const hashes = new Set<string>();
   const copyEvents: number[] = [];
   const thumbEvents: number[] = [];
-  let journal: string | null = null;
+  let journal: ImportManifest | null = null;
   let idCounter = 0;
   let insertCalls = 0;
 
@@ -52,10 +52,25 @@ function harness(overrides?: Partial<ImportEngineDeps>) {
       sources.delete(path);
       return Promise.resolve();
     },
-    readManifest: () => Promise.resolve(journal === null ? null : (JSON.parse(journal) as ImportManifest)),
-    writeManifest: (manifest) => {
-      journal = manifest === null ? null : JSON.stringify(manifest);
-      return Promise.resolve();
+    // In-memory journal modeling the real serialization boundary: every
+    // state crossing it is a snapshot, detached from the engine's mutations.
+    journal: {
+      read: () => Promise.resolve(journal === null ? null : structuredClone(journal)),
+      begin: (manifest) => {
+        journal = structuredClone(manifest);
+        return Promise.resolve();
+      },
+      update: (updates) => {
+        if (journal === null) return Promise.reject(new Error('journal update before begin'));
+        for (const { index, file } of updates) {
+          journal.files[index] = structuredClone(file);
+        }
+        return Promise.resolve();
+      },
+      clear: () => {
+        journal = null;
+        return Promise.resolve();
+      },
     },
     repo: {
       hasContentHash: (hash) => hashes.has(hash),
@@ -119,7 +134,7 @@ function harness(overrides?: Partial<ImportEngineDeps>) {
     thumbEvents,
     journalRaw: () => journal,
     setJournal: (manifest: ImportManifest) => {
-      journal = JSON.stringify(manifest);
+      journal = structuredClone(manifest);
     },
     insertCalls: () => insertCalls,
     engine: () => new ImportEngine(deps),

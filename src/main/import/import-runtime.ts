@@ -44,8 +44,7 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
   const engine = new ImportEngine({
     readFile: async (filePath) => readFile(filePath),
     deleteFile: async (filePath) => unlink(filePath),
-    readManifest: async () => journal.read(),
-    writeManifest: async (manifest) => journal.write(manifest),
+    journal,
     repo: {
       hasContentHash: (hash) => options.repo.hasContentHash(hash),
       get: (id) => options.repo.get(id),

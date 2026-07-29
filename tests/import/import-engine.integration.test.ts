@@ -39,7 +39,7 @@ describe('import engine integration (#87)', () => {
     mkdirSync(libraryB);
     const journalA = new ImportJournal(join(libraryA, 'import-journal.json'));
     const journalB = new ImportJournal(join(libraryB, 'import-journal.json'));
-    await journalA.write({
+    await journalA.begin({
       batchId: 'batch-a',
       mode: 'copy',
       source: '/card-a',
@@ -47,7 +47,7 @@ describe('import engine integration (#87)', () => {
     });
 
     assert.equal(await journalB.read(), null, 'library B has no resumable work from A');
-    await journalB.write({
+    await journalB.begin({
       batchId: 'batch-b',
       mode: 'move',
       source: '/card-b',
@@ -74,8 +74,7 @@ describe('import engine integration (#87)', () => {
     const deps: ImportEngineDeps = {
       readFile: async (path) => readFile(path),
       deleteFile: async (path) => unlink(path),
-      readManifest: async () => journal.read(),
-      writeManifest: async (manifest) => journal.write(manifest),
+      journal,
       repo: {
         hasContentHash: (hash) => hashes.has(hash),
         get: (id) => rows.get(id) as unknown as PhotoRecord | undefined,
@@ -180,8 +179,7 @@ describe('import engine integration (#87)', () => {
     const deps: ImportEngineDeps = {
       readFile: async (path) => readFile(path),
       deleteFile: async (path) => unlink(path),
-      readManifest: async () => journal.read(),
-      writeManifest: async (manifest) => journal.write(manifest),
+      journal,
       repo: {
         hasContentHash: (hash) => hashes.has(hash),
         get: (id) => rows.get(id) as unknown as PhotoRecord | undefined,

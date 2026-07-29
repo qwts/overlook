@@ -75,12 +75,26 @@ export interface ImportProgressEvents {
   thumbProgress(done: number, total: number): void;
 }
 
+/** One file's complete journaled state, addressed by manifest position. */
+export interface ImportJournalUpdate {
+  readonly index: number;
+  readonly file: ManifestFile;
+}
+
+/** Persistence contract (import-journal.ts): per-file transitions APPEND —
+ * a batch of any size never rewrites its whole manifest per stage. */
+export interface ImportJournalStore {
+  readonly read: () => Promise<ImportManifest | null>;
+  readonly begin: (manifest: ImportManifest) => Promise<void>;
+  readonly update: (updates: readonly ImportJournalUpdate[]) => Promise<void>;
+  readonly clear: () => Promise<void>;
+}
+
 export interface ImportEngineDeps {
   /** Returns an owned plaintext buffer; the engine zeroizes it after use. */
   readonly readFile: (path: string) => Promise<Buffer>;
   readonly deleteFile: (path: string) => Promise<void>;
-  readonly readManifest: () => Promise<ImportManifest | null>;
-  readonly writeManifest: (manifest: ImportManifest | null) => Promise<void>;
+  readonly journal: ImportJournalStore;
   readonly repo: {
     readonly hasContentHash: (hash: string) => boolean;
     readonly get: (id: string) => PhotoRecord | undefined;
@@ -120,10 +134,13 @@ export class ImportEngine {
 
   /** Resumes a journaled interrupted batch; null when there is none. */
   async resume(signal?: AbortSignal): Promise<ImportSummary | null> {
-    const manifest = await this.deps.readManifest();
+    const manifest = await this.deps.journal.read();
     if (manifest === null) {
       return null;
     }
+    // Re-begin = compaction: one fresh snapshot, so the replay log can never
+    // grow without bound across repeated crash/resume cycles.
+    await this.deps.journal.begin(manifest);
     return this.run(manifest, signal);
   }
 
@@ -141,35 +158,52 @@ export class ImportEngine {
       ...(cleanupPath === undefined ? {} : { cleanupPath }),
       files: files.map((file) => ({ ...file, stage: 'pending' as const })),
     };
-    await this.deps.writeManifest(manifest);
+    await this.deps.journal.begin(manifest);
     return this.run(manifest, signal);
   }
 
   private async run(manifest: ImportManifest, signal?: AbortSignal): Promise<ImportSummary> {
-    const persist = async (): Promise<void> => {
-      await this.deps.writeManifest(manifest);
-      this.emitProgress(manifest);
+    const total = manifest.files.length;
+    // Progress counters advance with each stage transition — emitting is
+    // O(1), never a scan of the whole batch per event.
+    let copied = manifest.files.filter((file) => file.stage !== 'pending').length;
+    let thumbed = manifest.files.filter((file) => file.stage === 'thumbed' || file.stage === 'done').length;
+    const setStage = (file: ManifestFile, stage: ImportFileStage): void => {
+      if (file.stage === 'pending' && stage !== 'pending') copied += 1;
+      if (file.stage !== 'thumbed' && file.stage !== 'done' && (stage === 'thumbed' || stage === 'done')) thumbed += 1;
+      file.stage = stage;
     };
-    for (const file of manifest.files) {
+    const emitProgress = (): void => {
+      this.deps.events.copyProgress(copied, total);
+      this.deps.events.thumbProgress(thumbed, total);
+    };
+    for (const [index, file] of manifest.files.entries()) {
       if (signal?.aborted === true) {
         // User cancel (#88 semantics): the current file already finished —
         // keep everything completed, finalize the rest as cancelled, and
         // clear the journal below. (A CRASH leaves no abort signal; its
         // journal survives untouched for resume.)
-        for (const remaining of manifest.files) {
+        const finalized: ImportJournalUpdate[] = [];
+        for (const [remainingIndex, remaining] of manifest.files.entries()) {
           if (remaining.stage === 'pending' && remaining.status === undefined) {
             remaining.status = 'cancelled';
-            remaining.stage = 'done';
+            setStage(remaining, 'done');
+            finalized.push({ index: remainingIndex, file: remaining });
           }
         }
-        await persist();
+        await this.deps.journal.update(finalized);
+        emitProgress();
         break;
       }
       if (file.stage === 'done') {
         continue;
       }
+      const persist = async (): Promise<void> => {
+        await this.deps.journal.update([{ index, file }]);
+        emitProgress();
+      };
       try {
-        await this.advance(file, manifest, persist);
+        await this.advance(file, manifest, setStage, persist);
       } catch (error) {
         // A per-file failure is recorded and the batch continues; the source
         // file is never deleted on any failed path (cleanup is the LAST
@@ -183,14 +217,14 @@ export class ImportEngine {
           // the retained journal retries the remaining stages on resume.
         } else {
           file.status = 'failed';
-          file.stage = 'done';
+          setStage(file, 'done');
         }
         await persist();
       }
     }
     if (manifest.files.every((file) => file.stage === 'done')) {
-      this.emitProgress(manifest);
-      await this.deps.writeManifest(null); // batch complete — clear journal
+      emitProgress();
+      await this.deps.journal.clear(); // batch complete — clear journal
       if (manifest.cleanupPath !== undefined) {
         // Cleanup cannot change a completed import into a failure. A leftover
         // private stage is reaped at the next startup.
@@ -214,19 +248,16 @@ export class ImportEngine {
     };
   }
 
-  private emitProgress(manifest: ImportManifest): void {
-    const total = manifest.files.length;
-    const copied = manifest.files.filter((file) => file.stage !== 'pending').length;
-    const thumbed = manifest.files.filter((file) => file.stage === 'thumbed' || file.stage === 'done').length;
-    this.deps.events.copyProgress(copied, total);
-    this.deps.events.thumbProgress(thumbed, total);
-  }
-
-  private async advance(file: ManifestFile, manifest: ImportManifest, persist: () => Promise<void>): Promise<void> {
+  private async advance(
+    file: ManifestFile,
+    manifest: ImportManifest,
+    setStage: (file: ManifestFile, stage: ImportFileStage) => void,
+    persist: () => Promise<void>,
+  ): Promise<void> {
     if (manifest.mode === 'move' && file.stage === 'thumbed' && file.moveLease !== undefined && !this.deps.sourceExists(file.path)) {
       const verified = await this.deps.blobs.verifyOriginal(file.moveLease.contentHash, this.deps.resolveKey, file.moveLease.photoId);
       if (!verified) throw new Error(`blob verification failed for ${file.fileName}; source recovery remains pending`);
-      file.stage = 'done';
+      setStage(file, 'done');
       await persist();
       return;
     }
@@ -260,11 +291,11 @@ export class ImportEngine {
         // in the insert→journal window) is ours to finish, not a duplicate.
         if (file.photoId !== undefined && this.deps.repo.get(file.photoId) !== undefined) {
           file.status = 'imported';
-          file.stage = 'recorded';
+          setStage(file, 'recorded');
           await persist();
         } else if (this.deps.repo.hasContentHash(contentHash)) {
           file.status = 'duplicate';
-          file.stage = 'done';
+          setStage(file, 'done');
           await persist();
           return;
         } else {
@@ -280,7 +311,7 @@ export class ImportEngine {
           // are never visible to queries.
           this.deps.repo.insert(this.toRecord(file, kind, mediaInfo, manifest.source, meta, ref.bytes, ref.keyId));
           file.status = 'imported';
-          file.stage = 'recorded';
+          setStage(file, 'recorded');
           await persist();
         }
       }
@@ -306,7 +337,7 @@ export class ImportEngine {
           // actionable display state (ADR-0026 §6), never a failed import.
           this.deps.repo.setPreviewFailure(file.photoId ?? '', outcome.generated ? null : (outcome.failure ?? 'decode-failed'));
         }
-        file.stage = 'thumbed';
+        setStage(file, 'thumbed');
         await persist();
       }
 
@@ -331,7 +362,7 @@ export class ImportEngine {
           await persist();
           await this.deps.deleteFile(file.path);
         }
-        file.stage = 'done';
+        setStage(file, 'done');
         await persist();
       }
     } finally {
