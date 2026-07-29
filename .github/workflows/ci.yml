@@ -12,9 +12,10 @@ on:
   push:
     branches:
       - main
-  # The version-cut workflow dispatches CI onto its bot-maintained version branch:
-  # GITHUB_TOKEN-created PRs get no pull_request runs, yet main requires the
-  # "CI" and "E2E gate" checks (contexts match by name across event types).
+  # Manual lever, for running the suite on an arbitrary ref and for E2E capacity
+  # measurement (the inputs below). The bot-maintained version branch no longer
+  # needs a dispatch: version-cut.yml opens that PR under RELEASE_TOKEN, so it
+  # gets ordinary pull_request runs (contexts match by name across event types).
   workflow_dispatch:
     inputs:
       e2e_workers:
@@ -67,10 +68,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      # workflow_dispatch (the version branch) and merge_group (the queue's merged
-      # state, about to become main) always run E2E: paths-filter has no base for
-      # dispatch events, and a merge group gets main's own always-run rule — main
-      # must stay green regardless of the diff.
+      # workflow_dispatch and merge_group (the queue's merged state, about to
+      # become main) always run E2E: paths-filter has no base for dispatch
+      # events, and a merge group gets main's own always-run rule — main must
+      # stay green regardless of the diff.
       e2e: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.e2e }}
     steps:
       - name: Checkout
@@ -304,6 +305,10 @@ jobs:
       # The HTML report is a self-contained clickable app (per-test steps, and screenshots /
       # videos / time-travel traces on failure). Upload it even when the E2E step fails —
       # that is exactly when it matters. View: download, unzip, `npx playwright show-report <dir>`.
+      # This artifact is the only report channel: the job that mirrored it to GitHub Pages was
+      # removed rather than hand a repo-scoped PAT to a third-party publishing action (the
+      # managed "pages build and deployment" run is triggered by github-actions[bot], which
+      # this repository's Actions actor policy refuses).
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -342,119 +347,6 @@ jobs:
             exit 0
           fi
           exit 1
-
-  # Publishes the Playwright HTML report to GitHub Pages at a stable per-PR URL:
-  #   https://qwts.github.io/photos/reports/pr-<number>/
-  # Each run replaces that PR's report (bounded growth); the artifact above keeps 14 days of
-  # history. Publishes on every run where E2E actually executed — green or red. The deploy
-  # races that once made green publishing noisy are contained by the freshness check below
-  # plus the gh-pages concurrency group; red runs still carry traces/screenshots/videos.
-  e2e-report:
-    name: Publish E2E report
-    needs: e2e
-    # PR-only (the stable URL is per-PR). Skipped E2E (non-E2E PRs) has no report to publish.
-    if: ${{ !cancelled() && needs.e2e.result != 'skipped' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-      # actions: write lets the verify step rerun GitHub's managed "pages build and deployment"
-      # workflow when it flakes ("Deployment failed, try again later"), instead of leaving a red
-      # run for a human to retry.
-      actions: write
-    # All e2e-report runs push to the same gh-pages branch, so serialize them across the whole
-    # workflow (not per PR) to avoid non-fast-forward push races between concurrent PRs.
-    concurrency:
-      group: e2e-report-gh-pages
-      cancel-in-progress: false
-    steps:
-      - name: Download Playwright report
-        id: download
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: playwright-report
-          path: playwright-report
-
-      # Concurrency ordering within a group is not guaranteed, so an older run finishing late
-      # could overwrite the stable per-PR URL with stale results. Only deploy when this run's
-      # commit is still the PR's current head.
-      - name: Check this run is for the PR's current head
-        id: freshness
-        if: ${{ steps.download.outcome == 'success' }}
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          current=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/heads/$HEAD_REF" | cut -f1)
-          if [ "$current" = "$HEAD_SHA" ]; then
-            echo "fresh=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "fresh=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping deploy: this run is for $HEAD_SHA but the branch head is ${current:-unavailable}."
-          fi
-
-      - name: Deploy report to GitHub Pages
-        if: ${{ steps.download.outcome == 'success' && steps.freshness.outputs.fresh == 'true' }}
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: playwright-report
-          destination_dir: reports/pr-${{ github.event.pull_request.number }}
-          commit_message: 'E2E report for PR #${{ github.event.pull_request.number }} (run ${{ github.run_id }})'
-
-      # The peaceiris step only pushes to gh-pages; GitHub's managed "pages build and deployment"
-      # workflow then publishes the branch, and it occasionally flakes server-side ("Deployment
-      # failed, try again later"). Verify the latest Pages build is `built` and includes the
-      # commit we just pushed; on a failed managed run, rerun it once (which also turns that red
-      # run green) and keep polling. Exhausting the poll emits a WARNING, not a failure — the
-      # report commit is already on gh-pages and a lagging Pages publish is GitHub's infra, not
-      # this PR's code; a red X here just trains people to ignore the job.
-      - name: Verify Pages picked up the deploy (self-heal once)
-        id: verify
-        if: ${{ steps.download.outcome == 'success' && steps.freshness.outputs.fresh == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          ours=$(gh api "repos/$REPO/branches/gh-pages" --jq .commit.sha)
-          echo "Pushed gh-pages commit: $ours"
-          healed=false
-          for i in $(seq 1 30); do
-            status=$(gh api "repos/$REPO/pages/builds/latest" --jq .status || echo unknown)
-            built=$(gh api "repos/$REPO/pages/builds/latest" --jq .commit || echo "")
-            if [ "$status" = "built" ] && [ -n "$built" ]; then
-              # Success if the built commit is ours or a descendant of ours (another PR may have
-              # deployed after us; the branch history still contains our report directory).
-              relation=$(gh api "repos/$REPO/compare/$ours...$built" --jq .status 2>/dev/null || echo unrelated)
-              if [ "$built" = "$ours" ] || [ "$relation" = "ahead" ] || [ "$relation" = "identical" ]; then
-                echo "Pages build $built is live and includes our deploy."
-                exit 0
-              fi
-            fi
-            if [ "$healed" = "false" ]; then
-              failed_run=$(gh api "repos/$REPO/actions/runs?per_page=10" \
-                --jq "[.workflow_runs[] | select(.name == \"pages build and deployment\" and .conclusion == \"failure\" and .head_sha == \"$ours\")][0].id // empty")
-              if [ -n "$failed_run" ]; then
-                echo "Managed Pages deployment $failed_run failed; rerunning it once."
-                gh run rerun "$failed_run" --failed --repo "$REPO" && healed=true
-              fi
-            fi
-            sleep 10
-          done
-          echo "::warning title=Pages deploy unconfirmed::gh-pages has the report commit but the managed Pages build never confirmed within 5m (last status: $status). The report URL may lag; no action needed on this PR."
-          exit 0
-
-      - name: Link report in run summary
-        if: ${{ steps.verify.outcome == 'success' }}
-        run: |
-          {
-            echo "### Playwright E2E report"
-            echo ""
-            echo "https://qwts.github.io/photos/reports/pr-${{ github.event.pull_request.number }}/"
-            echo ""
-            echo "_Traces, screenshots, and videos are attached to failed tests._"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   # Documentation governance (ENG-0009): the shared, zero-dependency docs-gov gate,
   # consumed from qwts/playbook-engineering per ENG-0004's reusable-workflow model so a

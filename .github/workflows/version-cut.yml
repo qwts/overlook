@@ -2,18 +2,32 @@
 #
 # Two halves, both driven by pushes to main:
 #  1. version-pr — while changesets are pending, keep a "Version packages" PR
-#     open and current (changesets/action force-refreshes changeset-release/main
-#     on every main push). Merging that PR is the human "cut a release" act.
+#     open and current (`changeset version`, then a force-push of
+#     changeset-release/main, on every main push). Merging that PR is the human
+#     "cut a release" act.
 #  2. tag — after the version PR merges (no changesets pending, version in
 #     package.json untagged), tag v<version> and hand off to the release
 #     workflow.
 #
-# GITHUB_TOKEN events cannot trigger other workflows, which bites twice here:
-#  - the bot-refreshed version PR gets no pull_request CI runs, yet main
-#    requires the "CI" and "E2E gate" checks — so we explicitly dispatch ci.yml
-#    onto the version branch after each refresh;
-#  - the tag push triggers no on:push:tags run — so we explicitly dispatch the
-#    release workflow instead of relying on the tag event.
+# Both halves authenticate with RELEASE_TOKEN — the same PAT auto-update-prs.yml
+# uses, and for the same reason, doubled:
+#  - GITHUB_TOKEN events cannot trigger other workflows. A bot-refreshed version
+#    PR got no pull_request CI runs even though main requires the "CI" and
+#    "E2E gate" checks, and a GITHUB_TOKEN tag push fired no on:push:tags run.
+#    Both downstream runs had to be dispatched explicitly.
+#  - This repository's Actions policy authorizes actors explicitly, and
+#    github-actions[bot] is not among them. Anything it triggers — including
+#    those explicit dispatches — dies at startup with "Actor is not allowed to
+#    trigger Actions workflows", so the workaround stopped working too.
+# Under the PAT the actor is an authorized account and both events fire on their
+# own: the version PR gets real pull_request runs, and the tag push starts
+# release.yml directly. No dispatch steps, no `actions: write` on the version
+# job. The PAT reaches only actions/* steps and our own `run:` blocks — which is
+# why versioning is a script here and not changesets/action.
+# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
+# still version and tag correctly — only the downstream runs fail to start (the
+# same degradation auto-update-prs.yml documents; re-dispatching by hand is not
+# a fallback here because the bot cannot dispatch either).
 name: Version cut
 
 on:
@@ -36,14 +50,17 @@ jobs:
   version-pr:
     name: Version packages PR
     runs-on: ubuntu-latest
+    # These scopes exist only for the `|| secrets.GITHUB_TOKEN` fallback below;
+    # a PAT carries its own.
     permissions:
       contents: write
       pull-requests: write
-      # Dispatching ci.yml onto the version branch.
-      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Credentials for the version-branch force-push below.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -56,30 +73,70 @@ jobs:
       - name: Install dependencies (scripts skipped)
         run: npm ci --ignore-scripts
 
+      # Done in-repo rather than by changesets/action. The step has to run under
+      # RELEASE_TOKEN (see the header), and the PAT goes only to actions/* steps
+      # and our own scripts — never to a third-party action, whose future
+      # versions we do not control. `changeset version` is the same CLI the
+      # action shells out to; the branch and PR handling below is what remains.
       - name: Create or refresh the Version packages PR
-        id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          version: npx changeset version
-          commit: 'Version packages'
-          title: 'Version packages'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run required checks on the version branch
-        # Empty changesets make hasChangesets true, but the action creates no
-        # branch or PR for them. The PR number is only set after that ref exists.
-        if: steps.changesets.outputs.pullRequestNumber != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yml --ref changeset-release/main
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          BRANCH: changeset-release/main
+        run: |
+          set -euo pipefail
+          if [ -z "$(find .changeset -name '*.md' ! -name 'README.md' -print -quit)" ]; then
+            echo "No changesets pending — nothing to version."
+            exit 0
+          fi
+          npx changeset version
+          version="$(node -p "require('./package.json').version")"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo '::warning::Changesets are pending but "changeset version" changed nothing.'
+            exit 0
+          fi
+          git commit -m 'Version packages'
+          # The branch is a disposable projection of main + the pending
+          # changesets, rebuilt from the current tip on every main push — force
+          # is the point, and auto-update-prs.yml excludes it for that reason.
+          git push --force origin "$BRANCH"
+          {
+            echo "Merging this PR cuts \`v$version\`: the tag and the release build follow automatically."
+            echo
+            echo "Do not hand-edit — every push to main rebuilds this branch from the pending changesets."
+            echo
+            echo '## Changelog'
+            echo
+            awk -v ver="$version" '
+              $0 ~ "^## " ver "$" { grab = 1; next }
+              grab && /^## / { exit }
+              grab { print }
+            ' CHANGELOG.md
+          } > "$RUNNER_TEMP/pr-body.md"
+          open=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            # The rolling PR outlives the changesets it was opened for. Its body
+            # is regenerated on every refresh, not just at creation — otherwise it
+            # keeps advertising the version and changelog from whenever it was
+            # first opened while the branch underneath moves on
+            # (qwts/image-trail#704 review).
+            gh pr edit "$open" --body-file "$RUNNER_TEMP/pr-body.md"
+            echo "Version PR #$open refreshed for v$version."
+            exit 0
+          fi
+          gh pr create --base main --head "$BRANCH" --title 'Version packages' \
+            --body-file "$RUNNER_TEMP/pr-body.md"
 
   tag:
     name: Tag version merges
     runs-on: ubuntu-latest
+    # Scopes for the `|| github.token` fallback only; `actions: write` covers the
+    # stranded-tag recovery dispatch below.
     permissions:
       contents: write
-      # Dispatching the release workflow for the new tag.
       actions: write
     steps:
       - name: Checkout
@@ -87,10 +144,13 @@ jobs:
         with:
           # Tags + history for the already-tagged check.
           fetch-depth: 0
+          # The tag push has to start release.yml by itself, so it must carry the
+          # PAT's credentials rather than GITHUB_TOKEN's.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
 
       - name: Tag when the current version is a fresh cut
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           # Push events only tag when this push actually changed the version —
@@ -114,10 +174,13 @@ jobs:
           version="v$(node -p "require('./package.json').version")"
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
             echo "$version already tagged."
-            # Recovery path (PR #178 review): a tag whose release dispatch
-            # failed — or predated release.yml — would otherwise be stranded.
+            # Recovery path (PR #178 review): a tag whose release run failed —
+            # or that predated release.yml — would otherwise be stranded, and no
+            # push event can be replayed for a tag that already exists.
             # Dispatch from main (which contains release.yml — a stranded tag
             # by definition does not; PR #181 review), tag passed as input.
+            # Needs the PAT: a github-actions[bot] dispatch is refused by the
+            # repository's Actions actor policy.
             if ! gh release view "$version" >/dev/null 2>&1; then
               echo "$version has no release — dispatching."
               gh workflow run release.yml --ref main -f tag="$version" \
@@ -130,8 +193,8 @@ jobs:
           git tag -a "$version" -m "Release $version"
           git push origin "$version"
           echo "Tagged $version."
-          # Tag pushes from GITHUB_TOKEN fire no workflows — dispatch the
-          # release directly, from main so the ref contains release.yml
-          # (PR #181 review), with the tag as input pinning what gets built.
-          gh workflow run release.yml --ref main -f tag="$version" \
-            || echo "::notice::release.yml not dispatchable yet (#172) — tag $version created without a release run."
+          # No dispatch: pushed under the PAT, this tag fires release.yml's
+          # on:push:tags trigger directly. Without RELEASE_TOKEN the push is a
+          # GITHUB_TOKEN push and starts nothing — re-run this workflow via
+          # workflow_dispatch once the secret is present and the already-tagged
+          # recovery path above picks the tag up.
