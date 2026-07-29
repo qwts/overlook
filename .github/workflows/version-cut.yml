@@ -2,8 +2,9 @@
 #
 # Two halves, both driven by pushes to main:
 #  1. version-pr — while changesets are pending, keep a "Version packages" PR
-#     open and current (changesets/action force-refreshes changeset-release/main
-#     on every main push). Merging that PR is the human "cut a release" act.
+#     open and current (`changeset version`, then a force-push of
+#     changeset-release/main, on every main push). Merging that PR is the human
+#     "cut a release" act.
 #  2. tag — after the version PR merges (no changesets pending, version in
 #     package.json untagged), tag v<version> and hand off to the release
 #     workflow.
@@ -21,7 +22,9 @@
 # Under the PAT the actor is an authorized account and both events fire on their
 # own: the version PR gets real pull_request runs, and the tag push starts
 # release.yml directly. No dispatch steps, no `actions: write` on the version
-# job. If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
+# job. The PAT reaches only actions/* steps and our own `run:` blocks — which is
+# why versioning is a script here and not changesets/action.
+# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
 # still version and tag correctly — only the downstream runs fail to start (the
 # same degradation auto-update-prs.yml documents; re-dispatching by hand is not
 # a fallback here because the bot cannot dispatch either).
@@ -55,6 +58,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Credentials for the version-branch force-push below.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -67,17 +73,56 @@ jobs:
       - name: Install dependencies (scripts skipped)
         run: npm ci --ignore-scripts
 
+      # Done in-repo rather than by changesets/action. The step has to run under
+      # RELEASE_TOKEN (see the header), and the PAT goes only to actions/* steps
+      # and our own scripts — never to a third-party action, whose future
+      # versions we do not control. `changeset version` is the same CLI the
+      # action shells out to; the branch and PR handling below is what remains.
       - name: Create or refresh the Version packages PR
-        id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          version: npx changeset version
-          commit: 'Version packages'
-          title: 'Version packages'
         env:
-          # PAT so the PR it opens (and every later force-refresh of
-          # changeset-release/main) fires pull_request CI as an authorized actor.
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          BRANCH: changeset-release/main
+        run: |
+          set -euo pipefail
+          if [ -z "$(find .changeset -name '*.md' ! -name 'README.md' -print -quit)" ]; then
+            echo "No changesets pending — nothing to version."
+            exit 0
+          fi
+          npx changeset version
+          version="$(node -p "require('./package.json').version")"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo '::warning::Changesets are pending but "changeset version" changed nothing.'
+            exit 0
+          fi
+          git commit -m 'Version packages'
+          # The branch is a disposable projection of main + the pending
+          # changesets, rebuilt from the current tip on every main push — force
+          # is the point, and auto-update-prs.yml excludes it for that reason.
+          git push --force origin "$BRANCH"
+          open=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            echo "Version PR #$open is open; the force-push refreshed it."
+            exit 0
+          fi
+          {
+            echo "Merging this PR cuts \`v$version\`: the tag and the release build follow automatically."
+            echo
+            echo "Do not hand-edit — every push to main rebuilds this branch from the pending changesets."
+            echo
+            echo '## Changelog'
+            echo
+            awk -v ver="$version" '
+              $0 ~ "^## " ver "$" { grab = 1; next }
+              grab && /^## / { exit }
+              grab { print }
+            ' CHANGELOG.md
+          } > "$RUNNER_TEMP/pr-body.md"
+          gh pr create --base main --head "$BRANCH" --title 'Version packages' \
+            --body-file "$RUNNER_TEMP/pr-body.md"
 
   tag:
     name: Tag version merges

@@ -135,10 +135,12 @@ this file in the same PR as the change — never after the fact.
   `GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
   Actions policy authorizes actors explicitly — `github-actions[bot]` is not one
   of them, so its runs die at startup with "Actor is not allowed to trigger
-  Actions workflows". Give the PAT only to first-party steps: never pass it to a
-  third-party action. If a third-party publishing step is the only way to make a
-  run happen, drop the step (as the E2E-report Pages publish was dropped)
-  instead of widening the token's blast radius.
+  Actions workflows". **The PAT may reach only `actions/*` steps and our own
+  `run:` blocks — never a third-party action**, whose future versions nobody
+  here controls. When a third-party action is the only thing standing between
+  the PAT and the run you need, replace it or drop it: versioning is a script in
+  `version-cut.yml` rather than `changesets/action` for exactly this reason, and
+  the E2E-report Pages publish was deleted rather than handed the token.
 
 ## Documentation And Validation
 
