@@ -52,7 +52,12 @@ describe('import journal (append-only, torn-write safe)', () => {
     await journal.update([{ index: 0, file: doneFile(first) }]);
 
     // The transitions APPENDED — the snapshot line was written once.
-    assert.equal(readFileSync(path, 'utf8').split('\n').filter((line) => line !== '').length, 3);
+    assert.equal(
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .filter((line) => line !== '').length,
+      3,
+    );
 
     const replayed = await new ImportJournal(path).read();
     assert.equal(replayed?.batchId, 'BATCH');
