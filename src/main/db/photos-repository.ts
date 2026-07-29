@@ -21,6 +21,7 @@ import type {
   PhotoInsert,
   PhotoRecord,
   SourceCounts,
+  SyncStatus,
 } from '../../shared/library/types.js';
 
 // Typed repository over the photos + sync_ledger tables (#69). No raw SQL
@@ -907,10 +908,12 @@ export class PhotosRepository {
   }
 
   /** The backup queue's input (#105): dirty, not-deleted photos. */
-  dirtyPhotos(): readonly { id: string; contentHash: string; bytes: number; fileName: string; keyId: number }[] {
-    return queryAll<{ id: string; contentHash: string; bytes: number; fileName: string; keyId: number }>(
+  dirtyPhotos(): readonly { id: string; contentHash: string; bytes: number; fileName: string; keyId: number; status: SyncStatus }[] {
+    // status rides along so the engine never re-queries the ledger per item
+    // (two status lookups × 94K dirty rows stalled the 113K-import sweep).
+    return queryAll<{ id: string; contentHash: string; bytes: number; fileName: string; keyId: number; status: SyncStatus }>(
       this.db,
-      `SELECT p.id, p.content_hash AS contentHash, p.bytes, p.file_name AS fileName, p.key_id AS keyId
+      `SELECT p.id, p.content_hash AS contentHash, p.bytes, p.file_name AS fileName, p.key_id AS keyId, l.status AS status
          FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
         WHERE l.dirty = 1 AND p.deleted_at IS NULL
         ORDER BY p.imported_at, p.id`,

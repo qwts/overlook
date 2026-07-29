@@ -43,6 +43,13 @@ export interface BackupItemPhoto {
   readonly keyId: number;
 }
 
+export interface DirtyBackupPhoto extends BackupItemPhoto {
+  /** Ledger status fetched by the dirty query itself — re-querying it per
+   * item cost 2 statements × 94K rows before the first upload (the 113K-
+   * import freeze). */
+  readonly status: SyncStatus;
+}
+
 export interface OrdinaryRemoteClaim extends BackupItemPhoto {
   readonly status: 'synced' | 'offloaded';
   readonly deleted: boolean;
@@ -75,7 +82,7 @@ export interface BackupRunIntegrity {
 export interface BackupEngineDeps {
   readonly provider: StorageProvider;
   readonly ledger: SyncLedger;
-  readonly dirtyPhotos: () => readonly BackupItemPhoto[];
+  readonly dirtyPhotos: () => readonly DirtyBackupPhoto[];
   /** RAW ciphertext for `contentHash` — uploaded as-is. */
   readonly encryptedStream: (contentHash: string) => Readable;
   /** Seals the manifest JSON (envelope, current key) → ciphertext bytes. */
@@ -95,6 +102,11 @@ export interface BackupEngineDeps {
   readonly now: () => number;
   readonly sleep: (ms: number) => Promise<void>;
   readonly pendingCountChanged: (count: number) => void;
+  /** Authoritative dirty count (one count(*) — never a materialized set).
+   * Reconciles the run's incremental count with rows dirtied concurrently
+   * (PR #831 review); absent, the engine falls back to dirtyPhotos().length
+   * once per run. */
+  readonly pendingCount?: (() => number) | undefined;
   /** Status changes patch loaded tiles without invalidating the gallery. */
   readonly syncStateChanged: (updates: readonly { readonly id: string; readonly syncState: SyncStatus }[]) => void;
   /** Verify results append to M11's audit trail (#106). */
@@ -139,6 +151,13 @@ export class ManifestIncompleteError extends Error {
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 500;
+/** Circuit breaker: this many consecutive PROVIDER-scoped transient item
+ * failures means the network (or provider) is down for everyone — abort the
+ * sweep instead of burning 3 attempts + backoff + a ledger error write on
+ * every remaining dirty row (~94K at the 113K-import freeze). Object-scoped
+ * transients (one bad path, a per-object conflict) never advance the streak
+ * (PR #831 review). Dirty rows resume next run. */
+const TRANSIENT_FAILURE_BREAK = 10;
 /** Manifest generations retained remotely (ADR-0007). */
 const MANIFEST_KEEP = 2;
 const EMPTY_INTEGRITY: BackupRunIntegrity = {
@@ -225,28 +244,48 @@ export class BackupEngine {
     // the upload loop, settled after the manifest generation lands
     // (PR #274 review — before this they crashed the whole run).
     const dirty = this.deps.dirtyPhotos();
-    const manifestOnly = dirty.filter((item) => this.deps.ledger.status(item.id) === 'offloaded');
+    const manifestOnly = dirty.filter((item) => item.status === 'offloaded');
     if (manifestOnly.length > 0) {
       this.setManifestOwed(true);
     }
-    const items = dirty.filter((item) => this.deps.ledger.status(item.id) !== 'offloaded');
+    const items = dirty.filter((item) => item.status !== 'offloaded');
     const total = items.length;
     let uploaded = 0;
     let failed = 0;
     this.deps.events.progress(0, total, null);
 
+    // The pending count is tracked incrementally: re-materializing the whole
+    // dirty set per item made the sweep O(N²) (the 113K-import freeze). Only
+    // a verified upload clears a row's dirt; failures leave it pending.
+    // Rows dirtied concurrently emit their own count at the markDirty sites.
+    let pending = dirty.length;
     let done = 0;
+    let transientStreak = 0;
     for (const item of items) {
       if (signal?.aborted === true) {
         break; // dirty rows remain dirty — the next run resumes
       }
-      const outcome = await this.uploadItem(item, settings, signal, () => {
+      const outcome = await this.uploadItem(item, settings, signal, (result) => {
         done += 1;
+        if (result === 'uploaded') pending = Math.max(0, pending - 1);
         this.deps.events.progress(done, total, item.id);
+        this.deps.pendingCountChanged(pending);
       });
       if (outcome === 'uploaded') uploaded += 1;
       else failed += 1;
       if (outcome === 'stop') break;
+      if (outcome === 'failed-transient') {
+        transientStreak += 1;
+        if (transientStreak >= TRANSIENT_FAILURE_BREAK) {
+          this.deps.audit(`BACKUP-CIRCUIT-BREAKER consecutive=${String(transientStreak)} remaining=${String(total - done)}`);
+          console.error(
+            `[overlook] backup aborted after ${String(transientStreak)} consecutive transient failures — dirty rows resume next run`,
+          );
+          break;
+        }
+      } else {
+        transientStreak = 0;
+      }
     }
 
     if (signal?.aborted !== true && this.deps.protectedBackup !== undefined) {
@@ -263,13 +302,18 @@ export class BackupEngine {
     }
 
     // The fresh generation carries the offloaded rows' edits — their dirt
-    // settles now, with no status change and no backup stamp.
+    // settles now, with no status change and no backup stamp. Idempotent:
+    // a second publication in the same run must not settle (or decrement
+    // the pending count) twice.
+    let manifestOnlySettled = false;
     const settleManifestOnly = (): void => {
-      if (manifestOnly.length === 0) return;
+      if (manifestOnly.length === 0 || manifestOnlySettled) return;
+      manifestOnlySettled = true;
       for (const item of manifestOnly) {
         this.deps.ledger.settleManifestOnly(item.id);
       }
-      this.deps.pendingCountChanged(this.deps.dirtyPhotos().length);
+      pending = Math.max(0, pending - manifestOnly.length);
+      this.deps.pendingCountChanged(pending);
     };
 
     let manifestUploaded = true;
@@ -402,21 +446,30 @@ export class BackupEngine {
         console.error(`[overlook] integrity check failed: ${reason}`);
       }
     }
+    // Rows dirtied while the sweep ran emitted their own live counts, but a
+    // later per-item emission overwrites them with this run's snapshot-
+    // derived value (PR #831 review). One authoritative count — a count(*),
+    // never a materialized set — reconciles at run end.
+    const livePending = this.deps.pendingCount?.() ?? this.deps.dirtyPhotos().length;
+    if (livePending !== pending) {
+      this.deps.pendingCountChanged(livePending);
+    }
     return { uploaded, failed, manifestUploaded, skipped: null, integrity, blockedRemoteOnly };
   }
 
   /** One verified item upload (#105/#106 semantics, extracted for the
    * preflight reconciliation path): syncing → put+retry → verify → synced.
-   * 'stop' = auth/quota failure that ends the whole run. */
+   * 'stop' = auth/quota failure that ends the whole run; 'failed-transient'
+   * (provider-scoped only) feeds the sweep's circuit breaker. */
   private async uploadItem(
     item: BackupItemPhoto,
     settings: BackupSettings,
     signal: AbortSignal | undefined,
-    progressed: () => void,
-  ): Promise<'uploaded' | 'failed' | 'stop'> {
+    progressed: (result: 'uploaded' | 'failed') => void,
+  ): Promise<'uploaded' | 'failed' | 'failed-transient' | 'stop'> {
     const started = this.deps.now();
     let syncState: SyncStatus = 'synced';
-    let outcome: 'uploaded' | 'failed' | 'stop' = 'uploaded';
+    let outcome: 'uploaded' | 'failed' | 'failed-transient' | 'stop' = 'uploaded';
     try {
       // A row killed mid-upload resumes: it is already 'syncing' and the
       // machine (rightly) rejects syncing → syncing (PR #203 review).
@@ -440,7 +493,7 @@ export class BackupEngine {
       this.deps.ledger.markBackedUp(item.id, new Date(this.deps.now()).toISOString());
       this.notePresent(remotePath);
     } catch (error) {
-      outcome = 'failed';
+      outcome = error instanceof ProviderError && error.kind === 'transient' && error.scope === 'provider' ? 'failed-transient' : 'failed';
       this.deps.ledger.markError(item.id);
       syncState = 'error';
       console.error(`[overlook] backup failed for ${item.fileName}: ${error instanceof Error ? error.message : String(error)}`);
@@ -449,8 +502,7 @@ export class BackupEngine {
         return 'stop'; // retrying the rest cannot help — surface and stop
       }
     }
-    progressed();
-    this.deps.pendingCountChanged(this.deps.dirtyPhotos().length);
+    progressed(outcome === 'uploaded' ? 'uploaded' : 'failed');
     this.deps.syncStateChanged([{ id: item.id, syncState }]);
     await this.throttle(settings, this.deps.now() - started);
     return outcome;

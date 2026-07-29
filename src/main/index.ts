@@ -498,6 +498,7 @@ function getBackupEngine(): BackupEngine {
       now: () => Date.now(),
       sleep: async (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       pendingCountChanged: (count) => emitPending({ count }),
+      pendingCount: () => repo.pendingCount(),
       syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
       audit,
       integrityScrub: () => integrityScrubber.scrub(),
