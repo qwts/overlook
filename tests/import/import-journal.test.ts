@@ -31,6 +31,12 @@ function doneFile(base: ManifestFile): ManifestFile {
   return { ...base, stage: 'done', status: 'imported', contentHash: 'hash', photoId: 'P1' };
 }
 
+function fileAt(manifest: ImportManifest, index: number): ManifestFile {
+  const file = manifest.files[index];
+  assert.ok(file, `manifest has a file at ${String(index)}`);
+  return file;
+}
+
 function journalAt(dir: string): { journal: ImportJournal; path: string } {
   const path = join(dir, 'import-journal.json');
   return { journal: new ImportJournal(path), path };
@@ -41,7 +47,7 @@ describe('import journal (append-only, torn-write safe)', () => {
     const { journal, path } = journalAt(mkdtempSync(join(tmpdir(), 'overlook-journal-')));
     const manifest = manifestOf(3);
     await journal.begin(manifest);
-    const first = manifest.files[0] as ManifestFile;
+    const first = fileAt(manifest, 0);
     await journal.update([{ index: 0, file: { ...first, stage: 'recorded', status: 'imported', photoId: 'P1' } }]);
     await journal.update([{ index: 0, file: doneFile(first) }]);
 
@@ -61,7 +67,7 @@ describe('import journal (append-only, torn-write safe)', () => {
     const { journal, path } = journalAt(mkdtempSync(join(tmpdir(), 'overlook-journal-torn-')));
     const manifest = manifestOf(2);
     await journal.begin(manifest);
-    await journal.update([{ index: 0, file: doneFile(manifest.files[0] as ManifestFile) }]);
+    await journal.update([{ index: 0, file: doneFile(fileAt(manifest, 0)) }]);
     // A crash mid-append leaves a prefix of the update line.
     appendFileSync(path, '{"index":1,"file":{"path":"/card/pho', 'utf8');
 
@@ -92,7 +98,7 @@ describe('import journal (append-only, torn-write safe)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'overlook-journal-legacy-'));
     const { path } = journalAt(dir);
     const manifest = manifestOf(2);
-    (manifest.files[0] as ManifestFile).stage = 'recorded';
+    fileAt(manifest, 0).stage = 'recorded';
     writeFileSync(path, JSON.stringify(manifest), 'utf8'); // the old whole-manifest write: one line, no terminator
     const replayed = await new ImportJournal(path).read();
     assert.equal(replayed?.files[0]?.stage, 'recorded');
@@ -103,11 +109,12 @@ describe('import journal (append-only, torn-write safe)', () => {
     const { journal, path } = journalAt(mkdtempSync(join(tmpdir(), 'overlook-journal-resume-append-')));
     const manifest = manifestOf(3);
     await journal.begin(manifest);
-    await journal.update([{ index: 0, file: doneFile(manifest.files[0] as ManifestFile) }]);
+    await journal.update([{ index: 0, file: doneFile(fileAt(manifest, 0)) }]);
 
     const reopened = new ImportJournal(path);
     const replayed = await reopened.read();
-    await reopened.update([{ index: 1, file: doneFile(replayed?.files[1] as ManifestFile) }]);
+    assert.ok(replayed, 'the interrupted batch is readable');
+    await reopened.update([{ index: 1, file: doneFile(fileAt(replayed, 1)) }]);
     const again = await new ImportJournal(path).read();
     assert.deepEqual([again?.files[0]?.stage, again?.files[1]?.stage, again?.files[2]?.stage], ['done', 'done', 'pending']);
   });
@@ -137,7 +144,7 @@ describe('import journal (append-only, torn-write safe)', () => {
     const { journal, path } = journalAt(dir);
     await journal.update([]);
     assert.throws(() => statSync(path), 'no journal file materializes from a no-op');
-    await assert.rejects(journal.update([{ index: 0, file: manifestOf(1).files[0] as ManifestFile }]), /before begin/u);
+    await assert.rejects(journal.update([{ index: 0, file: fileAt(manifestOf(1), 0) }]), /before begin/u);
   });
 
   test('clear removes the journal; reading again finds no batch', async () => {

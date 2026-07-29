@@ -23,12 +23,12 @@ import type { ImportFileStage, ImportManifest, ImportJournalUpdate, ManifestFile
  * pay for a snapshot rewrite. */
 const MIN_COMPACT_LOG = 256;
 
-const STAGES: readonly ImportFileStage[] = ['pending', 'recorded', 'thumbed', 'done'];
+const STAGES: ReadonlySet<unknown> = new Set<ImportFileStage>(['pending', 'recorded', 'thumbed', 'done']);
 
 function isManifestFile(value: unknown): value is ManifestFile {
   if (typeof value !== 'object' || value === null) return false;
   const file = value as Partial<ManifestFile>;
-  return typeof file.path === 'string' && typeof file.fileName === 'string' && STAGES.includes(file.stage as ImportFileStage);
+  return typeof file.path === 'string' && typeof file.fileName === 'string' && STAGES.has(file.stage);
 }
 
 function cloneFile(file: ManifestFile): ManifestFile {
