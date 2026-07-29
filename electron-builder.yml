@@ -43,6 +43,13 @@ npmRebuild: true
 # Native Node-API binaries cannot execute from inside app.asar. Keep those
 # bindings beside the archive, but unpack shared libraries only for the two
 # exact-pinned runtimes that dlopen them.
+# onnxruntime-node bundles every platform in one package, so each build would
+# otherwise ship five foreign binaries it can never load — and on Windows that
+# fails verify-windows-arch (#683). The hook takes the target from the packer,
+# which a static `files` pattern cannot do: the cross-compiled Windows arm64
+# build runs on an x64 runner and needs the opposite exclusion from the x64
+# build beside it.
+afterPack: scripts/prune-foreign-binaries.mjs
 asarUnpack:
   - '**/*.node'
   - 'node_modules/onnxruntime-node/**/*.{dylib,so,dll}'
