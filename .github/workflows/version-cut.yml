@@ -103,11 +103,6 @@ jobs:
           # changesets, rebuilt from the current tip on every main push — force
           # is the point, and auto-update-prs.yml excludes it for that reason.
           git push --force origin "$BRANCH"
-          open=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
-          if [ -n "$open" ]; then
-            echo "Version PR #$open is open; the force-push refreshed it."
-            exit 0
-          fi
           {
             echo "Merging this PR cuts \`v$version\`: the tag and the release build follow automatically."
             echo
@@ -121,6 +116,17 @@ jobs:
               grab { print }
             ' CHANGELOG.md
           } > "$RUNNER_TEMP/pr-body.md"
+          open=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            # The rolling PR outlives the changesets it was opened for. Its body
+            # is regenerated on every refresh, not just at creation — otherwise it
+            # keeps advertising the version and changelog from whenever it was
+            # first opened while the branch underneath moves on
+            # (qwts/image-trail#704 review).
+            gh pr edit "$open" --body-file "$RUNNER_TEMP/pr-body.md"
+            echo "Version PR #$open refreshed for v$version."
+            exit 0
+          fi
           gh pr create --base main --head "$BRANCH" --title 'Version packages' \
             --body-file "$RUNNER_TEMP/pr-body.md"
 
