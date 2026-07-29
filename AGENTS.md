@@ -133,7 +133,7 @@ this file in the same PR as the change — never after the fact.
 - **Anything that must start another workflow run authenticates as
   `chores-dumb[bot]`** (branch/tag pushes, bot-opened PRs, `gh workflow run`) —
   a GitHub App whose installation token is minted per run from
-  `CHORES_DUMB_APP_ID` / `CHORES_DUMB_PRIVATE_KEY` by
+  `CHORES_DUMB_CLIENT_ID` / `CHORES_DUMB_PRIVATE_KEY` by
   `actions/create-github-app-token`. `RELEASE_TOKEN` remains only as a fallback
   where the App is not installed. A bot, not a human PAT: a PAT opens the
   version PR as `qwts`, who cannot approve their own PR, so every release cut
