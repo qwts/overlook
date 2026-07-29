@@ -70,16 +70,24 @@ jobs:
     # updater anyway — `@dependabot rebase` maintains those).
     if: github.actor != 'dependabot[bot]'
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_APP_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
     steps:
       - name: Mint the chores-dumb token
         id: chores
+        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
+        # then github.token, but a *failed* step aborts the job before any of that
+        # applies — so an unreadable App key took the whole release pipeline down
+        # instead of degrading it (PR #836 follow-up).
+        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
         if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.CHORES_DUMB_APP_ID }}
+          # client-id, not app-id: v3 deprecated the latter, and the two are
+          # easy to confuse with the bot's *user* id, which is a third number
+          # entirely (PR #838 review).
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
       - name: Update each behind branch by merging main into it

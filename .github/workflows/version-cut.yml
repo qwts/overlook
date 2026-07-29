@@ -25,8 +25,8 @@
 # fire on their own: the version PR gets real pull_request runs, and the tag push
 # starts release.yml directly. It also un-deadlocks review — a PAT opens the
 # version PR as qwts, who cannot approve their own PR (ENG-0045 decision 4), so
-# every cut needed a bypass. chores-dumb[bot] opens it, and a human approves. No dispatch steps, no `actions: write` on the version
-# job. The PAT reaches only actions/* steps and our own `run:` blocks — which is
+# every cut needed a bypass. chores-dumb[bot] opens it, and a human approves.
+# No dispatch steps, no `actions: write` on the version job. The PAT reaches only actions/* steps and our own `run:` blocks — which is
 # why versioning is a script here and not changesets/action.
 # If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
 # still version and tag correctly — only the downstream runs fail to start (the
@@ -60,16 +60,24 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_APP_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
     steps:
       - name: Mint the chores-dumb token
         id: chores
+        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
+        # then github.token, but a *failed* step aborts the job before any of that
+        # applies — so an unreadable App key took the whole release pipeline down
+        # instead of degrading it (PR #836 follow-up).
+        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
         if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.CHORES_DUMB_APP_ID }}
+          # client-id, not app-id: v3 deprecated the latter, and the two are
+          # easy to confuse with the bot's *user* id, which is a third number
+          # entirely (PR #838 review).
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
       - name: Checkout
@@ -155,16 +163,24 @@ jobs:
       contents: write
       actions: write
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_APP_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
     steps:
       - name: Mint the chores-dumb token
         id: chores
+        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
+        # then github.token, but a *failed* step aborts the job before any of that
+        # applies — so an unreadable App key took the whole release pipeline down
+        # instead of degrading it (PR #836 follow-up).
+        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
         if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.CHORES_DUMB_APP_ID }}
+          # client-id, not app-id: v3 deprecated the latter, and the two are
+          # easy to confuse with the bot's *user* id, which is a third number
+          # entirely (PR #838 review).
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
       - name: Checkout
