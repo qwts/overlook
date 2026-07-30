@@ -37,6 +37,7 @@ decision gets a new ADR that links back to the one it replaces.
 | [ADR-0027](./ADR-0027-Native-macOS-Photo-Interoperability-And-Plaintext-Custody-Boundary.md) | Native macOS Photo Interop & Custody | Accepted |
 | [ADR-0028](./ADR-0028-Remote-Custody-Binding-And-Custody-Safe-Disconnect.md)                 | Remote Custody Binding & Disconnect  | Accepted |
 | [ADR-0029](./ADR-0029-Authenticated-Live-Local-Interop-Transport.md)                         | Authenticated Live Local Interop     | Accepted |
+| [ADR-0030](./ADR-0030-Collections-Visibility-Saved-Queries-And-Gallery-Inclusion.md)         | Collections, Visibility & Inclusion  | Accepted |
 | [ADR-0031](./ADR-0031-Editing-Variants-Provenance-And-Export-Boundary.md)                    | Editing, Variants & Export Boundary  | Accepted |
 | [ADR-0032](./ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md)                     | Sharing & E2EE Collaboration         | Accepted |
 
