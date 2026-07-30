@@ -1914,6 +1914,20 @@
       ]
     },
     {
+      "id": "m31-encrypted-sidecars",
+      "wiki": "Library-Format-v1",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/import-flow.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/import/sidecar-custody.test.ts", "tests/import/source-scanner.test.ts", "tests/backup/backup-manifest.test.ts"]
+        }
+      ]
+    },
+    {
       "id": "m32-common-video-containers",
       "wiki": "Library-Format-v1",
       "coverage": [

@@ -32,7 +32,11 @@ function isManifestFile(value: unknown): value is ManifestFile {
 }
 
 function cloneFile(file: ManifestFile): ManifestFile {
-  return { ...file, ...(file.moveLease === undefined ? {} : { moveLease: { ...file.moveLease } }) };
+  return {
+    ...file,
+    ...(file.moveLease === undefined ? {} : { moveLease: { ...file.moveLease } }),
+    ...(file.sidecars === undefined ? {} : { sidecars: file.sidecars.map((sidecar) => ({ ...sidecar })) }),
+  };
 }
 
 function cloneManifest(manifest: ImportManifest): ImportManifest {

@@ -13,6 +13,7 @@ import { openLibraryDatabase } from '../db/database.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
+import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
 import type { BackupManifestPhotoV2 } from './backup-manifest.js';
@@ -153,6 +154,7 @@ export class RestoreEngine {
     await store.init();
     await protectedStore.init();
     checkpoint = await this.restoreBlobs(paths, store, discovery, candidate, checkpoint, request.signal);
+    checkpoint = await this.restoreSidecars(paths, store, discovery, candidate, checkpoint, request.signal);
     checkpoint = await this.restoreProtectedBlobs(paths, protectedStore, candidate, checkpoint, request.signal);
     const recoveredKeys = await this.prepareRecoveredCustody(paths, discovery, candidate, request.masterKey);
     try {
@@ -199,6 +201,56 @@ export class RestoreEngine {
       photos: candidate.manifest.photos.length,
       resumed,
     };
+  }
+
+  /** Encrypted companions (#484): schema-6 manifests list every sidecar
+   * object; each download re-verifies (decrypt + content-address) before it
+   * counts, with its own resumable checkpoint set. */
+  private async restoreSidecars(
+    paths: RestorePaths,
+    store: BlobStore,
+    discovery: RestoreDiscovery,
+    candidate: RestoreCandidate,
+    checkpoint: RestoreCheckpoint,
+    signal?: AbortSignal,
+  ): Promise<RestoreCheckpoint> {
+    if (candidate.manifest.schema !== 6) return checkpoint;
+    const entries = candidate.manifest.sidecars.map((sidecar) => ({ sidecar, id: `${sidecar.photoId}:${sidecar.hash}` }));
+    const ids = new Set(entries.map((entry) => entry.id));
+    const completed = new Set((checkpoint.completedSidecarIds ?? []).filter((id) => ids.has(id)));
+    for (const entry of entries) {
+      if (!completed.has(entry.id)) continue;
+      if (!(await store.verifySidecar(entry.sidecar.photoId, entry.sidecar.hash, discovery.resolveKey))) {
+        completed.delete(entry.id);
+      }
+    }
+    checkpoint = { ...checkpoint, completedSidecarIds: [...completed] };
+    await saveCheckpoint(paths, checkpoint);
+    const pending = entries.filter((entry) => !completed.has(entry.id));
+    if (pending.length === 0) return checkpoint;
+    const remote = new Map((await this.deps.provider.list('sidecars')).map((entry) => [entry.path, entry]));
+    for (const entry of pending) {
+      assertNotAborted(signal);
+      if (!remote.has(entry.sidecar.blobPath)) {
+        throw new RestoreError('corrupt', `manifest references missing ${entry.sidecar.blobPath}`);
+      }
+      try {
+        const remoteStream = await this.deps.provider.getStream(entry.sidecar.blobPath);
+        await store.restoreSidecar(
+          entry.sidecar.photoId,
+          entry.sidecar.hash,
+          signal === undefined ? remoteStream : addAbortSignal(signal, remoteStream),
+          discovery.resolveKey,
+        );
+      } catch (error) {
+        if (error instanceof BlobStoreError) throw new RestoreError('corrupt', error.message);
+        throw error;
+      }
+      completed.add(entry.id);
+      checkpoint = { ...checkpoint, completedSidecarIds: [...completed] };
+      await saveCheckpoint(paths, checkpoint);
+    }
+    return checkpoint;
   }
 
   private async restoreProtectedBlobs(
@@ -419,11 +471,25 @@ export class RestoreEngine {
       createManifestDebtStore(db, () => new Date()).save(true);
       if ('boards' in candidate.manifest) restoreBoards(db, candidate.manifest.boards);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
-      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5) {
+      if (candidate.manifest.schema === 6) {
+        const sidecarRepo = new SidecarRepository(db);
+        for (const sidecar of candidate.manifest.sidecars) {
+          sidecarRepo.insert({
+            photoId: sidecar.photoId,
+            role: sidecar.role,
+            fileName: sidecar.fileName,
+            contentHash: sidecar.hash,
+            bytes: sidecar.bytes,
+            keyId: sidecar.keyId,
+            importedAt: candidate.manifest.generatedAt,
+          });
+        }
+      }
+      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
         new ActivityRepository(db).restoreSnapshot(candidate.manifest.activity);
       }
       const rebuilt = repo.manifestSnapshot();
-      const expectedBoards = candidate.manifest.schema === 5 ? candidate.manifest.boards : [];
+      const expectedBoards = candidate.manifest.schema === 5 || candidate.manifest.schema === 6 ? candidate.manifest.boards : [];
       const expected = {
         keyIds: candidate.manifest.keyIds,
         totals: candidate.manifest.totals,

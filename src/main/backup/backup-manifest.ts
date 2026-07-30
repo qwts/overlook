@@ -5,7 +5,7 @@ import type { ActivityEvent } from '../../shared/activity/types.js';
 import { mediaInfoSchema } from '../../shared/library/media-info.js';
 import { boardSchema } from '../../shared/moodboard/board.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 5 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 6 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -316,7 +316,7 @@ export const backupManifestBoardV5Schema = boardSchema.extend({
 export const backupManifestV5Schema = z
   .strictObject({
     ...backupManifestV4Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(5),
     boards: z.array(backupManifestBoardV5Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -337,6 +337,59 @@ export const backupManifestV5Schema = z
     }
   });
 
+// Encrypted sidecar custody (#484, ADR-0031 §7): manifests include every
+// companion object so restore rebuilds byte-identical sidecars. Objects live
+// at sidecars/<photoId>/<hash>; sha256/bytes describe the CIPHERTEXT (like
+// protected objects — verify-after-upload has no plaintext catalog hash for
+// the envelope itself; the plaintext hash IS `hash`).
+export const backupManifestSidecarV6Schema = z.strictObject({
+  photoId: z.string().min(1),
+  role: z.enum(['xmp', 'aae']),
+  fileName: z.string().min(1),
+  hash: z.string().regex(/^[0-9a-f]{64}$/u),
+  bytes: z.number().int().nonnegative(),
+  keyId: z.number().int().positive(),
+  blobPath: z.string().min(1),
+  ciphertext: z.strictObject({ sha256: z.string().regex(/^[0-9a-f]{64}$/u), bytes: z.number().int().positive() }),
+});
+
+export const backupManifestV6Schema = z
+  .strictObject({
+    ...backupManifestV5Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    sidecars: z.array(backupManifestSidecarV6Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { sidecars, ...withoutSidecars } = manifest;
+    const previous = backupManifestV5Schema.safeParse({ ...withoutSidecars, schema: 5 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-5 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    const photoIds = new Set(manifest.photos.map((photo) => photo.id));
+    const seen = new Set<string>();
+    for (const [index, sidecar] of sidecars.entries()) {
+      if (!photoIds.has(sidecar.photoId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['sidecars', index, 'photoId'],
+          message: 'sidecar references a photo not in the manifest',
+        });
+      }
+      const key = `${sidecar.photoId}:${sidecar.hash}`;
+      if (seen.has(key)) {
+        context.addIssue({ code: 'custom', path: ['sidecars', index], message: 'duplicate sidecar object' });
+      }
+      seen.add(key);
+      if (sidecar.blobPath !== `sidecars/${sidecar.photoId}/${sidecar.hash}`) {
+        context.addIssue({
+          code: 'custom',
+          path: ['sidecars', index, 'blobPath'],
+          message: 'sidecar blobPath must derive from photoId and hash',
+        });
+      }
+    }
+  });
+
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
 export type BackupManifestPhotoV2 = z.infer<typeof backupManifestPhotoV2Schema>;
 export type BackupManifestAlbumV2 = z.infer<typeof backupManifestAlbumV2Schema>;
@@ -348,7 +401,9 @@ export type BackupManifestV3 = z.infer<typeof backupManifestV3Schema>;
 export type BackupManifestV4 = z.infer<typeof backupManifestV4Schema>;
 export type BackupManifestBoardV5 = z.infer<typeof backupManifestBoardV5Schema>;
 export type BackupManifestV5 = z.infer<typeof backupManifestV5Schema>;
-export type RestorableBackupManifest = BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5;
+export type BackupManifestSidecarV6 = z.infer<typeof backupManifestSidecarV6Schema>;
+export type BackupManifestV6 = z.infer<typeof backupManifestV6Schema>;
+export type RestorableBackupManifest = BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -369,6 +424,10 @@ export interface BackupManifestSnapshotV4 extends BackupManifestSnapshotV3 {
 
 export interface BackupManifestSnapshotV5 extends BackupManifestSnapshotV4 {
   readonly boards: readonly BackupManifestBoardV5[];
+}
+
+export interface BackupManifestSnapshotV6 extends BackupManifestSnapshotV5 {
+  readonly sidecars: readonly BackupManifestSidecarV6[];
 }
 
 export type ParsedBackupManifest =
@@ -411,6 +470,19 @@ export function buildBackupManifestV5(input: {
   readonly snapshot: BackupManifestSnapshotV5;
 }): BackupManifestV5 {
   return backupManifestV5Schema.parse({
+    schema: 5,
+    libraryId: input.libraryId,
+    generatedAt: input.generatedAt,
+    ...input.snapshot,
+  });
+}
+
+export function buildBackupManifestV6(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV6;
+}): BackupManifestV6 {
+  return backupManifestV6Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -451,10 +523,17 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: parsed.data };
   }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+  if (version.data.schema === 5) {
     const parsed = backupManifestV5Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-5 manifest: ${z.prettifyError(parsed.error)}`);
+    }
+    return { restorable: true, manifest: parsed.data };
+  }
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+    const parsed = backupManifestV6Schema.safeParse(input);
+    if (!parsed.success) {
+      throw new BackupManifestError(`invalid schema-6 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: parsed.data };
   }

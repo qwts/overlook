@@ -25,6 +25,8 @@ export interface ExportedFile {
   /** True when a RAW transcoded from its embedded preview (#98) —
    * resolution honestly capped at preview size. */
   readonly fromPreview: boolean;
+  /** Companion sidecars written beside this original (#484). */
+  readonly sidecarNames: readonly string[];
 }
 
 export interface ExportSummary {
@@ -33,6 +35,8 @@ export interface ExportSummary {
   readonly cancelled: number;
   /** How many exports were preview-capped RAW transcodes (#98). */
   readonly previewTranscodes: number;
+  /** Companion sidecars written beside their originals (#484). */
+  readonly sidecarsExported: number;
   readonly files: readonly ExportedFile[];
 }
 
@@ -43,6 +47,12 @@ export class ExportPreflightError extends Error {
 export interface ExportEngineDeps {
   readonly repo: { readonly get: (id: string) => PhotoRecord | undefined };
   readonly blobs: { readonly getStream: (contentHash: string, resolveKey: KeyResolver, photoId: string) => Readable };
+  /** Encrypted companion custody (#484); absent = no sidecar support. Only
+   * 'original' format exports companions — a transcode is a baked export
+   * whose recipe no longer applies (ADR-0031 §6). */
+  readonly sidecarsFor?:
+    ((photoId: string) => readonly { readonly fileName: string; readonly contentHash: string; readonly bytes: number }[]) | undefined;
+  readonly sidecarStream?: ((photoId: string, contentHash: string) => Readable) | undefined;
   readonly resolveKey: KeyResolver;
   /** Policy-aware original custody. Production uses this so offloaded
    * originals export from verified temporary ciphertext without becoming
@@ -103,8 +113,17 @@ export class ExportEngine {
   ): Promise<ExportSummary> {
     const photos = photoIds.map((id) => this.deps.repo.get(id));
     // Free-space preflight: the sum of plaintext sizes must fit BEFORE any
-    // bytes move — a mid-batch ENOSPC helps nobody.
-    const needed = photos.reduce((sum, photo) => sum + (photo?.bytes ?? 0), 0);
+    // bytes move — a mid-batch ENOSPC helps nobody. Sidecar bytes count too.
+    const needed =
+      photos.reduce((sum, photo) => sum + (photo?.bytes ?? 0), 0) +
+      (format === 'original'
+        ? photos.reduce(
+            (sum, photo) =>
+              sum +
+              (photo === undefined ? 0 : (this.deps.sidecarsFor?.(photo.id) ?? []).reduce((inner, sidecar) => inner + sidecar.bytes, 0)),
+            0,
+          )
+        : 0);
     const free = await this.deps.freeBytes(destination);
     if (needed > free) {
       throw new ExportPreflightError(`destination needs ${String(needed)} bytes free, has ${String(free)}`);
@@ -142,7 +161,8 @@ export class ExportEngine {
         }
         const fileName = await this.resolveCollision(destination, targetName);
         await this.deps.writeFile(this.deps.joinPath(destination, fileName), plaintext);
-        files.push({ photoId: photo.id, fileName, renamed: fileName !== targetName, fromPreview });
+        const sidecarNames = format === 'original' ? await this.exportSidecars(photo, destination, fileName) : [];
+        files.push({ photoId: photo.id, fileName, renamed: fileName !== targetName, fromPreview, sidecarNames });
       } catch (error) {
         failed += 1;
         if (this.deps.failure === undefined) {
@@ -156,7 +176,33 @@ export class ExportEngine {
       done += 1;
       this.deps.events.progress(done, total);
     }
-    return { exported: files.length, failed, cancelled, previewTranscodes: files.filter((file) => file.fromPreview).length, files };
+    return {
+      exported: files.length,
+      failed,
+      cancelled,
+      previewTranscodes: files.filter((file) => file.fromPreview).length,
+      sidecarsExported: files.reduce((sum, file) => sum + file.sidecarNames.length, 0),
+      files,
+    };
+  }
+
+  /** Writes each companion beside the exported original, named from the
+   * original's RESOLVED stem so a suffixed export keeps its group together
+   * (`IMG (2).RAF` → `IMG (2).xmp`), with per-file collision fallback. */
+  private async exportSidecars(photo: PhotoRecord, destination: string, resolvedName: string): Promise<readonly string[]> {
+    const sidecars = this.deps.sidecarsFor?.(photo.id) ?? [];
+    if (sidecars.length === 0 || this.deps.sidecarStream === undefined) return [];
+    const dot = resolvedName.lastIndexOf('.');
+    const stem = dot <= 0 ? resolvedName : resolvedName.slice(0, dot);
+    const written: string[] = [];
+    for (const sidecar of sidecars) {
+      const sidecarDot = sidecar.fileName.lastIndexOf('.');
+      const extension = sidecarDot <= 0 ? '' : sidecar.fileName.slice(sidecarDot);
+      const target = await this.resolveCollision(destination, `${stem}${extension}`);
+      await this.deps.writeFile(this.deps.joinPath(destination, target), this.deps.sidecarStream(photo.id, sidecar.contentHash));
+      written.push(target);
+    }
+    return written;
   }
 
   private async resolveCollision(destination: string, fileName: string): Promise<string> {

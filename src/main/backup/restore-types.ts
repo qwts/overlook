@@ -31,6 +31,9 @@ export interface RestoreCheckpoint {
   readonly completedBlobIds: readonly string[];
   readonly completedThumbnailIds: readonly string[];
   readonly completedProtectedObjectIds: readonly string[];
+  /** Sidecar objects already restored + verified (#484): `photoId:hash`.
+   * Optional for checkpoints written before schema-6 manifests. */
+  readonly completedSidecarIds?: readonly string[] | undefined;
 }
 
 export function isAbortError(error: unknown): boolean {

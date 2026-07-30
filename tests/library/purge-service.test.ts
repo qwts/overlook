@@ -78,10 +78,12 @@ async function world(count: number, options: { contentHash?: string; retention?:
       },
       countAnyByContentHash: (hash) => repo.countAnyByContentHash(hash),
       expiredDeleted: (cutoff) => repo.expiredDeleted(cutoff),
+      sidecarHashesForPhoto: () => [],
     },
     blobs: {
       deleteOriginal: async (hash) => store.deleteOriginal(hash),
       deleteThumbs: async (hash) => store.deleteThumbs(hash),
+      deleteSidecars: async (photoId) => store.deleteSidecars(photoId),
     },
     provider,
     connected: () => connected,

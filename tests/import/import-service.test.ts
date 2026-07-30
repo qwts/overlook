@@ -25,7 +25,16 @@ const IDLE_EVENTS = {
   imported: () => undefined,
 };
 
-const EMPTY_SCAN: SourceScanSummary = { total: 0, newCount: 0, newBytes: 0, newRaw: 0, newJpg: 0, newOther: 0 };
+const EMPTY_SCAN: SourceScanSummary = {
+  total: 0,
+  newCount: 0,
+  newBytes: 0,
+  newRaw: 0,
+  newJpg: 0,
+  newOther: 0,
+  newSidecars: 0,
+  unmatchedCompanions: 0,
+};
 
 describe('import service serialization (#87)', () => {
   test('overlapping run()/resume() calls execute strictly in turn', async () => {
@@ -39,7 +48,17 @@ describe('import service serialization (#87)', () => {
       peak = Math.max(peak, active);
       await new Promise((resolve) => setTimeout(resolve, 20));
       active -= 1;
-      return { imported: 0, moved: 0, retained: 0, duplicates: 0, failed: 0, cancelled: 0, photoIds: [], moveCompensations: [] };
+      return {
+        imported: 0,
+        moved: 0,
+        retained: 0,
+        duplicates: 0,
+        failed: 0,
+        cancelled: 0,
+        sidecars: 0,
+        photoIds: [],
+        moveCompensations: [],
+      };
     };
     const engine = {
       importFiles: enter,
@@ -183,6 +202,7 @@ describe('local folder and dropped Move policy (#489)', () => {
     bytes: 4,
     contentHash: 'a'.repeat(64),
     isNew: true,
+    sidecars: [],
   };
   const existing = {
     ...fresh,
@@ -192,7 +212,7 @@ describe('local folder and dropped Move policy (#489)', () => {
     isNew: false,
   };
   const scan = {
-    summary: { total: 2, newCount: 1, newBytes: 4, newRaw: 0, newJpg: 1, newOther: 0 },
+    summary: { total: 2, newCount: 1, newBytes: 4, newRaw: 0, newJpg: 1, newOther: 0, newSidecars: 0, unmatchedCompanions: 0 },
     files: [fresh, existing],
   };
 

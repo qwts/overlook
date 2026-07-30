@@ -53,11 +53,23 @@ interface ScanSummary {
   readonly newBytes: number;
   readonly newRaw: number;
   readonly newJpg: number;
+  /** Companion sidecars attached to NEW media (#484). */
+  readonly newSidecars: number;
+  /** Allowlisted companions matching no media — reported, never dropped. */
+  readonly unmatchedCompanions: number;
 }
 
 /** Natural-case source text; mono-data applies the visual uppercase treatment. */
 function summaryDetail(summary: ScanSummary, formatCount: (value: number) => string, formatBytes: (bytes: number) => string): string {
-  return `${formatCount(summary.newCount)} new · ${formatBytes(summary.newBytes)} · ${formatCount(summary.newRaw)} RAW / ${formatCount(summary.newJpg)} JPG`;
+  const base = `${formatCount(summary.newCount)} new · ${formatBytes(summary.newBytes)} · ${formatCount(summary.newRaw)} RAW / ${formatCount(summary.newJpg)} JPG`;
+  return summary.newSidecars > 0 ? `${base} · ${formatCount(summary.newSidecars)} sidecar${summary.newSidecars === 1 ? '' : 's'}` : base;
+}
+
+/** Honest companion reporting (#484): allowlisted sidecars whose stem matched
+ * no media are named in the card, never silently discarded. */
+function unmatchedCompanionNote(summary: ScanSummary, formatCount: (value: number) => string): string | null {
+  if (summary.unmatchedCompanions === 0) return null;
+  return `${formatCount(summary.unmatchedCompanions)} sidecar file${summary.unmatchedCompanions === 1 ? '' : 's'} without a matching photo skipped`;
 }
 
 type SdState =
@@ -205,7 +217,10 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
       })
       .catch(() => {
         if (!stale) {
-          setDrop({ status: 'ready', summary: { total: 0, newCount: 0, newBytes: 0, newRaw: 0, newJpg: 0 } });
+          setDrop({
+            status: 'ready',
+            summary: { total: 0, newCount: 0, newBytes: 0, newRaw: 0, newJpg: 0, newSidecars: 0, unmatchedCompanions: 0 },
+          });
         }
       });
     return () => {
@@ -286,6 +301,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
   const [copyBar, setCopyBar] = useState<Bar>({ done: 0, total: 0 });
   const [thumbBar, setThumbBar] = useState<Bar>({ done: 0, total: 0 });
   const [imported, setImported] = useState(0);
+  const [sidecars, setSidecars] = useState(0);
   const [moved, setMoved] = useState(0);
   const [retained, setRetained] = useState(0);
   const [duplicates, setDuplicates] = useState(0);
@@ -404,6 +420,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
     void run
       .then((summary) => {
         setImported(summary.imported);
+        setSidecars(summary.sidecars);
         setMoved(summary.moved);
         setRetained(summary.retained);
         setDuplicates(summary.duplicates);
@@ -558,6 +575,11 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                     {formatCount(drop.summary.newCount)} photo{drop.summary.newCount === 1 ? '' : 's'} ready to import
                   </div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(drop.summary, formatCount, formatBytes)}</div>
+                  {unmatchedCompanionNote(drop.summary, formatCount) === null ? null : (
+                    <div className="ovl-import__cardMeta mono-data" data-testid="import-unmatched-companions">
+                      {unmatchedCompanionNote(drop.summary, formatCount)}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -575,6 +597,9 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                 <div className="ovl-import__cardText">
                   <div className="ovl-import__cardTitle">{sd.label}</div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(sd.summary, formatCount, formatBytes)}</div>
+                  {unmatchedCompanionNote(sd.summary, formatCount) === null ? null : (
+                    <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(sd.summary, formatCount)}</div>
+                  )}
                 </div>
               </div>
             ) : sd.status === 'scanning' ? (
@@ -612,6 +637,9 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                 <div className="ovl-import__cardMeta mono-data">
                   {folder.status === 'ready' ? summaryDetail(folder.summary, formatCount, formatBytes) : 'Scanning…'}
                 </div>
+                {folder.status === 'ready' && unmatchedCompanionNote(folder.summary, formatCount) !== null ? (
+                  <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(folder.summary, formatCount)}</div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -695,6 +723,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   ? 'Import failed — nothing was deleted from the source. Check the source and try again.'
                   : `${[
                       `${formatCount(imported)} imported`,
+                      ...(sidecars > 0 ? [`${formatCount(sidecars)} sidecar${sidecars === 1 ? '' : 's'}`] : []),
                       ...(importMode === 'move' ? [`${formatCount(moved)} moved`, `${formatCount(retained)} retained`] : []),
                       ...(duplicates > 0 ? [`${formatCount(duplicates)} duplicate${duplicates === 1 ? '' : 's'}`] : []),
                       ...(failed > 0 ? [`${formatCount(failed)} failed`] : []),
