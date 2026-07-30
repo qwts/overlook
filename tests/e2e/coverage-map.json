@@ -1896,6 +1896,24 @@
       ]
     },
     {
+      "id": "m30-library-folder-rename",
+      "wiki": "Library-Management",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/library-relocation.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/RenameLibraryDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-rename.test.ts", "tests/library/folder-name.test.ts"]
+        }
+      ]
+    },
+    {
       "id": "m32-common-video-containers",
       "wiki": "Library-Format-v1",
       "coverage": [
