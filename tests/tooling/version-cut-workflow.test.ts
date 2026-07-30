@@ -15,7 +15,6 @@ describe('version-cut workflow', () => {
     // workflows". A bot rather than a human PAT also keeps the version PR
     // approvable: qwts cannot approve a PR qwts opened (ENG-0045 decision 4).
     assert.match(workflow, /uses: actions\/create-github-app-token@[0-9a-f]{40}/u);
-    assert.match(workflow, /token: \$\{\{ steps\.chores\.outputs\.token \|\| secrets\.RELEASE_TOKEN \|\| github\.token \}\}/u);
     assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \|\| secrets\.RELEASE_TOKEN \|\| github\.token \}\}/u);
     // The secrets context is unavailable in `if`, so presence is surfaced as env.
     assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' \}\}/u);
@@ -36,10 +35,7 @@ describe('version-cut workflow', () => {
   });
 
   test('never puts a repo credential in reach of a third-party action', () => {
-    // The App key and the token it mints go to actions/* steps and our own run:
-    // blocks only — anything else would hand a repo-scoped credential to code
-    // whose future versions nobody here controls. This is why `changeset version`
-    // is invoked as a CLI rather than through changesets/action, and why the
+    // The App key and the token it mints never go to a third-party action. The
     // token is minted by actions/create-github-app-token rather than a
     // third-party equivalent (AGENTS.md → Branch And GitHub Hygiene).
     const foreign = [...workflow.matchAll(/^\s*uses: (?<action>[^@\s]+)/gmu)]
@@ -47,6 +43,16 @@ describe('version-cut workflow', () => {
       .filter((action) => !action.startsWith('actions/'));
 
     assert.deepEqual(foreign, []);
+  });
+
+  test('keeps repository credentials away from the changeset CLI', () => {
+    const versionJob = workflow.split(/^  tag:/mu)[0] ?? '';
+    const versionStep = versionJob.split('- name: Create the Version packages commit')[1]?.split('- name: Push and refresh')[0] ?? '';
+
+    assert.match(versionJob, /persist-credentials: false/u);
+    assert.match(versionStep, /npx changeset version/u);
+    assert.doesNotMatch(versionStep, /GH_TOKEN|RELEASE_TOKEN|steps\.chores\.outputs\.token/u);
+    assert.match(versionJob, /if: steps\.version\.outputs\.ready == 'true'/u);
   });
 
   test('hand-dispatches nothing but stranded-tag recovery', () => {
