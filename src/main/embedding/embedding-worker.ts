@@ -113,10 +113,14 @@ let current: Promise<unknown> = Promise.resolve();
 
 parentPort?.on('message', (request: EmbeddingWorkerRequest | EmbeddingWorkerShutdown) => {
   if ('shutdown' in request) {
-    void current.then(
-      () => process.exit(0),
-      () => process.exit(0),
-    );
+    // Value-checked, not just shape-checked: a malformed message carrying a
+    // falsy shutdown field is ignored, never an accidental exit.
+    if (request.shutdown) {
+      void current.then(
+        () => process.exit(0),
+        () => process.exit(0),
+      );
+    }
     return;
   }
   const bytes = Buffer.from(request.bytes.buffer, request.bytes.byteOffset, request.bytes.byteLength);

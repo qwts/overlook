@@ -36,6 +36,9 @@ function abortError(signal: AbortSignal): Error {
 export class EmbeddingPool {
   private worker: Worker | undefined;
   private active: ActiveJob | undefined;
+  /** Retirements still draining (abort detaches fire-and-forget); close()
+   * must await them so library teardown never outruns a live ONNX worker. */
+  private readonly retiring = new Set<Promise<void>>();
   private nextId = 1;
   private closed = false;
 
@@ -74,7 +77,13 @@ export class EmbeddingPool {
 
   async close(): Promise<void> {
     this.closed = true;
-    if (this.worker !== undefined) await this.retire(this.worker);
+    if (this.worker !== undefined) void this.retire(this.worker);
+    // Await EVERY outstanding retirement, not just the current worker: an
+    // abort may have detached a still-draining worker earlier, and teardown
+    // must not proceed while any ONNX run is alive (PR #845 review).
+    while (this.retiring.size > 0) {
+      await Promise.all([...this.retiring]);
+    }
   }
 
   /** Cooperative shutdown (#843): detach the worker (a new job gets a fresh
@@ -82,7 +91,7 @@ export class EmbeddingPool {
    * only a worker that never does. Resolves when the worker is gone. */
   private retire(worker: Worker): Promise<void> {
     if (this.worker === worker) this.worker = undefined;
-    return new Promise((resolve) => {
+    const drained = new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
         void worker.terminate().then(() => resolve());
       }, this.options.drainTimeoutMs ?? DRAIN_TIMEOUT_MS);
@@ -93,6 +102,9 @@ export class EmbeddingPool {
       });
       worker.postMessage({ shutdown: true } satisfies EmbeddingWorkerShutdown);
     });
+    this.retiring.add(drained);
+    void drained.finally(() => this.retiring.delete(drained));
+    return drained;
   }
 
   private getWorker(): Worker {

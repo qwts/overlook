@@ -60,6 +60,20 @@ describe('embedding pool worker retirement (#843)', () => {
     await pool.close();
   });
 
+  test('REGRESSION (PR #845): close() awaits a worker already detached by an earlier abort', async () => {
+    const pool = poolWith(COOPERATIVE_WORKER);
+    const controller = new AbortController();
+    const aborted = pool.embed(Buffer.from([1]), controller.signal);
+    controller.abort(new Error('teardown'));
+    await assert.rejects(aborted, /teardown/);
+
+    // The aborted worker is detached and draining in the background; close()
+    // must not resolve while it is still alive — teardown would otherwise
+    // outrun a live ONNX run.
+    await pool.close();
+    assert.equal((pool as unknown as { retiring: Set<Promise<void>> }).retiring.size, 0, 'no retirement is still draining after close()');
+  });
+
   test('a worker that never exits is hard-terminated by the backstop', async () => {
     const pool = poolWith(STUBBORN_WORKER, 100);
     const job = pool.embed(Buffer.from([1]));
