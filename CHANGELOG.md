@@ -1,5 +1,12 @@
 # photos
 
+## 0.64.3
+
+### Patch Changes
+
+- 2b1502a: Fix a whole-app crash (SIGABRT) when switching libraries or pausing indexing while an embedding was being computed: terminating the ONNX worker mid-inference made onnxruntime throw into the torn-down worker environment. Workers now retire cooperatively — the in-flight job settles first, and a hard terminate remains only as a backstop for a wedged worker.
+- 41cd05b: Judge library-lock staleness by a stable machine identity instead of the hostname, so a crashed instance's lock is reclaimed even after the hostname drifts with network state (`.local` ↔ `.lan`). Startup now fails loud when the selected library is lock-held by another instance, naming the holder and pointing at the library switcher instead of leaving the user in a different library.
+
 ## 0.64.2
 
 ### Patch Changes
