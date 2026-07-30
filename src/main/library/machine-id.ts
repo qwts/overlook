@@ -20,6 +20,7 @@ function probe(): string | undefined {
       const out = execFileSync('reg', ['query', String.raw`HKLM\SOFTWARE\Microsoft\Cryptography`, '/v', 'MachineGuid'], {
         encoding: 'utf8',
         timeout: PROBE_TIMEOUT_MS,
+        windowsHide: true,
       });
       return /MachineGuid\s+REG_SZ\s+(\S+)/u.exec(out)?.[1];
     }
