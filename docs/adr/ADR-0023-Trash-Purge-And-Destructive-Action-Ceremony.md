@@ -37,6 +37,19 @@ the encrypted copy remains in the provider's trash, recoverable only through
 the provider, until that provider's retention expires. Purge remains Tier D
 and its vocabulary is unchanged.
 
+**Amended 2026-07-30 by
+[ADR-0032](./ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md)
+(#793), resolving this ADR's "revisit when … sharing lands" debt:** §4's
+derived-death list gains space membership rows, encrypted outbox entries,
+space blob copies, cached foreign-key metadata projections, and per-photo
+disclosure decisions. §6's side-effect enumeration gains one line whenever the
+purged photo was shared — copies held by other participants are not deleted.
+§7's registry gains **Remove participant** and **Leave space** (Tier M — the
+photos survive, and the ceremony says so) and **Delete space** (Tier D, using
+the provider's recoverable deletion per the #750 amendment above, and
+disclosing that other participants keep whatever they downloaded). No ceremony
+may imply that revocation retracts plaintext a recipient already holds.
+
 ## Context
 
 Deletion is the one operation whose _purpose_ is data loss, so it runs the
