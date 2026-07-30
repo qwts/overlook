@@ -403,9 +403,9 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
 export type RelocationFacade = Pick<RelocationRuntime, 'move' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'>;
 
 // Library relocation (#483, ADR-0022). Like the registry handlers these use
-// validateHandler directly: moving an INACTIVE library exposes no content and
-// must work while the active library is app-locked; moving the ACTIVE library
-// is refused by the runtime while locked ('app-locked' designed refusal).
+// validateHandler directly. The runtime refuses OVLK custody without an
+// authenticated open and refuses a locked active library; other inactive
+// libraries may move while the active library is app-locked.
 export function registerRelocationHandlers(getRuntime: () => RelocationFacade): void {
   ipcMain.handle(channels.libraryRelocationMove.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationMove, ({ id, destPath }) => getRuntime().move(id, destPath))(request),

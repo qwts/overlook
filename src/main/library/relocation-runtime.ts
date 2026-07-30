@@ -11,10 +11,12 @@ import {
   type RelocationProbe,
 } from './relocation-engine.js';
 import type { RelocationOutcome, RelocationMode, RelocationProgress, RelocationState } from '../../shared/library/relocation.js';
+import { hasAppLockCustody } from './relocation-verify.js';
 
 // Relocation runtime (#483, ADR-0022 §4): the IPC-facing wrapper around the
-// engine. Inactive libraries relocate directly; the ACTIVE library runs the
-// switch-shaped sequence (guards → teardown → relocate → reactivate), and
+// engine. Inactive libraries relocate directly unless app-lock custody requires
+// an authenticated open; the ACTIVE library runs the switch-shaped sequence
+// (guards → teardown → relocate → reactivate), and
 // reactivation happens whatever the move's outcome — on success the registry
 // points at the destination, on any refusal/failure it still points at the
 // source, so the same reopen lands on the right directory both ways.
@@ -87,6 +89,12 @@ export class RelocationRuntime {
     }
     const sourcePath = entry.path;
     const isActive = this.options.active.openLibraryId() === id;
+    // Inactive OVLK custody has no authenticated password authority in this
+    // process. Require the user to open and unlock it before allowing renderer-
+    // initiated relocation to move its custody or delete its source.
+    if (!isActive && hasAppLockCustody(sourcePath)) {
+      return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before moving it' };
+    }
     if (isActive) {
       const lockState = this.options.active.lockState();
       if (lockState !== undefined && lockState !== 'unconfigured-unlocked' && lockState !== 'unlocked') {
@@ -157,6 +165,9 @@ export class RelocationRuntime {
     const journal = this.options.engineDeps.journals.load(id);
     if (entry === undefined || journal === null) return { ok: false, reason: 'io-error', detail: `library ${id} has no resumable move` };
     const isActive = this.options.active.openLibraryId() === id;
+    if (!isActive && hasAppLockCustody(entry.path)) {
+      return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before resuming its move' };
+    }
     if (isActive) {
       const lockState = this.options.active.lockState();
       if (lockState !== undefined && lockState !== 'unconfigured-unlocked' && lockState !== 'unlocked') {

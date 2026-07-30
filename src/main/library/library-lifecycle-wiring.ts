@@ -82,8 +82,8 @@ export function createLibraryLifecycle(deps: LibraryLifecycleDeps): LibraryLifec
 
   // Journals live in the profile root so recovery still runs when the
   // destination volume is unplugged (ADR-0022 §2). The staged-custody probe
-  // lives in relocation-verify.ts (covered; skips app-locked OVLK custody —
-  // PR #553 review).
+  // lives in relocation-verify.ts (covered; the runtime requires OVLK custody
+  // to be actively authenticated before relocation).
   const engineDeps = (): RelocationDeps => ({
     journals: new RelocationJournalStore(path.join(app.getPath('userData'), 'relocations')),
     registry: deps.registryRuntime.getRegistry(),
