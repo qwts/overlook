@@ -87,3 +87,30 @@ export function parseMediaInfo(value: string | null): MediaInfo | null {
     return null;
   }
 }
+
+/** Range-served `<video>` MIME per probed container (ADR-0026 §5, #549) —
+ * never derived from the extension. Unprobed rows fall back to the remux
+ * transport type, preserving the pre-#549 behavior for legacy rows. */
+export function videoMimeFor(container: MediaInfo['container'] | null | undefined): string {
+  switch (container) {
+    case 'MP4':
+      return 'video/mp4';
+    case 'QuickTime':
+      // Chromium demuxes MOV with the same BMFF stack it uses for MP4 and
+      // its canPlayType rejects video/quicktime outright — serve the family
+      // MIME the capability probe asked about (PR #856 review).
+      return 'video/mp4';
+    case 'WebM':
+      return 'video/webm';
+    case 'Matroska':
+      return 'video/x-matroska';
+    case 'AVI':
+      return 'video/x-msvideo';
+    case 'MPEG-PS':
+      return 'video/mpeg';
+    case 'MPEG-Audio':
+      return 'audio/mpeg';
+    default:
+      return 'video/mp2t';
+  }
+}
