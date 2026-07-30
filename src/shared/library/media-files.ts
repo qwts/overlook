@@ -42,8 +42,10 @@ const KIND_BY_EXTENSION: Readonly<Record<string, FileKind>> = {
   mpg: 'video',
   mpeg: 'video',
   // `.mp2` may be MPEG-PS video or an elementary audio stream; the signature
-  // decides (an audio cadence classifies as audio, never fake video).
+  // decides (an audio cadence classifies as audio, never fake video). `.mp3`
+  // admits the same elementary-audio path (PR #856 review).
   mp2: 'audio',
+  mp3: 'audio',
 };
 
 /** FileKind for an import candidate, or null when not a media file. */

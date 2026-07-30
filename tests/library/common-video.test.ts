@@ -451,6 +451,17 @@ describe('MPEG-PS and elementary audio (#549)', () => {
     assert.ok((info?.durationSeconds ?? 0) > 0, 'CBR duration estimated');
   });
 
+  test('REGRESSION (PR #856): a bare frame header at EOF and a lone pack header never classify', () => {
+    // One valid MP2 header with no frame body behind it.
+    const bareHeader = Uint8Array.from([0xff, 0xfd, 0x80, 0x00, 0xaa, 0xaa]);
+    assert.equal(detectMpegAudio(bareHeader), null);
+    assert.equal(sniffVideoKind(bareHeader), null);
+    // One pack start code on a short file, no second pack in the window.
+    const lonePack = Uint8Array.from([0, 0, 1, 0xba, 0x44, 0, 4, 0, 4, 1, 0, 0, 3, 0xf8, 9, 9, 9, 9]);
+    assert.equal(detectMpegPs(lonePack), false);
+    assert.equal(sniffVideoKind(lonePack), null);
+  });
+
   test('random bytes sustain neither cadence', () => {
     const bytes = Uint8Array.from(Array.from({ length: 4096 }, (_, index) => (index * 37) & 0xff));
     assert.equal(detectMpegPs(bytes), false);
@@ -498,12 +509,26 @@ describe('playability derivation over the new containers (§3)', () => {
     assert.equal(derivePlayability('video', webm, caps(['VP9'])), 'playable');
     assert.equal(derivePlayability('audio', probeMediaInfo(buildMp2(), 'audio'), DECODE_ALL), 'preserved-only');
   });
+
+  test('REGRESSION (PR #856): the capability probe is container-aware — a WebM verdict never vouches for MP4', () => {
+    const webmOnly: DeviceMediaCapabilities = {
+      canDecodeCodec: (codec, container) => codec === 'VP9' && container === 'WebM',
+      transportStreamRemuxAvailable: false,
+    };
+    const webm = probeMediaInfo(buildWebm({ doctype: 'webm', tracks: [{ type: 1, codec: 'V_VP9', width: 640, height: 360 }] }), 'video');
+    const mp4 = probeMediaInfo(
+      buildMp4({ tracks: [{ handler: 'vide', fourcc: 'vp09', width: 640, height: 360, stts: [[1, 1000]] }] }),
+      'video',
+    );
+    assert.equal(derivePlayability('video', webm, webmOnly), 'playable');
+    assert.equal(derivePlayability('video', mp4, webmOnly), 'preserved-only', 'the MP4 vp09 entry asks about MP4, not WebM');
+  });
 });
 
 describe('range-served MIME follows the probed container (§5)', () => {
   test('every container maps; unprobed rows keep the legacy transport type', () => {
     assert.equal(videoMimeFor('MP4'), 'video/mp4');
-    assert.equal(videoMimeFor('QuickTime'), 'video/quicktime');
+    assert.equal(videoMimeFor('QuickTime'), 'video/mp4', 'MOV serves through the BMFF demuxer family MIME');
     assert.equal(videoMimeFor('WebM'), 'video/webm');
     assert.equal(videoMimeFor('Matroska'), 'video/x-matroska');
     assert.equal(videoMimeFor('AVI'), 'video/x-msvideo');
@@ -520,6 +545,7 @@ describe('extension hints admit the new families (§2 — signature still decide
       assert.equal(classifyMediaFile(name), 'video', name);
     }
     assert.equal(classifyMediaFile('a.mp2'), 'audio');
+    assert.equal(classifyMediaFile('a.mp3'), 'audio', 'PR #856: ordinary MP3s admit as audio candidates');
     assert.equal(classifyMediaFile('a.wmv'), null, 'unrequested formats stay out');
   });
 });

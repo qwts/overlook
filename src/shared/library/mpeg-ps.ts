@@ -72,14 +72,14 @@ export function detectMpegAudio(bytes: Uint8Array): 'MP2' | 'MP3' | null {
   let cursor = at;
   for (let i = 0; i < MIN_AUDIO_FRAMES; i++) {
     const frame = audioFrameAt(bytes, cursor);
-    if (frame === null || frame.codec !== first.codec) break;
+    // A frame counts only when its DECLARED length is fully present — a bare
+    // header at EOF proves nothing (PR #856 review), so truncated or spoofed
+    // ff-fx prefixes never classify.
+    if (frame === null || frame.codec !== first.codec || cursor + frame.length > bytes.length) break;
     confirmed += 1;
     cursor += frame.length;
-    if (cursor >= bytes.length) break;
   }
-  // A short buffer passes when every present frame chained cleanly.
-  if (confirmed === MIN_AUDIO_FRAMES || (confirmed >= 1 && cursor >= bytes.length)) return first.codec;
-  return null;
+  return confirmed === MIN_AUDIO_FRAMES ? first.codec : null;
 }
 
 /** Bounded facts probe for detected MPEG elementary audio. Duration is the
@@ -136,7 +136,9 @@ export function detectMpegPs(bytes: Uint8Array): boolean {
   for (let at = 4; at < end && packs < MIN_PS_PACKS; at++) {
     if (bytes[at] === 0 && bytes[at + 1] === 0 && bytes[at + 2] === 0x01 && bytes[at + 3] === 0xba) packs += 1;
   }
-  return packs >= MIN_PS_PACKS || bytes.length <= MAX_SCAN_BYTES;
+  // The cadence must actually be seen — a lone pack header on a short file
+  // proves nothing (PR #856 review).
+  return packs >= MIN_PS_PACKS;
 }
 
 /** Bounded facts probe for a detected program stream: PES start codes name

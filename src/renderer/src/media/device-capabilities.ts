@@ -6,33 +6,48 @@ import type { PhotoRecord } from '../../../shared/library/types.js';
 // once per codec per session and cached; the result never crosses into library
 // rows, backup manifests, or interop payloads.
 
-const CODEC_MIME: Readonly<Record<string, string>> = {
+/** canPlayType probe strings per (container family, codec label). MP4 and
+ * QuickTime share Chromium's BMFF demuxer and are served as video/mp4;
+ * WebM probes as WebM. Codecs with NO entry (ProRes, MPEG-1/2, MPEG-4
+ * Part 2, legacy AVI families) deliberately answer false — preserved-only
+ * by derivation, not by a stored flag. A WebM verdict never vouches for the
+ * same codec in MP4 or vice versa (PR #856 review). */
+const BMFF_MIME: Readonly<Record<string, string>> = {
   'H.264': 'video/mp4; codecs="avc1.42E01E"',
   'H.265': 'video/mp4; codecs="hvc1.1.6.L93.B0"',
+  AV1: 'video/mp4; codecs="av01.0.04M.08"',
+  VP9: 'video/mp4; codecs="vp09.00.10.08"',
   AAC: 'audio/mp4; codecs="mp4a.40.2"',
-  MP2: 'audio/mpeg',
-  MP3: 'audio/mpeg',
+  ALAC: 'audio/mp4; codecs="alac"',
   'AC-3': 'audio/mp4; codecs="ac-3"',
   'E-AC-3': 'audio/mp4; codecs="ec-3"',
-  // #549: WebM codecs probe like any other; ProRes/MPEG-1/2/Part-2 and the
-  // legacy AVI families have NO entry — probeCodec answers false, so those
-  // streams stay preserved-only by derivation, not by a stored flag.
+  MP3: 'audio/mpeg',
+  PCM: 'audio/wav; codecs="1"',
+};
+
+const WEBM_MIME: Readonly<Record<string, string>> = {
   VP8: 'video/webm; codecs="vp8"',
   VP9: 'video/webm; codecs="vp09.00.10.08"',
-  AV1: 'video/mp4; codecs="av01.0.04M.08"',
+  AV1: 'video/webm; codecs="av01.0.04M.08"',
   Vorbis: 'audio/webm; codecs="vorbis"',
   Opus: 'audio/webm; codecs="opus"',
-  ALAC: 'audio/mp4; codecs="alac"',
-  PCM: 'audio/wav; codecs="1"',
-  FLAC: 'audio/flac',
 };
+
+/** Remux-transport codecs (MPEG-TS → fMP4, #548) probe as BMFF. Containers
+ * with no serving path never reach the codec probe — derivePlayability
+ * refuses them first. */
+function mimeFor(codec: string, container: string | undefined): string | undefined {
+  if (container === 'WebM') return WEBM_MIME[codec];
+  return BMFF_MIME[codec];
+}
 
 const decodeCache = new Map<string, boolean>();
 
-function probeCodec(codec: string): boolean {
-  const cached = decodeCache.get(codec);
+function probeCodec(codec: string, container?: string): boolean {
+  const key = `${container ?? 'BMFF'}:${codec}`;
+  const cached = decodeCache.get(key);
   if (cached !== undefined) return cached;
-  const mime = CODEC_MIME[codec];
+  const mime = mimeFor(codec, container);
   let ok = false;
   if (mime !== undefined && typeof document !== 'undefined') {
     const el = document.createElement('video');
@@ -41,7 +56,7 @@ function probeCodec(codec: string): boolean {
       ok = verdict === 'probably' || verdict === 'maybe';
     }
   }
-  decodeCache.set(codec, ok);
+  decodeCache.set(key, ok);
   return ok;
 }
 

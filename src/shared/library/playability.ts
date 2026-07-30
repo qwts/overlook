@@ -11,9 +11,11 @@ import type { FileKind } from './types.js';
 export type Playability = 'playable' | 'preserved-only';
 
 export interface DeviceMediaCapabilities {
-  /** True when the platform's `<video>`/MSE stack can decode this codec label,
-   * as recorded by the probe ('H.264', 'AAC', 'H.265', 'AC-3', …). */
-  readonly canDecodeCodec: (codec: string) => boolean;
+  /** True when the platform's `<video>`/MSE stack can decode this codec label
+   * ('H.264', 'AAC', 'VP9', …) INSIDE the given container — Chromium's answer
+   * differs per container, so a WebM VP9 verdict must never vouch for an MP4
+   * vp09 sample entry (PR #856 review). */
+  readonly canDecodeCodec: (codec: string, container?: string) => boolean;
   /** True when the MPEG-TS → fragmented-MP4 remux adapter (§5) is available
    * this session. MPEG-TS is not servable to `<video>` without it. */
   readonly transportStreamRemuxAvailable: boolean;
@@ -55,9 +57,9 @@ export function derivePlayability(fileKind: FileKind, info: MediaInfo | null, ca
     return 'preserved-only';
   }
 
-  // Every present stream must be locally decodable.
+  // Every present stream must be locally decodable in THIS container.
   for (const stream of [...videoStreams, ...audioStreams]) {
-    if (stream.codec === null || !caps.canDecodeCodec(stream.codec)) return 'preserved-only';
+    if (stream.codec === null || !caps.canDecodeCodec(stream.codec, info.container)) return 'preserved-only';
   }
   return 'playable';
 }

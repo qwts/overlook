@@ -96,7 +96,10 @@ export function videoMimeFor(container: MediaInfo['container'] | null | undefine
     case 'MP4':
       return 'video/mp4';
     case 'QuickTime':
-      return 'video/quicktime';
+      // Chromium demuxes MOV with the same BMFF stack it uses for MP4 and
+      // its canPlayType rejects video/quicktime outright — serve the family
+      // MIME the capability probe asked about (PR #856 review).
+      return 'video/mp4';
     case 'WebM':
       return 'video/webm';
     case 'Matroska':
