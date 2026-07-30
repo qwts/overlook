@@ -12,6 +12,7 @@ import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { IconButton } from '../components/IconButton';
 import { MoveLibraryDialog } from './MoveLibraryDialog';
+import { RenameLibraryDialog } from './RenameLibraryDialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 
@@ -20,7 +21,7 @@ import { useAnnouncer } from '../components/LiveAnnouncer';
 // tears down, repoints, and reloads this window — the "switching" phase here
 // is honest about that: it survives only until the reload wipes the renderer.
 
-type Phase = 'list' | 'switching' | 'create' | 'confirm-remove' | 'move';
+type Phase = 'list' | 'switching' | 'create' | 'confirm-remove' | 'move' | 'rename';
 
 interface Refusal {
   readonly kind:
@@ -48,6 +49,7 @@ const moveMessages = defineMessages({
   select: { id: 'libswitch.move.select', defaultMessage: 'Select {name} to move' },
   moveOne: { id: 'libswitch.move.one', defaultMessage: 'Move {name}…' },
   moveSelected: { id: 'libswitch.move.selected', defaultMessage: 'Move {count} selected…' },
+  renameOne: { id: 'libswitch.rename.one', defaultMessage: 'Rename folder of {name}…' },
 });
 
 export interface LibrarySwitcherProps {
@@ -72,6 +74,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
   const [createPath, setCreatePath] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [moveTargets, setMoveTargets] = useState<readonly LibraryDescriptor[] | null>(null);
+  const [renameTarget, setRenameTarget] = useState<LibraryDescriptor | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -213,6 +216,19 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
     }
     onClose();
   };
+
+  if (phase === 'rename' && renameTarget !== null) {
+    return (
+      <RenameLibraryDialog
+        library={renameTarget}
+        onClose={() => {
+          setPhase('list');
+          setRenameTarget(null);
+          refresh();
+        }}
+      />
+    );
+  }
 
   if (phase === 'move' && moveTargets !== null) {
     return (
@@ -403,6 +419,19 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
                         else next.delete(lib.id);
                         return next;
                       });
+                    }}
+                  />
+                )}
+                {blocked ? null : (
+                  <IconButton
+                    icon="pencil"
+                    label={intl.formatMessage(moveMessages.renameOne, { name: lib.name })}
+                    size="sm"
+                    data-testid={`rename-library-${lib.name}`}
+                    onClick={() => {
+                      setRefusal(null);
+                      setRenameTarget(lib);
+                      setPhase('rename');
                     }}
                   />
                 )}

@@ -400,7 +400,10 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
   );
 }
 
-export type RelocationFacade = Pick<RelocationRuntime, 'move' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'>;
+export type RelocationFacade = Pick<
+  RelocationRuntime,
+  'move' | 'rename' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'
+>;
 
 // Library relocation (#483, ADR-0022). Like the registry handlers these use
 // validateHandler directly. The runtime refuses OVLK custody without an
@@ -409,6 +412,9 @@ export type RelocationFacade = Pick<RelocationRuntime, 'move' | 'resume' | 'disc
 export function registerRelocationHandlers(getRuntime: () => RelocationFacade): void {
   ipcMain.handle(channels.libraryRelocationMove.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationMove, ({ id, destPath }) => getRuntime().move(id, destPath))(request),
+  );
+  ipcMain.handle(channels.libraryRelocationRename.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRelocationRename, ({ id, newName }) => getRuntime().rename(id, newName))(request),
   );
   ipcMain.handle(channels.libraryRelocationCancel.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationCancel, ({ id }) => ({ cancelled: getRuntime().cancel(id) }))(request),

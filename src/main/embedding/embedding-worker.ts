@@ -15,6 +15,14 @@ export interface EmbeddingWorkerRequest {
   readonly bytes: Uint8Array;
 }
 
+/** Cooperative shutdown (#843): the worker exits itself once the in-flight
+ * job settles. terminate() mid-inference aborts the WHOLE app — onnxruntime's
+ * completion callback throws into the torn-down worker env and the C++
+ * exception escapes to std::terminate. */
+export interface EmbeddingWorkerShutdown {
+  readonly shutdown: true;
+}
+
 export type EmbeddingWorkerResponse =
   | { readonly jobId: number; readonly ok: true; readonly embedding: Int8Array; readonly provider: string }
   | { readonly jobId: number; readonly ok: false; readonly kind: 'input' | 'runtime'; readonly error: string };
@@ -101,9 +109,22 @@ async function embed(bytes: Uint8Array): Promise<{ readonly embedding: Int8Array
   }
 }
 
-parentPort?.on('message', (request: EmbeddingWorkerRequest) => {
+let current: Promise<unknown> = Promise.resolve();
+
+parentPort?.on('message', (request: EmbeddingWorkerRequest | EmbeddingWorkerShutdown) => {
+  if ('shutdown' in request) {
+    // Value-checked, not just shape-checked: a malformed message carrying a
+    // falsy shutdown field is ignored, never an accidental exit.
+    if (request.shutdown) {
+      void current.then(
+        () => process.exit(0),
+        () => process.exit(0),
+      );
+    }
+    return;
+  }
   const bytes = Buffer.from(request.bytes.buffer, request.bytes.byteOffset, request.bytes.byteLength);
-  void embed(bytes)
+  current = embed(bytes)
     .then(({ embedding, provider }) => {
       parentPort?.postMessage({
         jobId: request.jobId,

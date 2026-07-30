@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   assertNoPendingRelocation,
   discardRelocation,
@@ -10,6 +12,7 @@ import {
   type RelocationDeps,
   type RelocationProbe,
 } from './relocation-engine.js';
+import { describeFolderNameObjection, objectToFolderName } from '../../shared/library/folder-name.js';
 import type { RelocationOutcome, RelocationMode, RelocationProgress, RelocationState } from '../../shared/library/relocation.js';
 import { hasAppLockCustody } from './relocation-verify.js';
 
@@ -147,6 +150,27 @@ export class RelocationRuntime {
     } finally {
       this.running = null;
     }
+  }
+
+  /** Rename the library's folder in place (#686): parent fixed, new final
+   * path component. Validation is conservative and cross-platform (the disk
+   * roams); everything else — quiesce/reactivate for the active library,
+   * journaling, refusal vocabulary — is the move path with a sibling
+   * destination. Case-only renames are legal; a same-name rename refuses. */
+  async rename(id: string, newName: string): Promise<RelocationMoveOutcome> {
+    const objection = objectToFolderName(newName);
+    if (objection !== null) {
+      return { ok: false, reason: 'invalid-destination', detail: describeFolderNameObjection(objection) };
+    }
+    const entry = this.options.engineDeps.registry.get(id);
+    if (entry === undefined) {
+      return { ok: false, reason: 'io-error', detail: `library ${id} is not registered` };
+    }
+    const source = path.resolve(entry.path);
+    if (newName === path.basename(source)) {
+      return { ok: false, reason: 'invalid-destination', detail: 'the folder already has this name' };
+    }
+    return this.move(id, path.join(path.dirname(source), newName));
   }
 
   /** Cancellation is honored at file boundaries and only ever before the
