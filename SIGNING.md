@@ -27,6 +27,17 @@ When these secrets are absent, the Windows legs still build — the workflow
 passes `-c.win.azureSignOptions=null` to force an unsigned build rather than
 failing (mirrors the mac `-c.mac.identity=null` unsigned path).
 
+## Secret scope
+
+Signing secrets (the Azure service principal above, and the mac
+`CSC_LINK`/`CSC_KEY_PASSWORD`/`APPLE_API_*` set) are exposed only to the
+workflow's **Package** step, which packages an already-built app via the
+build-free `dist*` npm scripts. The build (`npm run build`, electron-vite plus
+every build-time dependency) runs in a separate step with no signing material
+in its environment, so a compromised build dependency cannot read the
+certificate or the service-principal credentials (#855). The invariant is
+pinned by `tests/tooling/signing-secret-scope.test.ts`.
+
 ## Configuration values
 
 `electron-builder.yml`'s `win.azureSignOptions` block holds the non-secret

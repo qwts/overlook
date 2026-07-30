@@ -61,7 +61,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Package
+      # Build in a step whose env carries no signing secrets (#855): the
+      # compound package* scripts used to run `npm run build` under the full
+      # signing env, exposing certificate material to electron-vite and every
+      # build-time dependency. The Package step below scopes the signing
+      # secrets to the electron-builder invocation via the dist* scripts,
+      # which package without rebuilding.
+      - name: Build
         shell: bash
         env:
           # Public installed-app OAuth identifier embedded at build time.
@@ -73,6 +79,38 @@ jobs:
           # Public Chrome Web Store identity used for the exact native-host
           # allowed_origins entry. Empty pre-release builds fail closed.
           OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: ${{ vars.IMAGE_TRAIL_EXTENSION_ID }}
+          WIN_ARCH: ${{ matrix.win-arch }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ] && [ -n "$WIN_ARCH" ] && [ "$WIN_ARCH" != "x64" ]; then
+            # sharp ships its native binary as per-arch @img/sharp-win32-<arch>
+            # optional deps; npm ci on the x64 runner installs only the host
+            # (x64) one, so a cross-compiled arm64 build would bundle the x64
+            # sharp binary (caught by verify-windows-arch). Fetch ONLY the
+            # target-arch binary and swap it in: a plain `npm install --cpu/--os
+            # sharp` re-resolves the whole tree's optional deps for the target
+            # and prunes the x64 build toolchain (@rollup/rollup-win32-x64-msvc,
+            # swc, …) that must run natively on this x64 runner. npm pack +
+            # extract touches nothing else; better-sqlite3 is rebuilt for the
+            # target arch by electron-builder's npmRebuild (#683).
+            sharp_ver=$(node -p "require('./node_modules/sharp/package.json').version")
+            pkg="sharp-win32-$WIN_ARCH"
+            tgz="img-$pkg-$sharp_ver.tgz"
+            # Pack/extract with relative paths only: git-bash tar reads a
+            # Windows $RUNNER_TEMP path (D:\...) as an rsync host:path spec and
+            # fails with "Cannot connect to D:", so keep everything cwd-relative.
+            npm pack "@img/$pkg@$sharp_ver" >/dev/null
+            dest="node_modules/@img/$pkg"
+            rm -rf "$dest" && mkdir -p "$dest"
+            tar -xzf "$tgz" -C "$dest" --strip-components=1
+            rm -f "$tgz"
+            # Drop the host-arch sharp binaries so only the target payload ships.
+            find node_modules/@img -maxdepth 1 -type d -name 'sharp-win32-*' ! -name "$pkg" -exec rm -rf {} +
+          fi
+          npm run build
+
+      - name: Package
+        shell: bash
+        env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           MAC_PROVISIONING_PROFILE_B64: ${{ secrets.MAC_PROVISIONING_PROFILE }}
@@ -100,11 +138,11 @@ jobs:
             if [ -n "$MAC_PROVISIONING_PROFILE_B64" ]; then
               export OVERLOOK_MAC_PROVISIONING_PROFILE="$RUNNER_TEMP/overlook.provisionprofile"
               printf '%s' "$MAC_PROVISIONING_PROFILE_B64" | base64 -d > "$OVERLOOK_MAC_PROVISIONING_PROFILE"
-              npm run package:signed:provisioned
+              npm run dist:signed:provisioned
             else
               # A profile-free release remains launchable and signed, but its
               # Touch ID adapter fails closed to password/recovery fallback.
-              npm run package:signed
+              npm run dist:signed
             fi
             # electron-builder only *warns* when it can't find an identity, so
             # a broken cert would silently ship unsigned. Fail loudly instead:
@@ -124,31 +162,6 @@ jobs:
             # longer consults CSC_LINK at all now that it's Azure Trusted
             # Signing, but clear it anyway as cheap insurance.
             unset CSC_LINK CSC_KEY_PASSWORD
-            # sharp ships its native binary as per-arch @img/sharp-win32-<arch>
-            # optional deps; npm ci on the x64 runner installs only the host
-            # (x64) one, so a cross-compiled arm64 build would bundle the x64
-            # sharp binary (caught by verify-windows-arch). Fetch ONLY the
-            # target-arch binary and swap it in: a plain `npm install --cpu/--os
-            # sharp` re-resolves the whole tree's optional deps for the target
-            # and prunes the x64 build toolchain (@rollup/rollup-win32-x64-msvc,
-            # swc, …) that must run natively on this x64 runner. npm pack +
-            # extract touches nothing else; better-sqlite3 is rebuilt for the
-            # target arch by electron-builder's npmRebuild (#683).
-            if [ "$WIN_ARCH" != "x64" ]; then
-              sharp_ver=$(node -p "require('./node_modules/sharp/package.json').version")
-              pkg="sharp-win32-$WIN_ARCH"
-              tgz="img-$pkg-$sharp_ver.tgz"
-              # Pack/extract with relative paths only: git-bash tar reads a
-              # Windows $RUNNER_TEMP path (D:\...) as an rsync host:path spec and
-              # fails with "Cannot connect to D:", so keep everything cwd-relative.
-              npm pack "@img/$pkg@$sharp_ver" >/dev/null
-              dest="node_modules/@img/$pkg"
-              rm -rf "$dest" && mkdir -p "$dest"
-              tar -xzf "$tgz" -C "$dest" --strip-components=1
-              rm -f "$tgz"
-              # Drop the host-arch sharp binaries so only the target payload ships.
-              find node_modules/@img -maxdepth 1 -type d -name 'sharp-win32-*' ! -name "$pkg" -exec rm -rf {} +
-            fi
             # electron-builder compresses the NSIS payload with a downloaded
             # 7-Zip 24.x, which auto-applies its ARM64 branch filter (method
             # 0A) to ARM64 binaries — but the nsis7z plugin that unpacks that
@@ -171,14 +184,13 @@ jobs:
             # the service-principal secrets are absent, so the build still
             # ships unsigned rather than failing outright.
             if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
-              npm run "package:win:$WIN_ARCH"
+              npm run "dist:win:$WIN_ARCH"
             else
-              # package:win:$WIN_ARCH is "npm run build && electron-builder ... &&
-              # npm run licenses:sbom" -- `npm run x -- args` appends args to the
+              # dist:win:$WIN_ARCH is "electron-builder ... && npm run
+              # licenses:sbom" -- `npm run x -- args` appends args to the
               # whole script, not just the electron-builder call inside it, so the
               # override has to be applied to a direct electron-builder invocation
               # instead of routed through that compound script.
-              npm run build
               npx --no-install electron-builder --publish never --win --"$WIN_ARCH" \
                 -c.win.azureSignOptions=null
               npm run licenses:sbom
@@ -208,7 +220,7 @@ jobs:
             # set, electron-builder would try to use CSC_LINK for Windows
             # signing too (and fail on a mac-only .p12).
             unset CSC_LINK CSC_KEY_PASSWORD
-            npm run package
+            npm run dist
           fi
           if [ "$RUNNER_OS" = "macOS" ]; then
             app=$(find release -maxdepth 2 -name '*.app' | head -1)

@@ -30,12 +30,12 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(builder, /artifactName: \$\{productName\}-\$\{version\}-\$\{arch\}\.\$\{ext\}/u);
   });
 
-  test('each Windows leg drives the arch through a dedicated package script', () => {
+  test('each Windows leg drives the arch through a dedicated dist script', () => {
     const packageJson = JSON.parse(source('package.json')) as { readonly scripts?: Record<string, string> };
     const workflow = source('.github/workflows/package.yml');
-    assert.match(packageJson.scripts?.['package:win:x64'] ?? '', /electron-builder --publish never --win --x64/u);
-    assert.match(packageJson.scripts?.['package:win:arm64'] ?? '', /electron-builder --publish never --win --arm64/u);
-    assert.match(workflow, /npm run "package:win:\$WIN_ARCH"/u);
+    assert.match(packageJson.scripts?.['dist:win:x64'] ?? '', /electron-builder --publish never --win --x64/u);
+    assert.match(packageJson.scripts?.['dist:win:arm64'] ?? '', /electron-builder --publish never --win --arm64/u);
+    assert.match(workflow, /npm run "dist:win:\$WIN_ARCH"/u);
     assert.match(workflow, /WIN_ARCH: \$\{\{ matrix\.win-arch \}\}/u);
   });
 

@@ -75,7 +75,7 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(packager, /iCloud\.com\.zts1\.overlook/u);
     assert.match(packager, /Z5DM34QS5U/u);
     assert.match(packager, /com\.zts1\.overlook/u);
-    assert.match(packageJson.scripts?.['package:signed:provisioned'] ?? '', /package-signed-provisioned\.mjs/u);
+    assert.match(packageJson.scripts?.['dist:signed:provisioned'] ?? '', /package-signed-provisioned\.mjs/u);
     assert.match(packager, /OVERLOOK_MAC_PROVISIONING_PROFILE/u);
     assert.match(packager, /provisioningProfile/u);
     assert.match(packager, /--validate-only/u);
