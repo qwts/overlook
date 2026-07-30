@@ -715,7 +715,7 @@ const closeLibraryForLock = (): Promise<void> => closeLibrary('lock');
 // Live switch (#385) + relocation (#483): see library/switch-runtime.ts,
 // library/relocation-runtime.ts, and library-lifecycle-wiring.ts for the
 // contracts — both runtimes are built from this one deps bag.
-const { switchLibrary, getRelocationRuntime, settleRelocationJournals } = createLibraryLifecycle({
+const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({
   registryRuntime,
   instanceId,
   safeStorage: pickSafeStorage,
@@ -797,9 +797,7 @@ void externalOpen.whenReady().then(async () => {
   // caches an entry and before anything opens or classifies libraries. A
   // corrupt registry falls through to resolveFailure()'s loud dialog below.
   await settleRelocationJournals();
-  const registryFailure = registryRuntime.resolveFailure();
-  if (registryFailure !== null) {
-    dialog.showErrorBox('Library registry is damaged', registryFailure);
+  if (!reportStartupFailures((title, message) => dialog.showErrorBox(title, message))) {
     app.exit(1);
     return;
   }
