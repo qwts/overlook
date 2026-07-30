@@ -5,6 +5,7 @@ import type { KeyResolver } from '../crypto/envelope.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import type { EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import { FullService } from './full-service.js';
+import { videoMimeFor } from '../../shared/library/media-info.js';
 
 export interface FullRuntimeOptions {
   readonly repo: PhotosRepository;
@@ -38,11 +39,12 @@ export function createFullRuntime(options: FullRuntimeOptions): FullService {
       }
     },
     // Video streams from the decrypting blob read — never whole-file to the LRU
-    // (ADR-0026 §5). #548 serves MPEG-TS; #549 refines per-container MIME.
+    // (ADR-0026 §5). MIME follows the PROBED container (#549), never the
+    // extension; unprobed rows fall back to the remux transport type.
     openVideoStream: async (photoId) => {
       const photo = options.repo.get(photoId);
       if (photo === undefined || photo.fileKind !== 'video') return null;
-      const mime = 'video/mp2t';
+      const mime = videoMimeFor(photo.mediaInfo?.container);
       if (photo.syncState === 'offloaded') {
         try {
           const opened = await options.ephemeral().open(photoId, 'view');
