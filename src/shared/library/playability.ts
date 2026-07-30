@@ -42,11 +42,17 @@ export function derivePlayability(fileKind: FileKind, info: MediaInfo | null, ca
   if (videoStreams.length === 0) return 'preserved-only';
 
   // Container servability. MPEG-TS (#548) is servable only through the remux
-  // adapter, and only for H.264 + AAC in v1.
+  // adapter, and only for H.264 + AAC in v1. MP4/QuickTime/WebM serve
+  // directly to <video> (#549); AVI, Matroska (provisional gate), and
+  // MPEG-PS have no servable path in v1 — preserved-only regardless of
+  // codecs, with the honest playback-limitation UI.
   if (info.container === 'MPEG-TS') {
     if (!caps.transportStreamRemuxAvailable) return 'preserved-only';
     if (!videoStreams.every((s) => s.codec === TS_REMUX_VIDEO)) return 'preserved-only';
     if (!audioStreams.every((s) => s.codec === TS_REMUX_AUDIO)) return 'preserved-only';
+  }
+  if (info.container === 'AVI' || info.container === 'Matroska' || info.container === 'MPEG-PS' || info.container === 'MPEG-Audio') {
+    return 'preserved-only';
   }
 
   // Every present stream must be locally decodable.

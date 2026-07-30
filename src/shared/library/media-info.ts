@@ -87,3 +87,27 @@ export function parseMediaInfo(value: string | null): MediaInfo | null {
     return null;
   }
 }
+
+/** Range-served `<video>` MIME per probed container (ADR-0026 §5, #549) —
+ * never derived from the extension. Unprobed rows fall back to the remux
+ * transport type, preserving the pre-#549 behavior for legacy rows. */
+export function videoMimeFor(container: MediaInfo['container'] | null | undefined): string {
+  switch (container) {
+    case 'MP4':
+      return 'video/mp4';
+    case 'QuickTime':
+      return 'video/quicktime';
+    case 'WebM':
+      return 'video/webm';
+    case 'Matroska':
+      return 'video/x-matroska';
+    case 'AVI':
+      return 'video/x-msvideo';
+    case 'MPEG-PS':
+      return 'video/mpeg';
+    case 'MPEG-Audio':
+      return 'audio/mpeg';
+    default:
+      return 'video/mp2t';
+  }
+}

@@ -14,6 +14,17 @@ const CODEC_MIME: Readonly<Record<string, string>> = {
   MP3: 'audio/mpeg',
   'AC-3': 'audio/mp4; codecs="ac-3"',
   'E-AC-3': 'audio/mp4; codecs="ec-3"',
+  // #549: WebM codecs probe like any other; ProRes/MPEG-1/2/Part-2 and the
+  // legacy AVI families have NO entry — probeCodec answers false, so those
+  // streams stay preserved-only by derivation, not by a stored flag.
+  VP8: 'video/webm; codecs="vp8"',
+  VP9: 'video/webm; codecs="vp09.00.10.08"',
+  AV1: 'video/mp4; codecs="av01.0.04M.08"',
+  Vorbis: 'audio/webm; codecs="vorbis"',
+  Opus: 'audio/webm; codecs="opus"',
+  ALAC: 'audio/mp4; codecs="alac"',
+  PCM: 'audio/wav; codecs="1"',
+  FLAC: 'audio/flac',
 };
 
 const decodeCache = new Map<string, boolean>();

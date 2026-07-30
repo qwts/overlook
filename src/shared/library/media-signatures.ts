@@ -1,5 +1,9 @@
 import type { MediaInfo } from './media-info.js';
 import { detectTsLayout, probeTransportStream } from './mpeg-ts.js';
+import { detectEbml, probeEbml } from './ebml.js';
+import { detectIsoBmff, probeIsoBmff } from './iso-bmff.js';
+import { detectAvi, probeAvi } from './riff-avi.js';
+import { detectMpegAudio, detectMpegPs, probeMpegAudio, probeMpegPs } from './mpeg-ps.js';
 import type { FileKind, ImageFileKind } from './types.js';
 
 // Signature-first classification per ADR-0026 §2: content decides, names
@@ -196,25 +200,39 @@ function probeWebp(bytes: Uint8Array): MediaInfo {
 }
 
 /**
- * Signature-first classification for the video kinds (ADR-0026 §2). Returns
- * `'video'` for a validated MPEG-TS cadence (#548). Names never decide — a
- * `.ts` whose bytes are not a transport stream is rejected here and (per §2)
- * is not an import candidate. Returns null when no video signature matches.
+ * Signature-first classification for the container kinds (ADR-0026 §2).
+ * MPEG-TS cadence (#548); ISO-BMFF/QuickTime `ftyp` brands, EBML DocType,
+ * RIFF/AVI, MPEG-PS packs, and MP2/MP3 frame cadence (#549 — audio-only
+ * elementary streams classify as AUDIO, never fake video). Names never
+ * decide; null when no container signature matches.
  */
-export function sniffVideoKind(bytes: Uint8Array): Extract<FileKind, 'video'> | null {
+export function sniffVideoKind(bytes: Uint8Array): Extract<FileKind, 'video' | 'audio'> | null {
   if (detectTsLayout(bytes) !== null) return 'video';
+  if (detectIsoBmff(bytes) !== null) return 'video';
+  if (detectEbml(bytes) !== null) return 'video';
+  if (detectAvi(bytes)) return 'video';
+  if (detectMpegPs(bytes)) return 'video';
+  if (detectMpegAudio(bytes) !== null) return 'audio';
   return null;
 }
 
 /**
  * Bounded probe (ADR-0026 §2/§9) for signature-validated media bytes. GIF/WebP
- * animation facts (#547); MPEG-TS container/stream facts (#548). Truncated or
- * hostile input degrades fields to null / `probeIncomplete` — probe results are
- * facts or absent, never guesses. Returns null for kinds without probed facts.
+ * animation facts (#547); MPEG-TS facts (#548); ISO-BMFF/QuickTime, EBML,
+ * AVI, MPEG-PS, and MPEG-audio facts (#549). Truncated or hostile input
+ * degrades fields to null / `probeIncomplete` — probe results are facts or
+ * absent, never guesses. Returns null for kinds without probed facts.
  */
 export function probeMediaInfo(bytes: Uint8Array, kind: FileKind): MediaInfo | null {
   if (kind === 'gif' && sniffImageKind(bytes) === 'gif') return probeGif(bytes);
   if (kind === 'webp' && sniffImageKind(bytes) === 'webp') return probeWebp(bytes);
-  if (kind === 'video' && detectTsLayout(bytes) !== null) return probeTransportStream(bytes);
+  if (kind === 'video' || kind === 'audio') {
+    if (detectTsLayout(bytes) !== null) return probeTransportStream(bytes);
+    if (detectIsoBmff(bytes) !== null) return probeIsoBmff(bytes);
+    if (detectEbml(bytes) !== null) return probeEbml(bytes);
+    if (detectAvi(bytes)) return probeAvi(bytes);
+    if (detectMpegPs(bytes)) return probeMpegPs(bytes);
+    if (detectMpegAudio(bytes) !== null) return probeMpegAudio(bytes);
+  }
   return null;
 }

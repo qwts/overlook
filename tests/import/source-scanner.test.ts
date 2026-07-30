@@ -26,7 +26,7 @@ describe('media-file allowlist (ADR-0006)', () => {
   });
 
   test('rejects non-media, sidecars, and hidden files', () => {
-    assert.equal(classifyMediaFile('clip.mp4'), null);
+    assert.equal(classifyMediaFile('clip.wmv'), null); // .mp4 admits as a video candidate since #549
     assert.equal(classifyMediaFile('notes.txt'), null);
     assert.equal(classifyMediaFile('.DS_Store'), null);
     assert.equal(classifyMediaFile('._IMG_0001.JPG'), null);

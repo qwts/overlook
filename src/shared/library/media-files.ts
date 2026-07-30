@@ -28,6 +28,22 @@ const KIND_BY_EXTENSION: Readonly<Record<string, FileKind>> = {
   ts: 'video',
   mts: 'video',
   m2ts: 'video',
+  // Common video containers (#549, ADR-0026 §2): ISO-BMFF/MP4, QuickTime,
+  // WebM/Matroska, AVI, MPEG-PS. Hints only — every candidate is signature-
+  // confirmed before the scan promises it and before the engine inserts.
+  mp4: 'video',
+  m4v: 'video',
+  mpeg4: 'video',
+  mov: 'video',
+  qt: 'video',
+  webm: 'video',
+  mkv: 'video',
+  avi: 'video',
+  mpg: 'video',
+  mpeg: 'video',
+  // `.mp2` may be MPEG-PS video or an elementary audio stream; the signature
+  // decides (an audio cadence classifies as audio, never fake video).
+  mp2: 'audio',
 };
 
 /** FileKind for an import candidate, or null when not a media file. */
