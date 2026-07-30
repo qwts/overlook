@@ -620,6 +620,93 @@
   "library.trash.retentionPolicy.off": {
     "defaultMessage": "Items in Trash are kept until you delete them permanently."
   },
+  "librename.assurance": {
+    "defaultMessage": "Only the folder name changes. The library ID, keys, albums, backups, and display name stay exactly as they are."
+  },
+  "librename.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "librename.didNotReport": {
+    "defaultMessage": "The rename did not report back."
+  },
+  "librename.done": {
+    "defaultMessage": "Done"
+  },
+  "librename.nameLabel": {
+    "defaultMessage": "Folder name"
+  },
+  "librename.objection.dotName": {
+    "defaultMessage": "“.” and “..” are not folder names."
+  },
+  "librename.objection.empty": {
+    "defaultMessage": "Enter a folder name."
+  },
+  "librename.objection.forbiddenCharacter": {
+    "defaultMessage": "Some platforms refuse < > : \" | ? * and control characters in folder names."
+  },
+  "librename.objection.leadingSpace": {
+    "defaultMessage": "Folder names cannot start with a space."
+  },
+  "librename.objection.reservedName": {
+    "defaultMessage": "Windows reserves this name (CON, PRN, AUX, NUL, COM1–9, LPT1–9)."
+  },
+  "librename.objection.separator": {
+    "defaultMessage": "Folder names cannot contain / or \\."
+  },
+  "librename.objection.tooLong": {
+    "defaultMessage": "This name is too long for some filesystems."
+  },
+  "librename.objection.trailingDotOrSpace": {
+    "defaultMessage": "Folder names cannot end with a dot or a space."
+  },
+  "librename.openNote": {
+    "defaultMessage": "This library is open now: Overlook closes it, renames the folder, and reopens it."
+  },
+  "librename.pathArrow": {
+    "defaultMessage": "{from} → {to}"
+  },
+  "librename.reason.appLocked": {
+    "defaultMessage": "Unlock Overlook before renaming the open library."
+  },
+  "librename.reason.cancelled": {
+    "defaultMessage": "Cancelled — the folder was not renamed."
+  },
+  "librename.reason.destinationNotEmpty": {
+    "defaultMessage": "A folder with this name already exists here — Overlook never overwrites or merges."
+  },
+  "librename.reason.destinationNotWritable": {
+    "defaultMessage": "This location is not writable."
+  },
+  "librename.reason.destinationRegistered": {
+    "defaultMessage": "A registered library already uses this name here."
+  },
+  "librename.reason.fallback": {
+    "defaultMessage": "The rename could not be completed — the library is untouched."
+  },
+  "librename.reason.invalidDestination": {
+    "defaultMessage": "That name is not usable for this folder."
+  },
+  "librename.reason.locked": {
+    "defaultMessage": "The library is open in another Overlook instance."
+  },
+  "librename.reason.moveInProgress": {
+    "defaultMessage": "Another move is already running."
+  },
+  "librename.reason.providerBusy": {
+    "defaultMessage": "Finish or wait for the current backup or restore first."
+  },
+  "librename.rename": {
+    "defaultMessage": "Rename folder"
+  },
+  "librename.renamed": {
+    "defaultMessage": "The folder now appears with its new name in Finder or Explorer."
+  },
+  "librename.renaming": {
+    "defaultMessage": "Renaming…"
+  },
+  "librename.title": {
+    "defaultMessage": "Rename library folder"
+  },
   "libswitch.move.one": {
     "defaultMessage": "Move {name}…"
   },
@@ -628,6 +715,9 @@
   },
   "libswitch.move.selected": {
     "defaultMessage": "Move {count} selected…"
+  },
+  "libswitch.rename.one": {
+    "defaultMessage": "Rename folder of {name}…"
   },
   "lightbox.animation.play": {
     "defaultMessage": "Play animation"
