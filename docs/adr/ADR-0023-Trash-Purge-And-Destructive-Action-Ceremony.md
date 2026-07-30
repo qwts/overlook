@@ -51,6 +51,20 @@ disclosing that other participants keep whatever they downloaded). No ceremony
 may imply that revocation retracts plaintext a recipient already holds.
 
 **Amended 2026-07-30 by
+[ADR-0033](./ADR-0033-Backup-Coverage-Exceptions-And-Local-Only-Custody.md)
+(#794), resolving this ADR's "revisit when … per-photo cloud retention lands"
+debt:** §4's derived-death list gains the purged row's coverage state and any
+pending coverage-exception journal entry. §5's honest sentence gains two cases
+— purging a photo whose coverage is `excluded` has **no** cloud copy to remove
+and must say so instead of promising a cloud deletion, and purging a photo with
+a pending remote-deletion orphan discloses that orphan and that the purge
+inherits its retry. §7's registry gains **Remove cloud copy** (Tier D: exact
+count and bytes, provider and account named, the verified-local guarantee, and
+the shared-bytes exception count) and **Keep on this device only** (Tier M when
+no remote copy exists, stating that nothing is destroyed; escalating to the
+Tier D ceremony when one does).
+
+**Amended 2026-07-30 by
 [ADR-0034](./ADR-0034-On-Device-Face-Grouping-And-Biometric-Derived-Data.md)
 (#795), resolving this ADR's "revisit when … face data (#285) lands" debt:**
 §4's derived-death list gains the purged photo's `faces` rows, its
