@@ -111,7 +111,32 @@ describe('relocation runtime (#483, ADR-0022 §4)', () => {
     assert.deepEqual(h.calls, ['relocate']);
   });
 
-  test('designed refusals: app-locked and provider-busy guard the ACTIVE move only', async () => {
+  test('an unreadable custody probe refuses source-unreadable, never an opaque failure (PR #853 review)', async () => {
+    const h = harness();
+    // A directory in master.key's place makes the probe read throw (EISDIR).
+    mkdirSync(join(h.root, 'lib-a', 'master.key'), { recursive: true });
+    const outcome = await h.runtime.move(ULID_A, join(h.root, 'elsewhere'));
+    assert.deepEqual(outcome, {
+      ok: false,
+      reason: 'source-unreadable',
+      detail: `cannot read the library's custody files at ${join(h.root, 'lib-a')}`,
+    });
+    assert.deepEqual(h.calls, [], 'nothing tore down or relocated');
+  });
+
+  test('an inactive app-locked library must be opened and unlocked before moving', async () => {
+    const h = harness();
+    writeFileSync(join(h.root, 'lib-a', 'master.key'), 'OVLK-attacker-controlled-custody', 'utf8');
+
+    const outcome = await h.runtime.move(ULID_A, '/somewhere/new');
+
+    assert.ok(!outcome.ok);
+    assert.equal(outcome.reason, 'app-locked');
+    assert.deepEqual(h.calls, []);
+    assert.equal(h.registry.get(ULID_A)?.path, join(h.root, 'lib-a'));
+  });
+
+  test('designed refusals: app-locked and provider-busy guard the active move', async () => {
     const locked = harness();
     const lockedRuntime = new RelocationRuntime({
       engineDeps: { journals: locked.journals, registry: locked.registry, instanceId: 'test' },

@@ -20,13 +20,18 @@ import { RelocationError } from './relocation-engine.js';
 const CUSTODY_FILES = ['master.key', 'keys.json', 'library.db'] as const;
 const APP_LOCK_MAGIC = 'OVLK';
 
+export function hasAppLockCustody(dir: string): boolean {
+  const masterKeyPath = path.join(dir, 'master.key');
+  return existsSync(masterKeyPath) && readFileSync(masterKeyPath).subarray(0, 4).toString('ascii') === APP_LOCK_MAGIC;
+}
+
 export function verifyStagedLibrary(safeStorage: () => SafeStorageLike, dir: string): Promise<void> {
   for (const rel of CUSTODY_FILES) {
     if (!existsSync(path.join(dir, rel))) {
       return Promise.reject(new RelocationError('verification-failed', `staged library is missing ${rel}`));
     }
   }
-  if (readFileSync(path.join(dir, 'master.key')).subarray(0, 4).toString('ascii') === APP_LOCK_MAGIC) {
+  if (hasAppLockCustody(dir)) {
     return Promise.resolve();
   }
   try {
