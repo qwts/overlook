@@ -5,13 +5,15 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV5,
+  buildBackupManifestV6,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
-  type BackupManifestSnapshotV5,
+  type BackupManifestSidecarV6,
+  type BackupManifestSnapshotV6,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
+import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 import type { BackupIntegritySummary } from './integrity-scrubber.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
@@ -71,6 +73,31 @@ export interface BackupRunResult {
   readonly blockedRemoteOnly: number;
 }
 
+/** Composition-root helper (#484): the three sidecar deps in one spread —
+ * index.ts sits at its file-size budget. */
+export function sidecarBackupDeps(
+  db: ConstructorParameters<typeof SidecarRepository>[0],
+  blobs: { getEncryptedSidecarStream(photoId: string, contentHash: string): Readable },
+): Pick<BackupEngineDeps, 'sidecarsForPhoto' | 'allSidecars' | 'encryptedSidecarStream'> {
+  // One repository for the whole engine lifetime — sidecarsForPhoto sits in
+  // the per-photo upload loop (PR #849 review).
+  const sidecars = new SidecarRepository(db);
+  return {
+    sidecarsForPhoto: (photoId) => sidecars.listForPhoto(photoId),
+    allSidecars: () => sidecars.allRows(),
+    encryptedSidecarStream: (photoId, hash) => blobs.getEncryptedSidecarStream(photoId, hash),
+  };
+}
+
+export interface SidecarBackupObject {
+  readonly photoId: string;
+  readonly role: 'xmp' | 'aae';
+  readonly fileName: string;
+  readonly contentHash: string;
+  readonly bytes: number;
+  readonly keyId: number;
+}
+
 export interface BackupRunIntegrity {
   readonly checked: number;
   readonly repaired: number;
@@ -94,6 +121,12 @@ export interface BackupEngineDeps {
   readonly manifestSnapshot: () => BackupManifestSnapshot;
   readonly activitySnapshot?: (() => readonly ActivityEvent[]) | undefined;
   readonly boardsSnapshot?: (() => readonly BackupManifestBoardV5[]) | undefined;
+  /** Encrypted sidecar custody (#484): every companion row (for the manifest
+   * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
+   * support (tests, pre-#484 callers) — manifests carry an empty list. */
+  readonly sidecarsForPhoto?: ((photoId: string) => readonly SidecarBackupObject[]) | undefined;
+  readonly allSidecars?: (() => readonly SidecarBackupObject[]) | undefined;
+  readonly encryptedSidecarStream?: ((photoId: string, contentHash: string) => Readable) | undefined;
   readonly settings: () => BackupSettings;
   readonly network: () => NetworkKind;
   readonly events: {
@@ -168,6 +201,10 @@ const EMPTY_INTEGRITY: BackupRunIntegrity = {
   failed: false,
 };
 
+function sidecarPath(photoId: string, contentHash: string): string {
+  return `sidecars/${photoId}/${contentHash}`;
+}
+
 function blobPath(contentHash: string): string {
   return `blobs/${contentHash.slice(0, 2)}/${contentHash}`;
 }
@@ -185,6 +222,9 @@ interface RemotePresence {
 
 interface ReconcileOutcome {
   readonly uploadNow: readonly BackupItemPhoto[];
+  /** Locally held companion objects the selected provider is missing —
+   * re-uploaded directly during reconciliation (PR #849 review). */
+  readonly sidecarUploadNow: readonly SidecarBackupObject[];
   readonly protectedRequeued: number;
   readonly blocked: number;
 }
@@ -371,7 +411,27 @@ export class BackupEngine {
             requeueFailed += again.failed;
             this.invalidateListing('protected');
           }
-          const nothingRecovered = reconciled.uploadNow.length === 0 && reconciled.protectedRequeued === 0;
+          for (const sidecar of reconciled.sidecarUploadNow) {
+            if (aborted()) break;
+            try {
+              const remotePath = sidecarPath(sidecar.photoId, sidecar.contentHash);
+              await this.uploadWithRetry(remotePath, () => this.encryptedSidecar(sidecar), signal);
+              const local = await this.hashStream(this.encryptedSidecar(sidecar));
+              const remote = await this.deps.provider.verify(remotePath);
+              if (remote.sha256 !== local.sha256 || remote.bytes !== local.bytes) {
+                throw new ProviderError(`verify mismatch for ${sidecar.fileName}`, 'corrupt');
+              }
+              this.notePresent(remotePath);
+              this.invalidateListing('sidecars');
+            } catch (error) {
+              requeueFailed += 1;
+              console.error(
+                `[overlook] sidecar reconcile failed for ${sidecar.fileName}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+          }
+          const nothingRecovered =
+            reconciled.uploadNow.length === 0 && reconciled.sidecarUploadNow.length === 0 && reconciled.protectedRequeued === 0;
           if (reconciled.blocked > 0 || nothingRecovered || requeueFailed > 0 || aborted()) break;
         }
       }
@@ -490,6 +550,23 @@ export class BackupEngine {
         throw new ProviderError(`verify mismatch for ${item.fileName}`, 'corrupt');
       }
       this.deps.audit(`VERIFY-OK photo=${item.id} sha256=${local.sha256} bytes=${String(local.bytes)}`);
+      // Companion objects ride the owning photo's upload (#484): put +
+      // ciphertext-verify each sidecar before the row may go synced — a
+      // photo is not backed up while its companions are not.
+      for (const sidecar of this.deps.sidecarsForPhoto?.(item.id) ?? []) {
+        const sidecarRemote = sidecarPath(sidecar.photoId, sidecar.contentHash);
+        const alreadyPresent = this.presenceFor().verified.has(sidecarRemote) || (await this.listedPaths('sidecars')).has(sidecarRemote);
+        if (!alreadyPresent) {
+          await this.uploadWithRetry(sidecarRemote, () => this.encryptedSidecar(sidecar), signal);
+          const localSidecar = await this.hashStream(this.encryptedSidecar(sidecar));
+          const remoteSidecar = await this.deps.provider.verify(sidecarRemote);
+          if (remoteSidecar.sha256 !== localSidecar.sha256 || remoteSidecar.bytes !== localSidecar.bytes) {
+            this.deps.audit(`VERIFY-MISMATCH sidecar=${sidecarRemote}`);
+            throw new ProviderError(`verify mismatch for ${sidecar.fileName}`, 'corrupt');
+          }
+          this.notePresent(sidecarRemote);
+        }
+      }
       this.deps.ledger.markBackedUp(item.id, new Date(this.deps.now()).toISOString());
       this.notePresent(remotePath);
     } catch (error) {
@@ -546,7 +623,20 @@ export class BackupEngine {
       protectedRequeued = outcome.requeued;
       blocked += outcome.blocked;
     }
-    return { uploadNow, protectedRequeued, blocked };
+    // Missing sidecar objects re-upload from local encrypted custody: the
+    // owning photo may be clean synced (nothing dirties it), so without this
+    // path a provider switch would owe a manifest forever (PR #849 review).
+    const sidecarUploadNow: SidecarBackupObject[] = [];
+    const sidecarMissing = missing.filter((path) => path.startsWith('sidecars/'));
+    if (sidecarMissing.length > 0) {
+      const rows = new Map((this.deps.allSidecars?.() ?? []).map((row) => [sidecarPath(row.photoId, row.contentHash), row]));
+      for (const path of sidecarMissing) {
+        const row = rows.get(path);
+        if (row === undefined) blocked += 1;
+        else sidecarUploadNow.push(row);
+      }
+    }
+    return { uploadNow, sidecarUploadNow, protectedRequeued, blocked };
   }
 
   /** Politeness (#105): at p percent, rest (100-p)/p of each item's upload
@@ -575,9 +665,18 @@ export class BackupEngine {
   }
 
   private async hashLocalCiphertext(contentHash: string): Promise<{ sha256: string; bytes: number }> {
+    return this.hashStream(this.deps.encryptedStream(contentHash));
+  }
+
+  private encryptedSidecar(sidecar: SidecarBackupObject): Readable {
+    const open = this.deps.encryptedSidecarStream;
+    if (open === undefined) throw new ProviderError('sidecar ciphertext source is not wired', 'corrupt');
+    return open(sidecar.photoId, sidecar.contentHash);
+  }
+
+  private async hashStream(stream: Readable): Promise<{ sha256: string; bytes: number }> {
     const hasher = createHash('sha256');
     let bytes = 0;
-    const stream = this.deps.encryptedStream(contentHash);
     stream.on('data', (chunk: Buffer) => {
       bytes += chunk.length;
     });
@@ -615,7 +714,11 @@ export class BackupEngine {
    * manifest references must exist on the SELECTED provider. A switch, a
    * restore under a different selection, or a partial run can otherwise
    * seal a generation that promises blobs this remote never held. */
-  private async assertManifestComplete(photos: readonly { readonly blobPath: string }[], protectedPaths: readonly string[]): Promise<void> {
+  private async assertManifestComplete(
+    photos: readonly { readonly blobPath: string }[],
+    protectedPaths: readonly string[],
+    sidecarPaths: readonly string[] = [],
+  ): Promise<void> {
     const missing: string[] = [];
     const verified = this.presenceFor().verified;
     if (photos.length > 0) {
@@ -630,31 +733,64 @@ export class BackupEngine {
         if (!present.has(path) && !verified.has(path)) missing.push(path);
       }
     }
+    if (sidecarPaths.length > 0) {
+      const present = await this.listedPaths('sidecars');
+      for (const path of sidecarPaths) {
+        if (!present.has(path) && !verified.has(path)) missing.push(path);
+      }
+    }
     if (missing.length > 0) {
       throw new ManifestIncompleteError(missing);
     }
+  }
+
+  /** The snapshot photos' companion rows as manifest objects (#484):
+   * ciphertext digest computed locally so restore can verify the download
+   * byte-for-byte before it publishes. Rows whose photo the snapshot omits
+   * (soft-deleted, never backed up) stay out — schema 6 rejects a sidecar
+   * referencing a photo absent from the manifest (PR #849 review). */
+  private async sidecarManifestObjects(photoIds: ReadonlySet<string>): Promise<readonly BackupManifestSidecarV6[]> {
+    const rows = (this.deps.allSidecars?.() ?? []).filter((row) => photoIds.has(row.photoId));
+    const objects: BackupManifestSidecarV6[] = [];
+    for (const row of rows) {
+      const ciphertext = await this.hashStream(this.encryptedSidecar(row));
+      objects.push({
+        photoId: row.photoId,
+        role: row.role,
+        fileName: row.fileName,
+        hash: row.contentHash,
+        bytes: row.bytes,
+        keyId: row.keyId,
+        blobPath: sidecarPath(row.photoId, row.contentHash),
+        ciphertext,
+      });
+    }
+    return objects;
   }
 
   /** Seals and uploads the next manifest generation; prunes past N=2. */
   private async uploadManifest(): Promise<void> {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
-    const manifest = buildBackupManifestV5({
+    const snapshot = this.deps.manifestSnapshot();
+    const manifest = buildBackupManifestV6({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
-        ...this.deps.manifestSnapshot(),
+        ...snapshot,
         protectedAlbums: protectedSnapshot?.protectedAlbums ?? [],
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-      } satisfies BackupManifestSnapshotV5,
+        sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
+      } satisfies BackupManifestSnapshotV6,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.
     await this.assertManifestComplete(
       manifest.photos,
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
+      manifest.sidecars.map((sidecar) => sidecar.blobPath),
     );
     const json = JSON.stringify(manifest);
     const sealed = await this.deps.sealManifest(json);

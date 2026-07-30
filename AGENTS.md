@@ -139,6 +139,10 @@ this file in the same PR as the change — never after the fact.
   version PR as `qwts`, who cannot approve their own PR, so every release cut
   needed a ruleset bypass. Repo chores get a bot identity; agents get their own
   Apps, and the two never share one.
+  Repository credentials must be absent while third-party tools run: checkouts
+  that precede them use `persist-credentials: false`, and tokens are injected
+  only into first-party steps containing the `git` / `gh` commands that need
+  them.
   `GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
   Actions policy authorizes actors explicitly — `github-actions[bot]` is not one
   of them, so its runs die at startup with "Actor is not allowed to trigger
@@ -203,6 +207,12 @@ this file in the same PR as the change — never after the fact.
   app and decodes the checked-in iPhone fixture. Keep
   `scripts/verify-macos-heic-preview.mjs` and its readiness marker current when
   changing the native bridge, package layout, Electron ABI, or HEIC fixtures.
+- The Windows arm64 packaging leg re-resolves the target-arch sharp binary
+  with `npm pack` and **verifies the downloaded tarball's sha512 against the
+  exact `package-lock.json` integrity entry before extraction** — registry
+  metadata is never trusted on its own. The contract test in
+  `tests/tooling/windows-signing.test.ts` locks the gate; keep both in step
+  when changing sharp packaging or the lockfile shape.
 - Floors are ratchets — c8 (lines 90 / branches 80), type-coverage (99.8), the
   800-line file budget, the a11y violation budget (`tests/a11y/violation-budget.json`):
   raise them as coverage improves; never lower them to pass. The a11y budget

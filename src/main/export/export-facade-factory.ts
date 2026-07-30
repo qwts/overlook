@@ -1,4 +1,5 @@
 import { PhotosRepository } from '../db/photos-repository.js';
+import { SidecarRepository } from '../db/sidecar-repository.js';
 import { createExportRuntime, type DrainableExportFacade } from './export-runtime.js';
 import type { EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import type { BlobStore } from '../blobs/blob-store.js';
@@ -19,10 +20,14 @@ export interface ExportFacadeFactoryDeps {
 
 export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExportFacade {
   const repo = new PhotosRepository(deps.db);
+  const sidecars = new SidecarRepository(deps.db);
   return createExportRuntime({
     repo: { get: (id) => repo.get(id) },
     blobs: deps.blobStore,
     resolveKey: deps.resolveKey,
+    // Companions export beside their originals (#484, ADR-0031 §6).
+    sidecarsFor: (photoId) => sidecars.listForPhoto(photoId),
+    sidecarStream: (photoId, contentHash) => deps.blobStore.getSidecarStream(photoId, contentHash, deps.resolveKey),
     openOriginal: async (photo) => {
       const service = deps.ephemeral();
       const opened = await service.open(photo.id, 'export');

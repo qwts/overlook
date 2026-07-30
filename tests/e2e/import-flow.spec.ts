@@ -11,6 +11,7 @@ import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 const FIXTURES = join(import.meta.dirname, '../fixtures/exif');
 const CARD_FILES = ['exif-full.jpg', 'sample.raf', 'exif-stripped.jpg'];
+const XMP_MARKER = 'overlook-e2e-sidecar-keyword-aurora';
 const RAW_EXTENSIONS = ['raf', 'cr2', 'cr3', 'nef', 'arw', 'dng', 'orf', 'rw2'] as const;
 
 function makeCard(): string {
@@ -126,6 +127,62 @@ test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', async
 
     // Copy mode: the card is untouched.
     expect(readdirSync(card).sort()).toEqual([...CARD_FILES].sort());
+  } finally {
+    await app.close();
+  }
+});
+
+test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext at rest — and export beside the original', async () => {
+  // A card with one photo + its XMP companion, plus a companion nobody owns.
+  const card = join(mkE2eTmpDir('overlook-e2e-sidecar-card-'), 'SDCARD');
+  mkdirSync(card);
+  copyFileSync(join(FIXTURES, 'exif-full.jpg'), join(card, 'exif-full.jpg'));
+  const xmp = `<x:xmpmeta xmlns:x="adobe:ns:meta/">${XMP_MARKER}</x:xmpmeta>`;
+  writeFileSync(join(card, 'exif-full.xmp'), xmp, 'utf8');
+  writeFileSync(join(card, 'stray.xmp'), xmp, 'utf8');
+
+  const destination = mkE2eTmpDir('overlook-e2e-sidecar-export-');
+  const userData = mkE2eTmpDir('overlook-e2e-sidecar-');
+  const app = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      OVERLOOK_USER_DATA: userData,
+      OVERLOOK_INSECURE_KEYSTORE: '1',
+      OVERLOOK_IMPORT_SOURCE: card,
+      OVERLOOK_EXPORT_DESTINATION: destination,
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole('button', { name: 'Start a new library' }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+
+    // The scan card reports the companion and the unmatched stray honestly.
+    await expect(page.getByText(/JPG · 1 sidecar$/u)).toBeVisible();
+    await expect(page.getByText('1 sidecar file without a matching photo skipped')).toBeVisible();
+    await page.getByRole('button', { name: 'Import 1 photos', exact: true }).click();
+    await expect(page.getByText('All 1 photos imported and encrypted.')).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Show in library' }).click();
+
+    // Encrypted custody: the XMP text exists nowhere in the library profile.
+    expect(filesContaining(userData, Buffer.from(XMP_MARKER))).toEqual([]);
+    const sidecarEnvelopes = readdirSync(join(userData, 'library', 'sidecars'), { recursive: true, encoding: 'utf8' }).filter((name) =>
+      statSync(join(userData, 'library', 'sidecars', name)).isFile(),
+    );
+    expect(sidecarEnvelopes).toHaveLength(1);
+
+    // Export: the companion lands beside the original, byte-identical.
+    await page.getByTestId('virtual-grid').waitFor();
+    await page.locator('.ovl-tile__img, .ovl-tile').first().waitFor();
+    await page.locator('.ovl-grid__cell').first().getByRole('button', { name: 'Select' }).click();
+    await page.getByTestId('selection-pill').getByRole('button', { name: 'Export' }).click();
+    await page.getByRole('button', { name: /Choose folder/u }).click();
+    await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
+    await expect(page.getByText('1 photo exported and decrypted.')).toBeVisible({ timeout: 20_000 });
+
+    expect(readFileSync(join(destination, 'exif-full.xmp'), 'utf8')).toBe(xmp);
+    expect(existsSync(join(destination, 'exif-full.jpg'))).toBe(true);
   } finally {
     await app.close();
   }

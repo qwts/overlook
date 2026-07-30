@@ -19,6 +19,10 @@ export interface ExportRuntimeOptions {
     readonly stream: Readable;
     readonly release?: (() => Promise<void>) | undefined;
   }>;
+  /** Encrypted companion custody (#484); absent = no sidecar export. */
+  readonly sidecarsFor?:
+    ((photoId: string) => readonly { readonly fileName: string; readonly contentHash: string; readonly bytes: number }[]) | undefined;
+  readonly sidecarStream?: ((photoId: string, contentHash: string) => Readable) | undefined;
   readonly progress: (done: number, total: number) => void;
   readonly pickDestination: () => Promise<string | null>;
 }
@@ -29,6 +33,8 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     blobs: options.blobs,
     resolveKey: options.resolveKey,
     openOriginal: options.openOriginal,
+    ...(options.sidecarsFor === undefined ? {} : { sidecarsFor: options.sidecarsFor }),
+    ...(options.sidecarStream === undefined ? {} : { sidecarStream: options.sidecarStream }),
     writeFile: writeFileCleanly,
     exists: async (filePath) =>
       access(filePath).then(

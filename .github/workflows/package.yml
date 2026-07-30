@@ -99,6 +99,19 @@ jobs:
             # Windows $RUNNER_TEMP path (D:\...) as an rsync host:path spec and
             # fails with "Cannot connect to D:", so keep everything cwd-relative.
             npm pack "@img/$pkg@$sharp_ver" >/dev/null
+            # npm pack trusts live registry metadata, so independently bind the
+            # downloaded native binary to the artifact reviewed in the lockfile.
+            node -e '
+              const { createHash } = require("node:crypto");
+              const { readFileSync } = require("node:fs");
+              const [pkg, version, tgz] = process.argv.slice(1);
+              const locked = require("./package-lock.json").packages[`node_modules/@img/${pkg}`];
+              if (!locked || locked.version !== version || !locked.integrity?.startsWith("sha512-")) {
+                throw new Error(`Missing exact sha512 lock entry for @img/${pkg}@${version}`);
+              }
+              const actual = `sha512-${createHash("sha512").update(readFileSync(tgz)).digest("base64")}`;
+              if (actual !== locked.integrity) throw new Error(`Lockfile integrity mismatch for @img/${pkg}@${version}`);
+            ' "$pkg" "$sharp_ver" "$tgz"
             dest="node_modules/@img/$pkg"
             rm -rf "$dest" && mkdir -p "$dest"
             tar -xzf "$tgz" -C "$dest" --strip-components=1
