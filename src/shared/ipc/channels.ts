@@ -746,6 +746,14 @@ export const channels = {
     z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
     relocationMoveResponseSchema,
   ),
+  /** Rename the library's folder in place (#686): parent fixed, new final
+   * path component, validated conservatively for every platform the disk
+   * might visit. Same journaled engine and refusal vocabulary as move. */
+  libraryRelocationRename: defineChannel(
+    'library-relocation:rename',
+    z.object({ id: libraryIdSchema, newName: z.string().min(1).max(255) }),
+    relocationMoveResponseSchema,
+  ),
   /** Cancel the in-flight move for a library — honored at file boundaries,
    * only ever before the registry commit (ADR-0022 §4). */
   libraryRelocationCancel: defineChannel(
