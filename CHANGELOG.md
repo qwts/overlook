@@ -1,5 +1,17 @@
 # photos
 
+## 0.65.0
+
+### Minor Changes
+
+- 9034d91: Common video and Apple/iPhone media import as first-class library items: MP4/M4V, QuickTime MOV (H.264, HEVC, ProRes), WebM, AVI, MPEG-PS, and provisional Matroska classify by byte signature — never by extension — with bounded probes recording container, codecs, duration, dimensions, rotation, frame rate/VFR, audio presence, and HDR color hints. Audio-only MPEG files classify as audio, never as fake video. Playability stays a per-device runtime derivation: MP4/QuickTime/WebM play when every stream decodes locally; AVI, MPEG-PS, and Matroska are preserved-only (imported, protected, backed up, exported) with honest playback-limitation UI. Range-served playback MIME follows the probed container.
+- a570d41: Photos imported beside XMP or AAE sidecar files now carry those companions into encrypted custody by default: discovered by basename next to the original, encrypted per photo with the association authenticated in the envelope, imported under the same Copy/Move verified-then-delete transaction, included in backup manifests and restore, exported beside the original under its resolved name, and purged with the owning photo. Companions that match no photo are reported in the import summary, never silently dropped.
+- 251a2f5: Rename a library folder in place from the library switcher: the new name appears in Finder or Explorer while the library ID, keys, encrypted database, albums, backup links, and display name stay untouched. Renames run through the journaled relocation engine (crash-safe, refusal-first), validate names conservatively for every platform the disk might visit, and support case-only renames on case-insensitive filesystems.
+
+### Patch Changes
+
+- 3463d3d: Require app-locked libraries to be opened and unlocked before relocation.
+
 ## 0.64.3
 
 ### Patch Changes
