@@ -1,13 +1,24 @@
 import { Worker } from 'node:worker_threads';
 
-import type { EmbeddingWorkerData, EmbeddingWorkerRequest, EmbeddingWorkerResponse } from './embedding-worker.js';
+import type { EmbeddingWorkerData, EmbeddingWorkerRequest, EmbeddingWorkerResponse, EmbeddingWorkerShutdown } from './embedding-worker.js';
 
 export interface EmbeddingPoolOptions extends EmbeddingWorkerData {
   readonly workerUrl: URL;
+  /** Test override for the retire backstop. */
+  readonly drainTimeoutMs?: number;
 }
+
+/** Hard-terminate backstop for retire(): only a wedged or already-broken
+ * worker waits this long — a live one exits right after its in-flight run
+ * settles. A backstop terminate can still hit the #843 abort, but a run
+ * that has hung for this long has no safe teardown anyway. */
+const DRAIN_TIMEOUT_MS = 10_000;
 
 interface ActiveJob {
   readonly id: number;
+  /** The worker the job was posted to — a retired worker's late exit must
+   * only fail its own job, never a successor's (#843). */
+  readonly worker: Worker;
   readonly resolve: (embedding: Int8Array) => void;
   readonly reject: (error: Error) => void;
   readonly removeAbort: (() => void) | undefined;
@@ -25,6 +36,9 @@ function abortError(signal: AbortSignal): Error {
 export class EmbeddingPool {
   private worker: Worker | undefined;
   private active: ActiveJob | undefined;
+  /** Retirements still draining (abort detaches fire-and-forget); close()
+   * must await them so library teardown never outruns a live ONNX worker. */
+  private readonly retiring = new Set<Promise<void>>();
   private nextId = 1;
   private closed = false;
 
@@ -41,11 +55,17 @@ export class EmbeddingPool {
         signal === undefined
           ? undefined
           : () => {
-              void worker.terminate();
+              // Reject the job now, but retire the worker cooperatively:
+              // terminate() mid-inference aborts the entire app (#843) —
+              // onnxruntime's completion callback throws into the torn-down
+              // worker env and the C++ exception escapes to std::terminate.
+              this.fail(abortError(signal));
+              void this.retire(worker);
             };
       if (onAbort !== undefined) signal?.addEventListener('abort', onAbort, { once: true });
       this.active = {
         id,
+        worker,
         resolve,
         reject,
         removeAbort: onAbort === undefined || signal === undefined ? undefined : () => signal.removeEventListener('abort', onAbort),
@@ -57,9 +77,34 @@ export class EmbeddingPool {
 
   async close(): Promise<void> {
     this.closed = true;
-    const worker = this.worker;
-    this.worker = undefined;
-    if (worker !== undefined) await worker.terminate();
+    if (this.worker !== undefined) void this.retire(this.worker);
+    // Await EVERY outstanding retirement, not just the current worker: an
+    // abort may have detached a still-draining worker earlier, and teardown
+    // must not proceed while any ONNX run is alive (PR #845 review).
+    while (this.retiring.size > 0) {
+      await Promise.all([...this.retiring]);
+    }
+  }
+
+  /** Cooperative shutdown (#843): detach the worker (a new job gets a fresh
+   * one), ask it to exit once its in-flight run settles, and hard-terminate
+   * only a worker that never does. Resolves when the worker is gone. */
+  private retire(worker: Worker): Promise<void> {
+    if (this.worker === worker) this.worker = undefined;
+    const drained = new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        void worker.terminate().then(() => resolve());
+      }, this.options.drainTimeoutMs ?? DRAIN_TIMEOUT_MS);
+      timer.unref();
+      worker.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      worker.postMessage({ shutdown: true } satisfies EmbeddingWorkerShutdown);
+    });
+    this.retiring.add(drained);
+    void drained.finally(() => this.retiring.delete(drained));
+    return drained;
   }
 
   private getWorker(): Worker {
@@ -76,11 +121,13 @@ export class EmbeddingPool {
       else job.reject(response.kind === 'input' ? new EmbeddingInputError(response.error) : new Error(response.error));
     });
     worker.on('error', (error: Error) => {
-      this.fail(error);
+      if (this.active?.worker === worker) this.fail(error);
     });
     worker.on('exit', (code) => {
-      this.worker = undefined;
-      if (this.active !== undefined) this.fail(new Error(`embedding worker exited with code ${String(code)}`));
+      // A retired worker's late exit must not clear its replacement or fail
+      // a job that belongs to it.
+      if (this.worker === worker) this.worker = undefined;
+      if (this.active?.worker === worker) this.fail(new Error(`embedding worker exited with code ${String(code)}`));
     });
     this.worker = worker;
     return worker;
