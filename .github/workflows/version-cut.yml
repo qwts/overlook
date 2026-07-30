@@ -26,8 +26,9 @@
 # starts release.yml directly. It also un-deadlocks review — a PAT opens the
 # version PR as qwts, who cannot approve their own PR (ENG-0045 decision 4), so
 # every cut needed a bypass. chores-dumb[bot] opens it, and a human approves.
-# No dispatch steps, no `actions: write` on the version job. The PAT reaches only actions/* steps and our own `run:` blocks — which is
-# why versioning is a script here and not changesets/action.
+# No dispatch steps, no `actions: write` on the version job. Repository tokens
+# reach only actions/* steps and first-party command steps that need them;
+# third-party tooling runs without credentials.
 # If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
 # still version and tag correctly — only the downstream runs fail to start (the
 # same degradation auto-update-prs.yml documents; re-dispatching by hand is not
@@ -83,8 +84,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Credentials for the version-branch force-push below.
-          token: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          # The versioning CLI must not inherit a persisted repository token.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -97,14 +98,12 @@ jobs:
       - name: Install dependencies (scripts skipped)
         run: npm ci --ignore-scripts
 
-      # Done in-repo rather than by changesets/action. The step has to run under
-      # RELEASE_TOKEN (see the header), and the PAT goes only to actions/* steps
-      # and our own scripts — never to a third-party action, whose future
-      # versions we do not control. `changeset version` is the same CLI the
-      # action shells out to; the branch and PR handling below is what remains.
-      - name: Create or refresh the Version packages PR
+      # Done in-repo rather than by changesets/action. `changeset version` runs
+      # without repository credentials; only the first-party push/PR step below
+      # receives a token.
+      - name: Create the Version packages commit
+        id: version
         env:
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
           BRANCH: changeset-release/main
         run: |
           set -euo pipefail
@@ -113,7 +112,6 @@ jobs:
             exit 0
           fi
           npx changeset version
-          version="$(node -p "require('./package.json').version")"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git checkout -B "$BRANCH"
@@ -123,10 +121,21 @@ jobs:
             exit 0
           fi
           git commit -m 'Version packages'
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Push and refresh the Version packages PR
+        if: steps.version.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          BRANCH: changeset-release/main
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
           # The branch is a disposable projection of main + the pending
           # changesets, rebuilt from the current tip on every main push — force
           # is the point, and auto-update-prs.yml excludes it for that reason.
-          git push --force origin "$BRANCH"
+          git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
+            push --force origin "$BRANCH"
           {
             echo "Merging this PR cuts \`v$version\`: the tag and the release build follow automatically."
             echo
