@@ -116,6 +116,8 @@ const VOCABULARY = [
   'zoom-out',
   'maximize-2',
   'layers',
+  // Rename-library-folder affordance in the switcher rows (#686).
+  'pencil',
   // Video transport + kind iconography (#548, ADR-0026 §5/§6/§7): the full
   // viewer's play/pause/mute/volume/captions/fullscreen controls, the grid
   // duration pill (play/film), and the video/audio/probing placeholder tiles.
