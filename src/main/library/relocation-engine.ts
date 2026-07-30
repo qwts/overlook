@@ -241,6 +241,18 @@ interface Preflight {
   readonly mode: RelocationMode;
   readonly files: readonly SourceFile[];
   readonly totalBytes: number;
+  /** Destination aliases the source itself (#686): a case- or Unicode-
+   * normalization-only rename on an insensitive filesystem. The rename is a
+   * same-directory name change — the emptiness sweep must not run against
+   * what is really the source. */
+  readonly sameDirectoryRename: boolean;
+}
+
+/** True when both paths exist and are the same directory (dev+inode) under
+ * different name strings — the case-insensitive-filesystem alias shape. */
+function isSameDirectoryRename(sourceDir: string, destDir: string): boolean {
+  if (sourceDir === destDir || path.dirname(sourceDir) !== path.dirname(destDir)) return false;
+  return isSameDirectory(sourceDir, destDir);
 }
 
 async function preflight(deps: RelocationDeps, entry: LibraryEntry, destDirRaw: string): Promise<Preflight> {
@@ -263,7 +275,8 @@ async function preflight(deps: RelocationDeps, entry: LibraryEntry, destDirRaw: 
       throw new RelocationError('destination-registered', `staging path is the registered library "${registered.name}"`);
     }
   }
-  if (existsSync(destDir)) {
+  const sameDirectoryRename = isSameDirectoryRename(sourceDir, destDir);
+  if (existsSync(destDir) && !sameDirectoryRename) {
     const destStat = lstatSync(destDir);
     if (!destStat.isDirectory()) {
       throw new RelocationError('invalid-destination', 'destination exists and is not a folder');
@@ -305,7 +318,7 @@ async function preflight(deps: RelocationDeps, entry: LibraryEntry, destDirRaw: 
   }
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
 
-  const mode: RelocationMode = (deps.sameVolume ?? defaultSameVolume)(sourceDir, destParent) ? 'rename' : 'copy';
+  const mode: RelocationMode = sameDirectoryRename || (deps.sameVolume ?? defaultSameVolume)(sourceDir, destParent) ? 'rename' : 'copy';
   if (mode === 'copy') {
     const free = (deps.freeBytes ?? defaultFreeBytes)(destParent);
     if (free < totalBytes + SCRATCH_BYTES) {
@@ -315,7 +328,7 @@ async function preflight(deps: RelocationDeps, entry: LibraryEntry, destDirRaw: 
       );
     }
   }
-  return { sourceDir, destDir, mode, files, totalBytes };
+  return { sourceDir, destDir, mode, files, totalBytes, sameDirectoryRename };
 }
 
 async function verifyStaging(
@@ -539,7 +552,9 @@ export async function relocateLibrary(deps: RelocationDeps, options: RelocateOpt
         await writeMarker(plan.sourceDir, marker);
         deps.journals.advance(journal, 'verified'); // rename is all-or-nothing; intent recorded, nothing to verify byte-wise
         throwIfCancelled(options.signal);
-        await removeIfEmptyDir(plan.destDir);
+        // A same-directory rename's destination IS the source under another
+        // name (#686) — sweeping it would try to remove the library.
+        if (!plan.sameDirectoryRename) await removeIfEmptyDir(plan.destDir);
         await ops.rename(plan.sourceDir, plan.destDir);
         faultPoint(deps, 'after-activate');
       }
@@ -692,12 +707,29 @@ export async function finishRelocationCleanup(deps: RelocationDeps, libraryId: s
   if (journal === null || journal.state !== 'committed') return 'nothing-pending';
   const ops = opsOf(deps);
   await rm(path.join(journal.destPath, RELOCATION_MARKER_FILENAME), { force: true });
-  if (existsSync(journal.sourcePath) && path.resolve(journal.sourcePath) !== path.resolve(journal.destPath)) {
+  // Identity, not string equality (#686, PR #846 review): after a case-only
+  // rename on a case-insensitive filesystem the source path still EXISTS as
+  // an alias of the renamed library itself — removing it would delete the
+  // library the commit just produced.
+  if (
+    existsSync(journal.sourcePath) &&
+    path.resolve(journal.sourcePath) !== path.resolve(journal.destPath) &&
+    !isSameDirectory(journal.sourcePath, journal.destPath)
+  ) {
     await ops.rmrf(journal.sourcePath);
   }
   deps.journals.advance(journal, 'cleaned');
   deps.journals.clear(libraryId);
   return 'cleaned';
+}
+
+/** Both paths exist and are one directory (dev+inode) — the alias shape a
+ * case-only rename leaves on case-insensitive filesystems. */
+function isSameDirectory(a: string, b: string): boolean {
+  if (!existsSync(a) || !existsSync(b)) return false;
+  const statA = statSync(a);
+  const statB = statSync(b);
+  return statA.dev === statB.dev && statA.ino === statB.ino;
 }
 
 export type RecoveryAction =
@@ -753,6 +785,17 @@ async function recoverOne(deps: RelocationDeps, journal: RelocationJournal): Pro
     return { libraryId, action: 'inconsistent', detail: 'no marker-bound staging directory exists' };
   }
 
+  // Same-directory rename (#686): on a case-insensitive filesystem both
+  // journal paths alias ONE directory, so existence proves nothing — the
+  // parent's actual directory entry says whether the rename happened.
+  if (isSameDirectoryRename(journal.sourcePath, journal.destPath)) {
+    if ((await actualBasename(journal.sourcePath)) === path.basename(journal.destPath) && markerMatchesJournal(journal.destPath, journal)) {
+      return rollRenameForward(deps, journal);
+    }
+    await rm(path.join(journal.sourcePath, RELOCATION_MARKER_FILENAME), { force: true });
+    deps.journals.clear(libraryId);
+    return { libraryId, action: 'discarded' };
+  }
   // Rename mode: exactly one directory holds the library.
   if (existsSync(journal.sourcePath)) {
     await rm(path.join(journal.sourcePath, RELOCATION_MARKER_FILENAME), { force: true });
@@ -760,17 +803,39 @@ async function recoverOne(deps: RelocationDeps, journal: RelocationJournal): Pro
     return { libraryId, action: 'discarded' };
   }
   if (existsSync(journal.destPath) && markerMatchesJournal(journal.destPath, journal)) {
-    // The rename happened; only one copy exists, so the journal rolls the
-    // commit forward (ADR-0022 §4 — the journal wins).
-    const destId = (await readFile(path.join(journal.destPath, 'library-id'), 'utf8').catch(() => '')).trim();
-    if (destId !== libraryId) {
-      return { libraryId, action: 'inconsistent', detail: `directory at ${journal.destPath} carries library-id "${destId}"` };
-    }
-    deps.registry.updatePath(libraryId, journal.destPath);
-    await rm(path.join(journal.destPath, RELOCATION_MARKER_FILENAME), { force: true });
-    await rm(lockPath(journal.destPath), { force: true });
-    deps.journals.clear(libraryId);
-    return { libraryId, action: 'commit-completed' };
+    return rollRenameForward(deps, journal);
   }
   return { libraryId, action: 'inconsistent', detail: 'neither source nor a marker-bound destination exists' };
+}
+
+/** The parent directory's real entry name for `dir`, matched by identity
+ * (dev+inode) rather than by string — the only trustworthy answer when
+ * multiple path spellings alias one directory. */
+async function actualBasename(dir: string): Promise<string | null> {
+  const parent = path.dirname(dir);
+  const target = statSync(dir);
+  for (const entry of await readdir(parent)) {
+    try {
+      const candidate = statSync(path.join(parent, entry));
+      if (candidate.dev === target.dev && candidate.ino === target.ino) return entry;
+    } catch {
+      // Entry vanished mid-scan; keep looking.
+    }
+  }
+  return null;
+}
+
+/** The rename happened; only one copy exists, so the journal rolls the
+ * commit forward (ADR-0022 §4 — the journal wins). */
+async function rollRenameForward(deps: RelocationDeps, journal: RelocationJournal): Promise<RecoveryReport> {
+  const { libraryId } = journal;
+  const destId = (await readFile(path.join(journal.destPath, 'library-id'), 'utf8').catch(() => '')).trim();
+  if (destId !== libraryId) {
+    return { libraryId, action: 'inconsistent', detail: `directory at ${journal.destPath} carries library-id "${destId}"` };
+  }
+  deps.registry.updatePath(libraryId, journal.destPath);
+  await rm(path.join(journal.destPath, RELOCATION_MARKER_FILENAME), { force: true });
+  await rm(lockPath(journal.destPath), { force: true });
+  deps.journals.clear(libraryId);
+  return { libraryId, action: 'commit-completed' };
 }
