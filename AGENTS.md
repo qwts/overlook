@@ -139,6 +139,10 @@ this file in the same PR as the change — never after the fact.
   version PR as `qwts`, who cannot approve their own PR, so every release cut
   needed a ruleset bypass. Repo chores get a bot identity; agents get their own
   Apps, and the two never share one.
+  Repository credentials must be absent while third-party tools run: checkouts
+  that precede them use `persist-credentials: false`, and tokens are injected
+  only into first-party steps containing the `git` / `gh` commands that need
+  them.
   `GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
   Actions policy authorizes actors explicitly — `github-actions[bot]` is not one
   of them, so its runs die at startup with "Actor is not allowed to trigger
