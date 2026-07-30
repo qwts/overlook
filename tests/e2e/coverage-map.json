@@ -1912,6 +1912,20 @@
           "paths": ["tests/library/library-rename.test.ts", "tests/library/folder-name.test.ts"]
         }
       ]
+    },
+    {
+      "id": "m32-common-video-containers",
+      "wiki": "Library-Format-v1",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/video-media.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/common-video.test.ts", "tests/library/media-signatures.test.ts", "tests/library/mpeg-ts.test.ts"]
+        }
+      ]
     }
   ]
 }
