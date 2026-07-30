@@ -146,6 +146,38 @@ describe('rename a library folder safely (#686)', () => {
       assert.equal(h.journals.load(ULID_A), null);
     });
 
+    test('REGRESSION (PR #846): crash AFTER the commit never deletes the library through its old-case alias', async () => {
+      // The committed-cleanup path removes journal.sourcePath when it exists
+      // and differs as a string — on a case-insensitive volume that alias IS
+      // the renamed library. Recovery must finish cleanup without touching it.
+      const h = harness('photos');
+      const destDir = join(h.root, 'disk', 'PHOTOS');
+      h.journals.save({
+        version: 1,
+        libraryId: ULID_A,
+        nonce: 'crash-nonce',
+        sourcePath: h.sourceDir,
+        destPath: destDir,
+        stagingPath: `${destDir}.relocate-staging`,
+        mode: 'rename',
+        state: 'verified',
+        startedAt: NOW().toISOString(),
+      });
+      renameSync(h.sourceDir, destDir);
+      h.registry.updatePath(ULID_A, destDir); // the crash landed after the registry commit
+
+      const reports = await recoverRelocations(h.deps);
+
+      assert.deepEqual(
+        reports.map((report) => report.action),
+        ['commit-completed'],
+      );
+      assert.ok(existsSync(join(destDir, 'library.db')), 'the library survived committed cleanup');
+      assert.equal(readFileSync(join(destDir, 'library-id'), 'utf8'), LIB_FILES['library-id']);
+      assert.equal(h.registry.get(ULID_A)?.path, destDir);
+      assert.equal(h.journals.load(ULID_A), null, 'journal cleared');
+    });
+
     test('crash before the rename → discarded, marker removed, registry untouched', async () => {
       const h = harness('photos');
       const destDir = join(h.root, 'disk', 'PHOTOS');

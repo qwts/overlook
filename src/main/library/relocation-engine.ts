@@ -252,10 +252,7 @@ interface Preflight {
  * different name strings — the case-insensitive-filesystem alias shape. */
 function isSameDirectoryRename(sourceDir: string, destDir: string): boolean {
   if (sourceDir === destDir || path.dirname(sourceDir) !== path.dirname(destDir)) return false;
-  if (!existsSync(sourceDir) || !existsSync(destDir)) return false;
-  const source = statSync(sourceDir);
-  const dest = statSync(destDir);
-  return source.dev === dest.dev && source.ino === dest.ino;
+  return isSameDirectory(sourceDir, destDir);
 }
 
 async function preflight(deps: RelocationDeps, entry: LibraryEntry, destDirRaw: string): Promise<Preflight> {
@@ -710,12 +707,29 @@ export async function finishRelocationCleanup(deps: RelocationDeps, libraryId: s
   if (journal === null || journal.state !== 'committed') return 'nothing-pending';
   const ops = opsOf(deps);
   await rm(path.join(journal.destPath, RELOCATION_MARKER_FILENAME), { force: true });
-  if (existsSync(journal.sourcePath) && path.resolve(journal.sourcePath) !== path.resolve(journal.destPath)) {
+  // Identity, not string equality (#686, PR #846 review): after a case-only
+  // rename on a case-insensitive filesystem the source path still EXISTS as
+  // an alias of the renamed library itself — removing it would delete the
+  // library the commit just produced.
+  if (
+    existsSync(journal.sourcePath) &&
+    path.resolve(journal.sourcePath) !== path.resolve(journal.destPath) &&
+    !isSameDirectory(journal.sourcePath, journal.destPath)
+  ) {
     await ops.rmrf(journal.sourcePath);
   }
   deps.journals.advance(journal, 'cleaned');
   deps.journals.clear(libraryId);
   return 'cleaned';
+}
+
+/** Both paths exist and are one directory (dev+inode) — the alias shape a
+ * case-only rename leaves on case-insensitive filesystems. */
+function isSameDirectory(a: string, b: string): boolean {
+  if (!existsSync(a) || !existsSync(b)) return false;
+  const statA = statSync(a);
+  const statB = statSync(b);
+  return statA.dev === statB.dev && statA.ino === statB.ino;
 }
 
 export type RecoveryAction =
