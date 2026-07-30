@@ -70,6 +70,47 @@ test('ACCEPTANCE: an inactive library moves to a new folder and the registry fol
   expect(existsSync(join(dest, 'library-id'))).toBe(true);
 });
 
+test('ACCEPTANCE: rename a library folder in place — Finder name changes, identity and registry follow, bad names refuse (#686)', async ({
+  launchOverlook,
+}) => {
+  // Budget: launch+ready (≤30s staged) + three inactive renames (~1s each).
+  test.setTimeout(60_000);
+  const { page } = await launchOverlook({ prefix: 'overlook-e2e-rename-', env: { OVERLOOK_SEED: '1' } });
+  const secondId = await createSecondLibrary(page);
+  const before = await libraryPath(page, secondId);
+  expect(before).not.toBeNull();
+
+  const rename = async (newName: string): Promise<Awaited<ReturnType<OverlookApi['libraries']['renameFolder']>>> =>
+    page.evaluate(
+      async ({ target, name }) => {
+        const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+        return overlook.libraries.renameFolder({ id: target, newName: name });
+      },
+      { target: secondId, name: newName },
+    );
+
+  // Invalid names refuse before anything runs (conservative cross-platform).
+  for (const bad of ['CON', 'ends.', 'a/b']) {
+    expect(await rename(bad)).toMatchObject({ ok: false, reason: 'invalid-destination' });
+  }
+  expect(await libraryPath(page, secondId)).toMatchObject({ path: before?.path ?? '' });
+
+  // A real rename lands the sibling path and the folder carries the new name.
+  const renamed = await rename('Renamed Second');
+  expect(renamed).toMatchObject({ ok: true, outcome: 'moved', mode: 'rename' });
+  const after = await libraryPath(page, secondId);
+  expect(after?.path.endsWith('Renamed Second')).toBe(true);
+  expect(existsSync(join(after?.path ?? '', 'library-id'))).toBe(true);
+  expect(existsSync(before?.path ?? '')).toBe(false);
+
+  // Case-only rename works whatever the volume's case sensitivity (#686).
+  const cased = await rename('RENAMED SECOND');
+  expect(cased).toMatchObject({ ok: true, outcome: 'moved', mode: 'rename' });
+  const casedPath = await libraryPath(page, secondId);
+  expect(casedPath?.path.endsWith('RENAMED SECOND')).toBe(true);
+  expect(existsSync(join(casedPath?.path ?? '', 'library-id'))).toBe(true);
+});
+
 test('ACCEPTANCE: the ACTIVE library moves (copy mode), reopens from the destination, and keeps its photos (#483 acceptance 2/5)', async ({
   launchOverlook,
 }) => {

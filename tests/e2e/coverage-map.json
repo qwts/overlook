@@ -1894,6 +1894,24 @@
           "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Embedding-Index.md on packaged macOS and Windows builds to verify native execution-provider fallback, battery transitions, and relaunch behavior that unit and Storybook lanes cannot observe."
         }
       ]
+    },
+    {
+      "id": "m30-library-folder-rename",
+      "wiki": "Library-Management",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/library-relocation.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/RenameLibraryDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-rename.test.ts", "tests/library/folder-name.test.ts"]
+        }
+      ]
     }
   ]
 }
