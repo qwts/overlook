@@ -48,6 +48,16 @@ interactive and idempotent — run it from a shell where `az login` and
 `gh auth login` have already succeeded. This section documents what it does
 and, more usefully, the non-obvious parts that are easy to get stuck on.
 
+On the first run, the script creates a dedicated service principal. On a rerun,
+pass its application (client) ID explicitly as `SP_APP_ID=<client-id>`; Entra
+display names are not unique and are never used to select an existing identity.
+The rerun rotates that principal's password only after the role assignment
+succeeds (a failure part-way never strands CI on an invalidated secret) and
+then updates the repository secret. The signer role is scoped to the selected
+Certificate Profile, not its parent Trusted Signing Account; a legacy
+account-wide grant left by earlier runs is removed once the profile-scoped
+grant exists.
+
 **The CLI surface.** Account-level verbs are `az trustedsigning list|show` —
 there is no `az trustedsigning account ...` subgroup, and asking for one
 reports `'account' is misspelled or not recognized`. `certificate-profile` is
