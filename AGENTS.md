@@ -203,6 +203,12 @@ this file in the same PR as the change — never after the fact.
   app and decodes the checked-in iPhone fixture. Keep
   `scripts/verify-macos-heic-preview.mjs` and its readiness marker current when
   changing the native bridge, package layout, Electron ABI, or HEIC fixtures.
+- The Windows arm64 packaging leg re-resolves the target-arch sharp binary
+  with `npm pack` and **verifies the downloaded tarball's sha512 against the
+  exact `package-lock.json` integrity entry before extraction** — registry
+  metadata is never trusted on its own. The contract test in
+  `tests/tooling/windows-signing.test.ts` locks the gate; keep both in step
+  when changing sharp packaging or the lockfile shape.
 - Floors are ratchets — c8 (lines 90 / branches 80), type-coverage (99.8), the
   800-line file budget, the a11y violation budget (`tests/a11y/violation-budget.json`):
   raise them as coverage improves; never lower them to pass. The a11y budget
