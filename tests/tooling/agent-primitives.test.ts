@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import type { evaluateAgentContext as EvaluateAgentContext, paragraphs as Paragraphs } from '../../scripts/check-agent-context.mjs';
 import type { GuardVerdict } from '../../scripts/guard-agent-command.mjs';
 
 const root = process.cwd();
@@ -17,6 +18,15 @@ interface GuardModule {
 // exist (the macos-signing.test.ts precedent).
 function guardModule(): Promise<GuardModule> {
   return import(pathToFileURL(join(root, 'scripts/guard-agent-command.mjs')).href) as Promise<GuardModule>;
+}
+
+interface AgentContextModule {
+  readonly paragraphs: typeof Paragraphs;
+  readonly evaluateAgentContext: typeof EvaluateAgentContext;
+}
+
+function agentContextModule(): Promise<AgentContextModule> {
+  return import(pathToFileURL(join(root, 'scripts/check-agent-context.mjs')).href) as Promise<AgentContextModule>;
 }
 
 function source(path: string): string {
@@ -103,6 +113,27 @@ describe('agent primitives (#718, ENG-0006)', () => {
     }
     assert.equal(evaluateCommand('npm run test:cov').allow, true);
     assert.equal(evaluateCommand('node scripts/run-guarded.mjs -- npm run test:unit:inner').allow, true);
+  });
+
+  test('a copied list item is caught, not hidden inside its list (PR #863 review)', async () => {
+    const { evaluateAgentContext, paragraphs } = await agentContextModule();
+
+    const bullet =
+      '- Never invoke `electron --test`, `node --test`, `.test-dist`/`.test-dist-dom` output, `playwright test`, ' +
+      '`test-storybook`, or `c8` directly, and never call `:run`/`:inner` npm scripts.';
+    const list = `## Guard\n\n- A short first bullet that is on its own too brief to count.\n${bullet}\n- A short trailing bullet.\n`;
+
+    // Each bullet is its own unit; the list is never one blob.
+    assert.ok(paragraphs(list).some((unit) => unit.includes('never invoke')));
+
+    const failures = evaluateAgentContext({
+      readText: (file) => (file === 'AGENTS.md' ? list : `See AGENTS.md.\n\n${bullet}\n`),
+      readDir: () => [],
+    });
+    assert.ok(
+      failures.some((failure) => failure.includes('CLAUDE.md') && failure.includes('repeats')),
+      `expected the copied bullet to be reported, got: ${JSON.stringify(failures)}`,
+    );
   });
 
   test('every vendor adapter points at the canonical agent-context file', () => {

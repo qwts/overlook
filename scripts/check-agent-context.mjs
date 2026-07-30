@@ -48,19 +48,46 @@ function adapterFiles(readDir) {
 }
 
 // Markdown/frontmatter noise removed so a reflowed copy still matches.
-function normalizeParagraph(paragraph) {
-  return paragraph
+function normalize(block) {
+  return block
     .replaceAll(/[`*_>#]/gu, '')
     .replaceAll(/\s+/gu, ' ')
     .trim()
     .toLowerCase();
 }
 
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+/u;
+
+// A blank-line split alone would make an entire bullet list one unit, so an
+// adapter copying a single long bullet would be compared against the whole list
+// and pass. Bullets are the dominant shape in these files, so each list item is
+// its own unit, continuation lines included.
+function units(block) {
+  const lines = block.split('\n');
+  if (!lines.some((line) => LIST_ITEM.test(line))) return [block];
+
+  const items = [];
+  let current = null;
+  for (const line of lines) {
+    if (LIST_ITEM.test(line)) {
+      if (current !== null) items.push(current);
+      current = line;
+    } else if (current === null) {
+      items.push(line);
+    } else {
+      current += `\n${line}`;
+    }
+  }
+  if (current !== null) items.push(current);
+  return items;
+}
+
 export function paragraphs(text) {
   return text
     .split(/\n\s*\n/u)
-    .map(normalizeParagraph)
-    .filter((paragraph) => paragraph.length >= DUPLICATE_MIN_LENGTH);
+    .flatMap(units)
+    .map(normalize)
+    .filter((unit) => unit.length >= DUPLICATE_MIN_LENGTH);
 }
 
 export function evaluateAgentContext({ readText, readDir, maxLines = AGENTS_MAX_LINES }) {
@@ -86,9 +113,9 @@ export function evaluateAgentContext({ readText, readDir, maxLines = AGENTS_MAX_
     if (!text.includes(CANONICAL)) {
       failures.push(`${file} must point at ${CANONICAL} — a vendor adapter that stands alone becomes a second source of truth.`);
     }
-    for (const paragraph of paragraphs(text)) {
-      if (canonicalParagraphs.has(paragraph)) {
-        failures.push(`${file} repeats a paragraph from ${CANONICAL}: "${paragraph.slice(0, 80)}…". Link to it instead.`);
+    for (const unit of paragraphs(text)) {
+      if (canonicalParagraphs.has(unit)) {
+        failures.push(`${file} repeats a paragraph or list item from ${CANONICAL}: "${unit.slice(0, 80)}…". Link to it instead.`);
       }
     }
   }
