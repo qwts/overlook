@@ -776,6 +776,31 @@ const SCHEMA_V22: Migration = {
   },
 };
 
+const SCHEMA_V23: Migration = {
+  version: 23,
+  name: 'photo-sidecars',
+  // Encrypted sidecar custody (#484, ADR-0031 §4): companion files (XMP/AAE)
+  // imported beside an original are owned by the photo — one row per
+  // encrypted companion, purged with the photo, never exposed as a library
+  // photo. content_hash addresses the sidecars/ blob namespace; key_id names
+  // the envelope key like photos.key_id.
+  up(db) {
+    db.exec(`
+      CREATE TABLE photo_sidecars (
+        photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK (role IN ('xmp', 'aae')),
+        file_name TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        key_id INTEGER NOT NULL REFERENCES keys(id),
+        imported_at TEXT NOT NULL,
+        PRIMARY KEY (photo_id, content_hash)
+      ) WITHOUT ROWID;
+      CREATE INDEX idx_photo_sidecars_hash ON photo_sidecars (content_hash);
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -799,6 +824,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V20,
   SCHEMA_V21,
   SCHEMA_V22,
+  SCHEMA_V23,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

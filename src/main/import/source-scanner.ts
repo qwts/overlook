@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, open, readdir, stat } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { classifyMediaFile } from '../../shared/library/media-files.js';
 import { sniffImageKind, sniffVideoKind } from '../../shared/library/media-signatures.js';
+import { classifySidecarFile, sidecarStem, type SidecarRole } from '../../shared/library/sidecar-files.js';
 import type { FileKind } from '../../shared/library/types.js';
 
 // Import source discovery + scan (#84): the numbers behind the design's
@@ -19,6 +20,14 @@ export interface ImportSource {
   readonly kind: 'volume' | 'folder';
 }
 
+/** An allowlisted companion found beside a media candidate (#484): same
+ * directory, same stem (`IMG_001.jpg` ↔ `IMG_001.xmp`, case-insensitive). */
+export interface SidecarCandidate {
+  readonly path: string;
+  readonly fileName: string;
+  readonly role: SidecarRole;
+}
+
 export interface ScannedFile {
   readonly path: string;
   readonly fileName: string;
@@ -26,12 +35,15 @@ export interface ScannedFile {
   readonly bytes: number;
   readonly contentHash: string;
   readonly isNew: boolean;
+  readonly sidecars: readonly SidecarCandidate[];
 }
 
 export interface ImportCandidate {
   readonly path: string;
   readonly fileName: string;
   readonly kind: FileKind;
+  /** Absent for sources without filesystem adjacency (cloud, tests). */
+  readonly sidecars?: readonly SidecarCandidate[];
 }
 
 export interface SourceScanSummary {
@@ -46,6 +58,11 @@ export interface SourceScanSummary {
   readonly newJpg: number;
   /** New non-RAW, non-JPEG media (HEIC/PNG/GIF/WebP) — not JPGs (PR #174 review). */
   readonly newOther: number;
+  /** Companion sidecars attached to NEW media (#484). */
+  readonly newSidecars: number;
+  /** Allowlisted companions whose stem matched no media candidate — reported
+   * honestly, never silently discarded (#484). */
+  readonly unmatchedCompanions: number;
 }
 
 export interface SourceScanProgress extends SourceScanSummary {
@@ -100,24 +117,35 @@ async function isImportableContainer(path: string): Promise<boolean> {
   return (sniffImageKind(header) ?? sniffVideoKind(header)) !== null;
 }
 
-async function listMediaFiles(dir: string, signal?: AbortSignal): Promise<ImportCandidate[]> {
-  const found: ImportCandidate[] = [];
+interface DiscoveredMedia {
+  readonly candidates: ImportCandidate[];
+  /** Allowlisted companions whose stem matched no media in their directory. */
+  unmatchedCompanions: number;
+}
+
+async function walkMediaFiles(dir: string, into: DiscoveredMedia, signal?: AbortSignal): Promise<void> {
   // Unreadable directories (e.g. "System Volume Information" at a Windows
   // drive root) are skipped, never fatal — one system folder must not sink
   // the whole source-card scan (PR #174 review).
   let entries;
   try {
-    if ((await lstat(dir)).isSymbolicLink()) return found;
+    if ((await lstat(dir)).isSymbolicLink()) return;
     entries = (await readdir(dir, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
   } catch {
-    return found;
+    return;
   }
+  // Sidecar association is per directory, by stem (#484): collect this
+  // directory's media and companions, then attach each companion to EVERY
+  // stem-matching media file (an XMP beside IMG_1.jpg + IMG_1.raf describes
+  // both) — a companion matching none is counted, never silently dropped.
+  const mediaHere: { candidate: ImportCandidate; stem: string }[] = [];
+  const companionsHere: SidecarCandidate[] = [];
   for (const entry of entries) {
     if (signal?.aborted === true) break;
     const entryPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!entry.name.startsWith('.') && !isPackageDirectory(entry.name)) {
-        found.push(...(await listMediaFiles(entryPath, signal)));
+        await walkMediaFiles(entryPath, into, signal);
       }
       continue;
     }
@@ -126,10 +154,33 @@ async function listMediaFiles(dir: string, signal?: AbortSignal): Promise<Import
     }
     const kind = classifyMediaFile(entry.name);
     if (kind !== null) {
-      found.push({ path: entryPath, fileName: entry.name, kind });
+      mediaHere.push({ candidate: { path: entryPath, fileName: entry.name, kind }, stem: sidecarStem(entry.name) });
+      continue;
+    }
+    const role = classifySidecarFile(entry.name);
+    if (role !== null) {
+      companionsHere.push({ path: entryPath, fileName: entry.name, role });
     }
   }
-  return found;
+  const byStem = new Map<string, SidecarCandidate[]>();
+  for (const companion of companionsHere) {
+    const stem = sidecarStem(companion.fileName);
+    if (mediaHere.some((media) => media.stem === stem)) {
+      byStem.set(stem, [...(byStem.get(stem) ?? []), companion]);
+    } else {
+      into.unmatchedCompanions += 1;
+    }
+  }
+  for (const media of mediaHere) {
+    const sidecars = byStem.get(media.stem);
+    into.candidates.push(sidecars === undefined ? media.candidate : { ...media.candidate, sidecars });
+  }
+}
+
+async function listMediaFiles(dir: string, signal?: AbortSignal): Promise<DiscoveredMedia> {
+  const into: DiscoveredMedia = { candidates: [], unmatchedCompanions: 0 };
+  await walkMediaFiles(dir, into, signal);
+  return into;
 }
 
 export async function scanSource(
@@ -138,7 +189,8 @@ export async function scanSource(
   onProgress?: (progress: SourceScanProgress) => void,
   signal?: AbortSignal,
 ): Promise<{ readonly summary: SourceScanSummary; readonly files: readonly ScannedFile[] }> {
-  return scanCandidates(await listMediaFiles(dir, signal), deps, onProgress, signal);
+  const discovered = await listMediaFiles(dir, signal);
+  return scanCandidates(discovered.candidates, deps, onProgress, signal, discovered.unmatchedCompanions);
 }
 
 /** Dropped-entry scan (#237/#406): files and recursively expanded folders use
@@ -149,18 +201,30 @@ export async function scanFiles(
   onProgress?: (progress: SourceScanProgress) => void,
   signal?: AbortSignal,
 ): Promise<{ readonly summary: SourceScanSummary; readonly files: readonly ScannedFile[] }> {
-  return scanCandidates(await collectMediaCandidates(paths, signal), deps, onProgress, signal);
+  const discovered = await collectDroppedMedia(paths, signal);
+  return scanCandidates(discovered.candidates, deps, onProgress, signal, discovered.unmatchedCompanions);
 }
 
 /** Expands file/folder paths through the import allowlist without hashing.
  * Cloud and test sources use this to preserve the original display name while
  * still sharing the exact local-source admission policy. */
 export async function collectMediaCandidates(paths: readonly string[], signal?: AbortSignal): Promise<ImportCandidate[]> {
+  return (await collectDroppedMedia(paths, signal)).candidates;
+}
+
+/** Drop expansion with companion association (#484): folders associate inside
+ * the walk; a directly dropped sidecar attaches to every directly dropped
+ * media file with the same stem in the same directory, else counts as
+ * unmatched — reported, never silently dropped. */
+async function collectDroppedMedia(paths: readonly string[], signal?: AbortSignal): Promise<DiscoveredMedia> {
   const candidates = new Map<string, ImportCandidate>();
+  const pathKey = (path: string): string =>
+    process.platform === 'win32' || process.platform === 'darwin' ? path.toLocaleLowerCase('en-US') : path;
   const add = (candidate: ImportCandidate): void => {
-    const key = process.platform === 'win32' || process.platform === 'darwin' ? candidate.path.toLocaleLowerCase('en-US') : candidate.path;
-    candidates.set(key, candidate);
+    candidates.set(pathKey(candidate.path), candidate);
   };
+  let unmatchedCompanions = 0;
+  const droppedCompanions = new Map<string, SidecarCandidate>();
   for (const droppedPath of paths) {
     if (signal?.aborted === true) break;
     const absolute = resolve(droppedPath);
@@ -168,17 +232,38 @@ export async function collectMediaCandidates(paths: readonly string[], signal?: 
       const info = await lstat(absolute);
       if (info.isSymbolicLink()) continue;
       if (info.isDirectory()) {
-        for (const candidate of await listMediaFiles(absolute, signal)) add(candidate);
+        const discovered = await listMediaFiles(absolute, signal);
+        for (const candidate of discovered.candidates) add(candidate);
+        unmatchedCompanions += discovered.unmatchedCompanions;
       } else if (info.isFile()) {
         const fileName = basename(absolute);
         const kind = classifyMediaFile(fileName);
-        if (kind !== null) add({ path: absolute, fileName, kind });
+        if (kind !== null) {
+          add({ path: absolute, fileName, kind });
+          continue;
+        }
+        const role = classifySidecarFile(fileName);
+        if (role !== null) droppedCompanions.set(pathKey(absolute), { path: absolute, fileName, role });
       }
     } catch {
       continue;
     }
   }
-  return [...candidates.values()];
+  for (const companion of droppedCompanions.values()) {
+    const stem = sidecarStem(companion.fileName);
+    const dir = pathKey(dirname(companion.path));
+    const owners = [...candidates.values()].filter(
+      (candidate) => pathKey(dirname(candidate.path)) === dir && sidecarStem(candidate.fileName) === stem,
+    );
+    if (owners.length === 0) {
+      unmatchedCompanions += 1;
+      continue;
+    }
+    for (const owner of owners) {
+      add({ ...owner, sidecars: [...(owner.sidecars ?? []), companion] });
+    }
+  }
+  return { candidates: [...candidates.values()], unmatchedCompanions };
 }
 
 export async function scanCandidates(
@@ -186,6 +271,7 @@ export async function scanCandidates(
   deps: SourceScannerDeps,
   onProgress?: (progress: SourceScanProgress) => void,
   signal?: AbortSignal,
+  unmatchedCompanions = 0,
 ): Promise<{ readonly summary: SourceScanSummary; readonly files: readonly ScannedFile[] }> {
   const files: ScannedFile[] = [];
   let newCount = 0;
@@ -193,6 +279,7 @@ export async function scanCandidates(
   let newRaw = 0;
   let newJpg = 0;
   let newOther = 0;
+  let newSidecars = 0;
 
   const snapshot = (scanned: number, done: boolean): SourceScanProgress => ({
     // Survivors only, not candidates.length: a container that fails the
@@ -205,6 +292,8 @@ export async function scanCandidates(
     newRaw,
     newJpg,
     newOther,
+    newSidecars,
+    unmatchedCompanions,
     scanned,
     done,
   });
@@ -235,6 +324,7 @@ export async function scanCandidates(
     if (isNew) {
       newCount += 1;
       newBytes += size;
+      newSidecars += candidate.sidecars?.length ?? 0;
       if (candidate.kind === 'raw') {
         newRaw += 1;
       } else if (candidate.kind === 'jpeg') {
@@ -243,7 +333,7 @@ export async function scanCandidates(
         newOther += 1;
       }
     }
-    files.push({ ...candidate, bytes: size, contentHash, isNew });
+    files.push({ ...candidate, bytes: size, contentHash, isNew, sidecars: candidate.sidecars ?? [] });
     if ((index + 1) % PROGRESS_EVERY === 0) {
       onProgress?.(snapshot(index + 1, false));
     }

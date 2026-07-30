@@ -22,6 +22,9 @@ export interface LyingRow {
 export interface ConsistencyReport {
   readonly orphanOriginals: readonly string[];
   readonly orphanThumbs: readonly string[];
+  /** Companion blobs owned by no photo_sidecars row (#484), as
+   * `photoId:hash` labels. */
+  readonly orphanSidecars: readonly string[];
   readonly stagedLeftovers: readonly string[];
   readonly lyingRows: readonly LyingRow[];
 }
@@ -33,12 +36,17 @@ export interface RepairSummary extends ConsistencyReport {
 
 export interface ConsistencyDeps {
   readonly rows: () => readonly { id: string; contentHash: string; syncState: string }[];
+  /** Owned companion custody (#484): `photoId:hash` pairs from
+   * photo_sidecars. Absent = no sidecar support (pre-#484 callers). */
+  readonly ownedSidecars?: (() => readonly { photoId: string; contentHash: string }[]) | undefined;
   /** Ownership-only references that must prevent orphan cleanup but must not
    * appear in row diagnostics or repair audit output. */
   readonly hiddenOwnedHashes?: (() => readonly string[]) | undefined;
   readonly blobs: {
     readonly listOriginalHashes: () => Promise<{ hash: string; ageMs: number }[]>;
     readonly listThumbHashes: () => Promise<{ hash: string; ageMs: number }[]>;
+    readonly listSidecarEntries?: (() => Promise<{ photoId: string; hash: string; ageMs: number }[]>) | undefined;
+    readonly deleteSidecars?: ((photoId: string) => Promise<void>) | undefined;
     readonly listStaged: () => Promise<{ name: string; ageMs: number }[]>;
     readonly hasOriginal: (hash: string) => boolean;
     readonly deleteOriginal: (hash: string) => Promise<void>;
@@ -69,6 +77,16 @@ export class ConsistencyChecker {
       .map((entry) => entry.hash);
     // LIVE puts stage in the same directory — only old strands are
     // leftovers (a startup scan once reaped an in-flight seed write).
+    // Sidecar custody is per photo (#484): a companion is orphaned when no
+    // photo_sidecars row names its exact (photoId, hash) pair — same age
+    // gate, because companions publish before the owning row commits.
+    const ownedSidecars = new Set((this.deps.ownedSidecars?.() ?? []).map((entry) => `${entry.photoId}:${entry.contentHash}`));
+    const orphanSidecars =
+      this.deps.blobs.listSidecarEntries === undefined
+        ? []
+        : (await this.deps.blobs.listSidecarEntries())
+            .filter((entry) => !ownedSidecars.has(`${entry.photoId}:${entry.hash}`) && entry.ageMs > LEFTOVER_MIN_AGE_MS)
+            .map((entry) => `${entry.photoId}:${entry.hash}`);
     const stagedLeftovers = (await this.deps.blobs.listStaged())
       .filter((entry) => entry.ageMs > LEFTOVER_MIN_AGE_MS)
       .map((entry) => entry.name);
@@ -80,7 +98,7 @@ export class ConsistencyChecker {
         lyingRows.push({ photoId: row.id, contentHash: row.contentHash, remoteBacked: await this.deps.remoteHas(row.contentHash) });
       }
     }
-    return { orphanOriginals, orphanThumbs, stagedLeftovers, lyingRows };
+    return { orphanOriginals, orphanThumbs, orphanSidecars, stagedLeftovers, lyingRows };
   }
 
   /** Fix what is safe; report everything. */
@@ -97,6 +115,16 @@ export class ConsistencyChecker {
     for (const name of report.stagedLeftovers) {
       await this.deps.blobs.removeStaged(name);
       this.deps.audit(`REPAIR-STAGED name=${name}`);
+    }
+    // Orphaned companions repair per PHOTO directory: any orphan under a
+    // photo with no owning rows at all means the whole set is debris.
+    const orphanPhotoIds = new Set(report.orphanSidecars.map((label) => label.split(':')[0] ?? ''));
+    const stillOwned = new Set((this.deps.ownedSidecars?.() ?? []).map((entry) => entry.photoId));
+    for (const photoId of orphanPhotoIds) {
+      if (photoId !== '' && !stillOwned.has(photoId)) {
+        await this.deps.blobs.deleteSidecars?.(photoId);
+        this.deps.audit(`REPAIR-ORPHAN-SIDECARS photo=${photoId}`);
+      }
     }
     let repairedToOffloaded = 0;
     let markedError = 0;

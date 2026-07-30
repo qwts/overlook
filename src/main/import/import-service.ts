@@ -157,7 +157,14 @@ export class ImportService {
           () => undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         this.assertMoveOutsideLibrary(fresh, mode);
         const existing = files.length - fresh.length;
         const result = await this.engine.importFiles(fresh, mode, path, controller.signal);
@@ -185,7 +192,14 @@ export class ImportService {
           () => undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         this.assertMoveOutsideLibrary(fresh, mode);
         const existing = files.length - fresh.length;
         const result = await this.engine.importFiles(fresh, mode, 'dropped', controller.signal);
@@ -273,7 +287,14 @@ export class ImportService {
           undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         const summary = await this.engine.importFiles(fresh, 'copy', 'Google Drive', controller.signal, selection.rootPath ?? undefined);
         if (summary.photoIds.length > 0) this.events.imported(summary.photoIds);
         return summary;

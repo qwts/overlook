@@ -28,7 +28,7 @@ import type { PosterCaptureService } from './import/poster-capture-service.js';
 import { buildMaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
-import { BackupEngine, type BackupRunResult } from './backup/backup-engine.js';
+import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
 import { createBackupAuditLogger } from './backup/backup-audit.js';
 import { createBackupIntegrityRuntime } from './backup/integrity-runtime.js';
 import { sealManifestJson } from './backup/manifest-sealer.js';
@@ -42,8 +42,10 @@ import type { RestoreRuntime } from './backup/restore-runtime.js';
 import { createRestoreRuntime } from './backup/restore-runtime-factory.js';
 import { recoverInterruptedActivation, restorePaths } from './backup/restore-staging.js';
 import { sealKeyStoreRecoveryBootstrap } from './backup/recovery-bootstrap.js';
-import { ConsistencyChecker } from './library/consistency.js';
-import { createPurgeRepository, PurgeService } from './library/purge-service.js';
+import type { ConsistencyChecker } from './library/consistency.js';
+import { createConsistencyChecker } from './library/consistency-factory.js';
+import type { PurgeService } from './library/purge-service.js';
+import { createPurgeService } from './library/purge-factory.js';
 import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-runtime.js';
 import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
@@ -481,6 +483,7 @@ function getBackupEngine(): BackupEngine {
       manifestSnapshot: () => repo.manifestSnapshot(),
       activitySnapshot: () => activityBackupSnapshot(parts.db),
       boardsSnapshot: () => boardsSnapshot(parts.db),
+      ...sidecarBackupDeps(parts.db, parts.blobStore),
       // Live reads (#111): every run and every maybeAutoRun sees the
       // store's current values — no restart needed after a settings change.
       settings: () => {
@@ -527,12 +530,10 @@ function getBackupEngine(): BackupEngine {
     });
     offloadService = custody.offload;
     ephemeralOriginalService = custody.ephemeral;
-    purgeService = new PurgeService({
-      repo: createPurgeRepository(repo),
-      blobs: {
-        deleteOriginal: async (hash) => parts.blobStore.deleteOriginal(hash),
-        deleteThumbs: async (hash) => parts.blobStore.deleteThumbs(hash),
-      },
+    purgeService = createPurgeService({
+      db: parts.db,
+      repo,
+      blobStore: parts.blobStore,
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
       // Purging changes manifestSnapshot() — same owed-generation rule (and
@@ -543,30 +544,13 @@ function getBackupEngine(): BackupEngine {
       },
       audit,
       retention: () => getSettingsStore().get().trashRetention,
-      now: () => Date.now(),
-      sleep: async (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
     purgeRuntime = createPurgeRuntime(purgeService);
-    consistencyChecker = new ConsistencyChecker({
-      rows: () => repo.allRows(),
-      hiddenOwnedHashes: () => repo.migrationOwnedContentHashes(),
-      blobs: {
-        listOriginalHashes: async () => parts.blobStore.listOriginalHashes(),
-        listThumbHashes: async () => parts.blobStore.listThumbHashes(),
-        listStaged: async () => parts.blobStore.listStaged(),
-        hasOriginal: (hash) => parts.blobStore.hasOriginal(hash),
-        deleteOriginal: async (hash) => parts.blobStore.deleteOriginal(hash),
-        deleteThumbs: async (hash) => parts.blobStore.deleteThumbs(hash),
-        removeStaged: async (name) => parts.blobStore.removeStaged(name),
-      },
-      remoteHas: async (hash) => {
-        try {
-          await provider.verify(`blobs/${hash.slice(0, 2)}/${hash}`);
-          return true;
-        } catch {
-          return false;
-        }
-      },
+    consistencyChecker = createConsistencyChecker({
+      db: parts.db,
+      repo,
+      blobStore: parts.blobStore,
+      provider,
       setStatus: (photoId, status) => {
         ledger.repairStatus(photoId, status);
       },

@@ -99,6 +99,10 @@ const scanSummarySchema = z.object({
   newRaw: z.number().int().nonnegative(),
   newJpg: z.number().int().nonnegative(),
   newOther: z.number().int().nonnegative(),
+  /** Companion sidecars attached to NEW media (#484). */
+  newSidecars: z.number().int().nonnegative(),
+  /** Allowlisted companions matching no media — reported, never dropped. */
+  unmatchedCompanions: z.number().int().nonnegative(),
 });
 
 const googleDrivePickFailureSchema = z.enum([
@@ -117,6 +121,8 @@ const importRunSummarySchema = z.object({
   duplicates: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
+  /** Companion sidecars in verified encrypted custody (#484). */
+  sidecars: z.number().int().nonnegative(),
 });
 
 const syncStatusSchema = z.enum(['local', 'syncing', 'synced', 'offloaded', 'error']);

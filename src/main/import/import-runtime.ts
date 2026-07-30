@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey, KeyResolver } from '../crypto/envelope.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
+import type { SidecarRepository } from '../db/sidecar-repository.js';
 import { extractMetadata } from './exif.js';
 import { ImportEngine, type ImportSummary } from './import-engine.js';
 import { ImportJournal } from './import-journal.js';
@@ -21,6 +22,7 @@ export interface ImportRuntimeOptions {
   readonly dataDir: string;
   readonly workerUrl: URL;
   readonly repo: PhotosRepository;
+  readonly sidecars: SidecarRepository;
   readonly blobs: BlobStore;
   readonly blobsReady: Promise<void>;
   readonly currentKey: () => EnvelopeKey;
@@ -49,6 +51,7 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
       hasContentHash: (hash) => options.repo.hasContentHash(hash),
       get: (id) => options.repo.get(id),
       insert: (photo) => options.repo.insert(photo),
+      insertSidecar: (record) => options.sidecars.insert(record),
       repairGeneratedDimensions: (id, width, height) => options.repo.repairGeneratedDimensions(id, width, height),
       setDimensionStatus: (id, status) => options.repo.setDimensionStatus(id, status),
       setPreviewFailure: (id, failure) => options.repo.setPreviewFailure(id, failure),
@@ -59,6 +62,11 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
         return options.blobs.putOriginal(plaintext, key, photoId);
       },
       verifyOriginal: async (contentHash, resolveKey, photoId) => options.blobs.verifyOriginal(contentHash, resolveKey, photoId),
+      putSidecar: async (plaintext, key, photoId) => {
+        await options.blobsReady;
+        return options.blobs.putSidecar(plaintext, key, photoId);
+      },
+      verifySidecar: async (photoId, contentHash, resolveKey) => options.blobs.verifySidecar(photoId, contentHash, resolveKey),
     },
     generateThumbs: async (request) => {
       await options.blobsReady;

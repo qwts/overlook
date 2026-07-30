@@ -520,6 +520,7 @@ export function registerImportHandlers(
         duplicates: summary.duplicates,
         failed: summary.failed,
         cancelled: summary.cancelled,
+        sidecars: summary.sidecars,
       };
     })(request),
   );
@@ -568,6 +569,7 @@ export function registerImportHandlers(
         duplicates: summary.duplicates,
         failed: summary.failed,
         cancelled: summary.cancelled,
+        sidecars: summary.sidecars,
       };
     })(request),
   );
