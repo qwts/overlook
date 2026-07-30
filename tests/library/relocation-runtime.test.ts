@@ -111,6 +111,19 @@ describe('relocation runtime (#483, ADR-0022 §4)', () => {
     assert.deepEqual(h.calls, ['relocate']);
   });
 
+  test('an unreadable custody probe refuses source-unreadable, never an opaque failure (PR #853 review)', async () => {
+    const h = harness();
+    // A directory in master.key's place makes the probe read throw (EISDIR).
+    mkdirSync(join(h.root, 'lib-a', 'master.key'), { recursive: true });
+    const outcome = await h.runtime.move(ULID_A, join(h.root, 'elsewhere'));
+    assert.deepEqual(outcome, {
+      ok: false,
+      reason: 'source-unreadable',
+      detail: `cannot read the library's custody files at ${join(h.root, 'lib-a')}`,
+    });
+    assert.deepEqual(h.calls, [], 'nothing tore down or relocated');
+  });
+
   test('an inactive app-locked library must be opened and unlocked before moving', async () => {
     const h = harness();
     writeFileSync(join(h.root, 'lib-a', 'master.key'), 'OVLK-attacker-controlled-custody', 'utf8');

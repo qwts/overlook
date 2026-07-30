@@ -94,9 +94,14 @@ export class RelocationRuntime {
     const isActive = this.options.active.openLibraryId() === id;
     // Inactive OVLK custody has no authenticated password authority in this
     // process. Require the user to open and unlock it before allowing renderer-
-    // initiated relocation to move its custody or delete its source.
-    if (!isActive && hasAppLockCustody(sourcePath)) {
-      return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before moving it' };
+    // initiated relocation to move its custody or delete its source. An
+    // unreadable probe maps to the stable source-unreadable refusal, never an
+    // opaque IPC failure (ADR-0022 amendment, PR #853 review).
+    const custody = this.probeAppLockCustody(sourcePath);
+    if (!isActive && custody !== 'none') {
+      return custody === 'app-locked'
+        ? { ok: false, reason: 'app-locked', detail: 'open and unlock the library before moving it' }
+        : { ok: false, reason: 'source-unreadable', detail: `cannot read the library's custody files at ${sourcePath}` };
     }
     if (isActive) {
       const lockState = this.options.active.lockState();
@@ -173,6 +178,16 @@ export class RelocationRuntime {
     return this.move(id, path.join(path.dirname(source), newName));
   }
 
+  /** hasAppLockCustody reads master.key; ACLs or a flaky network volume can
+   * make that read throw — a designed refusal, not an opaque handler error. */
+  private probeAppLockCustody(dir: string): 'app-locked' | 'unreadable' | 'none' {
+    try {
+      return hasAppLockCustody(dir) ? 'app-locked' : 'none';
+    } catch {
+      return 'unreadable';
+    }
+  }
+
   /** Cancellation is honored at file boundaries and only ever before the
    * registry commit (ADR-0022 §4) — after it, the engine no longer checks. */
   cancel(id: string): boolean {
@@ -189,8 +204,14 @@ export class RelocationRuntime {
     const journal = this.options.engineDeps.journals.load(id);
     if (entry === undefined || journal === null) return { ok: false, reason: 'io-error', detail: `library ${id} has no resumable move` };
     const isActive = this.options.active.openLibraryId() === id;
-    if (!isActive && hasAppLockCustody(entry.path)) {
-      return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before resuming its move' };
+    if (!isActive) {
+      const custody = this.probeAppLockCustody(entry.path);
+      if (custody === 'app-locked') {
+        return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before resuming its move' };
+      }
+      if (custody === 'unreadable') {
+        return { ok: false, reason: 'source-unreadable', detail: `cannot read the library's custody files at ${entry.path}` };
+      }
     }
     if (isActive) {
       const lockState = this.options.active.lockState();
