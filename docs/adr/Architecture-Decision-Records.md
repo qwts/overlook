@@ -40,6 +40,7 @@ decision gets a new ADR that links back to the one it replaces.
 | [ADR-0030](./ADR-0030-Collections-Visibility-Saved-Queries-And-Gallery-Inclusion.md)         | Collections, Visibility & Inclusion  | Accepted |
 | [ADR-0031](./ADR-0031-Editing-Variants-Provenance-And-Export-Boundary.md)                    | Editing, Variants & Export Boundary  | Accepted |
 | [ADR-0032](./ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md)                     | Sharing & E2EE Collaboration         | Accepted |
+| [ADR-0033](./ADR-0033-Backup-Coverage-Exceptions-And-Local-Only-Custody.md)                  | Backup Coverage & Local-Only Custody | Accepted |
 
 ## Template
 
