@@ -20,6 +20,7 @@ set -euo pipefail
 
 REPO="${REPO:-qwts/overlook}"
 SP_NAME="${SP_NAME:-overlook-trusted-signing}"
+SP_APP_ID="${SP_APP_ID:-}"
 
 # Git Bash/MSYS2 rewrites any argument that looks like a Unix path (starts
 # with "/") into a Windows path before it reaches az, silently mangling ARM
@@ -124,22 +125,22 @@ fi
 PUBLISHER_NAME=$(az trustedsigning certificate-profile show \
   --resource-group "$RESOURCE_GROUP" --account-name "$ACCOUNT_NAME" \
   --name "$PROFILE_NAME" --query commonName -o tsv 2>/dev/null || echo "")
+PROFILE_ID=$(az trustedsigning certificate-profile show \
+  --resource-group "$RESOURCE_GROUP" --account-name "$ACCOUNT_NAME" \
+  --name "$PROFILE_NAME" --query id -o tsv)
 
-# --- 4. Service principal, scoped to just this account ------------------------
-# Reuse an existing SP if present: re-running `create-for-rbac` with the same
-# display name can mint a SECOND app registration rather than reusing the
-# first, leaving orphaned principals behind.
-EXISTING_APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv 2>/dev/null || echo "")
-if [ -n "$EXISTING_APP_ID" ]; then
-  echo "Service principal '$SP_NAME' already exists (appId $EXISTING_APP_ID)."
-  read -rp "Reset its password (invalidates the old one)? (y/N): " RESET
-  if [ "$RESET" = "y" ]; then
-    APP_ID="$EXISTING_APP_ID"
-    SP_PASSWORD=$(az ad sp credential reset --id "$EXISTING_APP_ID" --query password -o tsv)
-  else
-    APP_ID="$EXISTING_APP_ID"
-    SP_PASSWORD=""
+# --- 4. Service principal, scoped to just this certificate profile -----------
+# Display names are not unique in Entra ID. Only reuse an application when the
+# operator supplies its stable client ID; otherwise an attacker could pre-create
+# $SP_NAME and receive the signing role from a name-only lookup.
+if [ -n "$SP_APP_ID" ]; then
+  APP_ID=$(az ad sp show --id "$SP_APP_ID" --query appId -o tsv)
+  if [ "$APP_ID" != "$SP_APP_ID" ]; then
+    echo "SP_APP_ID must be the service principal's application (client) ID." >&2
+    exit 1
   fi
+  echo "Resetting credentials for explicitly selected service principal $APP_ID..."
+  SP_PASSWORD=$(az ad sp credential reset --id "$APP_ID" --query password -o tsv)
 else
   echo "Creating service principal '$SP_NAME'..."
   # --role/--scope are omitted deliberately so no broad subscription-wide
@@ -156,7 +157,7 @@ az role assignment create \
   --subscription "$SUBSCRIPTION" \
   --assignee "$APP_ID" \
   --role "Artifact Signing Certificate Profile Signer" \
-  --scope "$ACCOUNT_ID"
+  --scope "$PROFILE_ID"
 
 # --- 5. Non-secret config: paste into electron-builder.yml --------------------
 echo ""
