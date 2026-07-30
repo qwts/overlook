@@ -2,12 +2,21 @@ import { hostname } from 'node:os';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { machineId } from './machine-id.js';
+
 // Per-library single-instance lock (ADR-0017 §5, #385). Advisory: it orders
 // honest actors — two app instances on one machine cannot open the same
 // library concurrently. Created O_EXCL; a conflict is examined rather than
-// trusted: a same-host lock whose pid is dead is stale (crash) and reclaimed,
-// a same-host live pid refuses, and a different hostname (network share)
-// refuses because liveness cannot be verified across machines.
+// trusted: a same-machine lock whose pid is dead is stale (crash) and
+// reclaimed, a same-machine live pid refuses, and a lock from another
+// machine (network share) refuses because liveness cannot be verified
+// across machines.
+//
+// Same-machine identity keys on the stable machine id when both the record
+// and this process have one (#842): hostnames drift with network state
+// (`.local` ↔ `.lan`), which made crashed same-machine locks permanently
+// unreclaimable. The hostname stays in the record as the cross-host display
+// string and as the conservative fallback for legacy records.
 
 export class LibraryLockError extends Error {
   override readonly name = 'LibraryLockError';
@@ -23,6 +32,9 @@ export interface LibraryLockRecord {
   readonly instanceId: string;
   readonly pid: number;
   readonly hostname: string;
+  /** Stable machine identity (#842); absent in legacy records and when the
+   * probe fails, in which case hostname comparison decides. */
+  readonly machineId?: string;
   readonly acquiredAt: string;
 }
 
@@ -30,8 +42,21 @@ export interface LibraryLockOptions {
   /** Injected for tests. */
   readonly host?: string;
   readonly pid?: number;
+  /** Injected for tests: null = machine id unavailable (legacy behavior). */
+  readonly machineId?: string | null;
   readonly isPidAlive?: (pid: number) => boolean;
   readonly now?: () => Date;
+}
+
+function resolveMachineId(options: LibraryLockOptions): string | undefined {
+  return options.machineId === undefined ? machineId() : (options.machineId ?? undefined);
+}
+
+/** Same-machine judgment (#842): the stable machine id decides when both
+ * sides have one; otherwise the conservative hostname comparison stands. */
+function isSameMachine(record: LibraryLockRecord, host: string, id: string | undefined): boolean {
+  if (record.machineId !== undefined && id !== undefined) return record.machineId === id;
+  return record.hostname === host;
 }
 
 function defaultIsPidAlive(pid: number): boolean {
@@ -84,7 +109,11 @@ function readRecord(path: string): LibraryLockRecord | null {
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<LibraryLockRecord>;
     if (typeof raw.instanceId === 'string' && typeof raw.pid === 'number' && typeof raw.hostname === 'string') {
-      return raw as LibraryLockRecord;
+      if (typeof raw.machineId === 'string' || raw.machineId === undefined) return raw as LibraryLockRecord;
+      // A non-string machineId never proves anything — drop it and let the
+      // hostname fallback judge, instead of rejecting the whole record.
+      const { machineId: _invalid, ...rest } = raw as LibraryLockRecord;
+      return rest;
     }
   } catch {
     // Unreadable/torn lock: treat as stale below — a half-written lock never
@@ -101,8 +130,27 @@ function readRecord(path: string): LibraryLockRecord | null {
 export function readLockHolder(dataDir: string, instanceId: string, options: LibraryLockOptions = {}): string | null {
   const record = readRecord(lockPath(dataDir));
   if (record === null || record.instanceId === instanceId) return null;
-  if (record.hostname !== (options.host ?? hostname())) return record.hostname;
+  if (!isSameMachine(record, options.host ?? hostname(), resolveMachineId(options))) return record.hostname;
   return (options.isPidAlive ?? defaultIsPidAlive)(record.pid) ? record.hostname : null;
+}
+
+/** Fail-loud startup probe (#842): when the startup-selected library is
+ * lock-held by another live instance, the user must learn why up front —
+ * a silently failing bootstrap reads as data loss. Returns the dialog
+ * message naming the holder, or null when the library is openable. Same-
+ * machine stale locks never reach this: acquire reclaims them. */
+export function describeStartupLockHold(
+  dataDir: string,
+  libraryName: string,
+  instanceId: string,
+  options: LibraryLockOptions = {},
+): string | null {
+  const holder = readLockHolder(dataDir, instanceId, options);
+  if (holder === null) return null;
+  return (
+    `"${libraryName}" is locked by another Overlook instance on ${holder} and was not opened.\n\n` +
+    'Your photos are safe. Close Overlook there and relaunch, or open a different library from the library switcher.'
+  );
 }
 
 /** Acquires <dataDir>/library.lock for this instance or throws
@@ -112,12 +160,13 @@ export function acquireLibraryLock(dataDir: string, instanceId: string, options:
   const path = lockPath(dataDir);
   const host = options.host ?? hostname();
   const pid = options.pid ?? process.pid;
+  const id = resolveMachineId(options);
   const isPidAlive = options.isPidAlive ?? defaultIsPidAlive;
 
   const existing = existsSync(path) ? readRecord(path) : null;
   if (existsSync(path)) {
     if (existing !== null && existing.instanceId !== instanceId) {
-      if (existing.hostname !== host) {
+      if (!isSameMachine(existing, host, id)) {
         throw new LibraryLockError(
           `library is locked by another computer (${existing.hostname}); locks on shared volumes cannot be verified — close it there or remove ${path} if you are certain`,
           'held-by-other-host',
@@ -143,6 +192,7 @@ export function acquireLibraryLock(dataDir: string, instanceId: string, options:
     instanceId,
     pid,
     hostname: host,
+    ...(id === undefined ? {} : { machineId: id }),
     acquiredAt: (options.now?.() ?? new Date()).toISOString(),
   };
   // 'wx' = O_CREAT|O_EXCL: if another instance won the race between our
