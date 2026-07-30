@@ -50,6 +50,21 @@ the provider's recoverable deletion per the #750 amendment above, and
 disclosing that other participants keep whatever they downloaded). No ceremony
 may imply that revocation retracts plaintext a recipient already holds.
 
+**Amended 2026-07-30 by
+[ADR-0034](./ADR-0034-On-Device-Face-Grouping-And-Biometric-Derived-Data.md)
+(#795), resolving this ADR's "revisit when … face data (#285) lands" debt:**
+§4's derived-death list gains the purged photo's `faces` rows, its
+`face_embeddings` vectors, its cached face crops, and its group memberships,
+all removed in the same transaction as `purgeRow()`. User assertions that
+reference a deleted face are **tombstoned rather than deleted**, so re-importing
+the same photo cannot resurrect a correction about bytes that are gone.
+§6's side-effect enumeration gains face detections, embeddings, crops, group
+memberships, and — where the purge removes the last face of a named group —
+that the group becomes empty. §7's registry gains **Delete face data** (Tier D,
+naming the exact counts of faces, groups, and named groups, and stating that
+the photos themselves are untouched) and **Delete a named group** (Tier D, same
+shape, narrower scope).
+
 ## Context
 
 Deletion is the one operation whose _purpose_ is data loss, so it runs the
