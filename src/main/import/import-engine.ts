@@ -296,7 +296,7 @@ export class ImportEngine {
       if (!verified) throw new Error(`blob verification failed for ${file.fileName}; source recovery remains pending`);
       // The original's source is already gone; companion sources may remain
       // from a crash between the two deletes (#484).
-      await this.deleteMovedSidecarSources(file, persist);
+      await this.deleteMovedSidecarSources(file, manifest, persist);
       setStage(file, 'done');
       await persist();
       return;
@@ -408,7 +408,7 @@ export class ImportEngine {
           await this.deps.deleteFile(file.path);
           // Companion sources go the same way: verified encrypted custody
           // first, delete second, per sidecar (#484).
-          await this.deleteMovedSidecarSources(file, persist);
+          await this.deleteMovedSidecarSources(file, manifest, persist);
         }
         setStage(file, 'done');
         await persist();
@@ -451,8 +451,12 @@ export class ImportEngine {
   }
 
   /** Move mode: a companion source is deleted only after ITS encrypted copy
-   * decrypts and re-hashes clean — same per-file contract as the original. */
-  private async deleteMovedSidecarSources(file: ManifestFile, persist: () => Promise<void>): Promise<void> {
+   * decrypts and re-hashes clean — same per-file contract as the original.
+   * A source shared across owners (an XMP beside a RAW+JPG pair attaches to
+   * both) is deleted only by its LAST pending owner (PR #849 review): an
+   * early unlink would strand the next owner's custody read after its photo
+   * row already committed. */
+  private async deleteMovedSidecarSources(file: ManifestFile, manifest: ImportManifest, persist: () => Promise<void>): Promise<void> {
     const sidecars = file.sidecars ?? [];
     if (sidecars.length === 0 || file.photoId === undefined) return;
     let changed = false;
@@ -463,6 +467,9 @@ export class ImportEngine {
         changed = true;
         continue;
       }
+      if (this.sidecarSourceStillNeeded(sidecar.path, file, manifest)) {
+        continue; // a later owner still has to read it; that owner deletes
+      }
       const verified = await this.deps.blobs.verifySidecar(file.photoId, sidecar.contentHash, this.deps.resolveKey);
       if (!verified) {
         throw new Error(`sidecar verification failed for ${sidecar.fileName}; source retained`);
@@ -472,6 +479,17 @@ export class ImportEngine {
       changed = true;
     }
     if (changed) await persist();
+  }
+
+  /** True while another non-terminal manifest file references the same
+   * companion source without recorded custody yet. */
+  private sidecarSourceStillNeeded(path: string, current: ManifestFile, manifest: ImportManifest): boolean {
+    return manifest.files.some(
+      (other) =>
+        other !== current &&
+        other.stage !== 'done' &&
+        (other.sidecars ?? []).some((sidecar) => sidecar.path === path && sidecar.contentHash === undefined),
+    );
   }
 
   private toRecord(

@@ -291,6 +291,32 @@ describe('sidecar import custody (#484)', () => {
     assert.equal(summary2.sidecars, 0, 'no phantom companion custody');
   });
 
+  test('REGRESSION (PR #849): a companion shared by a RAW+JPG pair is deleted only after BOTH owners record custody', async () => {
+    const w = world();
+    await initWorld(w);
+    writeFileSync(join(w.sourceDir, 'IMG_1.jpg'), JPEG_BYTES);
+    writeFileSync(join(w.sourceDir, 'IMG_1.raf'), Buffer.concat([Buffer.from('FUJIFILM-RAW-'), JPEG_BYTES]));
+    writeFileSync(join(w.sourceDir, 'IMG_1.xmp'), XMP_BYTES);
+    const shared = { path: join(w.sourceDir, 'IMG_1.xmp'), fileName: 'IMG_1.xmp', role: 'xmp' as const };
+
+    const summary = await new ImportEngine(w.deps).importFiles(
+      [
+        { path: join(w.sourceDir, 'IMG_1.jpg'), fileName: 'IMG_1.jpg', kind: 'jpeg', sidecars: [shared] },
+        { path: join(w.sourceDir, 'IMG_1.raf'), fileName: 'IMG_1.raf', kind: 'raw', sidecars: [shared] },
+      ],
+      'move',
+      w.sourceDir,
+    );
+
+    assert.equal(summary.moved, 2);
+    assert.equal(summary.sidecars, 2, 'both owners hold authenticated custody');
+    assert.equal(w.sidecarRows.length, 2, 'one row per owner');
+    for (const row of w.sidecarRows) {
+      assert.equal(await w.store.verifySidecar(row.photoId, row.contentHash, () => w.key.key), true, `${row.photoId} custody verifies`);
+    }
+    assert.ok(!existsSync(join(w.sourceDir, 'IMG_1.xmp')), 'shared source deleted once, after the LAST owner');
+  });
+
   test('duplicate photos skip companion import — the existing custody stays authoritative', async () => {
     const w = world();
     await initWorld(w);

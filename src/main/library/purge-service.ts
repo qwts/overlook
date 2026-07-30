@@ -140,7 +140,7 @@ export class PurgeService {
    * orphan for M11's audits — the local state never lies either way. */
   private async deleteRemote(photoId: string, contentHash: string, remotePath: string): Promise<0 | 1> {
     if (!this.deps.connected()) {
-      this.deps.audit(`ORPHAN-REMOTE photo=${photoId} hash=${contentHash} reason=disconnected`);
+      this.deps.audit(`ORPHAN-REMOTE photo=${photoId} hash=${contentHash} path=${remotePath} reason=disconnected`);
       return 1;
     }
     for (let attempt = 1; attempt <= REMOTE_ATTEMPTS; attempt += 1) {
@@ -153,7 +153,7 @@ export class PurgeService {
         }
         if (attempt === REMOTE_ATTEMPTS) {
           const reason = error instanceof Error ? error.message : 'unknown';
-          this.deps.audit(`ORPHAN-REMOTE photo=${photoId} hash=${contentHash} reason=${reason}`);
+          this.deps.audit(`ORPHAN-REMOTE photo=${photoId} hash=${contentHash} path=${remotePath} reason=${reason}`);
           return 1;
         }
         await this.deps.sleep(REMOTE_BACKOFF_MS * 2 ** (attempt - 1));
