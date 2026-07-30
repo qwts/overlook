@@ -188,21 +188,48 @@ non-implied: `edit` does not confer `comment`. `admin` — the right to change
 the roster — is held by the creator and may be granted explicitly.
 
 The **roster** is a generation-numbered document listing participant keys,
-capabilities, and grant provenance, signed by an `admin` participant. Every
-record is validated against the roster generation in force at its position in
-the log.
+capabilities, and grant provenance, signed by an `admin` participant. Each
+generation commits to the hash of its predecessor, so the roster is a hash
+chain: a fork is detectable rather than merged, and a forked roster is
+surfaced for review instead of resolved by arrival order.
 
 Enforcement is honest about where it lives:
 
 - **Read is enforced by key possession.** Without a space key version, the
   bytes are opaque.
 - **Write is enforced by signature validation at every reader.** The provider
-  is dumb storage and enforces nothing. A removed participant who kept an old
-  space key can still upload objects the provider accepts; every conforming
-  reader rejects them because the roster no longer grants the capability, and
-  the space surfaces them as rejected rather than hiding them.
+  is dumb storage and enforces nothing.
 - Readers bound record count and size per participant per generation and report
   a space that exceeds its limits, rather than downloading without limit.
+
+**Position in the log is not evidence.** Because storage enforces no ordering,
+a removed participant holding an old space key could otherwise mint a record
+under the pre-removal generation, with a back-dated ULID and plausible causal
+parents, and no reader could prove it was authored after the cut. Ordering
+therefore has to be authenticated, not inferred:
+
+- **Every record names the roster generation hash it was authored under**, bound
+  in its AAD (§5).
+- **A roster generation that reduces any capability carries a revocation
+  anchor**: a Merkle root over the record ids the signing `admin` has accepted
+  at the cut, plus, per participant, that participant's highest accepted
+  sequence number.
+- **A record is accepted only if** it is authored under the current generation
+  and its author holds the capability there, **or** it is authored under a
+  superseded generation _and proven to precede the cut_ — covered by the
+  succeeding generation's anchor, by Merkle inclusion or by a sequence number
+  at or below that author's anchored high-water mark.
+- **Everything else is rejected**, whatever its ULID or claimed parents. A
+  rejected record is surfaced with its reason, never silently dropped.
+
+Two honest costs follow, and neither may be papered over in copy. A record
+authored offline under generation _g_ and uploaded after the cut is rejected as
+`superseded-roster`, because it is indistinguishable from a back-dated forgery;
+an author who still holds the capability is offered re-authoring under the
+current generation, and one who does not has genuinely lost the write. And an
+anchor is only as good as what its signing `admin` had seen — a legitimate
+record the admin never observed falls outside the anchor and is rejected on the
+same terms.
 
 ### 5. Records are append-only, authenticated, and reviewed on conflict
 
@@ -213,10 +240,14 @@ Record types are `photo`, `variant` (an ADR-0031 revision document),
 Each record carries the space id, a record ULID, the author participant and
 device, a per-participant sequence number, and its causal parents. The payload
 is sealed with ADR-0004's chunked AES-256-GCM envelope under the space key,
-with AAD binding space id, record id, record type, author, and roster
-generation; the sealed record is then signed by the author's device key.
-Replay, cross-space substitution, author swapping, and truncation all fail
-closed.
+with AAD binding space id, record id, record type, author, the author's
+sequence number, and the **hash** of the roster generation it was authored
+under; the sealed record is then signed by the author's device key. Replay,
+cross-space substitution, author swapping, truncation, and re-labelling a
+record onto a different roster generation all fail closed. Per-participant
+sequence numbers are strictly increasing and gap-checked, so an author cannot
+mint a record below their own anchored high-water mark to slip under §4's
+revocation cut.
 
 The log is append-only. An edit is a new record; a deletion is a tombstone.
 Nothing is rewritten in place, so a peer that was offline for a month replays
@@ -228,8 +259,9 @@ same honesty as the backup ledger's failure vocabulary. A record is never shown
 as delivered before the provider acknowledged it.
 
 Conflict resolution is by type, never by arrival order. Comments are
-commutative and cannot conflict. Roster generations are totally ordered by
-`admin` signature and generation number. Shared metadata fields and variant
+commutative and cannot conflict. Roster generations are totally ordered by the
+predecessor-hash chain in §4, and a fork in that chain is a reviewed conflict
+rather than a merge. Shared metadata fields and variant
 edit heads follow ADR-0015's deterministic reviewed-journal rules: concurrent
 heads are surfaced for explicit review, with authorship and time shown, and
 last-writer-wins is not available as a silent default.
@@ -283,10 +315,11 @@ content as shared or public.
 ### 7. Revocation is forward-only, and the product says so
 
 **Removing a participant** advances the roster generation with a signed removal,
-mints a new space key version, and wraps it to the remaining participants. All
-subsequent records seal under the new version. Records already downloaded, and
-records still sealed under an old version the removed participant holds, remain
-readable to them.
+publishes that generation's revocation anchor (§4), mints a new space key
+version, and wraps it to the remaining participants. All subsequent records seal
+under the new version, and the anchor is what stops the removed participant from
+writing under the old one. Records already downloaded, and records still sealed
+under an old version the removed participant holds, remain readable to them.
 
 The ceremony copy is fixed by that fact: _"Removing them stops them from
 reading anything shared from now on. It cannot delete or un-see anything they
@@ -317,16 +350,20 @@ rejected.
 
 **Protects against:** the provider operator and anyone with provider
 credentials; a network observer, beyond object sizes, counts, and timing; other
-OS users without the keychain session; a removed participant's _future_ reads;
-tampered, replayed, reordered, or forged records; a stale or compromised
-renderer attempting to widen disclosure.
+OS users without the keychain session; a removed participant's _future_ reads
+and _future_ writes, including writes back-dated under a pre-removal roster
+generation (§4's anchor); tampered, replayed, reordered, or forged records; a
+stale or compromised renderer attempting to widen disclosure.
 
 **Does not protect against:** a compromised participant device, or a
 participant who chooses to leak; plaintext a recipient already downloaded;
 traffic analysis of object count, size, and timing; a malicious inviter
 presenting a fingerprint they do not control — out-of-band verification is the
-only defense and the UI must say so; metadata the user classified as shared;
-a compromised OS or session on any participant's machine.
+only defense and the UI must say so; metadata the user classified as shared; a
+compromised OS or session on any participant's machine; a compromised or
+dishonest `admin`, whose anchor can omit records that were genuinely authored
+before a cut — the fork-detectable roster chain makes that visible to other
+participants rather than preventable.
 
 **Deliberately not built:** public link sharing, discovery or a social graph,
 server-side moderation or indexing, key escrow, and any "unsend" affordance.
@@ -345,6 +382,11 @@ participants or a promise the cryptography cannot keep.
 - Sharing costs a second ciphertext copy per original. Storage totals, offload
   accounting, and purge disclosure all have to name space copies separately
   from backup copies.
+- Authenticated revocation costs offline authorship. A record written offline
+  and uploaded after a roster cut is rejected rather than accepted on trust,
+  because the two are indistinguishable to a reader — so the outbox needs a
+  re-author path and honest copy, and admins publishing a cut need to know
+  their anchor defines what "already written" means.
 - Disclosure moves from a renderer concern to a compiled plan in `src/shared`,
   which makes every existing boundary — export, interop, diagnostics,
   language-model requests — a consumer that must be retrofitted.
