@@ -101,9 +101,20 @@ and new collections. A folder's setting is a **default for descendants that
 have not set their own**; an explicit setting on a child wins over the
 inherited one, and the UI shows which of the two is in force.
 
+**Membership is what can remove a photo from All Photos, and only unanimously.**
+A photo is in All Photos when it belongs to no collection at all, or when at
+least one collection containing it is visible. Only a photo whose every
+containing collection is excluded leaves the gallery.
+
+The uncollected case is the base case, not an edge case: All Photos is every
+non-deleted ordinary row today (`sourceWhere('all')` in
+`src/main/db/photos-repository.ts`), album membership is an optional additional
+filter, and most rows in a real library are unfiled. A rule phrased purely over
+collections would empty the gallery of every newly imported photo.
+
 When a photo belongs to several collections whose policies disagree,
-**inclusion wins**: the photo remains in All Photos if any collection including
-it is visible.
+**inclusion wins**: it remains in All Photos if any collection containing it is
+visible.
 
 That direction is chosen deliberately. #494 states that exclusion is
 organizational metadata and not a security boundary — protected albums
@@ -213,15 +224,26 @@ the page it labels can never be produced by different logic, and a count is
 never obtained by materializing identifiers.
 
 Visibility composition (§2) is maintained as a **transactional per-photo
-`in_all_photos` flag**. Evaluating "does any visible collection include this
-row" per row at the 200K scale target requires a correlated existence check
-that defeats the covering index and therefore keyset pagination; the flag is
-the price of keeping the main gallery paginated. It is written in the same
-transaction as any membership change, collection move, or policy change that
-could affect it; it is rebuildable by a StartupMaintenance-style sweep; and it
-is **never authoritative over the rows it summarizes** — a detected mismatch
-rebuilds the flag rather than being trusted, exactly as ADR-0031 §3 treats
-cached reference counts.
+`in_all_photos` flag**, defined to match §2 exactly:
+
+```text
+in_all_photos = (the photo has no collection memberships)
+             OR (at least one containing collection is visible)
+```
+
+It defaults to true, and only unanimous exclusion clears it. The default
+matters as much as the rule: a photo acquires the flag at import, before any
+collection exists to speak for it, and any implementation that computes the
+flag purely from memberships is wrong in the most common case.
+
+Evaluating that expression per row at the 200K scale target requires a
+correlated existence check that defeats the covering index and therefore keyset
+pagination; the flag is the price of keeping the main gallery paginated. It is
+written in the same transaction as any membership change, collection move, or
+policy change that could affect it; it is rebuildable by a
+StartupMaintenance-style sweep; and it is **never authoritative over the rows it
+summarizes** — a detected mismatch rebuilds the flag rather than being trusted,
+exactly as ADR-0031 §3 treats cached reference counts.
 
 New budgets enter the 200K perf harness as ratchets, each set from the first
 honest measurement at or under its ceiling and then only tightened: gallery
