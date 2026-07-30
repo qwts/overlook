@@ -19,6 +19,7 @@
 // this hook only closes the direct-entrypoint bypass.
 
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const GUIDANCE =
   'Use the guarded npm scripts instead: npm test, npm run test:dom / test:cov / test:stories / ' +
@@ -121,5 +122,8 @@ async function main() {
   respond(protocol, verdict);
 }
 
-const invokedDirectly = process.argv[1] && import.meta.url.endsWith('guard-agent-command.mjs');
-if (invokedDirectly) await main();
+// Compare this module's URL against the entrypoint, not against its own
+// filename: `import.meta.url.endsWith('guard-agent-command.mjs')` is true for
+// every import, so any importer ran main() and blocked forever on stdin. Same
+// form as the other scripts here.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
