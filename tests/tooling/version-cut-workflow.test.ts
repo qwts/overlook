@@ -46,7 +46,7 @@ describe('version-cut workflow', () => {
   });
 
   test('keeps repository credentials away from the changeset CLI', () => {
-    const versionJob = workflow.split(/^  tag:/mu)[0] ?? '';
+    const versionJob = workflow.split(/^ {2}tag:/mu)[0] ?? '';
     const versionStep = versionJob.split('- name: Create the Version packages commit')[1]?.split('- name: Push and refresh')[0] ?? '';
 
     assert.match(versionJob, /persist-credentials: false/u);
