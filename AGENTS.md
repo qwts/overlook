@@ -294,7 +294,11 @@ this file in the same PR as the change — never after the fact.
   Windows installers (verified with `signtool`; see
   [`SIGNING.md`](SIGNING.md)); restricted Touch ID identity entitlements are
   included only when `MAC_PROVISIONING_PROFILE` is also present and
-  validated. Every tag publishes as a GitHub prerelease regardless of signing
+  validated. Signing secrets are scoped to the Package step only — the build
+  runs in its own secret-free step, and only the build-free `dist*` scripts
+  (never the compound `package*` ones, which rebuild) may run under the
+  signing env (#855; pinned by `tests/tooling/signing-secret-scope.test.ts`).
+  Every tag publishes as a GitHub prerelease regardless of signing
   availability. Each clickable mac
   and Windows installer asset is labeled `signed` or `unsigned` from its own
   platform gate; signing state never changes the release title or prerelease
