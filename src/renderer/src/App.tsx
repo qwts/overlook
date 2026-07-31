@@ -29,11 +29,14 @@ export function App(): ReactElement {
   const lockRef = useRef<LockStatus | null>(null);
   useEffect(() => {
     const unsubscribe = window.overlook.commands.onInvoked(({ id }) => {
-      sequenceRef.current += 1;
-      setNativeCommand({ id, sequence: sequenceRef.current });
       const currentLock = lockRef.current;
       const authorized = currentLock?.state === 'unconfigured-unlocked' || currentLock?.state === 'unlocked';
-      if (!authorized && id === 'library.switch') setLockedLibrarySwitcherOpen(true);
+      if (currentLock !== null && !authorized && id === 'library.switch') {
+        setLockedLibrarySwitcherOpen(true);
+        return;
+      }
+      sequenceRef.current += 1;
+      setNativeCommand({ id, sequence: sequenceRef.current });
     });
     return unsubscribe;
   }, []);

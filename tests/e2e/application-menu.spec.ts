@@ -1,5 +1,6 @@
 import { expect, test, _electron as electron, type ElectronApplication } from '@playwright/test';
 
+import type { OverlookApi } from '../../src/shared/ipc/api.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 const PASSWORD = 'Correct Horse Battery Staple 42!';
@@ -116,6 +117,19 @@ test('lock-safe Settings commands wait without exposing content, then open after
     await expect(page.getByTestId('virtual-grid')).toHaveCount(0);
     await page.keyboard.press('Escape');
 
+    await page.getByLabel('App password').fill(PASSWORD);
+    await page.getByRole('button', { name: 'Unlock' }).click();
+    await expect(page.getByTestId('virtual-grid')).toBeVisible();
+    await expect(page.getByTestId('library-switcher')).toHaveCount(0);
+
+    const locking = page
+      .evaluate(async () => {
+        const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+        await overlook.appLock.lockNow();
+      })
+      .catch(() => undefined);
+    await expect(page.getByTestId('lock-screen')).toBeVisible();
+    await locking;
     await invokeMenu(app, 'app.settings.open.privacy');
     await expect(page.getByTestId('virtual-grid')).toHaveCount(0);
     await page.getByLabel('App password').fill(PASSWORD);
