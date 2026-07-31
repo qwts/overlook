@@ -1,0 +1,168 @@
+# Validation And Release Gates
+
+Gate-by-gate detail behind `AGENTS.md` → **Validation**. That file states the
+rules; this one states what each gate checks, why the ratchets point the way they
+do, and which policies exist only as prose. See also
+[Testing Strategy](./Testing-Strategy.md) for the test lanes themselves and
+[ADR-0001](./adr/ADR-0001-Automation-Check-Governance.md) for the governance
+model.
+
+## The chain
+
+`npm run ci` runs the same non-browser gates CI enforces, in order: interop
+acceptance → the lint chain → `format:check` → `check:changesets` →
+`check:acceptance-coverage` → `check:a11y-budget` → `docs:gov` → `test:cov` →
+`build`. Browser lanes (`test:e2e`, `test:stories:ci`) run separately and are
+required for E2E- and renderer-relevant changes.
+
+Two gates need an external checkout, both env-gated in the same shape:
+
+| Variable                   | Points at                                                             |
+| -------------------------- | --------------------------------------------------------------------- |
+| `DOCS_GOV_TOOLING_ROOT`    | a `qwts/playbook-engineering` checkout with `tools/docs-gov` at `v1`  |
+| `INTEROP_IMAGE_TRAIL_ROOT` | a `qwts/image-trail` checkout pinned to the commit the manifest names |
+
+## Documentation governance (`docs:gov`)
+
+The deterministic docs-gov check gates `docs/` and the root agent files against
+link, orphan, stale-path, heading, token-budget, and anti-pattern rules per
+`docs-gov.config.json`
+([ENG-0009](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0009-documentation-governance-gate.md)).
+
+Its implementation is **not vendored**. It lives once in
+`qwts/playbook-engineering` and both halves run it at the `v1` tag: CI via the
+reusable workflow `.github/workflows/docs-governance.yml@v1` (the required
+`Docs governance / docs-gov` status context), and locally via
+`scripts/check-docs-gov.mjs`. The local wrapper verifies the checkout's
+`tools/docs-gov` is byte-identical to `v1`, so a local pass proves what a CI pass
+proves. Raising a token budget always records a `reason` in the config.
+
+## Ratchets
+
+Floors only ever move in the direction that makes the codebase stricter:
+
+| Ratchet                                                    | Current                   | Direction    |
+| ---------------------------------------------------------- | ------------------------- | ------------ |
+| c8 coverage (`.c8rc.json`)                                 | lines 90 / branches 80    | only up      |
+| `type-coverage --at-least`                                 | 99.8, strict, per project | only up      |
+| File size (ESLint `max-lines` + `check-new-file-size.mjs`) | 800 lines                 | only down    |
+| a11y violation budget (`tests/a11y/violation-budget.json`) | per surface               | only smaller |
+| `AGENTS.md` length (`check-agent-context.mjs`)             | see the script's constant | only smaller |
+
+The a11y budget is the same policy inverted: its counts only ever **shrink**, and
+a surface that comes in **under** budget fails until the entry is tightened or
+deleted. Unlisted surfaces are budgeted at zero. Never lower a floor to make a
+build pass.
+
+## Accessibility runs in three lanes
+
+None of them subsumes the others:
+
+- **`jsx-a11y`** (strict, `src/renderer`) reads the **source**, so pointer-only
+  handlers and label/control mismatches fail at authoring time;
+- the **story lane** runs axe over every story;
+- the **E2E lane** runs axe over composed flows plus the focus-obscured probe for
+  SC 2.4.11, which has no axe rule.
+
+A story-lane pass proves nothing about composition, and an axe pass proves
+nothing about criteria axe does not implement — roughly two thirds of WCAG. The
+[Accessibility Audit](./Accessibility-Audit-2026-07.md) records which criteria
+are gated and which rest on the manual pass.
+
+**Never suppress an a11y rule bare.** `reportUnusedDisableDirectives` is `error`,
+so every `eslint-disable` must carry a reason: either why the code is verified
+correct, or the issue that owns the debt. When the fix lands the directive stops
+matching and the build fails until it is deleted — that is the ratchet applied to
+exemptions. A blanket `rules: {'jsx-a11y/x': 'off'}` needs the same justification
+as lowering a coverage floor.
+
+## Licenses
+
+`lint:licenses` (part of the `lint` chain) audits the **shipped** dependency
+closure — production deps of `dependencies` / `optionalDependencies` plus the
+bundled `electron` runtime, per `scripts/dependency-closure.mjs`, **not**
+`devDependencies` — against the SPDX allowlist in `.license-policy.json`. The
+same step verifies `THIRD-PARTY-NOTICES.md` is not stale.
+
+A new or upgraded dependency with a non-allowlisted or undeclared license fails
+CI until it is allowlisted or given a reviewed `exceptions` entry with a reason;
+then run `npm run licenses:notices` to refresh attributions. A CycloneDX SBOM
+(`npm run licenses:sbom`) is emitted into `release/` by the `package*` scripts.
+
+## Dependency policy
+
+Dependencies use **exact pins**; Dependabot is the only actor that bumps
+versions (`scripts/check-package-pins.mjs` enforces this). A set of **toolchain
+caps** holds back majors that would break the build — TypeScript below 6.1.0
+(typescript-eslint's peer cap), `@types/node` tracking the `.nvmrc` runtime major,
+Electron on the prebuilt-ABI major, and Vite / `@vitejs/plugin-react` / React held
+until `electron-vite` supports Vite 8 and React 19 is migrated deliberately. Each
+is a Dependabot ignore; `.github/dependabot.yml` is the source of truth for the
+exact bounds and removal conditions.
+
+Four overrides exist, each with a removal condition:
+
+- **`axe-core`** is pinned exact and overridden into `axe-playwright` (which
+  depends on a floating range). Its rule set _defines_ the a11y violation-budget
+  counts, so an unpinned bump would move every number with no diff naming the
+  cause. A Dependabot bump of it is _expected_ to move counts: re-audit and
+  re-baseline in that PR (`OVERLOOK_A11Y_REPORT=<path> npm run test:stories:ci`),
+  never widen the tags or raise a budget to make it pass.
+- **`eslint-plugin-jsx-a11y`** is overridden onto `$eslint`. Its latest release
+  caps its peer at ESLint 9 and this repo is on 10, so npm refuses the install
+  without the override. The rules were verified to actually run under ESLint 10 —
+  this is a stale peer range, not an incompatibility. If a bump ever breaks rule
+  execution the symptom is jsx-a11y silently reporting **nothing**, so treat a
+  sudden drop to zero findings as a failure, not a win.
+- **`shell-quote`** is overridden to 1.9.0 because `concurrently` pins vulnerable
+  1.8.4 (CVE-2026-13311). Remove when `concurrently` adopts 1.9.0 or later and
+  its Storybook orchestration lane passes without the override.
+- **`uuid`** is overridden to 11.1.1 because `@storybook/test-runner` resolves
+  vulnerable 8.3.2 through `jest-junit` and `nyc` (CVE-2026-41907). Remove when
+  the Storybook testing stack resolves only unaffected versions, the
+  interaction/report lane passes without it, and the security scan stays clean.
+
+## Packaging checks
+
+- The macOS package job loads the native HEIC decoder from the packaged app and
+  decodes the checked-in iPhone fixture. Keep
+  `scripts/verify-macos-heic-preview.mjs` and its readiness marker current when
+  changing the native bridge, package layout, Electron ABI, or HEIC fixtures.
+- The Windows arm64 leg re-resolves the target-arch sharp binary with `npm pack`
+  and **verifies the downloaded tarball's sha512 against the exact
+  `package-lock.json` integrity entry before extraction** — registry metadata is
+  never trusted on its own. `tests/tooling/windows-signing.test.ts` locks the
+  gate; keep both in step when changing sharp packaging or the lockfile shape.
+
+## Changesets and releases
+
+Behavior-changing PRs include a changeset (`npx changeset`). Docs- and
+tooling-only PRs may skip the semantic content but still need an **empty**
+changeset when none are pending, because `check:changesets` fails on any diff
+with an empty `.changeset/`. 0.x semantics (minor = behavior-changing, patch =
+fixes) are [ADR-0002](./adr/ADR-0002-Versioning-Policy.md). `CHANGELOG.md` is
+generated by `npm run changeset:version` — never hand-edit it.
+
+Releases are cut by merging the bot-maintained **Version packages** PR, which the
+version-cut workflow keeps current while changesets are pending. That merge is
+tagged `v0.x.y` automatically and the Release workflow publishes mac + win builds,
+CHANGELOG notes, and the design-package zip.
+
+Windows ships two architecture-qualified NSIS installers — `overlook-windows-x64`
+and `overlook-windows-arm64` (arm64 cross-compiled on the x64 runner) — each gated
+post-build by `verify-windows-arch.mjs`, which fails the leg if any payload
+(`Overlook.exe` or a shipped `*.node`) is not the target PE machine type.
+
+Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
+and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
+`AZURE_CLIENT_SECRET` drive Azure Trusted Signing for the Windows installers
+(verified with `signtool`; see [`SIGNING.md`](../SIGNING.md)); restricted Touch ID
+identity entitlements are included only when `MAC_PROVISIONING_PROFILE` is also
+present and validated.
+
+Every tag publishes as a GitHub prerelease regardless of signing availability.
+Each clickable mac and Windows installer asset is labeled `signed` or `unsigned`
+from its own platform gate; signing state never changes the release title or
+prerelease status. The macOS release gate extracts the generated ZIP and launches
+it in an isolated smoke mode. Never hand-tag releases or invoke Changesets
+versioning directly.
