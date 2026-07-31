@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import { LockScreen } from './LockScreen';
@@ -31,7 +31,7 @@ function installStub(result: Awaited<ReturnType<OverlookApi['appLock']['unlock']
 const meta: Meta<typeof LockScreen> = {
   title: 'App/LockScreen',
   component: LockScreen,
-  args: { platform: 'darwin', state: 'locked', retryAfterMs: 0 },
+  args: { platform: 'darwin', state: 'locked', retryAfterMs: 0, onSwitchLibrary: fn() },
   decorators: [
     (Story) => {
       installStub({ ok: false, reason: 'wrong-password', retryAfterMs: 1_000 });
@@ -71,6 +71,14 @@ export const TouchIdCancellationKeepsPasswordFallback: Story = {
     await expect(await canvas.findByText('Touch ID was cancelled. Try again or enter your app password.')).toBeVisible();
     await expect(canvas.getByLabelText('App password')).toBeEnabled();
     await expect(canvas.getByRole('button', { name: 'Unlock' })).toBeVisible();
+  },
+};
+
+export const SwitchLibraryWhileLocked: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Switch Library…' }));
+    await expect(args.onSwitchLibrary).toHaveBeenCalledOnce();
   },
 };
 

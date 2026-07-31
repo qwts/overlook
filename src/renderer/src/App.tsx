@@ -10,6 +10,7 @@ import { EMPTY_COMMAND_MENU_CONTEXT } from '../../shared/commands/menu-contract.
 import type { CommandId } from '../../shared/commands/registry.js';
 import { AnnouncerProvider } from './components/LiveAnnouncer';
 import { DetachedInspectorWindow } from './inspector/DetachedInspectorWindow';
+import { LibrarySwitcher } from './shell/LibrarySwitcher';
 
 type LockStatus = Awaited<ReturnType<typeof window.overlook.appLock.status>>;
 
@@ -23,9 +24,17 @@ export function App(): ReactElement {
   const [fresh, setFresh] = useState<boolean | null>(null);
   const [lock, setLock] = useState<LockStatus | null>(null);
   const [nativeCommand, setNativeCommand] = useState<{ readonly id: CommandId; readonly sequence: number } | null>(null);
+  const [lockedLibrarySwitcherOpen, setLockedLibrarySwitcherOpen] = useState(false);
   const sequenceRef = useRef(0);
+  const lockRef = useRef<LockStatus | null>(null);
   useEffect(() => {
     const unsubscribe = window.overlook.commands.onInvoked(({ id }) => {
+      const currentLock = lockRef.current;
+      const authorized = currentLock?.state === 'unconfigured-unlocked' || currentLock?.state === 'unlocked';
+      if (currentLock !== null && !authorized && id === 'library.switch') {
+        setLockedLibrarySwitcherOpen(true);
+        return;
+      }
       sequenceRef.current += 1;
       setNativeCommand({ id, sequence: sequenceRef.current });
     });
@@ -33,8 +42,13 @@ export function App(): ReactElement {
   }, []);
   useEffect(() => {
     void window.overlook.getPlatform().then(setPlatform);
-    void window.overlook.appLock.status().then(setLock);
-    return window.overlook.appLock.onChanged(setLock);
+    const receiveLock = (next: LockStatus): void => {
+      lockRef.current = next;
+      setLock(next);
+      if (next.state === 'unconfigured-unlocked' || next.state === 'unlocked') setLockedLibrarySwitcherOpen(false);
+    };
+    void window.overlook.appLock.status().then(receiveLock);
+    return window.overlook.appLock.onChanged(receiveLock);
   }, []);
 
   useEffect(() => {
@@ -59,7 +73,13 @@ export function App(): ReactElement {
   if (lock.state !== 'unconfigured-unlocked' && lock.state !== 'unlocked') {
     return (
       <AnnouncerProvider>
-        <LockScreen platform={platform} state={lock.state} retryAfterMs={lock.retryAfterMs} />
+        <LockScreen
+          platform={platform}
+          state={lock.state}
+          retryAfterMs={lock.retryAfterMs}
+          onSwitchLibrary={() => setLockedLibrarySwitcherOpen(true)}
+        />
+        {lockedLibrarySwitcherOpen ? <LibrarySwitcher switchOnly onClose={() => setLockedLibrarySwitcherOpen(false)} /> : null}
       </AnnouncerProvider>
     );
   }

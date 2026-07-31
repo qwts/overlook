@@ -112,6 +112,46 @@ test('remove from list is registry-only in the UI: reassurance copy, row gone, f
   }
 });
 
+test('app-locked surface can switch away from a closed startup library without exposing management (#847)', async () => {
+  test.setTimeout(90_000);
+  const userData = mkE2eTmpDir('overlook-e2e-locked-switcher-');
+  const app = await launch(userData, { OVERLOOK_SEED: '1', OVERLOOK_APP_LOCK_TEST_ANCHOR: '1' });
+  try {
+    let page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    const target = await page.evaluate(async () => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      return (await overlook.libraries.create({ name: 'Available target', path: null })).library;
+    });
+
+    const configuring = page
+      .evaluate(`window.overlook.appLock.configure({ password: ${JSON.stringify(APP_PASSWORD)} })`)
+      .catch(() => undefined);
+    await expect(page.getByTestId('lock-screen')).toBeVisible();
+    await configuring;
+
+    await page.getByRole('button', { name: 'Switch Library…' }).click();
+    await expect(page.getByTestId('library-switcher')).toBeVisible();
+    await expect(page.getByTestId('new-library')).toHaveCount(0);
+    await expect(page.getByTestId('add-existing')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Remove library from list:/u })).toHaveCount(0);
+    await page.getByTestId('library-row-Available target').click();
+
+    page = await app.firstWindow();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+          return (await overlook.libraries.current()).library.id;
+        }),
+      )
+      .toBe(target.id);
+    await expect(page.getByTestId('lock-screen')).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
 test('fresh-profile onboarding opens a retained local library without cloud recovery (#479)', async () => {
   test.setTimeout(60_000);
   const originalProfile = mkE2eTmpDir('overlook-e2e-retained-library-');

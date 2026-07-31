@@ -52,7 +52,9 @@ export function createSwitchLibrary(deps: SwitchLibraryDeps): (id: string) => Pr
       return { ok: false, reason: 'switch-in-progress', host: null };
     }
     const lockState = deps.lockState();
-    if (lockState !== undefined && lockState !== 'unconfigured-unlocked' && lockState !== 'unlocked') {
+    const authorized = lockState === undefined || lockState === 'unconfigured-unlocked' || lockState === 'unlocked';
+    const stableClosedLockScreen = (lockState === 'locked' || lockState === 'recovery-required') && deps.openLibraryId() === null;
+    if (!authorized && !stableClosedLockScreen) {
       return { ok: false, reason: 'locked', host: null };
     }
     if (deps.providerBusy()) {
