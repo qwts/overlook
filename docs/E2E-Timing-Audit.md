@@ -108,6 +108,11 @@ Synchronize on the app's own completion signal under a bound sized to the work.
 `expect.poll` with the default 5 s bound (window count, menu state, settings
 push, gesture/animation settle, image decode via `naturalWidth`) is used
 throughout — acceptable because each polls a semantic predicate, not a clock.
+The 200% zoom reachability checks in `visual-accessibility.spec.ts` poll the
+strict target rectangle until every edge is inside the renderer viewport. This
+synchronizes zoom-triggered layout and the Lightbox `ResizeObserver`: at narrow
+container widths the initial toolbar placement is intentionally transient, but
+the zero-edge accessibility bounds are never relaxed.
 
 ## Product-time behavior — real elapsed time (category 1)
 

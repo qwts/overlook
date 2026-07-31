@@ -3,16 +3,30 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './support/app.js';
 
 async function expectInsideViewport(selector: string, page: Page): Promise<void> {
-  const layout = await page.evaluate<{ left: number; top: number; right: number; bottom: number; width: number; height: number }>(`(() => {
-    const element = document.querySelector(${JSON.stringify(selector)});
-    if (!element) throw new Error('Missing visual-accessibility target: ${selector}');
-    const rect = element.getBoundingClientRect();
-    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: window.innerWidth, height: window.innerHeight };
-  })()`);
-  expect(layout.left).toBeGreaterThanOrEqual(0);
-  expect(layout.top).toBeGreaterThanOrEqual(0);
-  expect(layout.right).toBeLessThanOrEqual(layout.width);
-  expect(layout.bottom).toBeLessThanOrEqual(layout.height);
+  await expect
+    .poll(
+      async () => {
+        const layout = await page.evaluate<{
+          left: number;
+          top: number;
+          right: number;
+          bottom: number;
+          width: number;
+          height: number;
+        }>(`(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!element) throw new Error('Missing visual-accessibility target: ${selector}');
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: window.innerWidth, height: window.innerHeight };
+        })()`);
+        return {
+          inside: layout.left >= 0 && layout.top >= 0 && layout.right <= layout.width && layout.bottom <= layout.height,
+          ...layout,
+        };
+      },
+      { message: `${selector} should settle fully inside the viewport` },
+    )
+    .toMatchObject({ inside: true });
 }
 
 async function expectControlInsideViewport(control: Locator, page: Page): Promise<void> {
