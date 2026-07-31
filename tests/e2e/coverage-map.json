@@ -1511,6 +1511,24 @@
       ]
     },
     {
+      "id": "847-locked-startup-library-switch",
+      "wiki": "ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "paths": ["tests/e2e/application-menu.spec.ts", "tests/e2e/library-switcher-ui.spec.ts"]
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/lock/LockScreen.stories.tsx", "src/renderer/src/shell/LibrarySwitcher.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/library/switch-runtime.test.ts"
+        }
+      ]
+    },
+    {
       "id": "local-diagnostics-review-controls",
       "wiki": "Security-Review-M11-Telemetry-And-Crash-Reporting",
       "coverage": [
