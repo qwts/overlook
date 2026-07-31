@@ -108,7 +108,13 @@ test('lock-safe Settings commands wait without exposing content, then open after
     await expect(page.getByTestId('lock-screen')).toBeVisible();
     await configuring;
     await expect.poll(() => menuState(app, 'app.settings.open.privacy')).toMatchObject({ enabled: true });
+    await expect.poll(() => menuState(app, 'library.switch')).toMatchObject({ enabled: true });
     await expect.poll(() => menuState(app, 'library.import')).toMatchObject({ enabled: false });
+
+    await invokeMenu(app, 'library.switch');
+    await expect(page.getByTestId('library-switcher')).toBeVisible();
+    await expect(page.getByTestId('virtual-grid')).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     await invokeMenu(app, 'app.settings.open.privacy');
     await expect(page.getByTestId('virtual-grid')).toHaveCount(0);

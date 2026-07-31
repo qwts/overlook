@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { PasswordField } from '../components/PasswordField';
 import { TitleBar } from '../components/TitleBar';
+import { commandById } from '../../../shared/commands/registry.js';
 import { RecoveryUnlock } from './RecoveryUnlock';
 
 import './lock-screen.css';
@@ -17,9 +18,10 @@ export interface LockScreenProps {
   readonly platform: string;
   readonly state: 'locked' | 'unlocking' | 'locking' | 'recovery-required';
   readonly retryAfterMs: number;
+  readonly onSwitchLibrary: () => void;
 }
 
-export function LockScreen({ platform, state, retryAfterMs }: LockScreenProps): ReactElement {
+export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: LockScreenProps): ReactElement {
   const intl = useIntl();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -151,6 +153,16 @@ export function LockScreen({ platform, state, retryAfterMs }: LockScreenProps): 
               {error}
             </div>
           )}
+          <Button
+            type="button"
+            variant="secondary"
+            icon="images"
+            className="ovl-lock-screen__unlock"
+            disabled={busy}
+            onClick={onSwitchLibrary}
+          >
+            {intl.formatMessage(commandById('library.switch').label)}
+          </Button>
           <div className="ovl-lock-screen__seal mono-data">
             <Icon name="shield-check" size={13} />
             Decrypted originals stay sealed while locked

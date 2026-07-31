@@ -56,13 +56,16 @@ export interface LibrarySwitcherProps {
   readonly onClose: () => void;
   /** Open straight into the "New library…" form (File → New Library…, #689). */
   readonly startInCreate?: boolean;
+  /** Locked surfaces expose switching without library management (#847). */
+  readonly switchOnly?: boolean;
 }
 
-export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitcherProps): ReactElement {
+export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = false }: LibrarySwitcherProps): ReactElement {
   const intl = useIntl();
   const { formatRelativeTime } = useFormats();
   const { announce } = useAnnouncer();
   const [libs, setLibs] = useState<readonly LibraryDescriptor[] | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(null);
   // "4h ago" stamps are relative to load time, not render time (purity).
   const [loadedAt, setLoadedAt] = useState(0);
   const [phase, setPhase] = useState<Phase>(startInCreate ? 'create' : 'list');
@@ -79,24 +82,20 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
   const listRef = useRef<HTMLUListElement>(null);
 
   const refresh = useCallback((): void => {
-    void window.overlook.libraries
-      .list()
-      .then(({ libraries }) => {
+    void Promise.all([window.overlook.libraries.list(), window.overlook.libraries.current()])
+      .then(([{ libraries }, { library }]) => {
         setLibs(libraries);
+        setCurrentId(library.id);
         setLoadedAt(Date.now());
       })
       .catch(() => setRefusal({ kind: 'error' }));
   }, []);
   useEffect(refresh, [refresh]);
 
-  const current = libs?.find((lib) => lib.open) ?? null;
+  const current = libs?.find((lib) => lib.open) ?? libs?.find((lib) => lib.id === currentId) ?? null;
 
   const switchTo = (lib: LibraryDescriptor): void => {
     setRefusal(null);
-    if (lib.open) {
-      onClose();
-      return;
-    }
     // The designed refusals are visible in the list itself — refuse locally
     // before asking main, so the banner explains rather than round-trips.
     if (lib.missing) {
@@ -105,6 +104,10 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
     }
     if (lib.lockedBy !== null) {
       setRefusal({ kind: 'locked-elsewhere', host: lib.lockedBy });
+      return;
+    }
+    if (lib.open || lib.id === currentId) {
+      onClose();
       return;
     }
     setSwitchTarget(lib);
@@ -408,7 +411,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
                     {lib.lastOpenedAt === null ? 'Never opened' : formatRelativeTime(lib.lastOpenedAt, loadedAt)}
                   </span>
                 </button>
-                {blocked ? null : (
+                {switchOnly || blocked ? null : (
                   <Checkbox
                     checked={selected.has(lib.id)}
                     label={intl.formatMessage(moveMessages.select, { name: lib.name })}
@@ -422,7 +425,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
                     }}
                   />
                 )}
-                {blocked ? null : (
+                {switchOnly || blocked ? null : (
                   <IconButton
                     icon="pencil"
                     label={intl.formatMessage(moveMessages.renameOne, { name: lib.name })}
@@ -435,7 +438,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
                     }}
                   />
                 )}
-                {blocked ? null : (
+                {switchOnly || blocked ? null : (
                   <IconButton
                     icon="hard-drive"
                     label={intl.formatMessage(moveMessages.moveOne, { name: lib.name })}
@@ -448,7 +451,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
                     }}
                   />
                 )}
-                {lib.open ? null : (
+                {switchOnly || lib.open ? null : (
                   <IconButton
                     icon="trash-2"
                     label={`${destructiveActions.removeLibraryFromList.label}: ${lib.name}`}
@@ -465,32 +468,36 @@ export function LibrarySwitcher({ onClose, startInCreate = false }: LibrarySwitc
           })}
         </ul>
         <div className="ovl-libswitch__footer">
-          <Button
-            variant="primary"
-            icon="plus"
-            data-testid="new-library"
-            onClick={() => {
-              setRefusal(null);
-              setPhase('create');
-            }}
-          >
-            New library…
-          </Button>
-          <Button icon="folder-open" onClick={addExisting} data-testid="add-existing">
-            Add existing…
-          </Button>
-          {selected.size === 0 ? null : (
-            <Button
-              icon="hard-drive"
-              data-testid="move-selected"
-              onClick={() => {
-                setRefusal(null);
-                setMoveTargets((libs ?? []).filter((lib) => selected.has(lib.id)));
-                setPhase('move');
-              }}
-            >
-              {intl.formatMessage(moveMessages.moveSelected, { count: selected.size })}
-            </Button>
+          {switchOnly ? null : (
+            <>
+              <Button
+                variant="primary"
+                icon="plus"
+                data-testid="new-library"
+                onClick={() => {
+                  setRefusal(null);
+                  setPhase('create');
+                }}
+              >
+                New library…
+              </Button>
+              <Button icon="folder-open" onClick={addExisting} data-testid="add-existing">
+                Add existing…
+              </Button>
+              {selected.size === 0 ? null : (
+                <Button
+                  icon="hard-drive"
+                  data-testid="move-selected"
+                  onClick={() => {
+                    setRefusal(null);
+                    setMoveTargets((libs ?? []).filter((lib) => selected.has(lib.id)));
+                    setPhase('move');
+                  }}
+                >
+                  {intl.formatMessage(moveMessages.moveSelected, { count: selected.size })}
+                </Button>
+              )}
+            </>
           )}
           <span className="mono-data ovl-libswitch__keys">↑↓ select · ⏎ switch · esc close</span>
         </div>

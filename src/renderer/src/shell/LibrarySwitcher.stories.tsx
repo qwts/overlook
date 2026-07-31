@@ -38,6 +38,7 @@ const LIBRARIES: readonly LibraryDescriptor[] = [
 
 interface StubOptions {
   readonly libraries?: readonly LibraryDescriptor[];
+  readonly current?: LibraryDescriptor;
   readonly openOutcome?: Awaited<ReturnType<OverlookApi['libraries']['open']>>;
   readonly openRejects?: boolean;
   readonly addOutcome?: Awaited<ReturnType<OverlookApi['libraries']['add']>>;
@@ -47,7 +48,8 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
   const calls: string[] = [];
   const libraries = {
     list: () => Promise.resolve({ libraries: options.libraries ?? LIBRARIES }),
-    current: () => Promise.resolve({ library: (options.libraries ?? LIBRARIES).find((entry) => entry.open) ?? LIBRARIES[0] }),
+    current: () =>
+      Promise.resolve({ library: options.current ?? (options.libraries ?? LIBRARIES).find((entry) => entry.open) ?? LIBRARIES[0] }),
     open: ({ id }: { id: string }) => {
       calls.push(`open:${id}`);
       if (options.openRejects === true) return Promise.reject(new Error('IPC_HANDLER_FAILED'));
@@ -143,6 +145,34 @@ export const SwitchAndKeyboard: Story = {
     });
     await expect(body.getByText('Opening Beta…')).toBeVisible();
     await expect(body.getByText(/Closing Alpha/u)).toBeVisible();
+  },
+};
+
+export const SwitchOnlyWhileLocked: Story = {
+  args: { switchOnly: true },
+  decorators: [
+    (Story) => {
+      installStub({
+        libraries: LIBRARIES.map((entry) => ({ ...entry, open: false })),
+        current: lib({ open: false }),
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getByTestId('library-row-Alpha')).toBeVisible();
+    });
+    await expect(body.queryByTestId('new-library')).toBeNull();
+    await expect(body.queryByTestId('add-existing')).toBeNull();
+    await expect(body.queryByLabelText('Rename folder of Beta…')).toBeNull();
+    await expect(body.queryByLabelText('Move Beta…')).toBeNull();
+    await expect(body.queryByRole('button', { name: 'Remove library from list: Beta' })).toBeNull();
+    await userEvent.click(body.getByTestId('library-row-Alpha'));
+    await expect(args.onClose).toHaveBeenCalledOnce();
+    await userEvent.click(body.getByTestId('library-row-Beta'));
+    await expect(body.getByTestId('switch-progress')).toBeVisible();
   },
 };
 
