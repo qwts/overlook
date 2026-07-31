@@ -1,5 +1,11 @@
 # photos
 
+## 0.65.1
+
+### Patch Changes
+
+- ee3dee0: Keep the library switcher reachable when the startup library is app-locked and held by another Overlook instance.
+
 ## 0.65.0
 
 ### Minor Changes
