@@ -36,6 +36,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(identityPolicy, /both actor fields to be `github-merge-queue\[bot\]`/u);
     assert.match(identityPolicy, /Workflow execution protections\*\* disabled/u);
     assert.match(identityPolicy, /never approve\s+public-fork runs/u);
+    assert.match(identityPolicy, /Bind `CodeQL` to the GitHub Advanced Security App/u);
+    assert.match(identityPolicy, /other four contexts\s+to GitHub Actions — never to `chores-dumb`/u);
   });
 
   test('authorizes every direct non-CI entrypoint before repository work', () => {
