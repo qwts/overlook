@@ -57,27 +57,32 @@ through the Git Data API, which GitHub signs server-side.
 
 ## Merge automation
 
-The native GitHub merge queue owns target-branch freshness. It forms a synthetic
-candidate from the approved PR, current `main`, and earlier queued changes; the
-`merge_group` run executes the complete suite for that exact SHA. Queue method
-`MERGE` preserves that validated SHA when it reaches `main`, allowing the
-main-push lane to reuse the evidence and run only the short interop smoke plus
-the required default-branch CodeQL scan. A main SHA without queue evidence runs
-the complete suite instead.
+GitHub's native merge queue is organization-only, so this user-owned repository
+keeps `.github/workflows/auto-update-prs.yml`. After a `main` push, PR open, or
+ready transition, the workflow uses `chores-dumb[bot]` to merge current `main`
+into each eligible ready branch through the update-branch API. The resulting
+`synchronize` event runs the complete suite, and strict required checks prevent
+auto-merge from landing stale evidence.
+
+The final merge commit has a new SHA, so it is not treated as the validated PR
+head. Its `main` push therefore runs the complete-suite fallback plus
+default-branch CodeQL. The `merge_group` lane and the shared policy action's
+narrow merge-queue actor exception remain dormant compatibility for a future
+transfer to an organization; they do not justify skipping exact-commit checks.
 
 Consequences worth knowing before touching a branch:
 
 - **Never manually rebase, merge `main` in, or "update" a branch that is merely
   behind `main`**. Resolve genuine conflicts on the source branch; otherwise the
-  queue owns the merged candidate.
-- Dependabot enters the same queue and complete-suite lifecycle after review.
+  updater owns branch freshness.
+- Dependabot branches are excluded; use `@dependabot rebase` before the normal
+  ready complete-suite and review lifecycle.
 - After any update that changes `package-lock.json`, run `npm ci` before trusting
   local gates. A stale install fails E2E in ways that look like flakes; an
   Electron bump landing mid-session produced two identical timeout failures this
   way.
-- Queue configuration is `MERGE`, `ALLGREEN`, one concurrent candidate build,
-  and one PR per merge. The ruleset retains strict status checks and resolved
-  review threads.
+- Auto-merge uses merge commits. The ruleset retains strict status checks,
+  approval, CODEOWNERS, and resolved review threads.
 
 ## Workflow actor boundary
 
@@ -87,14 +92,14 @@ the governed roster. It checks both `github.actor` and
 `github.triggering_actor`; credentials do not grant actor authorization. The one
 system exception requires both actor fields to be `github-merge-queue[bot]`, the
 event to be `push`, and the ref to be `refs/heads/main`. That exception cannot
-authorize PR, queue-candidate, manual, tag, or non-main events. Public-fork runs
-are never approved.
+authorize PR, queue-candidate, manual, tag, or non-main events and is dormant in
+this user-owned repository. Public-fork runs are never approved.
 
 Every direct non-CI entrypoint runs that same immutable action in
 authorization-only mode before checkout, credential minting, or repository
-work. This covers Package, Perf, version-cut, release, and close-linked-issues;
-their reusable children inherit the gated caller event. A new direct trigger is
-incomplete until its policy job and dependency edge exist.
+work. This covers the branch updater, Package, Perf, version-cut, release, and
+close-linked-issues; their reusable children inherit the gated caller event. A
+new direct trigger is incomplete until its policy job and dependency edge exist.
 
 ## Manual repository rollout
 
@@ -102,21 +107,21 @@ These settings cannot be supplied by pull-request code and must be applied only
 after the replacement contexts first report successfully:
 
 1. Keep **Actions → Policies → Workflow execution protections** disabled. The
-   preview picker cannot represent the native merge-queue bot or limit it to the
-   post-merge push event; using the Write role would authorize unrelated current
-   and future writers. Require approval for all external-contributor workflows,
-   never approve public-fork runs, keep the default workflow token read-only,
-   and retain the action-source allowlist and full-SHA pinning.
+   preview picker cannot express event-scoped GitHub system exceptions, while
+   using the Write role would authorize unrelated current and future writers.
+   Require approval for all external-contributor workflows, never approve
+   public-fork runs, keep the default workflow token read-only, and retain the
+   action-source allowlist and full-SHA pinning.
 2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
    after a manual CI run proves both configured languages and the stable
    `CodeQL` context. Do not leave a gap in code-scanning enforcement.
 3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`; retain
    the CodeQL code-scanning and code-quality rules. Remove an obsolete default
    setup context only after its Advanced replacement reports successfully.
-4. Require merge queue with method `MERGE`, grouping `ALLGREEN`, one concurrent
-   candidate build, and one PR per merge. Retain strict status checks, approval,
-   CODEOWNERS, and resolved-thread requirements. Repository settings must keep
-   merge commits enabled.
+4. Retain strict status checks, approval, CODEOWNERS, resolved-thread
+   requirements, auto-merge, and merge commits. Keep the governed branch updater
+   enabled until the repository is transferred to an organization; only then may
+   a native `MERGE` queue replace it after exact-SHA validation is proven.
 
 No `CHORES_DUMB` or `RELEASE_TOKEN` secret is required by the execution policy.
 Those credentials remain solely for existing version/tag automation.

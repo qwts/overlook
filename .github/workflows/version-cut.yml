@@ -139,7 +139,7 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           # The branch is a disposable projection of main + the pending
           # changesets, rebuilt from the current tip on every main push — force
-          # is the point. The native merge queue never rewrites source branches.
+          # is the point. The branch updater excludes changeset-release branches.
           git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
             push --force origin "$BRANCH"
           {

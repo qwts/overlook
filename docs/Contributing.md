@@ -94,8 +94,8 @@ Automated coding agents follow the same hygiene as human contributors, plus:
 ## Branching and PR hygiene
 
 - One PR = one issue / one behavioral slice. Don't bundle unrelated changes.
-- PRs target `main`. Do not manually update a merely-behind branch; the native
-  merge queue validates the approved PR with current `main`.
+- PRs target `main`. Do not manually update a merely-behind branch; the governed
+  branch updater merges current `main` and causes the ready suite to rerun.
 - PR descriptions must include: **Motivation**, **Description**,
   **Documentation** (what was updated, or why nothing needed it), **Testing**
   (exact commands run), and **Manual testing** where applicable — the PR

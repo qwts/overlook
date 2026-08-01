@@ -1,0 +1,91 @@
+# GitHub's native merge queue is organization-only, so this user-owned repository
+# keeps ready branches current with a serialized updater:
+#
+#   1. Every push to main updates each open, non-draft, non-bot PR by MERGING main
+#      through GitHub's update-branch API — no rebase, force-push, or local rewrite.
+#   2. Strict required checks prevent auto-merge from landing a stale-green branch.
+#   3. Auto-merge lands the current, green PR as a merge commit after review.
+#
+# The update is performed only as chores-dumb[bot], so its synchronize event starts
+# normal ready-PR CI. Dependabot and changeset-release branches remain excluded.
+name: Auto-update PR branches
+
+on:
+  push:
+    branches:
+      - main
+  # A draft skipped during a main merge would otherwise remain behind when marked
+  # ready. pull_request_target is safe here because the base workflow is used and
+  # no PR code is checked out or executed; the job only calls GitHub APIs.
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-update-prs
+  cancel-in-progress: false
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
+  update:
+    needs: policy
+    name: Merge main into open PRs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    # Dependabot-triggered runs receive no regular Actions secrets and its branches
+    # are intentionally maintained through `@dependabot rebase` instead.
+    if: github.actor != 'dependabot[bot]'
+    env:
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
+    steps:
+      - name: Require chores-dumb credentials
+        run: test "$HAS_CHORES_DUMB" = true
+
+      - name: Mint the chores-dumb token
+        id: chores
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
+          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
+
+      - name: Update each behind branch by merging main into it
+        env:
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr list --repo "$REPO" --state open \
+            --json number,isDraft,headRefName,headRefOid,headRepositoryOwner \
+            --jq '.[] | select(.isDraft | not)
+                      | select(.headRepositoryOwner.login == "'"${REPO%%/*}"'")
+                      | select((.headRefName | startswith("dependabot/")) or (.headRefName | startswith("changeset-release/")) | not)
+                      | "\(.number)\t\(.headRefName)\t\(.headRefOid)"' |
+          while IFS=$'\t' read -r number branch sha; do
+            behind=$(gh api "repos/$REPO/compare/main...$branch" --jq .behind_by 2>/dev/null || echo unknown)
+            if [ "$behind" = "unknown" ]; then
+              echo "::warning title=PR #$number::could not compare $branch to main; skipping."
+              continue
+            fi
+            if [ "$behind" -eq 0 ]; then
+              echo "PR #$number ($branch) is current; nothing to do."
+              continue
+            fi
+            # expected_head_sha is an optimistic lock. A raced push or real conflict
+            # is left visible on the PR and retried by a later updater event.
+            if gh api -X PUT "repos/$REPO/pulls/$number/update-branch" \
+                 -f expected_head_sha="$sha" >/dev/null 2>&1; then
+              echo "PR #$number ($branch): merged main in ($behind behind); CI will run on the new head."
+            else
+              echo "::warning title=PR #$number needs attention::update-branch failed for $branch (conflict or raced push); skipped."
+            fi
+          done

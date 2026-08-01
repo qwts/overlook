@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 const root = process.cwd();
+const autoUpdate = readFileSync(join(root, '.github/workflows/auto-update-prs.yml'), 'utf8');
 const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
 const codeql = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8');
 const closeLinkedIssues = readFileSync(join(root, '.github/workflows/close-linked-issues.yml'), 'utf8');
@@ -34,17 +35,18 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   test('documents the narrow native-queue exception and disabled preview policy', () => {
     assert.match(identityPolicy, /both actor fields to be `github-merge-queue\[bot\]`/u);
     assert.match(identityPolicy, /Workflow execution protections\*\* disabled/u);
-    assert.match(identityPolicy, /never approve public-fork runs/u);
+    assert.match(identityPolicy, /never approve\s+public-fork runs/u);
   });
 
   test('authorizes every direct non-CI entrypoint before repository work', () => {
-    const workflows = [packageWorkflow, perf, release, versionCut, closeLinkedIssues];
+    const workflows = [autoUpdate, packageWorkflow, perf, release, versionCut, closeLinkedIssues];
     for (const workflow of workflows) {
       assert.match(workflow, /^ {2}policy:$/mu);
       assert.match(workflow, /authorization-only: 'true'/u);
       assert.match(workflow, /ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11/u);
     }
     for (const [workflow, jobs] of [
+      [autoUpdate, ['update']],
       [packageWorkflow, ['package']],
       [perf, ['perf']],
       [release, ['verify']],
@@ -113,9 +115,12 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(release, /needs: \[verify, build\]/u);
   });
 
-  test('versioning dispatches no duplicate CI and the native queue replaces branch rewriting', () => {
+  test('versioning dispatches no duplicate CI and the governed updater preserves freshness', () => {
     assert.doesNotMatch(versionCut, /gh workflow run ci\.yml/u);
     assert.match(versionCut, /event=push&head_sha=\$GITHUB_SHA/u);
-    assert.equal(existsSync(join(root, '.github/workflows/auto-update-prs.yml')), false);
+    assert.equal(existsSync(join(root, '.github/workflows/auto-update-prs.yml')), true);
+    assert.match(autoUpdate, /name: Require chores-dumb credentials/u);
+    assert.match(autoUpdate, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
+    assert.doesNotMatch(autoUpdate, /RELEASE_TOKEN|\|\| github\.token/u);
   });
 });

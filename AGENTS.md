@@ -66,8 +66,8 @@ this file in the same PR as the change — never after the fact.
 - **Commit frequently.** Small, coherent commits per meaningful slice; push
   regularly. No end-of-session mega-commits.
 - **Queue the merge yourself.** Right after `gh pr ready`, run
-  `gh pr merge <n> --auto --merge`. The native queue validates its exact merge
-  candidate; do not manually rebase or merge `main` into a merely-behind branch.
+  `gh pr merge <n> --auto --merge`. The branch updater and strict checks keep the
+  PR current; do not manually rebase or merge `main` into a merely-behind branch.
   Details are in
   [CI Identity And Tokens](docs/CI-Identity-And-Tokens.md) → Merge automation.
 - **Drafts run no Actions jobs.** Run `npm run ci`, `test:e2e`, and
