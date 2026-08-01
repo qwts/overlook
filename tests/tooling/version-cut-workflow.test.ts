@@ -6,7 +6,7 @@ import { describe, test } from 'node:test';
 describe('version-cut workflow', () => {
   const workflow = readFileSync(join(process.cwd(), '.github/workflows/version-cut.yml'), 'utf8');
 
-  test('starts downstream runs as chores-dumb[bot], never as GITHUB_TOKEN', () => {
+  test('uses chores-dumb for writes and GITHUB_TOKEN only for read-only evidence', () => {
     // The version PR is opened and force-refreshed by chores-dumb[bot] so it gets
     // real pull_request CI runs, and the tag is pushed with that token so
     // release.yml's on:push:tags trigger fires. GITHUB_TOKEN events start no
@@ -15,8 +15,10 @@ describe('version-cut workflow', () => {
     // workflows". A bot rather than a human PAT also keeps the version PR
     // approvable: qwts cannot approve a PR qwts opened (ENG-0045 decision 4).
     assert.match(workflow, /uses: actions\/create-github-app-token@[0-9a-f]{40}/u);
-    assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
-    assert.match(workflow, /token: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
+    assert.equal(workflow.match(/GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/gu)?.length, 2);
+    assert.equal(workflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)?.length, 2);
+    assert.match(workflow, /^ {2}actions: read$/mu);
+    assert.doesNotMatch(workflow, /^\s+(?:actions|contents|pull-requests): write$/mu);
     assert.doesNotMatch(workflow, /RELEASE_TOKEN|\|\| github\.token/u);
     // The secrets context is unavailable in `if`, so presence is surfaced as env.
     assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' && secrets\.CHORES_DUMB_PRIVATE_KEY != '' \}\}/u);
@@ -30,6 +32,7 @@ describe('version-cut workflow', () => {
     assert.equal(mints.length, 2);
     for (const mint of mints) {
       const beforeUses = mint.split('uses:')[0] ?? '';
+      assert.match(beforeUses, /if: steps\.(?:version\.outputs\.ready == 'true'|release-plan\.outputs\.kind != 'none')/u);
       assert.doesNotMatch(beforeUses, /continue-on-error/u);
       assert.match(mint, /client-id: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID \}\}/u);
       assert.match(mint, /private-key: \$\{\{ secrets\.CHORES_DUMB_PRIVATE_KEY \}\}/u);
@@ -49,12 +52,26 @@ describe('version-cut workflow', () => {
 
   test('keeps repository credentials away from the changeset CLI', () => {
     const versionJob = workflow.split(/^ {2}tag:/mu)[0] ?? '';
-    const versionStep = versionJob.split('- name: Create the Version packages commit')[1]?.split('- name: Push and refresh')[0] ?? '';
+    const versionStep =
+      versionJob.split('- name: Create the Version packages commit')[1]?.split('- name: Require chores-dumb credentials')[0] ?? '';
 
     assert.match(versionJob, /persist-credentials: false/u);
     assert.match(versionStep, /npx changeset version/u);
     assert.doesNotMatch(versionStep, /GH_TOKEN|RELEASE_TOKEN|steps\.chores\.outputs\.token/u);
     assert.match(versionJob, /if: steps\.version\.outputs\.ready == 'true'/u);
+  });
+
+  test('mints the tag token only after the exact-SHA wait and only for a planned write', () => {
+    const tagJob = workflow.split(/^ {2}tag:/mu)[1] ?? '';
+    const plan = tagJob.indexOf('- name: Determine release operation');
+    const wait = tagJob.indexOf('- name: Wait for exact main-push CI');
+    const requireCredentials = tagJob.indexOf('- name: Require chores-dumb credentials');
+    const mint = tagJob.indexOf('- name: Mint the chores-dumb token');
+    const publish = tagJob.indexOf('- name: Publish tag or recover release');
+
+    assert.ok(plan < wait && wait < requireCredentials && requireCredentials < mint && mint < publish);
+    assert.match(tagJob, /if: steps\.release-plan\.outputs\.kind != 'none'/u);
+    assert.match(tagJob, /persist-credentials: false/u);
   });
 
   test('hand-dispatches nothing but stranded-tag recovery', () => {

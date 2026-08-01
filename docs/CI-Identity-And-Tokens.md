@@ -13,6 +13,12 @@ from `CHORES_DUMB_CLIENT_ID` / `CHORES_DUMB_PRIVATE_KEY` by
 `actions/create-github-app-token`. Privileged writes have no PAT or
 `GITHUB_TOKEN` fallback.
 
+Version-cut jobs perform their read-only no-op checks before requiring App
+credentials. This lets a Dependabot-initiated main run exit cleanly when no
+version or tag write is needed. When a tag is needed, the job waits for exact-SHA
+CI with the read-only repository token, then mints a fresh App token immediately
+before the write; installation tokens expire after one hour.
+
 A bot rather than a human PAT, for a concrete reason: a PAT opens the version PR
 as `qwts`, who cannot approve their own PR, so every release cut needed a ruleset
 bypass. Repository chores get a bot identity; agents get their own Apps, and the
