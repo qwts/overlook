@@ -15,22 +15,24 @@ describe('version-cut workflow', () => {
     // workflows". A bot rather than a human PAT also keeps the version PR
     // approvable: qwts cannot approve a PR qwts opened (ENG-0045 decision 4).
     assert.match(workflow, /uses: actions\/create-github-app-token@[0-9a-f]{40}/u);
-    assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \|\| secrets\.RELEASE_TOKEN \|\| github\.token \}\}/u);
+    assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
+    assert.match(workflow, /token: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
+    assert.doesNotMatch(workflow, /RELEASE_TOKEN|\|\| github\.token/u);
     // The secrets context is unavailable in `if`, so presence is surfaced as env.
-    assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' \}\}/u);
+    assert.match(workflow, /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' && secrets\.CHORES_DUMB_PRIVATE_KEY != '' \}\}/u);
   });
 
-  test('a bad App key degrades to the fallback tokens, never a failed job', () => {
-    // continue-on-error on every mint step: a malformed CHORES_DUMB_PRIVATE_KEY
-    // fails the step — and with it the job — before the
-    // `steps.chores.outputs.token || …` fallbacks can apply. Both jobs mint, so
-    // both must be non-fatal (PR #838 review: the tag job was left fatal and
-    // every push to main still died there).
+  test('fails closed when chores-dumb credentials are absent or unreadable', () => {
+    const requirements = workflow.match(/- name: Require chores-dumb credentials/gu) ?? [];
+    assert.equal(requirements.length, 2);
+
     const mints = workflow.split(/- name: Mint the chores-dumb token/u).slice(1);
     assert.equal(mints.length, 2);
     for (const mint of mints) {
       const beforeUses = mint.split('uses:')[0] ?? '';
-      assert.match(beforeUses, /continue-on-error: true/u);
+      assert.doesNotMatch(beforeUses, /continue-on-error/u);
+      assert.match(mint, /client-id: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID \}\}/u);
+      assert.match(mint, /private-key: \$\{\{ secrets\.CHORES_DUMB_PRIVATE_KEY \}\}/u);
     }
   });
 

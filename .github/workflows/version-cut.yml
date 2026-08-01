@@ -10,9 +10,8 @@
 #     workflow.
 #
 # Both halves authenticate as chores-dumb[bot], a GitHub App whose installation
-# token is minted per run. RELEASE_TOKEN (a human PAT) stays only as a fallback
-# for a repo where the App is not installed yet. Two reasons for a bot rather
-# than a PAT:
+# token is minted per run from the repository's App client ID and private key.
+# There is no PAT or GITHUB_TOKEN write fallback. Two reasons for the App:
 #  - GITHUB_TOKEN events cannot trigger other workflows. A bot-refreshed version
 #    PR got no pull_request CI runs even though main requires the "CI" and
 #    "E2E gate" checks, and a GITHUB_TOKEN tag push fired no on:push:tags run.
@@ -28,9 +27,7 @@
 # No dispatch steps, no `actions: write` on the version job. Repository tokens
 # reach only actions/* steps and first-party command steps that need them;
 # third-party tooling runs without credentials.
-# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and still
-# version and tag correctly; only downstream runs fail to start. Recovery stays
-# explicit because github-actions[bot] is not an authorized workflow actor.
+# Missing or unreadable App credentials fail closed before any repository write.
 name: Version cut
 
 on:
@@ -61,29 +58,18 @@ jobs:
     needs: policy
     name: Version packages PR
     runs-on: ubuntu-latest
-    # These scopes exist only for the `|| secrets.GITHUB_TOKEN` fallback below;
-    # a PAT carries its own.
-    permissions:
-      contents: write
-      pull-requests: write
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
+      - name: Require chores-dumb credentials
+        run: test "$HAS_CHORES_DUMB" = true
+
       - name: Mint the chores-dumb token
         id: chores
-        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
-        # then github.token, but a *failed* step aborts the job before any of that
-        # applies — so an unreadable App key took the whole release pipeline down
-        # instead of degrading it (PR #836 follow-up).
-        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
-        if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          # client-id, not app-id: v3 deprecated the latter, and the two are
-          # easy to confuse with the bot's *user* id, which is a third number
-          # entirely (PR #838 review).
           client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
@@ -132,7 +118,7 @@ jobs:
       - name: Push and refresh the Version packages PR
         if: steps.version.outputs.ready == 'true'
         env:
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
           BRANCH: changeset-release/main
         run: |
           set -euo pipefail
@@ -173,29 +159,18 @@ jobs:
     needs: policy
     name: Tag version merges
     runs-on: ubuntu-latest
-    # Scopes for the `|| github.token` fallback only; `actions: write` covers the
-    # stranded-tag recovery dispatch below.
-    permissions:
-      contents: write
-      actions: write
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
+      - name: Require chores-dumb credentials
+        run: test "$HAS_CHORES_DUMB" = true
+
       - name: Mint the chores-dumb token
         id: chores
-        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
-        # then github.token, but a *failed* step aborts the job before any of that
-        # applies — so an unreadable App key took the whole release pipeline down
-        # instead of degrading it (PR #836 follow-up).
-        continue-on-error: true
         # actions/* — first-party, so the App key never reaches a third-party
         # action (AGENTS.md → Branch And GitHub Hygiene).
-        if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          # client-id, not app-id: v3 deprecated the latter, and the two are
-          # easy to confuse with the bot's *user* id, which is a third number
-          # entirely (PR #838 review).
           client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
@@ -204,13 +179,12 @@ jobs:
         with:
           # Tags + history for the already-tagged check.
           fetch-depth: 0
-          # The tag push has to start release.yml by itself, so it must carry the
-          # PAT's credentials rather than GITHUB_TOKEN's.
-          token: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          # The tag push has to start release.yml under the authorized App.
+          token: ${{ steps.chores.outputs.token }}
 
       - name: Tag when the current version is a fresh cut
         env:
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           # Push events only tag when this push actually changed the version —
@@ -272,8 +246,5 @@ jobs:
           git tag -a "$version" -m "Release $version"
           git push origin "$version"
           echo "Tagged $version."
-          # No dispatch: pushed under the PAT, this tag fires release.yml's
-          # on:push:tags trigger directly. Without RELEASE_TOKEN the push is a
-          # GITHUB_TOKEN push and starts nothing — re-run this workflow via
-          # workflow_dispatch once the secret is present and the already-tagged
-          # recovery path above picks the tag up.
+          # No dispatch: pushed under the App, this tag fires release.yml's
+          # on:push:tags trigger directly.

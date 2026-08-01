@@ -120,6 +120,10 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(versionCut, /event=push&head_sha=\$GITHUB_SHA/u);
     assert.equal(existsSync(join(root, '.github/workflows/auto-update-prs.yml')), true);
     assert.match(autoUpdate, /name: Require chores-dumb credentials/u);
+    assert.match(
+      autoUpdate,
+      /HAS_CHORES_DUMB: \$\{\{ secrets\.CHORES_DUMB_CLIENT_ID != '' && secrets\.CHORES_DUMB_PRIVATE_KEY != '' \}\}/u,
+    );
     assert.match(autoUpdate, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
     assert.doesNotMatch(autoUpdate, /RELEASE_TOKEN|\|\| github\.token/u);
   });

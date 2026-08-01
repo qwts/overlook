@@ -10,8 +10,8 @@ the failure modes, so the rule is followable when something breaks.
 `chores-dumb[bot]`** — branch and tag pushes, bot-opened PRs, and
 `gh workflow run`. It is a GitHub App whose installation token is minted per run
 from `CHORES_DUMB_CLIENT_ID` / `CHORES_DUMB_PRIVATE_KEY` by
-`actions/create-github-app-token`. `RELEASE_TOKEN` remains only as a fallback
-where the App is not installed.
+`actions/create-github-app-token`. Privileged writes have no PAT or
+`GITHUB_TOKEN` fallback.
 
 A bot rather than a human PAT, for a concrete reason: a PAT opens the version PR
 as `qwts`, who cannot approve their own PR, so every release cut needed a ruleset
@@ -30,10 +30,10 @@ Repository credentials must be **absent while third-party tools run**: checkouts
 that precede them use `persist-credentials: false`, and tokens are injected only
 into first-party steps containing the `git` / `gh` commands that need them.
 
-**The PAT may reach only `actions/*` steps and our own `run:` blocks — never a
-third-party action**, whose future versions nobody here controls. When a
-third-party action is the only thing standing between the PAT and the run you
-need, replace it or drop it. Two precedents:
+**The App credential may reach only `actions/*` steps and our own `run:` blocks
+— never a third-party action**, whose future versions nobody here controls. When a
+third-party action is the only thing standing between the App credential and the
+run you need, replace it or drop it. Two precedents:
 
 - versioning is a script in `version-cut.yml` rather than `changesets/action`,
   for exactly this reason;
@@ -123,7 +123,6 @@ after the replacement contexts first report successfully:
    enabled until the repository is transferred to an organization; only then may
    a native `MERGE` queue replace it after exact-SHA validation is proven.
 
-No `CHORES_DUMB` or `RELEASE_TOKEN` secret is added merely for actor
-authorization. Existing `CHORES_DUMB` credentials remain required by the
-governed branch updater and version/tag automation; any `RELEASE_TOKEN` use
-remains separate version/tag fallback credential handling.
+No secret is added merely for actor authorization. The existing `CHORES_DUMB`
+credentials remain required by the governed branch updater and version/tag
+automation; `RELEASE_TOKEN` is not consumed by those privileged writes.
