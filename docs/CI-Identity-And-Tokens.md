@@ -58,28 +58,58 @@ through the Git Data API, which GitHub signs server-side.
 
 ## Merge automation
 
-GitHub's real merge queue is organizations-only, so this repo runs the
-hand-rolled equivalent in `.github/workflows/auto-update-prs.yml`: after every
-merge to `main` the workflow updates each open ready PR by **merging `main` into
-it** (the update-branch API — no rebase, no force-push), which fires that PR's CI
-on the true merged state. The ruleset's strict up-to-date requirement stops
-auto-merge from landing a stale-green combination, and auto-merge lands the PR as
-a merge commit once its updated head is green and its review threads are
-resolved.
+The native GitHub merge queue owns target-branch freshness. It forms a synthetic
+candidate from the approved PR, current `main`, and earlier queued changes; the
+`merge_group` run executes the complete suite for that exact SHA. Queue method
+`MERGE` preserves that validated SHA when it reaches `main`, allowing the
+main-push lane to reuse the evidence and run only the short interop smoke plus
+the required default-branch CodeQL scan. A main SHA without queue evidence runs
+the complete suite instead.
 
 Consequences worth knowing before touching a branch:
 
 - **Never manually rebase, merge `main` in, or "update" a branch that is merely
-  behind `main`** — that chore belongs to the automation. Touch history yourself
-  only to resolve a real conflict; the workflow skips conflicting branches and
-  the PR shows CONFLICTING.
-- The automation no longer rewrites your branch, so a plain `git pull` before
-  pushing fast-forwards cleanly.
-- Dependabot branches are excluded — comment `@dependabot rebase` on those.
+  behind `main`**. Resolve genuine conflicts on the source branch; otherwise the
+  queue owns the merged candidate.
+- Dependabot enters the same queue and complete-suite lifecycle after review.
 - After any update that changes `package-lock.json`, run `npm ci` before trusting
   local gates. A stale install fails E2E in ways that look like flakes; an
   Electron bump landing mid-session produced two identical timeout failures this
   way.
-- If a push seems to not trigger CI, or a PR shows a stale failing check, check
-  `gh pr view <n> --json mergeable` **first** — GitHub creates no workflow runs
-  for a CONFLICTING PR.
+- Queue configuration is `MERGE`, `ALLGREEN`, one concurrent candidate build,
+  and one PR per merge. The ruleset retains strict status checks and resolved
+  review threads.
+
+## Workflow actor boundary
+
+Repository Actions Policy permits only `qwts`, `chores-dumb[bot]`,
+`dependabot[bot]`, and active `<agent-slug>[bot]` Apps from the governed roster.
+It rejects GitHub-owned workflow actors, Copilot, third parties, retired Apps,
+and public forks. The immutable playbook CI-policy action independently checks
+both `github.actor` and `github.triggering_actor`; credentials do not grant actor
+authorization.
+
+## Manual repository rollout
+
+These settings cannot be supplied by pull-request code and must be applied only
+after the replacement contexts first report successfully:
+
+1. Activate **Actions → Policies → Workflow execution protections** for
+   `qwts`, `chores-dumb[bot]`, `dependabot[bot]`, and every active App in the
+   governed [`agents.json`](https://github.com/qwts/playbook-engineering/blob/main/governance/agents.json).
+   Permit `merge_group`; do not add `github-actions[bot]`,
+   `github-merge-queue[bot]`, Copilot, external contributors, public forks, or
+   retired/unregistered Apps.
+2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
+   after a manual CI run proves both configured languages and the stable
+   `CodeQL` context. Do not leave a gap in code-scanning enforcement.
+3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`; retain
+   the CodeQL code-scanning and code-quality rules. Remove an obsolete default
+   setup context only after its Advanced replacement reports successfully.
+4. Require merge queue with method `MERGE`, grouping `ALLGREEN`, one concurrent
+   candidate build, and one PR per merge. Retain strict status checks, approval,
+   CODEOWNERS, and resolved-thread requirements. Repository settings must keep
+   merge commits enabled.
+
+No `CHORES_DUMB` or `RELEASE_TOKEN` secret is required by the execution policy.
+Those credentials remain solely for existing version/tag automation.

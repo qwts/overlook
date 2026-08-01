@@ -9,8 +9,9 @@
 - **Local "before done" gate:** `npm run ci` = lint suite + `format:check` +
   `test:cov` (unit + renderer DOM) + `build` — the same non-browser gates CI
   runs.
-- **CI runs everything** on every PR to `main` and every push to `main`,
-  including the coverage floor and the Playwright E2E lane (path-filtered).
+- **CI follows PR lifecycle:** drafts run locally; ready heads, merge candidates,
+  and manual preflights run the complete suite; validated main commits run a
+  short integration smoke, with a complete-suite fallback.
 - **Floors ratchet upward only:** c8 lines 90 / branches 80 (`.c8rc.json`),
   type-coverage 99.8 strict, file-size budget 800 lines. The **a11y violation
   budget** (`tests/a11y/violation-budget.json`, #398) is the same policy
@@ -134,18 +135,17 @@ non-browser gates still run through `npm run ci` locally and in hosted CI.
 
 ### CI — `.github/workflows/ci.yml`
 
-On every PR to `main` and push to `main` (post-merge signal):
-
-1. `lint` (full chain) → `format:check` → `test:cov` (unit + renderer DOM, with
-   `node-test-github-reporter` annotations) → coverage summary + lcov artifact →
-   `build` → Storybook interaction tests (`test:stories:ci`, chromium)
-2. **E2E job** (parallel, own runner): path-filtered by `dorny/paths-filter` —
-   docs-only PRs skip it; always runs on main pushes. Chromium via Playwright,
-   `test:e2e`, HTML report artifact (14-day retention), and runner-capacity
-   evidence (30-day retention).
-3. **`E2E gate`** — the stable required check: green on E2E success or a
-   legitimate filter skip; red if change detection itself failed. The branch
-   ruleset requires **this job**, never `E2E` directly.
+- Draft PRs create no runner jobs; agents run every applicable local gate.
+- Manual dispatch runs the complete suite for the dispatched ref's exact SHA.
+- A ready PR reuses a successful manual suite only for its exact current head;
+  otherwise lint, formatting, changesets, acceptance/a11y, tests with coverage,
+  build, Storybook, E2E, docs-gov, and Advanced CodeQL all run.
+- Each `merge_group` candidate runs that same complete suite. PR-scoped
+  concurrency cancels obsolete ready runs without canceling other candidates.
+- A `main` push with successful exact merge-group evidence runs the short interop
+  smoke and default-branch CodeQL. Missing evidence triggers the complete suite.
+- Stable `CI` evaluates the selected lane. `E2E gate`, docs-gov, and CodeQL keep
+  their existing check identities and evidence artifacts.
 
 The Playwright HTML report (traces, screenshots, videos) ships **only** as the
 run's `playwright-report` artifact — download, unzip,
@@ -156,8 +156,9 @@ triggered by `github-actions[bot]` and therefore rejected by this repository's
 Actions actor policy — and the only fix would have been handing a repo-scoped
 PAT to a third-party publishing action.
 
-There is no scheduled/nightly run — all automation is PR-triggered, with one
-manual exception:
+There is no scheduled/nightly run. Manual dispatch is reserved for exact-SHA
+preflight, diagnostics, release recovery, workflow testing, and explicit reruns;
+the operational package and perf workflows remain manual.
 
 ### Packaging lane (manual, #53)
 

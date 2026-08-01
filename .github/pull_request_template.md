@@ -29,7 +29,7 @@
 ## Testing
 
 <!-- List the exact commands you ran locally, for example: `npm run ci`. -->
-<!-- CI independently verifies `npm ci`, lint, format check, tests + coverage, build, and the E2E gate. -->
+<!-- Ready/manual/queue CI verifies lint, format, tests + coverage, build, Storybook, E2E, docs-gov, and CodeQL. -->
 
 <!-- Coverage travels with the change — see the wiki Testing Strategy page. -->
 

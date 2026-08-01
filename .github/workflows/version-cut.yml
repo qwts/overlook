@@ -29,10 +29,9 @@
 # No dispatch steps, no `actions: write` on the version job. Repository tokens
 # reach only actions/* steps and first-party command steps that need them;
 # third-party tooling runs without credentials.
-# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and
-# still version and tag correctly — only the downstream runs fail to start (the
-# same degradation auto-update-prs.yml documents; re-dispatching by hand is not
-# a fallback here because the bot cannot dispatch either).
+# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and still
+# version and tag correctly; only downstream runs fail to start. Recovery stays
+# explicit because github-actions[bot] is not an authorized workflow actor.
 name: Version cut
 
 on:
@@ -133,7 +132,7 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           # The branch is a disposable projection of main + the pending
           # changesets, rebuilt from the current tip on every main push — force
-          # is the point, and auto-update-prs.yml excludes it for that reason.
+          # is the point. The native merge queue never rewrites source branches.
           git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
             push --force origin "$BRANCH"
           {
@@ -241,6 +240,25 @@ jobs:
             fi
             exit 0
           fi
+          # The tag must never outrun the main-push CI run for this exact SHA.
+          # Wait for its stable gate instead of dispatching an equivalent suite.
+          ci_run=''
+          for _ in $(seq 1 140); do
+            ci_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=push&head_sha=$GITHUB_SHA&per_page=100" \
+              --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml") | .id) // empty')
+            if [ -n "$ci_run" ]; then
+              conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run" --jq '.conclusion // empty')
+              if [ "$conclusion" = success ]; then break; fi
+              if [ -n "$conclusion" ]; then
+                echo "::error::Exact-commit CI concluded $conclusion; refusing to tag."
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
+          test -n "$ci_run"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run/jobs?filter=latest&per_page=100" \
+            --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')" = true
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git tag -a "$version" -m "Release $version"

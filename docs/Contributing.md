@@ -83,6 +83,9 @@ Automated coding agents follow the same hygiene as human contributors, plus:
   review" is the definition of done for a code slice**; "pushed" and "CI is
   green" are not.
 - Verify before claiming success: run the same gates CI runs (`npm run ci`).
+- Draft PR events start no Actions jobs. Before promotion, run the browser lanes
+  locally when applicable; after the final push, an exact-SHA manual CI preflight
+  may supply the complete-suite evidence reused by the ready transition.
 - After pushing, wait for required checks; report failures factually.
 - Record lessons and follow-ups in issues, PRs, or `docs/` — not only in chat.
 - Keep user-facing summaries short and factual: what changed, what was tested,
@@ -91,7 +94,8 @@ Automated coding agents follow the same hygiene as human contributors, plus:
 ## Branching and PR hygiene
 
 - One PR = one issue / one behavioral slice. Don't bundle unrelated changes.
-- Rebase onto the latest `main` before requesting review; PRs target `main`.
+- PRs target `main`. Do not manually update a merely-behind branch; the native
+  merge queue validates the approved PR with current `main`.
 - PR descriptions must include: **Motivation**, **Description**,
   **Documentation** (what was updated, or why nothing needed it), **Testing**
   (exact commands run), and **Manual testing** where applicable — the PR

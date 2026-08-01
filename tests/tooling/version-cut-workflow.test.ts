@@ -64,4 +64,10 @@ describe('version-cut workflow', () => {
     assert.doesNotMatch(workflow, /gh workflow run ci\.yml/u);
     assert.deepEqual(workflow.match(/gh workflow run \S+/gu), ['gh workflow run release.yml']);
   });
+
+  test('waits for the exact main-push CI gate before tagging without dispatching another suite', () => {
+    assert.match(workflow, /event=push&head_sha=\$GITHUB_SHA/u);
+    assert.match(workflow, /\.name == "CI" and \.conclusion == "success"/u);
+    assert.doesNotMatch(workflow, /gh workflow run ci\.yml/u);
+  });
 });

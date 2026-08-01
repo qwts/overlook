@@ -66,14 +66,14 @@ this file in the same PR as the change — never after the fact.
 - **Commit frequently.** Small, coherent commits per meaningful slice; push
   regularly. No end-of-session mega-commits.
 - **Queue the merge yourself.** Right after `gh pr ready`, run
-  `gh pr merge <n> --auto --merge`. The branch-update automation and its rules —
-  including **never manually rebasing or merging `main` into a branch that is
-  merely behind** — are in
+  `gh pr merge <n> --auto --merge`. The native queue validates its exact merge
+  candidate; do not manually rebase or merge `main` into a merely-behind branch.
+  Details are in
   [CI Identity And Tokens](docs/CI-Identity-And-Tokens.md) → Merge automation.
-- **Draft CI is the fast lane only.** Drafts run the deterministic gates and skip
-  the browser lanes; the full suite runs when the PR opens ready or leaves draft.
-  The local `test:e2e` / `test:stories:ci` runs required before `gh pr ready` are
-  therefore not a formality — the ready flip is the first time CI verifies them.
+- **Drafts run no Actions jobs.** Run `npm run ci`, `test:e2e`, and
+  `test:stories:ci` locally as applicable. After pushing the final SHA, an agent
+  may dispatch CI for exact-SHA preflight and wait for success before `gh pr
+ready`; otherwise the ready transition runs the complete suite.
 - **Use the status footer only during an active validation/build run or while
   pairing on manual testing.** Omit it from routine turns. When it applies:
   - `Working dir:` absolute path of the active worktree/checkout

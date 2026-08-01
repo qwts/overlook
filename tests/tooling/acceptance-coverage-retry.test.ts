@@ -13,14 +13,14 @@ test('acceptance coverage retries transient GitHub API failures (#357)', () => {
   assert.match(source, /signed pull-request event snapshot/u);
 });
 
-test('dispatched CI resolves PR metadata so the acceptance opt-out survives auto-rebases (PR #541 review)', () => {
+test('manual exact-SHA CI resolves PR metadata for acceptance opt-outs', () => {
   const source = readFileSync(join(process.cwd(), 'scripts/check-acceptance-coverage-diff.mjs'), 'utf8');
   assert.match(source, /GITHUB_EVENT_NAME.*===.*'workflow_dispatch'/u);
   assert.match(source, /pulls\?state=open&head=/u);
   assert.match(source, /\.\.\.HEAD/u);
-  const workflow = readFileSync(join(process.cwd(), '.github/workflows/auto-update-prs.yml'), 'utf8');
-  assert.match(workflow, /types: \[opened, reopened, ready_for_review\]/u);
-  assert.match(workflow, /--force-with-lease/u);
+  const workflow = readFileSync(join(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /types: \[opened, synchronize, reopened, ready_for_review\]/u);
+  assert.match(workflow, /exact-sha-preflight/u);
 });
 
 // Replaces the two E2E-report guards (#357 freshness via git ls-remote, #715
