@@ -37,7 +37,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(identityPolicy, /Workflow execution protections\*\* disabled/u);
     assert.match(identityPolicy, /never approve\s+public-fork runs/u);
     assert.match(identityPolicy, /Bind `CodeQL` to the GitHub Advanced Security App/u);
-    assert.match(identityPolicy, /other four contexts\s+to GitHub Actions — never to `chores-dumb`/u);
+    assert.match(identityPolicy, /other three contexts\s+to GitHub Actions — never to `chores-dumb`/u);
+    assert.match(identityPolicy, /only its stable `E2E gate` verdict belongs in branch protection/u);
   });
 
   test('authorizes every direct non-CI entrypoint before repository work', () => {

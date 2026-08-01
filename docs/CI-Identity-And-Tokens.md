@@ -122,12 +122,13 @@ after the replacement contexts first report successfully:
 2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
    after a manual CI run proves both configured languages and the stable
    `CodeQL` context. Do not leave a gap in code-scanning enforcement.
-3. Require `CI`, `E2E`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`.
-   Bind `CodeQL` to the GitHub Advanced Security App and the other four contexts
+3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`. Bind
+   `CodeQL` to the GitHub Advanced Security App and the other three contexts
    to GitHub Actions — never to `chores-dumb`, which initiates privileged writes
-   but does not publish check runs. Retain the CodeQL code-scanning and
-   code-quality rules. Remove an obsolete default-setup context only after its
-   Advanced replacement reports successfully.
+   but does not publish check runs. `E2E` still runs in every complete suite, but
+   only its stable `E2E gate` verdict belongs in branch protection. Retain the
+   CodeQL code-scanning and code-quality rules. Remove an obsolete default-setup
+   context only after its Advanced replacement reports successfully.
 4. Retain strict status checks, approval, CODEOWNERS, resolved-thread
    requirements, auto-merge, and merge commits. Keep the governed branch updater
    enabled until the repository is transferred to an organization; only then may
