@@ -56,9 +56,21 @@ describe('version-cut workflow', () => {
       versionJob.split('- name: Create the Version packages commit')[1]?.split('- name: Require chores-dumb credentials')[0] ?? '';
 
     assert.match(versionJob, /persist-credentials: false/u);
+    assert.match(versionStep, /git branch main origin\/main/u);
+    assert.match(versionStep, /npx changeset status --output/u);
+    assert.match(versionStep, /\.releases\.length/u);
     assert.match(versionStep, /npx changeset version/u);
     assert.doesNotMatch(versionStep, /GH_TOKEN|RELEASE_TOKEN|steps\.chores\.outputs\.token/u);
     assert.match(versionJob, /if: steps\.version\.outputs\.ready == 'true'/u);
+  });
+
+  test('does not open a version PR for empty governance changesets', () => {
+    const versionJob = workflow.split(/^ {2}tag:/mu)[0] ?? '';
+    const status = versionJob.indexOf('npx changeset status --output');
+    const noReleaseExit = versionJob.indexOf('if [ "$releases" -eq 0 ]');
+    const version = versionJob.indexOf('npx changeset version');
+
+    assert.ok(status < noReleaseExit && noReleaseExit < version);
   });
 
   test('mints the tag token only after the exact-SHA wait and only for a planned write', () => {

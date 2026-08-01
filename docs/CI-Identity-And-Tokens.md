@@ -17,7 +17,8 @@ Version-cut jobs perform their read-only no-op checks before requiring App
 credentials. This lets a Dependabot-initiated main run exit cleanly when no
 version or tag write is needed. When a tag is needed, the job waits for exact-SHA
 CI with the read-only repository token, then mints a fresh App token immediately
-before the write; installation tokens expire after one hour.
+before the write; installation tokens expire after one hour. Empty governance
+changesets satisfy the PR gate but do not create a Version packages PR.
 
 A bot rather than a human PAT, for a concrete reason: a PAT opens the version PR
 as `qwts`, who cannot approve their own PR, so every release cut needed a ruleset
