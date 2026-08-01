@@ -60,12 +60,13 @@ updates:
       # together with .nvmrc when the runtime moves.
       - dependency-name: '@types/node'
         versions: ['>=25']
-      # Electron is capped at the newest major with better-sqlite3-multiple-ciphers
-      # Electron-ABI prebuilds (ADR-0006 prebuilt-only policy; 43 = ABI v148 has none
-      # as of 2026-07-12). Remove once the fork publishes the matching ABI, and bump
-      # electron + the driver together (issue #72 records the pin-down from 43.1.0).
+      # Electron is capped at the newest release with better-sqlite3-multiple-ciphers
+      # Electron-ABI prebuilds (ADR-0006 prebuilt-only policy; 42.8 = ABI v146 and
+      # 43 = ABI v148 have none as of 2026-08-01). Remove once the fork publishes the
+      # matching ABI, and bump electron + the driver together (issue #72 records the
+      # original pin-down from 43.1.0; PR #871 caught the 42.8 ABI roll).
       - dependency-name: electron
-        versions: ['>=43']
+        versions: ['>=42.8.0']
       # Vite is capped at the 7 line: electron-vite@5 (stable) peers vite ^5||^6||^7,
       # with Vite 8 support only in the unreleased 6.0 betas, and @vitejs/plugin-react@6
       # peers vite ^8 (plus new babel-plugin-react-compiler peers), so both are gated on
