@@ -59,6 +59,8 @@ jobs:
     needs: policy
     name: Version packages PR
     runs-on: ubuntu-latest
+    outputs:
+      has-releases: ${{ steps.version.outputs.has-releases }}
     env:
       HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
@@ -95,9 +97,11 @@ jobs:
           npx changeset status --output "$status_file"
           releases=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).releases.length' "$status_file")
           if [ "$releases" -eq 0 ]; then
+            echo 'has-releases=false' >> "$GITHUB_OUTPUT"
             echo "No package releases pending — nothing to version."
             exit 0
           fi
+          echo 'has-releases=true' >> "$GITHUB_OUTPUT"
           npx changeset version
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -165,7 +169,7 @@ jobs:
             --body-file "$RUNNER_TEMP/pr-body.md"
 
   tag:
-    needs: policy
+    needs: [policy, version-pr]
     name: Tag version merges
     runs-on: ubuntu-latest
     env:
@@ -183,6 +187,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          HAS_RELEASES: ${{ needs.version-pr.outputs.has-releases }}
         run: |
           set -euo pipefail
           # Push events only tag when this push actually changed the version —
@@ -199,9 +204,8 @@ jobs:
               exit 0
             fi
           fi
-          pending=$(find .changeset -name '*.md' ! -name 'README.md' -print -quit)
-          if [ -n "$pending" ]; then
-            echo "Changesets pending — nothing to tag."
+          if [ "$HAS_RELEASES" = true ]; then
+            echo "Package releases pending — nothing to tag."
             echo 'kind=none' >> "$GITHUB_OUTPUT"
             exit 0
           fi

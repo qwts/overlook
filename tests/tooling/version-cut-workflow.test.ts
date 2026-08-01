@@ -71,6 +71,18 @@ describe('version-cut workflow', () => {
     const version = versionJob.indexOf('npx changeset version');
 
     assert.ok(status < noReleaseExit && noReleaseExit < version);
+    assert.match(versionJob, /has-releases: \$\{\{ steps\.version\.outputs\.has-releases \}\}/u);
+    assert.match(versionJob, /echo 'has-releases=false' >> "\$GITHUB_OUTPUT"/u);
+    assert.match(versionJob, /echo 'has-releases=true' >> "\$GITHUB_OUTPUT"/u);
+  });
+
+  test('uses the semantic release count for tag planning so empty changesets permit recovery', () => {
+    const tagJob = workflow.split(/^ {2}tag:/mu)[1] ?? '';
+
+    assert.match(tagJob, /needs: \[policy, version-pr\]/u);
+    assert.match(tagJob, /HAS_RELEASES: \$\{\{ needs\.version-pr\.outputs\.has-releases \}\}/u);
+    assert.match(tagJob, /if \[ "\$HAS_RELEASES" = true \]/u);
+    assert.doesNotMatch(tagJob, /find \.changeset/u);
   });
 
   test('mints the tag token only after the exact-SHA wait and only for a planned write', () => {
