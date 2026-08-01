@@ -20,10 +20,9 @@ two never share one.
 
 ## Why `GITHUB_TOKEN` is not enough
 
-`GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
-Actions policy authorizes actors explicitly — `github-actions[bot]` is not one of
-them, so its runs die at startup with "Actor is not allowed to trigger Actions
-workflows". That is the reason a separate App identity exists at all.
+`GITHUB_TOKEN` events normally trigger no downstream workflows. Governed CI also
+rejects `github-actions[bot]` in the immutable policy job. That is why a separate
+App identity exists at all.
 
 ## Token blast radius
 
@@ -58,28 +57,73 @@ through the Git Data API, which GitHub signs server-side.
 
 ## Merge automation
 
-GitHub's real merge queue is organizations-only, so this repo runs the
-hand-rolled equivalent in `.github/workflows/auto-update-prs.yml`: after every
-merge to `main` the workflow updates each open ready PR by **merging `main` into
-it** (the update-branch API — no rebase, no force-push), which fires that PR's CI
-on the true merged state. The ruleset's strict up-to-date requirement stops
-auto-merge from landing a stale-green combination, and auto-merge lands the PR as
-a merge commit once its updated head is green and its review threads are
-resolved.
+GitHub's native merge queue is organization-only, so this user-owned repository
+keeps `.github/workflows/auto-update-prs.yml`. After a `main` push, PR open, or
+ready transition, the workflow uses `chores-dumb[bot]` to merge current `main`
+into each eligible ready branch through the update-branch API. The resulting
+`synchronize` event runs the complete suite, and strict required checks prevent
+auto-merge from landing stale evidence.
+
+The final merge commit has a new SHA, so it is not treated as the validated PR
+head. Its `main` push therefore runs the complete-suite fallback plus
+default-branch CodeQL. The `merge_group` lane and the shared policy action's
+narrow merge-queue actor exception remain dormant compatibility for a future
+transfer to an organization; they do not justify skipping exact-commit checks.
 
 Consequences worth knowing before touching a branch:
 
 - **Never manually rebase, merge `main` in, or "update" a branch that is merely
-  behind `main`** — that chore belongs to the automation. Touch history yourself
-  only to resolve a real conflict; the workflow skips conflicting branches and
-  the PR shows CONFLICTING.
-- The automation no longer rewrites your branch, so a plain `git pull` before
-  pushing fast-forwards cleanly.
-- Dependabot branches are excluded — comment `@dependabot rebase` on those.
+  behind `main`**. Resolve genuine conflicts on the source branch; otherwise the
+  updater owns branch freshness.
+- Dependabot branches are excluded; use `@dependabot rebase` before the normal
+  ready complete-suite and review lifecycle.
 - After any update that changes `package-lock.json`, run `npm ci` before trusting
   local gates. A stale install fails E2E in ways that look like flakes; an
   Electron bump landing mid-session produced two identical timeout failures this
   way.
-- If a push seems to not trigger CI, or a PR shows a stale failing check, check
-  `gh pr view <n> --json mergeable` **first** — GitHub creates no workflow runs
-  for a CONFLICTING PR.
+- Auto-merge uses merge commits. The ruleset retains strict status checks,
+  approval, CODEOWNERS, and resolved review threads.
+
+## Workflow actor boundary
+
+The immutable playbook CI-policy action permits only `qwts`,
+`chores-dumb[bot]`, `dependabot[bot]`, and active `<agent-slug>[bot]` Apps from
+the governed roster. It checks both `github.actor` and
+`github.triggering_actor`; credentials do not grant actor authorization. The one
+system exception requires both actor fields to be `github-merge-queue[bot]`, the
+event to be `push`, and the ref to be `refs/heads/main`. That exception cannot
+authorize PR, queue-candidate, manual, tag, or non-main events and is dormant in
+this user-owned repository. Public-fork runs are never approved.
+
+Every direct non-CI entrypoint runs that same immutable action in
+authorization-only mode before checkout, credential minting, or repository
+work. This covers the branch updater, Package, Perf, version-cut, release, and
+close-linked-issues; their reusable children inherit the gated caller event. A
+new direct trigger is incomplete until its policy job and dependency edge exist.
+
+## Manual repository rollout
+
+These settings cannot be supplied by pull-request code and must be applied only
+after the replacement contexts first report successfully:
+
+1. Keep **Actions → Policies → Workflow execution protections** disabled. The
+   preview picker cannot express event-scoped GitHub system exceptions, while
+   using the Write role would authorize unrelated current and future writers.
+   Require approval for all external-contributor workflows, never approve
+   public-fork runs, keep the default workflow token read-only, and retain the
+   action-source allowlist and full-SHA pinning.
+2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
+   after a manual CI run proves both configured languages and the stable
+   `CodeQL` context. Do not leave a gap in code-scanning enforcement.
+3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`; retain
+   the CodeQL code-scanning and code-quality rules. Remove an obsolete default
+   setup context only after its Advanced replacement reports successfully.
+4. Retain strict status checks, approval, CODEOWNERS, resolved-thread
+   requirements, auto-merge, and merge commits. Keep the governed branch updater
+   enabled until the repository is transferred to an organization; only then may
+   a native `MERGE` queue replace it after exact-SHA validation is proven.
+
+No `CHORES_DUMB` or `RELEASE_TOKEN` secret is added merely for actor
+authorization. Existing `CHORES_DUMB` credentials remain required by the
+governed branch updater and version/tag automation; any `RELEASE_TOKEN` use
+remains separate version/tag fallback credential handling.

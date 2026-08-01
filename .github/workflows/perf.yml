@@ -11,7 +11,15 @@ permissions:
   contents: read
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
   perf:
+    needs: policy
     name: 200K perf harness
     runs-on: ubuntu-latest
     # Outer backstop only — the harness itself runs under scripts/run-guarded.mjs

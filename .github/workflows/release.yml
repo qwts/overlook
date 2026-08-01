@@ -22,15 +22,84 @@ on:
         required: true
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
+  verify:
+    needs: policy
+    name: Verify release evidence
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify tag and version provenance
+        run: |
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "::error::Release runs only on v* tags (got $TAG)."; exit 1 ;;
+          esac
+          release_sha=$(git rev-list -n 1 "$TAG")
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$release_sha" origin/main
+          test "v$(node -p "require('./package.json').version")" = "$TAG"
+          test -z "$(find .changeset -name '*.md' ! -name 'README.md' -print -quit)"
+          echo "RELEASE_SHA=$release_sha" >> "$GITHUB_ENV"
+
+      - name: Verify exact-commit complete-suite and reviewed-PR evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          queue_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=merge_group&head_sha=$RELEASE_SHA&per_page=100" \
+            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+          if [ -n "$queue_run" ]; then
+            complete=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$queue_run/jobs?filter=latest&per_page=100" \
+              --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
+          else
+            push_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=push&head_sha=$RELEASE_SHA&per_page=100" \
+              --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+            test -n "$push_run"
+            complete=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$push_run/jobs?filter=latest&per_page=100" \
+              --jq 'any(.jobs[]; .name == "Complete suite" and .conclusion == "success")')
+          fi
+          test "$complete" = true
+
+          pr=$(gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/pulls" |
+            jq -r --arg sha "$RELEASE_SHA" 'first(.[] | select(.merge_commit_sha == $sha and .merged_at != null and .base.ref == "main")) | .number // empty')
+          test -n "$pr"
+          approved=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr/reviews?per_page=100" \
+            --jq 'any(.[]; .state == "APPROVED")')
+          test "$approved" = true
+          pr_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq '.head.sha')
+          pr_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=pull_request&head_sha=$pr_head&per_page=100" \
+            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+          test -n "$pr_run"
+          verified=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$pr_run/jobs?filter=latest&per_page=100" \
+            --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
+          test "$verified" = true
+
   build:
     name: Build packages
+    needs: verify
     uses: ./.github/workflows/package.yml
     with:
       ref: ${{ inputs.tag || github.ref_name }}
@@ -39,20 +108,13 @@ jobs:
 
   publish:
     name: Publish prerelease
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - name: Guard tag shape
-        run: |
-          case "$TAG" in
-            v[0-9]*) ;;
-            *) echo "::error::Release runs only on v* tags (got $TAG)."; exit 1;;
-          esac
-
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

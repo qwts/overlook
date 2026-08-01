@@ -4,6 +4,16 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 describe('release workflow publication', () => {
+  test('requires exact-commit CI and reviewed-PR evidence before packaging', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+
+    assert.match(workflow, /name: Verify release evidence/u);
+    assert.match(workflow, /event=merge_group&head_sha=\$RELEASE_SHA/u);
+    assert.match(workflow, /\.name == "Complete suite" and \.conclusion == "success"/u);
+    assert.match(workflow, /\.state == "APPROVED"/u);
+    assert.match(workflow, /needs: verify/u);
+  });
+
   test('uploads files recursively instead of passing artifact directories to gh', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 

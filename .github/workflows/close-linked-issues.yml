@@ -17,7 +17,15 @@ permissions:
   pull-requests: read
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
   close-linked-issues:
+    needs: policy
     name: Close linked issues
     # Keep in sync with TARGET_BASE_REFS in scripts/close-linked-issues.mjs.
     if: |

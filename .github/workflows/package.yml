@@ -31,7 +31,15 @@ permissions:
   contents: read
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
   package:
+    needs: policy
     strategy:
       # The legs are independent — let one finish even if another fails.
       fail-fast: false
