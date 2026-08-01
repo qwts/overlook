@@ -29,6 +29,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
 
   test('reuses only exact-SHA complete-suite evidence', () => {
     assert.match(ci, /event=workflow_dispatch&head_sha=\$TARGET_SHA/u);
+    assert.match(ci, /\.display_title == "CI workflow_dispatch purpose=exact-sha-preflight retries=0"/u);
     assert.match(ci, /event=merge_group&head_sha=\$GITHUB_SHA/u);
     assert.match(ci, /\.path == "\.github\/workflows\/ci\.yml"/u);
     assert.match(ci, /\.name == "CI" and \.conclusion == "success"/u);
@@ -55,6 +56,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /name: Docs governance/u);
     assert.match(ci, /^ {2}e2e-gate:\n {4}name: E2E gate$/mu);
     assert.match(ci, /^ {2}gate:\n {4}name: CI$/mu);
+    assert.match(ci, /git branch main origin\/main/u);
   });
 
   test('runs advanced CodeQL for both existing languages through CI only', () => {

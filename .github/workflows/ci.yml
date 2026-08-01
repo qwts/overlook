@@ -1,4 +1,5 @@
 name: CI
+run-name: CI ${{ github.event_name }} purpose=${{ inputs.purpose || 'automatic' }} retries=${{ inputs.e2e_retries || '0' }}
 
 on:
   pull_request:
@@ -97,7 +98,7 @@ jobs:
           TARGET_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=workflow_dispatch&head_sha=$TARGET_SHA&per_page=100" \
-            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .display_title == "CI workflow_dispatch purpose=exact-sha-preflight retries=0" and .conclusion == "success") | .id) // empty')
           validated=false
           if [ -n "$run_id" ]; then
             validated=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
@@ -165,6 +166,11 @@ jobs:
         run: npm run format:check
 
       - name: Changesets
+        # `changeset status` resolves the configured base branch by its local
+        # name. A PR checkout has origin/main but does not create local main.
+        run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+
+      - name: Check changesets
         run: npm run check:changesets
 
       # Acceptance-coverage gates (#82): the map validator (every spec mapped,
