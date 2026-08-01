@@ -123,5 +123,7 @@ after the replacement contexts first report successfully:
    enabled until the repository is transferred to an organization; only then may
    a native `MERGE` queue replace it after exact-SHA validation is proven.
 
-No `CHORES_DUMB` or `RELEASE_TOKEN` secret is required by the execution policy.
-Those credentials remain solely for existing version/tag automation.
+No `CHORES_DUMB` or `RELEASE_TOKEN` secret is added merely for actor
+authorization. Existing `CHORES_DUMB` credentials remain required by the
+governed branch updater and version/tag automation; any `RELEASE_TOKEN` use
+remains separate version/tag fallback credential handling.
