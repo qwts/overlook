@@ -117,7 +117,7 @@ components; their full license texts ship inside the Electron distribution at
 | `util-deprecate` | 1.0.2 | MIT |
 | `webworkify-webpack` | 2.1.5 | MIT |
 | `wrappy` | 1.0.2 | ISC |
-| `ws` | 8.21.0 | MIT |
+| `ws` | 8.21.1 | MIT |
 | `zod` | 4.4.3 | MIT |
 
 ---
@@ -3108,7 +3108,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ---
 
-## ws 8.21.0
+## ws 8.21.1
 
 License: MIT
 
