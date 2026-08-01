@@ -19,7 +19,8 @@ version or tag write is needed. When a tag is needed, the job waits for exact-SH
 CI with the read-only repository token, then mints a fresh App token immediately
 before the write; installation tokens expire after one hour. Empty governance
 changesets satisfy the PR gate but do not create a Version packages PR or block
-stranded-tag recovery; both lanes share Changesets' semantic release count.
+stranded-tag recovery; version, tag, and release-verification lanes share
+Changesets' semantic release count.
 
 A bot rather than a human PAT, for a concrete reason: a PAT opens the version PR
 as `qwts`, who cannot approve their own PR, so every release cut needed a ruleset
