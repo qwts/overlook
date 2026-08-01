@@ -20,10 +20,9 @@ two never share one.
 
 ## Why `GITHUB_TOKEN` is not enough
 
-`GITHUB_TOKEN` events trigger no downstream workflows, and the repository's
-Actions policy authorizes actors explicitly — `github-actions[bot]` is not one of
-them, so its runs die at startup with "Actor is not allowed to trigger Actions
-workflows". That is the reason a separate App identity exists at all.
+`GITHUB_TOKEN` events normally trigger no downstream workflows. Governed CI also
+rejects `github-actions[bot]` in the immutable policy job. That is why a separate
+App identity exists at all.
 
 ## Token blast radius
 
@@ -82,24 +81,32 @@ Consequences worth knowing before touching a branch:
 
 ## Workflow actor boundary
 
-Repository Actions Policy permits only `qwts`, `chores-dumb[bot]`,
-`dependabot[bot]`, and active `<agent-slug>[bot]` Apps from the governed roster.
-It rejects GitHub-owned workflow actors, Copilot, third parties, retired Apps,
-and public forks. The immutable playbook CI-policy action independently checks
-both `github.actor` and `github.triggering_actor`; credentials do not grant actor
-authorization.
+The immutable playbook CI-policy action permits only `qwts`,
+`chores-dumb[bot]`, `dependabot[bot]`, and active `<agent-slug>[bot]` Apps from
+the governed roster. It checks both `github.actor` and
+`github.triggering_actor`; credentials do not grant actor authorization. The one
+system exception requires both actor fields to be `github-merge-queue[bot]`, the
+event to be `push`, and the ref to be `refs/heads/main`. That exception cannot
+authorize PR, queue-candidate, manual, tag, or non-main events. Public-fork runs
+are never approved.
+
+Every direct non-CI entrypoint runs that same immutable action in
+authorization-only mode before checkout, credential minting, or repository
+work. This covers Package, Perf, version-cut, release, and close-linked-issues;
+their reusable children inherit the gated caller event. A new direct trigger is
+incomplete until its policy job and dependency edge exist.
 
 ## Manual repository rollout
 
 These settings cannot be supplied by pull-request code and must be applied only
 after the replacement contexts first report successfully:
 
-1. Activate **Actions → Policies → Workflow execution protections** for
-   `qwts`, `chores-dumb[bot]`, `dependabot[bot]`, and every active App in the
-   governed [`agents.json`](https://github.com/qwts/playbook-engineering/blob/main/governance/agents.json).
-   Permit `merge_group`; do not add `github-actions[bot]`,
-   `github-merge-queue[bot]`, Copilot, external contributors, public forks, or
-   retired/unregistered Apps.
+1. Keep **Actions → Policies → Workflow execution protections** disabled. The
+   preview picker cannot represent the native merge-queue bot or limit it to the
+   post-merge push event; using the Write role would authorize unrelated current
+   and future writers. Require approval for all external-contributor workflows,
+   never approve public-fork runs, keep the default workflow token read-only,
+   and retain the action-source allowlist and full-SHA pinning.
 2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
    after a manual CI run proves both configured languages and the stable
    `CodeQL` context. Do not leave a gap in code-scanning enforcement.

@@ -31,7 +31,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
   verify:
+    needs: policy
     name: Verify release evidence
     runs-on: ubuntu-latest
     env:

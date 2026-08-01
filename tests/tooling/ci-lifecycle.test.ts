@@ -6,8 +6,12 @@ import { describe, test } from 'node:test';
 const root = process.cwd();
 const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
 const codeql = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8');
+const closeLinkedIssues = readFileSync(join(root, '.github/workflows/close-linked-issues.yml'), 'utf8');
+const packageWorkflow = readFileSync(join(root, '.github/workflows/package.yml'), 'utf8');
+const perf = readFileSync(join(root, '.github/workflows/perf.yml'), 'utf8');
 const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
 const versionCut = readFileSync(join(root, '.github/workflows/version-cut.yml'), 'utf8');
+const identityPolicy = readFileSync(join(root, 'docs/CI-Identity-And-Tokens.md'), 'utf8');
 
 describe('governed CI lifecycle (ENG-0004)', () => {
   test('uses only governed CI triggers and PR-scoped cancellation', () => {
@@ -22,9 +26,33 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@012ec7b8cd101c528b587d969e8d21da4e589770/u);
+    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
+  });
+
+  test('documents the narrow native-queue exception and disabled preview policy', () => {
+    assert.match(identityPolicy, /both actor fields to be `github-merge-queue\[bot\]`/u);
+    assert.match(identityPolicy, /Workflow execution protections\*\* disabled/u);
+    assert.match(identityPolicy, /never approve public-fork runs/u);
+  });
+
+  test('authorizes every direct non-CI entrypoint before repository work', () => {
+    const workflows = [packageWorkflow, perf, release, versionCut, closeLinkedIssues];
+    for (const workflow of workflows) {
+      assert.match(workflow, /^ {2}policy:$/mu);
+      assert.match(workflow, /authorization-only: 'true'/u);
+      assert.match(workflow, /ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11/u);
+    }
+    for (const [workflow, jobs] of [
+      [packageWorkflow, ['package']],
+      [perf, ['perf']],
+      [release, ['verify']],
+      [versionCut, ['version-pr', 'tag']],
+      [closeLinkedIssues, ['close-linked-issues']],
+    ] as const) {
+      for (const job of jobs) assert.match(workflow, new RegExp(`^  ${job}:\\n {4}needs: policy`, 'mu'));
+    }
   });
 
   test('reuses only exact-SHA complete-suite evidence', () => {

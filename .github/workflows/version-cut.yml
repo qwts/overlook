@@ -17,10 +17,9 @@
 #    PR got no pull_request CI runs even though main requires the "CI" and
 #    "E2E gate" checks, and a GITHUB_TOKEN tag push fired no on:push:tags run.
 #    Both downstream runs had to be dispatched explicitly.
-#  - This repository's Actions policy authorizes actors explicitly, and
-#    github-actions[bot] is not among them. Anything it triggers — including
-#    those explicit dispatches — dies at startup with "Actor is not allowed to
-#    trigger Actions workflows", so the workaround stopped working too.
+#  - Governed automation authorizes initiators explicitly, and
+#    github-actions[bot] is not one of them. A later workflow that needs write
+#    authority must be initiated as chores-dumb[bot], not by a repository token.
 # Under the App the actor is an authorized non-human account and both events
 # fire on their own: the version PR gets real pull_request runs, and the tag push
 # starts release.yml directly. It also un-deadlocks review — a PAT opens the
@@ -51,7 +50,15 @@ permissions:
   contents: read
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
+        with:
+          authorization-only: 'true'
+
   version-pr:
+    needs: policy
     name: Version packages PR
     runs-on: ubuntu-latest
     # These scopes exist only for the `|| secrets.GITHUB_TOKEN` fallback below;
@@ -163,6 +170,7 @@ jobs:
             --body-file "$RUNNER_TEMP/pr-body.md"
 
   tag:
+    needs: policy
     name: Tag version merges
     runs-on: ubuntu-latest
     # Scopes for the `|| github.token` fallback only; `actions: write` covers the
@@ -231,8 +239,8 @@ jobs:
             # push event can be replayed for a tag that already exists.
             # Dispatch from main (which contains release.yml — a stranded tag
             # by definition does not; PR #181 review), tag passed as input.
-            # Needs the PAT: a github-actions[bot] dispatch is refused by the
-            # repository's Actions actor policy.
+            # Needs the App/PAT identity: github-actions[bot] is not an
+            # authorized initiator for governed release recovery.
             if ! gh release view "$version" >/dev/null 2>&1; then
               echo "$version has no release — dispatching."
               gh workflow run release.yml --ref main -f tag="$version" \

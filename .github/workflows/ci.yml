@@ -59,7 +59,7 @@ jobs:
       run_post_merge: ${{ steps.policy.outputs.run_post_merge }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@012ec7b8cd101c528b587d969e8d21da4e589770
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11
 
   merge-evidence:
     name: Verify merged commit evidence
@@ -325,9 +325,8 @@ jobs:
       # videos / time-travel traces on failure). Upload it even when the E2E step fails —
       # that is exactly when it matters. View: download, unzip, `npx playwright show-report <dir>`.
       # This artifact is the only report channel: the job that mirrored it to GitHub Pages was
-      # removed rather than hand a repo-scoped PAT to a third-party publishing action (the
-      # managed "pages build and deployment" run is triggered by github-actions[bot], which
-      # this repository's Actions actor policy refuses).
+      # removed rather than create a GitHub-owned publishing exception or hand a repo-scoped
+      # PAT to a third-party publishing action.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

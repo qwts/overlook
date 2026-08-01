@@ -25,10 +25,10 @@ test('manual exact-SHA CI resolves PR metadata for acceptance opt-outs', () => {
 
 // Replaces the two E2E-report guards (#357 freshness via git ls-remote, #715
 // fork head refs passed as env data rather than shell source). The job they
-// guarded is gone: publishing ended in GitHub's managed "pages build and
-// deployment" run, which is triggered by github-actions[bot] and refused by this
-// repository's Actions actor policy, and the only repair would have handed a
-// repo-scoped PAT to a third-party publishing action. If per-PR report hosting
+// guarded is gone: publishing ended in a GitHub-managed run outside the
+// governed lifecycle, and the replacement would have needed either a
+// GitHub-owned publishing exception or a repo-scoped PAT in a third-party
+// action. If per-PR report hosting
 // ever returns, it needs both of those hardenings again — and a publisher that
 // does not require the PAT.
 test('the E2E report ships as a run artifact only, with no Pages publishing path (#357, #715)', () => {
