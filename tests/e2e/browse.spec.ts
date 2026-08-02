@@ -7,14 +7,14 @@ import { mkE2eTmpDir } from './support/tmp-dir.js';
 // each flow is its own test so a regression names the broken flow, not a
 // 100-line composite. Ledger: tests/e2e/coverage-map.json.
 
-async function launchSeeded(): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchSeeded(seed = '12'): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = mkE2eTmpDir('overlook-e2e-browse-');
   const app = await electron.launch({
     args: ['.'],
     env: {
       ...process.env,
       OVERLOOK_USER_DATA: userData,
-      OVERLOOK_SEED: '12',
+      OVERLOOK_SEED: seed,
       OVERLOOK_INSECURE_KEYSTORE: '1',
     },
   });
@@ -100,6 +100,32 @@ test('selection: pointer, ⌘/Ctrl+A, Esc, pill survival across sources', async 
     await page.keyboard.press('ControlOrMeta+a');
     await page.getByRole('button', { name: 'Clear selection' }).click();
     await expect(page.getByTestId('selection-pill')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('selection: Shift range spans virtualized rows in the full active library', async () => {
+  const { app, page } = await launchSeeded('120');
+  try {
+    const grid = page.getByTestId('virtual-grid');
+    await grid.locator('.ovl-grid__cell[aria-posinset="1"] .ovl-tile__select').click();
+    await grid.evaluate((node) => {
+      const element = node as unknown as { scrollTop: number; scrollHeight: number; dispatchEvent: (event: Event) => void };
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    const last = grid.locator('.ovl-grid__cell[aria-posinset="120"] .ovl-tile__select');
+    await last.waitFor();
+    await last.click({ modifiers: ['Shift'] });
+    await expect(page.getByTestId('selection-pill')).toContainText('120 selected');
+
+    await grid.evaluate((node) => {
+      const element = node as unknown as { scrollTop: number; dispatchEvent: (event: Event) => void };
+      element.scrollTop = 0;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    await expect(grid.locator('.ovl-grid__cell[aria-posinset="1"] .ovl-tile__select')).toHaveAttribute('aria-pressed', 'true');
   } finally {
     await app.close();
   }

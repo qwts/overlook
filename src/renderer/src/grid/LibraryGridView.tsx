@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -9,7 +9,7 @@ import { videoTileProps } from '../media/device-capabilities.js';
 import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
-import { useLibraryPhotos } from '../state/use-library-photos';
+import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
 import { AlbumPicker } from './AlbumPicker';
@@ -84,6 +84,48 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
+  const projectionKey = `${state.source}|${state.query}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
+  const selectionAnchorRef = useRef<string | null>(null);
+  const rangeRequestRef = useRef(0);
+  const projectionKeyRef = useRef(projectionKey);
+  useEffect(() => {
+    projectionKeyRef.current = projectionKey;
+    selectionAnchorRef.current = null;
+    rangeRequestRef.current += 1;
+  }, [projectionKey]);
+  const selectPhoto = useCallback(
+    (photoId: string, extend: boolean): void => {
+      const anchorId = selectionAnchorRef.current;
+      if (!extend || anchorId === null || projectionKeyRef.current !== projectionKey) {
+        rangeRequestRef.current += 1;
+        dispatch({ type: 'selection/toggled', photoId });
+        selectionAnchorRef.current = photoId;
+        return;
+      }
+      const requestId = (rangeRequestRef.current += 1);
+      void window.overlook.library
+        .selectionRange({
+          source: state.source,
+          anchorId,
+          targetId: photoId,
+          ...(state.source === 'recent' ? { recentSince: recentSinceIso() } : {}),
+          ...(state.query === '' ? {} : { query: state.query }),
+          ...(Object.values(state.chips).some(Boolean) ? { chips: state.chips } : {}),
+          ...(state.sortOrder === 'date' ? {} : { order: state.sortOrder }),
+          ...(state.album === null ? {} : { albumId: state.album }),
+        })
+        .then(({ photoIds }) => {
+          if (requestId !== rangeRequestRef.current || projectionKeyRef.current !== projectionKey) return;
+          if (photoIds.length === 0) {
+            dispatch({ type: 'selection/toggled', photoId });
+            selectionAnchorRef.current = photoId;
+            return;
+          }
+          dispatch({ type: 'selection/all', photoIds });
+        });
+    },
+    [dispatch, projectionKey, state.album, state.chips, state.query, state.sortOrder, state.source],
+  );
   // Purge ceremony (#121): the Trash pill's permanent-delete action opens the confirm over
   // a SNAPSHOT of the selection — global shortcuts (⌘A) stay live while
   // the modal is open, and the destructive set must be exactly what the
@@ -390,9 +432,7 @@ export function LibraryGridView({
         onOpen={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
         }}
-        onToggleSelect={() => {
-          dispatch({ type: 'selection/toggled', photoId: photo.id });
-        }}
+        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
         onToggleFavorite={() => toggleFavorite(photo)}
         favoritePending={favoritePending.has(photo.id)}
         retentionLabel={retentionLabel}
@@ -419,9 +459,7 @@ export function LibraryGridView({
         onClick={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
         }}
-        onToggleSelect={() => {
-          dispatch({ type: 'selection/toggled', photoId: photo.id });
-        }}
+        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
         onToggleFavorite={() => toggleFavorite(photo)}
         favoritePending={favoritePending.has(photo.id)}
         retentionLabel={retentionLabel}
@@ -448,9 +486,9 @@ export function LibraryGridView({
         onNeedMore={loadMore}
         renderTile={renderTile}
         onKeyboardOpen={(photo) => dispatch({ type: 'lightbox/opened', photoId: photo.id })}
-        onKeyboardSelection={(photoIds, mode) => {
-          if (mode === 'replace') dispatch({ type: 'selection/replaced', photoIds });
-          else if (photoIds[0] !== undefined) dispatch({ type: 'selection/toggled', photoId: photoIds[0] });
+        onKeyboardSelection={selectPhoto}
+        onSelectionAnchorChange={(photoId) => {
+          selectionAnchorRef.current = photoId;
         }}
       />
       {state.selection.size > 0 ? (

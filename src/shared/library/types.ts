@@ -117,6 +117,21 @@ export interface PageResult {
   readonly nextCursor: PageCursor | null;
 }
 
+export interface SelectionRangeRequest {
+  readonly source: SourceFilter;
+  readonly anchorId: string;
+  readonly targetId: string;
+  readonly recentSince?: string | undefined;
+  readonly query?: string | undefined;
+  readonly chips?: ChipFilters | undefined;
+  readonly order?: SortOrder | undefined;
+  readonly albumId?: string | undefined;
+}
+
+export interface SelectionRangeResult {
+  readonly photoIds: readonly string[];
+}
+
 export type SourceCounts = Readonly<Record<SourceFilter, number>>;
 
 /** Sidebar albums list (#80); CRUD arrives with M10. */

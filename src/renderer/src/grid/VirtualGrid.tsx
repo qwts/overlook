@@ -38,7 +38,8 @@ export interface VirtualGridProps<Photo extends { readonly id: string }> {
   /** Tile renderer — #74 ships a placeholder; #76 swaps in PhotoTile. */
   readonly renderTile?: ((photo: Photo, size: number, keyboard: VirtualGridItemKeyboard) => ReactNode) | undefined;
   readonly onKeyboardOpen?: ((photo: Photo) => void) | undefined;
-  readonly onKeyboardSelection?: ((photoIds: readonly string[], mode: 'replace' | 'toggle') => void) | undefined;
+  readonly onKeyboardSelection?: ((photoId: string, extend: boolean) => void) | undefined;
+  readonly onSelectionAnchorChange?: ((photoId: string) => void) | undefined;
 }
 
 export interface VirtualGridItemKeyboard {
@@ -59,6 +60,7 @@ export function VirtualGrid<Photo extends { readonly id: string }>({
   renderTile,
   onKeyboardOpen,
   onKeyboardSelection,
+  onSelectionAnchorChange,
 }: VirtualGridProps<Photo>): ReactElement {
   const intl = useIntl();
   const direction = directionOf(intl.locale);
@@ -149,6 +151,7 @@ export function VirtualGrid<Photo extends { readonly id: string }>({
     direction,
     onOpen: onKeyboardOpen,
     onSelection: onKeyboardSelection,
+    onAnchorChange: onSelectionAnchorChange,
     onScrollPositionChange: setScrollTop,
   });
 

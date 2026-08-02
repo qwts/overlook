@@ -73,6 +73,12 @@ const libraryQuerySchema = z.object({
   order: z.enum(['date', 'name', 'size']).optional(),
   albumId: z.string().optional(),
 });
+const librarySelectionRangeSchema = libraryQuerySchema.extend({ anchorId: z.string().min(1), targetId: z.string().min(1) });
+const libraryChangedSchema = z.object({
+  photoIds: z.array(z.string()),
+  derivativeOnly: z.boolean().optional(),
+  membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
+});
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({
   state: appLockStateSchema,
@@ -291,6 +297,11 @@ export const channels = {
     z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
   ),
   librarySelectAll: defineChannel('library:select-all', libraryQuerySchema, z.object({ photoIds: z.array(z.string()).readonly() })),
+  librarySelectionRange: defineChannel(
+    'library:selection-range',
+    librarySelectionRangeSchema,
+    z.object({ photoIds: z.array(z.string()).readonly() }),
+  ),
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
@@ -828,19 +839,9 @@ export const events = {
   ...boardEvents,
   ...embeddingEvents,
   // Targeted library pushes (#71) — never refetch-the-world signals.
-  // `derivativeOnly` marks a change that only regenerated a thumb/poster
-  // derivative (a captured video poster, a repaired preview) with no membership
-  // or metadata change — the renderer refreshes just those tiles' images and
-  // must NOT refetch/replace the page (which would reset scroll and drop the
-  // lightbox/selection for items beyond page 1). #744 review.
-  libraryChanged: defineEvent(
-    'library:changed',
-    z.object({
-      photoIds: z.array(z.string()),
-      derivativeOnly: z.boolean().optional(),
-      membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
-    }),
-  ),
+  // `derivativeOnly` refreshes tile images without replacing the page or
+  // dropping deep scroll/lightbox/selection state (#744).
+  libraryChanged: defineEvent('library:changed', libraryChangedSchema),
   ...originalPolicy.originalPolicyEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',

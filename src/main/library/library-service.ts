@@ -11,6 +11,8 @@ import type {
   PageRequest,
   PageResult,
   PhotoRecord,
+  SelectionRangeRequest,
+  SelectionRangeResult,
   SourceCounts,
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
@@ -64,6 +66,10 @@ export class LibraryService {
 
   selectAllIds(request: LibraryQuery): readonly string[] {
     return this.repo.selectAllIds(request);
+  }
+
+  selectionRange(request: SelectionRangeRequest): SelectionRangeResult {
+    return { photoIds: this.repo.selectionRange(request) };
   }
 
   get(photoId: string): PhotoRecord | undefined {
