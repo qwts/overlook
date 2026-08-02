@@ -82,6 +82,9 @@ function seededService(): {
 // so malformed traffic in either direction rejects exactly as over IPC.
 function rendererClient(service: LibraryService): {
   page: ReturnType<typeof createInvoker<typeof channels.libraryPage.request, typeof channels.libraryPage.response>>;
+  selectionRange: ReturnType<
+    typeof createInvoker<typeof channels.librarySelectionRange.request, typeof channels.librarySelectionRange.response>
+  >;
   toggleFavorite: ReturnType<
     typeof createInvoker<typeof channels.libraryToggleFavorite.request, typeof channels.libraryToggleFavorite.response>
   >;
@@ -92,6 +95,7 @@ function rendererClient(service: LibraryService): {
 } {
   const handlers: Record<string, (request: unknown) => Promise<unknown>> = {
     [channels.libraryPage.name]: wrapHandler(channels.libraryPage, (req) => service.page(req)),
+    [channels.librarySelectionRange.name]: wrapHandler(channels.librarySelectionRange, (req) => service.selectionRange(req)),
     [channels.libraryToggleFavorite.name]: wrapHandler(channels.libraryToggleFavorite, ({ id }) => service.toggleFavorite(id)),
     [channels.libraryRepairDimensions.name]: wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) =>
       service.repairDimensions(id, width, height),
@@ -107,6 +111,7 @@ function rendererClient(service: LibraryService): {
   };
   return {
     page: createInvoker(channels.libraryPage, transport),
+    selectionRange: createInvoker(channels.librarySelectionRange, transport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, transport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, transport),
     stats: createInvoker(channels.libraryStats, transport),
@@ -163,6 +168,50 @@ describe('library IPC contract', () => {
     await assert.rejects(client.page({ source: 'all', limit: 5000 }));
     // Unknown source enum rejects.
     await assert.rejects(client.page({ source: 'everything' as never, limit: 10 }));
+  });
+
+  test('resolves complete active-projection ranges, including album and search scopes', async () => {
+    const { service } = seededService();
+    const client = rendererClient(service);
+    const all = await client.page({ source: 'all', limit: 50 });
+    const allRange = await client.selectionRange({
+      source: 'all',
+      anchorId: all.photos.at(-1)?.id ?? '',
+      targetId: all.photos[0]?.id ?? '',
+    });
+    assert.deepEqual(
+      allRange.photoIds,
+      all.photos.map(({ id }) => id),
+    );
+
+    const searched = await client.page({ source: 'all', limit: 50, query: 'lisbon' });
+    const searchRange = await client.selectionRange({
+      source: 'all',
+      query: 'lisbon',
+      anchorId: searched.photos[0]?.id ?? '',
+      targetId: searched.photos.at(-1)?.id ?? '',
+    });
+    assert.deepEqual(
+      searchRange.photoIds,
+      searched.photos.map(({ id }) => id),
+    );
+
+    service.createAlbum('ALB-RANGE', 'Range album');
+    service.addToAlbum('ALB-RANGE', [all.photos[0]?.id ?? '', all.photos[1]?.id ?? '']);
+    const albumRange = await client.selectionRange({
+      source: 'all',
+      albumId: 'ALB-RANGE',
+      anchorId: all.photos[1]?.id ?? '',
+      targetId: all.photos[0]?.id ?? '',
+    });
+    assert.deepEqual(albumRange.photoIds, [all.photos[0]?.id, all.photos[1]?.id]);
+    const outside = await client.selectionRange({
+      source: 'all',
+      albumId: 'ALB-RANGE',
+      anchorId: all.photos[0]?.id ?? '',
+      targetId: '01J8LIB005',
+    });
+    assert.deepEqual(outside.photoIds, []);
   });
 
   test('favorite toggle bumps pendingCount and emits both events', async () => {

@@ -7,7 +7,7 @@ const PAGE_SIZE = 500; // channel max — fewest round-trips on deep scrolls
 
 export const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
-function recentSinceIso(): string {
+export function recentSinceIso(): string {
   return new Date(Date.now() - RECENT_WINDOW_MS).toISOString();
 }
 

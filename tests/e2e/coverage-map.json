@@ -195,6 +195,20 @@
       ]
     },
     {
+      "id": "m04-full-projection-range-selection",
+      "wiki": "User-Story-M04-Library-browsing",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/browse.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-service.test.ts"]
+        }
+      ]
+    },
+    {
       "id": "m04-sidebar-sources-and-albums",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [
