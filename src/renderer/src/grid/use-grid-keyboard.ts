@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 import type { GridLayout } from '../../../shared/library/grid-layout.js';
 import { tilePosition } from '../../../shared/library/grid-layout.js';
@@ -51,6 +51,7 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
   onScrollPositionChange,
 }: GridKeyboardOptions<Photo>): number {
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const shiftNavigationIndexRef = useRef<number | null>(null);
   const activeIndex = Math.min(focusedIndex, Math.max(0, photos.length - 1));
 
   const focusAt = useCallback(
@@ -79,6 +80,7 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
     if (node === null) return;
     const onFocusIn = (event: FocusEvent): void => {
       if (event.target === node) {
+        shiftNavigationIndexRef.current = null;
         focusAt(activeIndex);
         return;
       }
@@ -86,7 +88,10 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
       if (index !== null) {
         setFocusedIndex(index);
         const photo = photos[index];
-        if (photo !== undefined) onAnchorChange?.(photo.id);
+        if (photo !== undefined) {
+          if (shiftNavigationIndexRef.current === index) shiftNavigationIndexRef.current = null;
+          else onAnchorChange?.(photo.id);
+        }
       }
     };
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
@@ -109,8 +114,13 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
         focusAt(next);
         const nextPhoto = photos[next];
         if (nextPhoto !== undefined) {
-          if (event.shiftKey) onSelection?.(nextPhoto.id, true);
-          else onAnchorChange?.(nextPhoto.id);
+          if (event.shiftKey) {
+            shiftNavigationIndexRef.current = next;
+            onSelection?.(nextPhoto.id, true);
+          } else {
+            shiftNavigationIndexRef.current = null;
+            onAnchorChange?.(nextPhoto.id);
+          }
         }
       } else return;
       event.preventDefault();
