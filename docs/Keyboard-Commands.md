@@ -17,7 +17,11 @@ registry and shows only commands active in the current surface.
 Photo focus is roving: only one tile is in the Tab order. Arrow keys move by
 cell or row, Home/End move to the row boundary, and Page Up/Page Down move by a
 viewport. Shift plus a movement key extends the selection; Space toggles the
-focused photo; Enter opens it. The skip link moves directly to the grid.
+focused photo; Enter opens it. A normal selection establishes the range anchor;
+Shift-click and Shift-keyboard selection replace the selection with the
+inclusive range in the complete active gallery projection, including
+virtualized photos that are not mounted. The skip link moves directly to the
+grid.
 
 ## Albums
 
