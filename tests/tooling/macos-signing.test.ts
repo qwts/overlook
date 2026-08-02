@@ -85,8 +85,9 @@ describe('macOS release signing safety (#357)', () => {
 
   test('the package workflow validates that the packaged app can start with provisioned identity', () => {
     const workflow = source('.github/workflows/package.yml');
-    const knip = source('knip.json');
+    const provisioningProfile = source('scripts/provisioning-profile.mjs');
     const provisionedVerifier = source('scripts/verify-macos-provisioned-app.mjs');
+    const launchVerifier = source('scripts/verify-macos-app-launch.mjs');
     assert.match(workflow, /verify-macos-provisioned-app\.mjs/u);
     assert.match(workflow, /verify-macos-app-launch\.mjs/u);
     assert.match(workflow, /OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: \$\{\{ vars\.IMAGE_TRAIL_EXTENSION_ID \}\}/u);
@@ -106,8 +107,8 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(provisionedVerifier, /ICLOUD_CONTAINER_ID = `iCloud\.\$\{BUNDLE_ID\}`/u);
     assert.match(provisionedVerifier, /UBIQUITY_CONTAINER_ID = ICLOUD_CONTAINER_ID/u);
     assert.match(provisionedVerifier, /codesign/u);
-    assert.match(source('scripts/verify-macos-app-launch.mjs'), /ditto/u);
-    for (const binary of ['ditto', 'plutil', 'security']) assert.match(knip, new RegExp(binary, 'u'));
+    for (const binary of ['ditto', 'plutil']) assert.match(launchVerifier, new RegExp(binary, 'u'));
+    for (const binary of ['plutil', 'security']) assert.match(provisioningProfile, new RegExp(binary, 'u'));
   });
 
   test('the signed app executable is the native messaging host and registration is build-identity gated', () => {

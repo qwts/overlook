@@ -14,6 +14,17 @@ describe('release workflow publication', () => {
     assert.match(workflow, /needs: verify/u);
   });
 
+  test('rejects real pending releases but permits empty governance changesets', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+    const verify = workflow.split('- name: Verify tag and version provenance')[1]?.split('- name: Verify exact-commit')[0] ?? '';
+
+    assert.match(workflow, /npm ci --ignore-scripts/u);
+    assert.match(verify, /npx changeset status --output/u);
+    assert.match(verify, /\.releases\.length/u);
+    assert.match(verify, /test "\$releases" -eq 0/u);
+    assert.doesNotMatch(verify, /find \.changeset/u);
+  });
+
   test('uploads files recursively instead of passing artifact directories to gh', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 
