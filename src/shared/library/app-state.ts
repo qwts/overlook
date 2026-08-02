@@ -32,6 +32,8 @@ export interface AppState {
    * before this is set and never represent protected content. */
   readonly protectedAlbum: string | null;
   readonly selection: ReadonlySet<string>;
+  /** `all` selections span unloaded pages and survive page replacement. */
+  readonly selectionMode: 'explicit' | 'all';
   readonly lightboxId: string | null;
   readonly inspectorOpen: boolean;
   /** Sidebar visibility — toggled from View → Toggle Sidebar (#689). */
@@ -74,6 +76,7 @@ export const initialAppState: AppState = {
   album: null,
   protectedAlbum: null,
   selection: new Set<string>(),
+  selectionMode: 'explicit',
   lightboxId: null,
   inspectorOpen: false,
   sidebarOpen: true,
@@ -109,6 +112,7 @@ export type AppAction =
   | { type: 'protectedAlbum/set'; albumId: string | null }
   | { type: 'selection/toggled'; photoId: string }
   | { type: 'selection/all'; photoIds: readonly string[] }
+  | { type: 'selection/replaced'; photoIds: readonly string[] }
   | { type: 'selection/cleared' }
   | { type: 'lightbox/opened'; photoId: string }
   | { type: 'lightbox/stepped'; delta: 1 | -1 }
@@ -133,12 +137,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (action.append) {
         return { ...state, photos: [...state.photos, ...action.photos] };
       }
-      // Mock semantics (#78): selection survives filter/source changes only
-      // for still-visible items — intersect with each fresh first page. The
-      // lightbox follows the same rule (#92, PR #187 review): a photo that
-      // left the visible set closes it for real, never lingering to reopen.
+      // Explicit selections survive filter/source changes only for still-visible
+      // items. A complete Select All selection spans unloaded pages and remains
+      // intact while the same collection refetches (#884). The lightbox follows
+      // visibility independently (#92): a photo that left the set closes it.
       const visible = new Set(action.photos.map((photo) => photo.id));
-      const selection = new Set([...state.selection].filter((id) => visible.has(id)));
+      const selection =
+        state.selectionMode === 'all' ? new Set(state.selection) : new Set([...state.selection].filter((id) => visible.has(id)));
       const lightboxId = state.lightboxId !== null && visible.has(state.lightboxId) ? state.lightboxId : null;
       const inspectorClosedWithLightbox = state.inspectorSource === 'lightbox' && lightboxId === null && !state.inspectorDetached;
       const detachedFallbackToSelection = state.inspectorSource === 'lightbox' && lightboxId === null && state.inspectorDetached;
@@ -176,7 +181,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, thumbEpoch };
     }
     case 'query/set':
-      return { ...state, query: action.query };
+      return { ...state, query: action.query, selectionMode: 'explicit' };
     case 'zoom/set':
       return { ...state, zoom: Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, action.zoom)) };
     case 'view/set':
@@ -184,15 +189,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'source/set':
       // Selection is NOT cleared here: the next photos/loaded intersects it
       // with the new visible set (still-visible items survive, #78).
-      return { ...state, source: action.source, album: null, protectedAlbum: null };
+      return { ...state, source: action.source, album: null, protectedAlbum: null, selectionMode: 'explicit' };
     case 'chip/toggled': {
       const next = { ...state.chips, [action.chip]: state.chips[action.chip] !== true };
-      return { ...state, chips: next };
+      return { ...state, chips: next, selectionMode: 'explicit' };
     }
     case 'album/set':
       // An album behaves like a source (design §Sidebar): selecting one
       // resets the source to 'all'; picking any source clears it below.
-      return { ...state, album: action.albumId, protectedAlbum: null, source: 'all' };
+      return { ...state, album: action.albumId, protectedAlbum: null, source: 'all', selectionMode: 'explicit' };
     case 'protectedAlbum/set':
       return {
         ...state,
@@ -201,6 +206,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         source: 'all',
         photos: [],
         selection: new Set<string>(),
+        selectionMode: 'explicit',
         lightboxId: null,
         inspectorOpen: false,
         inspectorDetached: false,
@@ -210,7 +216,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'sortOrder/set':
       // Fed by settings:changed pushes (#113) — the query hook refetches
       // and the next photos/loaded intersects the selection as usual.
-      return { ...state, sortOrder: action.order };
+      return { ...state, sortOrder: action.order, selectionMode: 'explicit' };
     case 'selection/toggled': {
       const selection = new Set(state.selection);
       if (selection.has(action.photoId)) {
@@ -221,6 +227,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection,
+        selectionMode: 'explicit',
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
       };
@@ -230,6 +237,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection,
+        selectionMode: 'all',
+        inspectorPhotoId:
+          state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
+      };
+    }
+    case 'selection/replaced': {
+      const selection = new Set(action.photoIds);
+      return {
+        ...state,
+        selection,
+        selectionMode: 'explicit',
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
       };
@@ -238,6 +256,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection: new Set<string>(),
+        selectionMode: 'explicit',
         inspectorPhotoId: state.inspectorSource === 'selection' ? null : state.inspectorPhotoId,
       };
     case 'lightbox/opened':

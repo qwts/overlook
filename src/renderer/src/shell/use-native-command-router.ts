@@ -20,6 +20,7 @@ export interface NativeCommandRouterDeps {
   readonly nativeCommand: { readonly id: CommandId; readonly sequence: number } | null;
   readonly state: AppState;
   readonly dispatch: Dispatch<AppAction>;
+  readonly onSelectAll: () => void;
   readonly setShortcutSurface: (surface: CommandSurface | null) => void;
   readonly setSettingsSection: (section: SettingsSection | undefined) => void;
   readonly setExportPhotoIds: (ids: readonly string[] | null) => void;
@@ -37,6 +38,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     nativeCommand,
     state,
     dispatch,
+    onSelectAll,
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
@@ -122,7 +124,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           });
           return;
         case 'selection.selectAll':
-          dispatch({ type: 'selection/all', photoIds: state.photos.map(({ id }) => id) });
+          onSelectAll();
           return;
         case 'selection.clear':
           dispatch({ type: 'selection/cleared' });
@@ -272,6 +274,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     [
       dispatch,
       state,
+      onSelectAll,
       setShortcutSurface,
       setSettingsSection,
       setExportPhotoIds,

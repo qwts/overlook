@@ -160,7 +160,7 @@ export function LibraryGridView({
   ): void => {
     const selectionBeforeOpen = [...state.selection];
     const targetIds = state.selection.has(photo.id) ? selectionBeforeOpen : [photo.id];
-    if (!state.selection.has(photo.id)) dispatch({ type: 'selection/all', photoIds: targetIds });
+    if (!state.selection.has(photo.id)) dispatch({ type: 'selection/replaced', photoIds: targetIds });
     setContextPhoto({ photo, targetIds, selectionBeforeOpen, ...point });
   };
 
@@ -449,7 +449,7 @@ export function LibraryGridView({
         renderTile={renderTile}
         onKeyboardOpen={(photo) => dispatch({ type: 'lightbox/opened', photoId: photo.id })}
         onKeyboardSelection={(photoIds, mode) => {
-          if (mode === 'replace') dispatch({ type: 'selection/all', photoIds });
+          if (mode === 'replace') dispatch({ type: 'selection/replaced', photoIds });
           else if (photoIds[0] !== undefined) dispatch({ type: 'selection/toggled', photoId: photoIds[0] });
         }}
       />
@@ -567,7 +567,7 @@ export function LibraryGridView({
           }}
           onExport={() => {
             onExport(contextPhoto.targetIds);
-            dispatch({ type: 'selection/all', photoIds: contextPhoto.selectionBeforeOpen });
+            dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
           }}
           onAddToAlbum={() => {
             setAlbumPicker({ targetIds: contextPhoto.targetIds, x: contextPhoto.x, y: contextPhoto.y, origin: contextPhoto.origin });
@@ -643,7 +643,7 @@ export function LibraryGridView({
             }
             invokeQuickAction(id, contextPhoto.photo);
             if (id === 'photo.export') {
-              dispatch({ type: 'selection/all', photoIds: contextPhoto.selectionBeforeOpen });
+              dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
             }
           }}
         />

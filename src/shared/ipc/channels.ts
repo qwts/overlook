@@ -65,6 +65,14 @@ const chipFiltersSchema = z.object({
 });
 
 const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'offloaded', 'deleted']);
+const libraryQuerySchema = z.object({
+  source: sourceFilterSchema,
+  recentSince: z.string().optional(),
+  query: z.string().optional(),
+  chips: chipFiltersSchema.optional(),
+  order: z.enum(['date', 'name', 'size']).optional(),
+  albumId: z.string().optional(),
+});
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({
   state: appLockStateSchema,
@@ -276,18 +284,13 @@ export const channels = {
   // Library contract (#71) — the renderer's typed window into the library.
   libraryPage: defineChannel(
     'library:page',
-    z.object({
-      source: sourceFilterSchema,
+    libraryQuerySchema.extend({
       limit: z.number().int().positive().max(500),
       cursor: pageCursorSchema.optional(),
-      recentSince: z.string().optional(),
-      query: z.string().optional(),
-      chips: chipFiltersSchema.optional(),
-      order: z.enum(['date', 'name', 'size']).optional(),
-      albumId: z.string().optional(),
     }),
     z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
   ),
+  librarySelectAll: defineChannel('library:select-all', libraryQuerySchema, z.object({ photoIds: z.array(z.string()).readonly() })),
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',

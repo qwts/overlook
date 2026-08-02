@@ -82,6 +82,7 @@ function seededService(): {
 // so malformed traffic in either direction rejects exactly as over IPC.
 function rendererClient(service: LibraryService): {
   page: ReturnType<typeof createInvoker<typeof channels.libraryPage.request, typeof channels.libraryPage.response>>;
+  selectAll: ReturnType<typeof createInvoker<typeof channels.librarySelectAll.request, typeof channels.librarySelectAll.response>>;
   toggleFavorite: ReturnType<
     typeof createInvoker<typeof channels.libraryToggleFavorite.request, typeof channels.libraryToggleFavorite.response>
   >;
@@ -92,6 +93,7 @@ function rendererClient(service: LibraryService): {
 } {
   const handlers: Record<string, (request: unknown) => Promise<unknown>> = {
     [channels.libraryPage.name]: wrapHandler(channels.libraryPage, (req) => service.page(req)),
+    [channels.librarySelectAll.name]: wrapHandler(channels.librarySelectAll, (req) => ({ photoIds: service.selectAllIds(req) })),
     [channels.libraryToggleFavorite.name]: wrapHandler(channels.libraryToggleFavorite, ({ id }) => service.toggleFavorite(id)),
     [channels.libraryRepairDimensions.name]: wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) =>
       service.repairDimensions(id, width, height),
@@ -107,6 +109,7 @@ function rendererClient(service: LibraryService): {
   };
   return {
     page: createInvoker(channels.libraryPage, transport),
+    selectAll: createInvoker(channels.librarySelectAll, transport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, transport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, transport),
     stats: createInvoker(channels.libraryStats, transport),
@@ -163,6 +166,28 @@ describe('library IPC contract', () => {
     await assert.rejects(client.page({ source: 'all', limit: 5000 }));
     // Unknown source enum rejects.
     await assert.rejects(client.page({ source: 'everything' as never, limit: 10 }));
+  });
+
+  test('Select All resolves complete library, album, filter, search, and combined scopes', async () => {
+    const { service, db } = seededService();
+    const client = rendererClient(service);
+
+    const all = await client.selectAll({ source: 'all' });
+    assert.equal(all.photoIds.length, 19);
+    assert.equal(new Set(all.photoIds).size, all.photoIds.length);
+
+    run(db, `INSERT INTO albums (id, name, created_at, position) VALUES ('AL1', 'Travel', '2026-07-01T00:00:00Z', 0)`);
+    run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('AL1', '01J8LIB000', 0)`);
+    run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('AL1', '01J8LIB001', 1)`);
+    const album = await client.selectAll({ source: 'all', albumId: 'AL1' });
+    assert.deepEqual(album.photoIds, ['01J8LIB001', '01J8LIB000']);
+
+    const raw = await client.selectAll({ source: 'all', chips: { raw: true } });
+    assert.equal(raw.photoIds.length, 3);
+    const kyoto = await client.selectAll({ source: 'all', query: 'kyo' });
+    assert.ok(kyoto.photoIds.length > 0);
+    const combined = await client.selectAll({ source: 'all', albumId: 'AL1', chips: { raw: true }, query: 'IMG_' });
+    assert.deepEqual(combined.photoIds, ['01J8LIB000']);
   });
 
   test('favorite toggle bumps pendingCount and emits both events', async () => {

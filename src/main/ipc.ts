@@ -152,6 +152,9 @@ export function registerLibraryHandlers(
 ): void {
   const page = (request: unknown): unknown => wrapHandler(channels.libraryPage, (req) => getService().page(req))(request);
   ipcMain.handle(channels.libraryPage.name, (_event, request: unknown) => page(request));
+  ipcMain.handle(channels.librarySelectAll.name, (_event, request: unknown) =>
+    wrapHandler(channels.librarySelectAll, (req) => ({ photoIds: getService().selectAllIds(req) }))(request),
+  );
   ipcMain.handle(channels.libraryGet.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryGet, ({ id }) => ({ photo: getService().get(id) ?? null }))(request),
   );

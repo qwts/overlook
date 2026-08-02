@@ -90,10 +90,9 @@ export interface ChipFilters {
   readonly localOnly?: boolean | undefined;
 }
 
-export interface PageRequest {
+/** The complete logical collection query shared by paging and Select All. */
+export interface LibraryQuery {
   readonly source: SourceFilter;
-  readonly limit: number;
-  readonly cursor?: PageCursor | undefined;
   /** 'recent' cutoff (ISO); callers own the "recent" window policy. */
   readonly recentSince?: string | undefined;
   /** FTS5-ranked search over name/place/camera, prefix-matched per token
@@ -105,6 +104,11 @@ export interface PageRequest {
   readonly order?: SortOrder | undefined;
   /** Restrict to one album's members (#117) — AND-combined with source. */
   readonly albumId?: string | undefined;
+}
+
+export interface PageRequest extends LibraryQuery {
+  readonly limit: number;
+  readonly cursor?: PageCursor | undefined;
 }
 
 export interface PageResult {
