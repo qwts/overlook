@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChipFilters, PageCursor, PageRequest, SyncStatus } from '../../../shared/library/types.js';
+import { membershipChanged } from '../../../shared/library/library-membership-change.js';
 import { useAppState, useAppDispatch } from './app-state-context';
 
 const PAGE_SIZE = 500; // channel max — fewest round-trips on deep scrolls
@@ -13,19 +14,6 @@ export function recentSinceIso(): string {
 
 function chipsActive(chips: ChipFilters): boolean {
   return Object.values(chips).some(Boolean);
-}
-
-function membershipChanged(
-  membership: 'none' | 'favorite' | 'album' | 'library' | undefined,
-  source: PageRequest['source'],
-  chips: ChipFilters,
-  album: string | null,
-): boolean {
-  if (membership === undefined) return false;
-  if (membership === 'none') return false;
-  if (membership === 'favorite') return source === 'favorites' || chips.favorites === true;
-  if (membership === 'album') return album !== null;
-  return true;
 }
 
 function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (preserveSelection?: boolean) => void): void {
@@ -126,7 +114,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
   // leave stale cells or permanent loading placeholders. Replace semantics
   // reset the cursor; the selection intersects safely in the reducer.
   useEffect(() => {
-    return window.overlook.library.onChanged(({ photoIds, derivativeOnly, membership }) => {
+    return window.overlook.library.onChanged(({ photoIds, derivativeOnly, membership, albumIds }) => {
       // A derivative can change in place (video poster captured post-import, a
       // repaired RAW preview) without altering the record or its stable thumb
       // URL — so bump those ids' cache-bust epoch to force the tiles to reload.
@@ -134,7 +122,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage(!membershipChanged(membership, source, chips, album));
+      if (derivativeOnly !== true) fetchFirstPage(!membershipChanged(membership, source, chips, album, albumIds));
     });
   }, [album, chips, dispatch, fetchFirstPage, source]);
 

@@ -64,6 +64,7 @@ const libraryChangedSchema = z.object({
   photoIds: z.array(z.string()),
   derivativeOnly: z.boolean().optional(),
   membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
+  albumIds: z.array(z.string()).optional(),
 });
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({

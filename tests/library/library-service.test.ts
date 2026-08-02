@@ -22,7 +22,7 @@ import { serializeBoard, type Board } from '../../src/shared/moodboard/board.js'
 function seededService(): {
   service: LibraryService;
   db: ReturnType<typeof openLibraryDatabase>;
-  events: { changed: string[][]; originalChanged: string[][]; pending: number[] };
+  events: { changed: string[][]; changedAlbums: (string[] | undefined)[]; originalChanged: string[][]; pending: number[] };
 } {
   const db = openLibraryDatabase({
     path: join(mkdtempSync(join(tmpdir(), 'overlook-lib-')), 'library.db'),
@@ -69,9 +69,17 @@ function seededService(): {
   run(db, `UPDATE sync_ledger SET status = 'synced', dirty = 0 WHERE photo_id = '01J8LIB004'`);
   run(db, `UPDATE photos SET deleted_at = '2026-07-02T00:00:00Z' WHERE id = '01J8LIB005'`);
 
-  const events = { changed: [] as string[][], originalChanged: [] as string[][], pending: [] as number[] };
+  const events = {
+    changed: [] as string[][],
+    changedAlbums: [] as (string[] | undefined)[],
+    originalChanged: [] as string[][],
+    pending: [] as number[],
+  };
   const service = new LibraryService(db, {
-    libraryChanged: (ids) => events.changed.push([...ids]),
+    libraryChanged: (ids, _membership, albumIds) => {
+      events.changed.push([...ids]);
+      events.changedAlbums.push(albumIds === undefined ? undefined : [...albumIds]);
+    },
     originalClassificationChanged: (ids) => events.originalChanged.push([...ids]),
     pendingCountChanged: (count) => events.pending.push(count),
   });
@@ -331,6 +339,7 @@ describe('library IPC contract', () => {
     service.createAlbum('AL2', 'Target');
     service.addToAlbum('AL1', ['01J8LIB003', '01J8LIB004']);
     events.changed.length = 0;
+    events.changedAlbums.length = 0;
     events.pending.length = 0;
 
     assert.deepEqual(service.moveBetweenAlbums('AL1', 'AL2', ['01J8LIB003', '01J8LIB004']), {
@@ -338,6 +347,7 @@ describe('library IPC contract', () => {
       alreadyInTarget: 0,
     });
     assert.deepEqual(events.changed, [['01J8LIB003', '01J8LIB004']]);
+    assert.deepEqual(events.changedAlbums, [['AL1', 'AL2']]);
     assert.equal(events.pending.length, 1);
     assert.equal(service.albums().find((album) => album.id === 'AL1')?.count, 0);
     assert.equal(service.albums().find((album) => album.id === 'AL2')?.count, 2);

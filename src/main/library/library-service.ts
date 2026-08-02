@@ -22,7 +22,7 @@ import type { Board } from '../../shared/moodboard/board.js';
 // targeted change events instead of refetch-the-world signals.
 
 export interface LibraryEvents {
-  libraryChanged(photoIds: readonly string[], membership: LibraryMembershipChange): void;
+  libraryChanged(photoIds: readonly string[], membership: LibraryMembershipChange, albumIds?: readonly string[]): void;
   originalClassificationChanged?(photoIds: readonly string[]): void;
   pendingCountChanged(count: number): void;
 }
@@ -174,20 +174,20 @@ export class LibraryService {
 
   deleteAlbum(albumId: string): void {
     const members = this.repo.deleteAlbum(albumId);
-    this.events.libraryChanged(members, 'album');
+    this.events.libraryChanged(members, 'album', [albumId]);
     this.events.pendingCountChanged(this.repo.pendingCount());
   }
 
   addToAlbum(albumId: string, photoIds: readonly string[]): { added: number; changedPhotoIds: readonly string[] } {
     const added = this.repo.addToAlbum(albumId, photoIds);
-    this.events.libraryChanged(added, 'album');
+    this.events.libraryChanged(added, 'album', [albumId]);
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { added: added.length, changedPhotoIds: added };
   }
 
   removeFromAlbum(albumId: string, photoIds: readonly string[]): { removed: number; changedPhotoIds: readonly string[] } {
     const removed = this.repo.removeFromAlbum(albumId, photoIds);
-    this.events.libraryChanged(removed, 'album');
+    this.events.libraryChanged(removed, 'album', [albumId]);
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { removed: removed.length, changedPhotoIds: removed };
   }
@@ -198,7 +198,7 @@ export class LibraryService {
 
   moveBetweenAlbums(sourceAlbumId: string, targetAlbumId: string, photoIds: readonly string[]): { moved: number; alreadyInTarget: number } {
     const result = this.repo.moveBetweenAlbums(sourceAlbumId, targetAlbumId, photoIds);
-    this.events.libraryChanged(result.moved, 'album');
+    this.events.libraryChanged(result.moved, 'album', [sourceAlbumId, targetAlbumId]);
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { moved: result.moved.length, alreadyInTarget: result.alreadyInTarget };
   }

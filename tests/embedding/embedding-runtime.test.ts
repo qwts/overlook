@@ -45,7 +45,7 @@ describe('embedding execution-provider fallback', () => {
     const maintenance = source('src/main/import/maintenance-runtime.ts');
     assert.match(
       index,
-      /libraryChanged: \(photoIds, membership\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\], membership \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
+      /libraryChanged: \(photoIds, membership, albumIds\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\], membership, \.\.\.\(albumIds === undefined \? \{\} : \{ albumIds: \[\.\.\.albumIds\] \}\) \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
     );
     assert.match(
       index,
