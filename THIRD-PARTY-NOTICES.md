@@ -15,7 +15,7 @@ components; their full license texts ship inside the Electron distribution at
 | ------- | ------- | ------- |
 | `@anthropic-ai/sdk` | 0.112.4 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
-| `@emnapi/runtime` | 1.11.1 | MIT |
+| `@emnapi/runtime` | 1.11.2 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
 | `@img/sharp-darwin-arm64` | 0.35.3 | Apache-2.0 |
 | `@img/sharp-darwin-x64` | 0.35.3 | Apache-2.0 |
@@ -169,7 +169,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-## @emnapi/runtime 1.11.1
+## @emnapi/runtime 1.11.2
 
 License: MIT
 

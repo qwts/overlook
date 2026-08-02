@@ -17,8 +17,6 @@ import { createNativeTouchIdAdapter } from './touch-id-native.js';
 import { TestTouchIdAdapter } from './test-touch-id-adapter.js';
 import { registerInspectorWindowHandlers } from '../inspector-window-runtime.js';
 
-export { createAppLockFacade } from './app-lock-facade.js';
-
 export interface AppLockRuntimeOptions {
   readonly dataDir: string;
   readonly safeStorage: SafeStorageLike;
