@@ -97,6 +97,7 @@ export function LibraryGridView({
     (photoId: string, extend: boolean): void => {
       const anchorId = selectionAnchorRef.current;
       if (!extend || anchorId === null || projectionKeyRef.current !== projectionKey) {
+        rangeRequestRef.current += 1;
         dispatch({ type: 'selection/toggled', photoId });
         selectionAnchorRef.current = photoId;
         return;
