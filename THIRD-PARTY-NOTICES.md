@@ -13,9 +13,9 @@ components; their full license texts ship inside the Electron distribution at
 
 | Package | Version | License |
 | ------- | ------- | ------- |
-| `@anthropic-ai/sdk` | 0.112.4 | MIT |
+| `@anthropic-ai/sdk` | 0.115.0 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
-| `@emnapi/runtime` | 1.11.1 | MIT |
+| `@emnapi/runtime` | 1.11.2 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
 | `@img/sharp-darwin-arm64` | 0.35.3 | Apache-2.0 |
 | `@img/sharp-darwin-x64` | 0.35.3 | Apache-2.0 |
@@ -88,7 +88,7 @@ components; their full license texts ship inside the Electron distribution at
 | `once` | 1.4.0 | ISC |
 | `onnxruntime-common` | 1.27.0 | MIT |
 | `onnxruntime-node` | 1.27.0 | MIT |
-| `openai` | 6.48.0 | Apache-2.0 |
+| `openai` | 7.1.0 | Apache-2.0 |
 | `prebuild-install` | 7.1.3 | MIT |
 | `pump` | 3.0.4 | MIT |
 | `rc` | 1.2.8 | (BSD-2-Clause OR MIT OR Apache-2.0) |
@@ -122,7 +122,7 @@ components; their full license texts ship inside the Electron distribution at
 
 ---
 
-## @anthropic-ai/sdk 0.112.4
+## @anthropic-ai/sdk 0.115.0
 
 License: MIT
 
@@ -169,7 +169,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-## @emnapi/runtime 1.11.1
+## @emnapi/runtime 1.11.2
 
 License: MIT
 
@@ -2028,7 +2028,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## openai 6.48.0
+## openai 7.1.0
 
 License: Apache-2.0
 
