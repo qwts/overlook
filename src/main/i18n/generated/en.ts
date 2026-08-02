@@ -35,6 +35,7 @@ export const en: Readonly<Record<string, string>> = {
   "commands.help.title": "Keyboard shortcuts",
   "commands.history.redo": "Redo",
   "commands.history.undo": "Undo",
+  "commands.library.exportAll": "Export All Unencrypted…",
   "commands.library.import": "Import Photos…",
   "commands.library.move": "Move Library…",
   "commands.library.new": "New Library…",

@@ -22,7 +22,7 @@ export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExpo
   const repo = new PhotosRepository(deps.db);
   const sidecars = new SidecarRepository(deps.db);
   return createExportRuntime({
-    repo: { get: (id) => repo.get(id) },
+    repo: { get: (id) => repo.get(id), exportableIds: () => repo.exportableIds() },
     blobs: deps.blobStore,
     resolveKey: deps.resolveKey,
     // Companions export beside their originals (#484, ADR-0031 §6).

@@ -12,7 +12,10 @@ import type { PhotoRecord } from '../../shared/library/types.js';
 export type DrainableExportFacade = ExportFacade & { close(): void; drain(): Promise<void> };
 
 export interface ExportRuntimeOptions {
-  readonly repo: { readonly get: (id: string) => PhotoRecord | undefined };
+  readonly repo: {
+    readonly get: (id: string) => PhotoRecord | undefined;
+    readonly exportableIds: () => readonly string[];
+  };
   readonly blobs: { readonly getStream: (contentHash: string, resolveKey: KeyResolver, photoId: string) => Readable };
   readonly resolveKey: KeyResolver;
   readonly openOriginal: (photo: PhotoRecord) => Promise<{
@@ -53,30 +56,33 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
   let controller: AbortController | null = null;
   let turn: Promise<unknown> = Promise.resolve();
   let closed = false;
+  const schedule = (photoIds: () => readonly string[], destination: string, format: 'original' | 'jpeg' = 'original') => {
+    const task = async () => {
+      if (closed) throw new Error('export service is closed');
+      controller = new AbortController();
+      try {
+        const summary = await engine.exportPhotos(photoIds(), destination, controller.signal, format);
+        return {
+          exported: summary.exported,
+          failed: summary.failed,
+          cancelled: summary.cancelled,
+          previewTranscodes: summary.previewTranscodes,
+          failures: [...summary.failures],
+        };
+      } finally {
+        controller = null;
+      }
+    };
+    const next = turn.then(task, task);
+    turn = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
   return {
-    run: (photoIds, destination, format) => {
-      const task = async () => {
-        if (closed) throw new Error('export service is closed');
-        controller = new AbortController();
-        try {
-          const summary = await engine.exportPhotos(photoIds, destination, controller.signal, format);
-          return {
-            exported: summary.exported,
-            failed: summary.failed,
-            cancelled: summary.cancelled,
-            previewTranscodes: summary.previewTranscodes,
-          };
-        } finally {
-          controller = null;
-        }
-      };
-      const next = turn.then(task, task);
-      turn = next.then(
-        () => undefined,
-        () => undefined,
-      );
-      return next;
-    },
+    run: (photoIds, destination, format) => schedule(() => photoIds, destination, format),
+    runAll: (destination) => schedule(options.repo.exportableIds, destination),
     cancel: () => controller?.abort(),
     close: () => {
       closed = true;

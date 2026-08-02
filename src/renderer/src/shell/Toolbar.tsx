@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN } from '../../../shared/library/app-state.js';
+import { commandById } from '../../../shared/commands/registry.js';
 import type { ChipFilters } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -64,11 +65,13 @@ const filterLabels: Record<keyof ChipFilters, (typeof messages)[keyof typeof mes
 export interface ToolbarProps {
   /** Opens the ImportDialog (#88); wired by the shell. */
   readonly onImport?: (() => void) | undefined;
+  /** Opens the unencrypted-library export through the shared command handler. */
+  readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
   readonly onTransfer?: (() => void) | undefined;
 }
 
-export function Toolbar({ onImport, onLock, onTransfer }: ToolbarProps = {}): ReactElement {
+export function Toolbar({ onImport, onExportAll, onLock, onTransfer }: ToolbarProps = {}): ReactElement {
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -165,6 +168,11 @@ export function Toolbar({ onImport, onLock, onTransfer }: ToolbarProps = {}): Re
         {onTransfer === undefined ? null : (
           <Button variant="secondary" icon="refresh-cw" size="md" onClick={onTransfer}>
             <FormattedMessage id="toolbar.transfer" defaultMessage="Transfer & Sync" />
+          </Button>
+        )}
+        {onExportAll === undefined ? null : (
+          <Button variant="secondary" icon="share" size="md" onClick={onExportAll}>
+            {intl.formatMessage(commandById('library.exportAll').label)}
           </Button>
         )}
         <Button

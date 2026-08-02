@@ -17,6 +17,29 @@ const PHOTO = {
 } as PhotoRecord;
 
 describe('export runtime serialization (#311 review)', () => {
+  test('Export All resolves the complete scope in the main-process repository (#885)', async () => {
+    const destination = mkdtempSync(join(tmpdir(), 'overlook-export-runtime-all-'));
+    let scopeReads = 0;
+    const runtime = createExportRuntime({
+      repo: {
+        get: (id) => (id === PHOTO.id ? PHOTO : undefined),
+        exportableIds: () => {
+          scopeReads += 1;
+          return [PHOTO.id];
+        },
+      },
+      blobs: { getStream: () => Readable.from([Buffer.from([1])]) },
+      resolveKey: () => undefined,
+      openOriginal: () => Promise.resolve({ stream: Readable.from([Buffer.from([1])]) }),
+      progress: () => undefined,
+      pickDestination: () => Promise.resolve(null),
+    });
+
+    const result = await runtime.runAll(destination);
+    assert.deepEqual(result, { exported: 1, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] });
+    assert.equal(scopeReads, 1);
+  });
+
   test('close rejects an export already queued behind active work', async () => {
     const destination = mkdtempSync(join(tmpdir(), 'overlook-export-runtime-'));
     let entered: (() => void) | undefined;
@@ -29,7 +52,7 @@ describe('export runtime serialization (#311 review)', () => {
     });
     let opens = 0;
     const runtime = createExportRuntime({
-      repo: { get: (id) => (id === PHOTO.id ? PHOTO : undefined) },
+      repo: { get: (id) => (id === PHOTO.id ? PHOTO : undefined), exportableIds: () => [PHOTO.id] },
       blobs: { getStream: () => Readable.from([Buffer.from([1])]) },
       resolveKey: () => undefined,
       openOriginal: async () => {
