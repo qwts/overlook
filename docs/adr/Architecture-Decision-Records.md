@@ -42,6 +42,7 @@ decision gets a new ADR that links back to the one it replaces.
 | [ADR-0032](./ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md)                     | Sharing & E2EE Collaboration         | Accepted |
 | [ADR-0033](./ADR-0033-Backup-Coverage-Exceptions-And-Local-Only-Custody.md)                  | Backup Coverage & Local-Only Custody | Accepted |
 | [ADR-0034](./ADR-0034-On-Device-Face-Grouping-And-Biometric-Derived-Data.md)                 | On-Device Face Grouping              | Accepted |
+| [ADR-0035](./ADR-0035-Changeset-Presence-Before-Review.md)                                   | Changeset Presence Before Review     | Accepted |
 
 ## Template
 

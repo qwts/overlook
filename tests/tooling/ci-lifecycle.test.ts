@@ -10,10 +10,13 @@ const codeql = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8');
 const closeLinkedIssues = readFileSync(join(root, '.github/workflows/close-linked-issues.yml'), 'utf8');
 const packageWorkflow = readFileSync(join(root, '.github/workflows/package.yml'), 'utf8');
 const perf = readFileSync(join(root, '.github/workflows/perf.yml'), 'utf8');
+const prChangeset = readFileSync(join(root, 'scripts/check-pr-changeset.mjs'), 'utf8');
 const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
 const versionCut = readFileSync(join(root, '.github/workflows/version-cut.yml'), 'utf8');
 const identityPolicy = readFileSync(join(root, 'docs/CI-Identity-And-Tokens.md'), 'utf8');
 
+// The workflow contract shares one fixture; splitting it would obscure the lane relationships.
+// eslint-disable-next-line max-lines-per-function -- The grouped contract keeps its shared fixture readable.
 describe('governed CI lifecycle (ENG-0004)', () => {
   test('uses only governed CI triggers and PR-scoped cancellation', () => {
     assert.match(ci, /^ {2}pull_request:$/mu);
@@ -30,6 +33,17 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@060af0b6a71ed32c04bb04efd07f2c87b46eec03/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
+  });
+
+  test('requires a PR-owned semantic changeset before full CI or review promotion', () => {
+    assert.match(ci, /^ {2}changesets:\n {4}name: Changesets$/mu);
+    assert.match(ci, /npm ci --ignore-scripts/u);
+    assert.match(ci, /npm run check:pr-changeset/u);
+    assert.match(prChangeset, /--diff-filter=A/u);
+    assert.match(ci, /^ {2}changeset-draft-guard:\n {4}name: Changeset draft guard$/mu);
+    assert.match(ci, /github\.event\.action == 'ready_for_review'/u);
+    assert.match(ci, /convert-to-draft/u);
+    assert.match(ci, /needs\.changesets\.result == 'success'/u);
   });
 
   test('documents the narrow native-queue exception and disabled preview policy', () => {

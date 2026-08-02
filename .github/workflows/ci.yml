@@ -49,9 +49,64 @@ permissions:
   pull-requests: read
 
 jobs:
+  # Draft PRs run only this low-cost, read-only gate. Every PR must contribute
+  # its own semantic release entry; pending changesets already on main cannot
+  # satisfy a new PR's requirement.
+  changesets:
+    name: Changesets
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install changeset dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check changeset syntax and PR ownership
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+          npm run check:changesets
+          npm run check:pr-changeset
+
+  # GitHub rulesets can require a successful status before merge, but cannot
+  # precondition the UI's draft-to-ready transition. Restore draft state when
+  # an internal PR attempts promotion without its own semantic changeset.
+  changeset-draft-guard:
+    name: Changeset draft guard
+    needs: changesets
+    if: >-
+      always() && github.event_name == 'pull_request' &&
+      github.event.action == 'ready_for_review' &&
+      github.event.pull_request.head.repo.fork == false &&
+      needs.changesets.result != 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Return the PR to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/convert-to-draft" --silent
+
   policy:
     name: Action Policy
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changesets
+    if: >-
+      always() && (github.event_name != 'pull_request' || needs.changesets.result == 'success') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.policy.outputs.mode }}
@@ -410,8 +465,10 @@ jobs:
 
   gate:
     name: CI
-    needs: [policy, merge-evidence, preflight-evidence, ci, e2e-gate, docs-gov, codeql, post-merge]
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [changesets, policy, merge-evidence, preflight-evidence, ci, e2e-gate, docs-gov, codeql, post-merge]
+    if: >-
+      always() && (github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft == false && needs.changesets.result == 'success'))
     runs-on: ubuntu-latest
     steps:
       - name: Enforce the selected lifecycle lane

@@ -12,10 +12,10 @@
 
 ## Changeset
 
-<!-- Behavior-changing PRs include a changeset (`npx changeset`); docs/tooling-only PRs may skip. -->
+<!-- Every PR includes a semantic changeset (`npx changeset`); releases require it. -->
 <!-- Semantics (0.x minor vs patch): see the wiki ADR-0002 Versioning Policy. -->
 
-- [ ] Changeset included, or not needed (say why)
+- [ ] Semantic changeset included
 
 ## Acceptance coverage
 

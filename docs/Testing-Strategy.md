@@ -135,7 +135,8 @@ non-browser gates still run through `npm run ci` locally and in hosted CI.
 
 ### CI — `.github/workflows/ci.yml`
 
-- Draft PRs create no runner jobs; agents run every applicable local gate.
+- Draft PRs run only the lightweight `Changesets` gate, which requires a new
+  semantic changeset owned by that PR; agents run every applicable local gate.
 - Manual dispatch runs the complete suite for the dispatched ref's exact SHA.
 - A ready PR reuses a successful manual suite only for its exact current head;
   otherwise lint, formatting, changesets, acceptance/a11y, tests with coverage,
