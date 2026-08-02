@@ -9,17 +9,25 @@ export interface FavoriteMutations {
   readonly toggleFavorites: (photoIds: readonly string[]) => void;
 }
 
+function availableFavoriteIds(photoIds: readonly string[], pending: ReadonlySet<string>): readonly string[] {
+  return photoIds.filter((id) => !pending.has(id));
+}
+
 export function useFavoriteMutations(): FavoriteMutations {
   const dispatch = useAppDispatch();
   const pendingRef = useRef<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
 
-  const run = (photoIds: readonly string[], mutation: () => Promise<{ pendingCount: number }>, errorTitle: string): void => {
-    const activeIds = photoIds.filter((id) => !pendingRef.current.has(id));
+  const run = (
+    photoIds: readonly string[],
+    mutation: (activeIds: readonly string[]) => Promise<{ pendingCount: number }>,
+    errorTitle: string,
+  ): void => {
+    const activeIds = availableFavoriteIds(photoIds, pendingRef.current);
     if (activeIds.length === 0) return;
     pendingRef.current = new Set([...pendingRef.current, ...activeIds]);
     setPending(pendingRef.current);
-    void mutation()
+    void mutation(activeIds)
       .then(({ pendingCount }) => dispatch({ type: 'pendingCount/set', count: pendingCount }))
       .catch(() => dispatch({ type: 'toast/shown', toast: { title: errorTitle, tone: 'red' } }))
       .finally(() => {
@@ -36,7 +44,11 @@ export function useFavoriteMutations(): FavoriteMutations {
       run([photo.id], () => window.overlook.library.toggleFavorite({ id: photo.id }), `Couldn't update favorite — ${photo.fileName}`);
     },
     toggleFavorites: (photoIds) => {
-      run(photoIds, () => window.overlook.library.toggleFavorites({ photoIds: [...photoIds] }), "Couldn't update selected favorites");
+      run(
+        photoIds,
+        (activeIds) => window.overlook.library.toggleFavorites({ photoIds: [...activeIds] }),
+        "Couldn't update selected favorites",
+      );
     },
   };
 }
