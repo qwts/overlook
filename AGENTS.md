@@ -71,11 +71,12 @@ this file in the same PR as the change — never after the fact.
   Details are in
   [CI Identity And Tokens](docs/CI-Identity-And-Tokens.md) → Merge automation.
 - **Drafts run only the `Changesets` gate.** Every PR adds a semantic changeset;
-  a ready transition without one returns the PR to draft. Run `npm run ci`,
-  `test:e2e`, and `test:stories:ci` locally as applicable. After pushing the
-  final SHA, an agent may dispatch CI for exact-SHA preflight and wait for
-  success before `gh pr ready`; otherwise the ready transition runs the
-  complete suite.
+  a ready transition without one returns the PR to draft. The generated Version
+  packages PR is the sole exception because it consumes those reviewed entries.
+  Run `npm run ci`, `test:e2e`, and `test:stories:ci` locally as applicable.
+  After pushing the final SHA, an agent may dispatch CI for exact-SHA preflight
+  and wait for success before `gh pr ready`; otherwise the ready transition runs
+  the complete suite.
 - **Use the status footer only during an active validation/build run or while
   pairing on manual testing.** Omit it from routine turns. When it applies:
   - `Working dir:` absolute path of the active worktree/checkout

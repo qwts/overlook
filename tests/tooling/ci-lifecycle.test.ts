@@ -42,6 +42,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(prChangeset, /--diff-filter=A/u);
     assert.match(ci, /^ {2}changeset-draft-guard:\n {4}name: Changeset draft guard$/mu);
     assert.match(ci, /github\.event\.action == 'ready_for_review'/u);
+    assert.match(ci, /github\.event\.action == 'opened' && github\.event\.pull_request\.draft == false/u);
+    assert.match(ci, /github\.event\.pull_request\.head\.ref != 'changeset-release\/main'/u);
     assert.match(ci, /convert-to-draft/u);
     assert.match(ci, /needs\.changesets\.result == 'success'/u);
   });

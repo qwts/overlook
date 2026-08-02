@@ -72,13 +72,18 @@ jobs:
       - name: Install changeset dependencies
         run: npm ci --ignore-scripts
 
-      - name: Check changeset syntax and PR ownership
+      - name: Check changeset syntax
         env:
           BASE_REF: origin/${{ github.event.pull_request.base.ref }}
         run: |
           git show-ref --verify --quiet refs/heads/main || git branch main origin/main
           npm run check:changesets
-          npm run check:pr-changeset
+
+      - name: Require a PR-owned semantic changeset
+        if: github.event.pull_request.head.ref != 'changeset-release/main'
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: npm run check:pr-changeset
 
   # GitHub rulesets can require a successful status before merge, but cannot
   # precondition the UI's draft-to-ready transition. Restore draft state when
@@ -88,8 +93,10 @@ jobs:
     needs: changesets
     if: >-
       always() && github.event_name == 'pull_request' &&
-      github.event.action == 'ready_for_review' &&
+      (github.event.action == 'ready_for_review' ||
+      (github.event.action == 'opened' && github.event.pull_request.draft == false)) &&
       github.event.pull_request.head.repo.fork == false &&
+      github.event.pull_request.head.ref != 'changeset-release/main' &&
       needs.changesets.result != 'success'
     runs-on: ubuntu-latest
     permissions:

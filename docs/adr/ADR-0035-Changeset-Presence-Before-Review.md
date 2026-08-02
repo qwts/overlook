@@ -23,6 +23,11 @@ check, the workflow immediately returns an internal PR to draft when that
 transition has no passing changeset check. Full CI does not run for that failed
 promotion.
 
+The generated Version packages PR is the sole exception to PR-owned changeset
+presence. It exists only after `changeset version` consumes the reviewed
+changesets into package versions and the generated changelog, so its release
+projection is the evidence the gate validates.
+
 This supersedes ADR-0002's optional changeset convention.
 
 ## Consequences

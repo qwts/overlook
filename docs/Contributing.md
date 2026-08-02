@@ -85,10 +85,12 @@ Automated coding agents follow the same hygiene as human contributors, plus:
 - Verify before claiming success: run the same gates CI runs (`npm run ci`).
 - Draft PR events run only the `Changesets` check. Every PR must add its own
   semantic changeset; pending changesets already on `main` do not satisfy this
-  requirement. Attempting to mark a PR ready without one returns it to draft.
-  Before promotion, run the browser lanes locally when applicable; after the
-  final push, an exact-SHA manual CI preflight may supply the complete-suite
-  evidence reused by the ready transition.
+  requirement. Attempting to mark a PR ready without one returns it to draft,
+  including PRs opened directly as ready. The generated Version packages PR is
+  the sole exception because it consumes the reviewed changesets while building
+  its release projection. Before promotion, run the browser lanes locally when
+  applicable; after the final push, an exact-SHA manual CI preflight may supply
+  the complete-suite evidence reused by the ready transition.
 - After pushing, wait for required checks; report failures factually.
 - Record lessons and follow-ups in issues, PRs, or `docs/` — not only in chat.
 - Keep user-facing summaries short and factual: what changed, what was tested,
