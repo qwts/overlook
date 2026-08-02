@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
@@ -10,6 +11,16 @@ import { useFormats } from '../i18n/use-formats.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 
 import './export.css';
+
+const messages = defineMessages({
+  allPhotos: { id: 'export.allPhotos', defaultMessage: 'Export all photos' },
+  everyPhoto: { id: 'export.everyPhoto', defaultMessage: 'Every photo in this library' },
+  unencryptedOriginals: { id: 'export.unencryptedOriginals', defaultMessage: 'Unencrypted originals' },
+  allPhotosHint: {
+    id: 'export.allPhotosHint',
+    defaultMessage: 'Every original will be written as a plain, openable file to the folder you choose.',
+  },
+});
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
 // (README §6 + Content voice). The decrypt switch is ON by default; OFF
@@ -34,6 +45,7 @@ interface Bar {
 }
 
 export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: ExportDialogProps): ReactElement | null {
+  const intl = useIntl();
   const { formatCount } = useFormats();
   const { announce } = useAnnouncer();
   const formatLabelId = useId();
@@ -77,7 +89,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
 
   const count = photoIds.length;
   const noun = count === 1 ? 'photo' : 'photos';
-  const exportLabel = allPhotos ? 'Export all photos' : `Export ${formatCount(count)} ${noun}`;
+  const exportLabel = allPhotos ? intl.formatMessage(messages.allPhotos) : `Export ${formatCount(count)} ${noun}`;
 
   const start = (): void => {
     if (destination === null) {
@@ -150,7 +162,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
           <div className="ovl-export__card">
             <Icon name="image" size={16} />
             <div className="ovl-export__cardTitle">
-              {allPhotos ? 'Every photo in this library' : `${formatCount(count)} ${noun} selected`}
+              {allPhotos ? intl.formatMessage(messages.everyPhoto) : `${formatCount(count)} ${noun} selected`}
             </div>
           </div>
           {allPhotos ? null : (
@@ -169,10 +181,12 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
           )}
           <div className="ovl-export__decrypt">
             <div>
-              <div className="ovl-export__decryptTitle">{allPhotos ? 'Unencrypted originals' : 'Decrypt originals'}</div>
+              <div className="ovl-export__decryptTitle">
+                {allPhotos ? intl.formatMessage(messages.unencryptedOriginals) : 'Decrypt originals'}
+              </div>
               <div className="ovl-export__decryptHint">
                 {allPhotos
-                  ? 'Every original will be written as a plain, openable file to the folder you choose.'
+                  ? intl.formatMessage(messages.allPhotosHint)
                   : 'Files are stored encrypted. Turn this on to write plain, openable files to disk.'}
               </div>
             </div>
