@@ -26,6 +26,7 @@ import { inspectorWindowChannels, windowEvents } from '../inspector-window-contr
 import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
+import { chipFiltersSchema, sourceFilterSchema } from './library-query-schemas.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
@@ -58,14 +59,6 @@ const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload
 
 const pageCursorSchema = z.object({ sortKey: z.union([z.string(), z.number()]), id: z.string() });
 
-const chipFiltersSchema = z.object({
-  favorites: z.boolean().optional(),
-  raw: z.boolean().optional(),
-  offloaded: z.boolean().optional(),
-  localOnly: z.boolean().optional(),
-});
-
-const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'offloaded', 'deleted']);
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({
   state: appLockStateSchema,

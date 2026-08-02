@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ChannelDefinition } from './channels.js';
+import { chipFiltersSchema, sourceFilterSchema } from './library-query-schemas.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   name: string,
@@ -14,19 +15,12 @@ export const librarySelectionChannels = {
   librarySelectionRange: channel(
     'library:selection-range',
     z.object({
-      source: z.enum(['all', 'favorites', 'recent', 'offloaded', 'deleted']),
+      source: sourceFilterSchema,
       anchorId: z.string().min(1),
       targetId: z.string().min(1),
       recentSince: z.string().optional(),
       query: z.string().optional(),
-      chips: z
-        .object({
-          favorites: z.boolean().optional(),
-          raw: z.boolean().optional(),
-          offloaded: z.boolean().optional(),
-          localOnly: z.boolean().optional(),
-        })
-        .optional(),
+      chips: chipFiltersSchema.optional(),
       order: z.enum(['date', 'name', 'size']).optional(),
       albumId: z.string().optional(),
     }),
