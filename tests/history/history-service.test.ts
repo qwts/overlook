@@ -10,7 +10,7 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { run } from '../../src/main/db/sql.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { HistoryService } from '../../src/main/history/history-service.js';
-import { boardLayoutCommand } from '../../src/main/history/command-drafts.js';
+import { boardLayoutCommand, favoritesCommand } from '../../src/main/history/command-drafts.js';
 import { LibraryService } from '../../src/main/library/library-service.js';
 import { serializeBoard, type Board } from '../../src/shared/moodboard/board.js';
 
@@ -75,6 +75,30 @@ describe('HistoryService (#615, ADR-0025)', () => {
     assert.deepEqual(await new HistoryService(state.db, state.service).undo('undo-favorite'), undone);
     assert.equal((await state.history.redo('redo-favorite')).applied, true);
     assert.equal(state.service.favoriteState('photo-one'), true);
+    state.db.close();
+  });
+
+  test('undoes and redoes a bulk favorite mutation as one command', async () => {
+    const state = world();
+    state.service.toggleFavorite('photo-two');
+    mutateWithActivity(
+      () => state.activity,
+      () => state.service.toggleFavorites(['photo-one', 'photo-two']),
+      (result) => ({
+        eventType: 'photo.favorite-changed',
+        entityIds: result.changes.map(({ id }) => id),
+        outcome: 'succeeded',
+      }),
+      (result) => favoritesCommand(result.changes),
+    );
+    assert.equal(state.service.favoriteState('photo-one'), true);
+    assert.equal(state.service.favoriteState('photo-two'), false);
+    assert.equal((await state.history.undo('undo-bulk-favorite')).applied, true);
+    assert.equal(state.service.favoriteState('photo-one'), false);
+    assert.equal(state.service.favoriteState('photo-two'), true);
+    assert.equal((await state.history.redo('redo-bulk-favorite')).applied, true);
+    assert.equal(state.service.favoriteState('photo-one'), true);
+    assert.equal(state.service.favoriteState('photo-two'), false);
     state.db.close();
   });
 

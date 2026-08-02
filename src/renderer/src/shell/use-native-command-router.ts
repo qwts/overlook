@@ -177,11 +177,14 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           dispatch({ type: 'lightbox/closed' });
           return;
         case 'photo.favorite.toggle':
-          for (const id of targetIds) {
-            void window.overlook.library.toggleFavorite({ id }).then(({ pendingCount }) => {
-              dispatch({ type: 'pendingCount/set', count: pendingCount });
-            });
-          }
+          if (targetIds[0] === undefined) return;
+          void (
+            targetIds.length === 1
+              ? window.overlook.library.toggleFavorite({ id: targetIds[0] })
+              : window.overlook.library.toggleFavorites({ photoIds: targetIds })
+          ).then(({ pendingCount }) => {
+            dispatch({ type: 'pendingCount/set', count: pendingCount });
+          });
           return;
         case 'photo.trash': {
           if (state.lightboxId !== null) {

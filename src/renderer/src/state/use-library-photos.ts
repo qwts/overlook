@@ -21,6 +21,7 @@ function membershipChanged(
   chips: ChipFilters,
   album: string | null,
 ): boolean {
+  if (membership === undefined) return false;
   if (membership === 'none') return false;
   if (membership === 'favorite') return source === 'favorites' || chips.favorites === true;
   if (membership === 'album') return album !== null;

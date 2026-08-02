@@ -37,7 +37,7 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
       copyProgress: (done, total) => emitCopyProgress({ done, total }),
       thumbProgress: (done, total) => emitThumbProgress({ done, total }),
       imported: (photoIds) => {
-        emitChanged({ photoIds: [...photoIds] });
+        emitChanged({ photoIds: [...photoIds], membership: 'library' });
         const pending = repo.stats().pending;
         emitPending({ count: pending });
         options.imported(photoIds, pending);

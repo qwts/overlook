@@ -22,7 +22,7 @@ import type { Board } from '../../shared/moodboard/board.js';
 // targeted change events instead of refetch-the-world signals.
 
 export interface LibraryEvents {
-  libraryChanged(photoIds: readonly string[], membership?: LibraryMembershipChange): void;
+  libraryChanged(photoIds: readonly string[], membership: LibraryMembershipChange): void;
   originalClassificationChanged?(photoIds: readonly string[]): void;
   pendingCountChanged(count: number): void;
 }
@@ -116,6 +116,13 @@ export class LibraryService {
     this.events.libraryChanged([photoId], 'favorite');
     this.events.pendingCountChanged(pendingCount);
     return { favorite: updated, pendingCount };
+  }
+
+  setFavorites(changes: readonly { readonly photoId: string; readonly favorite: boolean }[]): void {
+    const changedIds = this.historyRepo.setFavorites(changes);
+    if (changedIds.length === 0) return;
+    this.events.libraryChanged(changedIds, 'favorite');
+    this.events.pendingCountChanged(this.repo.pendingCount());
   }
 
   favoriteState(photoId: string): boolean | undefined {

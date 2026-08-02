@@ -5,6 +5,7 @@ import {
   albumMembershipCommand,
   albumOrderCommand,
   favoriteCommand,
+  favoritesCommand,
   moveCompensationCommand,
   trashCommand,
 } from '../../src/main/history/command-drafts.js';
@@ -15,6 +16,24 @@ test('command drafts preserve exact reversible before/after state (#225, #614)',
     classification: 'immediately-reversible',
     inverse: { kind: 'favorite', photoId: 'P1', before: false, after: true },
   });
+  assert.deepEqual(
+    favoritesCommand([
+      { id: 'P1', favorite: true },
+      { id: 'P2', favorite: false },
+    ]),
+    {
+      commandId: 'photo.favorite.toggle',
+      classification: 'immediately-reversible',
+      inverse: {
+        kind: 'favorites',
+        changes: [
+          { photoId: 'P1', before: false, after: true },
+          { photoId: 'P2', before: true, after: false },
+        ],
+      },
+    },
+  );
+  assert.equal(favoritesCommand([]), undefined);
   assert.equal(trashCommand([], 'trash'), undefined);
   assert.deepEqual(trashCommand(['P1'], 'restore'), {
     commandId: 'photo.restore',

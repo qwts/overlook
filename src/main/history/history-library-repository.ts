@@ -21,6 +21,29 @@ export class HistoryLibraryRepository {
     })();
   }
 
+  setFavorites(changes: readonly { readonly photoId: string; readonly favorite: boolean }[]): readonly string[] {
+    return this.db.transaction(() => {
+      const changed: string[] = [];
+      for (const { photoId, favorite } of changes) {
+        const updated = queryGet<{ favorite: number }>(
+          this.db,
+          `UPDATE photos SET favorite = @favorite
+            WHERE id = @photoId AND favorite != @favorite
+              AND id IN (SELECT id FROM ordinary_visible_photos)
+            RETURNING favorite`,
+          { photoId, favorite: favorite ? 1 : 0 },
+        );
+        if (updated === undefined) {
+          if (this.favoriteState(photoId) === undefined) throw new Error(`photo ${photoId} does not exist`);
+          continue;
+        }
+        markDirty(this.db, photoId);
+        changed.push(photoId);
+      }
+      return changed;
+    })();
+  }
+
   favoriteState(photoId: string): boolean | undefined {
     const row = queryGet<{ favorite: number }>(this.db, 'SELECT favorite FROM ordinary_visible_photos WHERE id = ?', photoId);
     return row === undefined ? undefined : row.favorite === 1;

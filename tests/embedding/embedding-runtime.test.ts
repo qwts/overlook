@@ -45,11 +45,11 @@ describe('embedding execution-provider fallback', () => {
     const maintenance = source('src/main/import/maintenance-runtime.ts');
     assert.match(
       index,
-      /libraryChanged: \(photoIds, membership\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\], \.\.\.\(membership === undefined \? \{\} : \{ membership \}\) \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
+      /libraryChanged: \(photoIds, membership\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\], membership \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
     );
     assert.match(
       index,
-      /ordinaryChanged: \(photoIds\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\] \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
+      /ordinaryChanged: \(photoIds\) => \{\s+emitLibraryChanged\(\{ photoIds: \[\.\.\.photoIds\], membership: 'library' \}\);\s+notifyEmbeddingEligibilityChanged\(photoIds\);/u,
     );
     assert.equal(maintenance.match(/ctx\.embeddingEligible\(ids\)/gu)?.length, 2);
   });

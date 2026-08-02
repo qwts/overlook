@@ -1,6 +1,6 @@
 import type { ActivityFacade } from '../activity/activity-publication.js';
 import { mutateWithActivity } from '../activity/activity-publication.js';
-import { favoriteCommand } from '../history/command-drafts.js';
+import { favoriteCommand, favoritesCommand } from '../history/command-drafts.js';
 import type { LibraryService } from './library-service.js';
 
 export function toggleFavoriteWithActivity(
@@ -38,6 +38,6 @@ export function toggleFavoritesWithActivity(
             outcome: 'succeeded',
             payload: { count: result.updated },
           },
-    (result) => result.changes.map(({ id, favorite }) => favoriteCommand(id, favorite)),
+    (result) => favoritesCommand(result.changes),
   );
 }

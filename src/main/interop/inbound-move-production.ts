@@ -66,7 +66,7 @@ class ProductionInboundMove {
       store: authority.pcloud.objectStore(),
       custody: () => authority.pairing.withUnlocked((custody) => custody),
       photoChanged: (photoId) => {
-        broadcast((window) => window.webContents.send(events.libraryChanged.name, { photoIds: [photoId] }));
+        broadcast((window) => window.webContents.send(events.libraryChanged.name, { photoIds: [photoId], membership: 'library' }));
         this.options.imported();
       },
       beginWork: () => {
