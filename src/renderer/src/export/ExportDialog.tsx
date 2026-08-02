@@ -20,6 +20,7 @@ const messages = defineMessages({
     id: 'export.allPhotosHint',
     defaultMessage: 'Every original will be written as a plain, openable file to the folder you choose.',
   },
+  itemFailures: { id: 'export.itemFailures', defaultMessage: 'View item failures' },
 });
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
@@ -238,7 +239,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                     ].join(' · ')}.`}
                 {failures.length > 0 ? (
                   <details>
-                    <summary>View item failures</summary>
+                    <summary>{intl.formatMessage(messages.itemFailures)}</summary>
                     <ul>
                       {failures.map(({ fileName, reason }) => (
                         <li key={`${fileName}:${reason}`} className="mono-data">

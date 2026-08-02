@@ -311,6 +311,9 @@
   "export.everyPhoto": {
     "defaultMessage": "Every photo in this library"
   },
+  "export.itemFailures": {
+    "defaultMessage": "View item failures"
+  },
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
   },

@@ -108,6 +108,7 @@ export const en: Readonly<Record<string, string>> = {
   "export.allPhotos": "Export all photos",
   "export.allPhotosHint": "Every original will be written as a plain, openable file to the folder you choose.",
   "export.everyPhoto": "Every photo in this library",
+  "export.itemFailures": "View item failures",
   "export.unencryptedOriginals": "Unencrypted originals",
   "favorite.add": "Add to Favorites",
   "favorite.remove": "Remove from Favorites",
