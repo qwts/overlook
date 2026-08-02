@@ -15,7 +15,7 @@ function chipsActive(chips: ChipFilters): boolean {
   return Object.values(chips).some(Boolean);
 }
 
-function useSyncStatePatches(localOnly: boolean, fetchFirstPage: () => void): void {
+function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (preserveSelection?: boolean) => void): void {
   const dispatch = useAppDispatch();
   useEffect(() => {
     const pending = new Map<string, SyncStatus>();
@@ -24,7 +24,7 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: () => void): vo
       timer = null;
       if (localOnly) {
         pending.clear();
-        fetchFirstPage();
+        fetchFirstPage(false);
         return;
       }
       const updates = [...pending].map(([id, syncState]) => ({ id, syncState }));
@@ -80,26 +80,29 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
     [source, query, chips, sortOrder, album],
   );
 
-  const fetchFirstPage = useCallback(() => {
-    const requestId = (requestRef.current += 1);
-    inFlightRef.current = true;
-    cursorRef.current = null;
-    void window.overlook.library
-      .page(baseRequest())
-      .then(({ photos, nextCursor }) => {
-        if (requestRef.current !== requestId) {
-          return;
-        }
-        cursorRef.current = nextCursor;
-        setExhaustedKey(nextCursor === null ? setKey : null);
-        dispatch({ type: 'photos/loaded', photos, append: false });
-      })
-      .finally(() => {
-        if (requestRef.current === requestId) {
-          inFlightRef.current = false;
-        }
-      });
-  }, [baseRequest, setKey, dispatch]);
+  const fetchFirstPage = useCallback(
+    (preserveSelection = true) => {
+      const requestId = (requestRef.current += 1);
+      inFlightRef.current = true;
+      cursorRef.current = null;
+      void window.overlook.library
+        .page(baseRequest())
+        .then(({ photos, nextCursor }) => {
+          if (requestRef.current !== requestId) {
+            return;
+          }
+          cursorRef.current = nextCursor;
+          setExhaustedKey(nextCursor === null ? setKey : null);
+          dispatch({ type: 'photos/loaded', photos, append: false, preserveSelection });
+        })
+        .finally(() => {
+          if (requestRef.current === requestId) {
+            inFlightRef.current = false;
+          }
+        });
+    },
+    [baseRequest, setKey, dispatch],
+  );
 
   useEffect(() => {
     fetchFirstPage();
@@ -118,7 +121,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage();
+      if (derivativeOnly !== true) fetchFirstPage(false);
     });
   }, [dispatch, fetchFirstPage]);
 

@@ -34,6 +34,8 @@ export interface AppState {
   readonly selection: ReadonlySet<string>;
   /** `all` selections span unloaded pages and survive page replacement. */
   readonly selectionMode: 'explicit' | 'all';
+  /** Increments for every selection intent, including clearing an empty set. */
+  readonly selectionRevision: number;
   readonly lightboxId: string | null;
   readonly inspectorOpen: boolean;
   /** Sidebar visibility — toggled from View → Toggle Sidebar (#689). */
@@ -77,6 +79,7 @@ export const initialAppState: AppState = {
   protectedAlbum: null,
   selection: new Set<string>(),
   selectionMode: 'explicit',
+  selectionRevision: 0,
   lightboxId: null,
   inspectorOpen: false,
   sidebarOpen: true,
@@ -96,7 +99,7 @@ export const initialAppState: AppState = {
 };
 
 export type AppAction =
-  | { type: 'photos/loaded'; photos: readonly PhotoRecord[]; append: boolean }
+  | { type: 'photos/loaded'; photos: readonly PhotoRecord[]; append: boolean; preserveSelection?: boolean }
   | {
       type: 'photos/sync-state-patched';
       updates: readonly { readonly id: string; readonly syncState: PhotoRecord['syncState'] }[];
@@ -142,8 +145,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       // intact while the same collection refetches (#884). The lightbox follows
       // visibility independently (#92): a photo that left the set closes it.
       const visible = new Set(action.photos.map((photo) => photo.id));
-      const selection =
-        state.selectionMode === 'all' ? new Set(state.selection) : new Set([...state.selection].filter((id) => visible.has(id)));
+      const preserveSelection = action.preserveSelection !== false;
+      const selection = !preserveSelection
+        ? new Set<string>()
+        : state.selectionMode === 'all'
+          ? new Set(state.selection)
+          : new Set([...state.selection].filter((id) => visible.has(id)));
       const lightboxId = state.lightboxId !== null && visible.has(state.lightboxId) ? state.lightboxId : null;
       const inspectorClosedWithLightbox = state.inspectorSource === 'lightbox' && lightboxId === null && !state.inspectorDetached;
       const detachedFallbackToSelection = state.inspectorSource === 'lightbox' && lightboxId === null && state.inspectorDetached;
@@ -156,6 +163,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         photos: action.photos,
         selection,
+        selectionMode: preserveSelection ? state.selectionMode : 'explicit',
+        selectionRevision: preserveSelection ? state.selectionRevision : state.selectionRevision + 1,
         lightboxId,
         inspectorOpen: inspectorClosedWithLightbox ? false : state.inspectorOpen,
         inspectorSource: inspectorClosedWithLightbox ? null : detachedFallbackToSelection ? 'selection' : state.inspectorSource,
@@ -207,6 +216,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         photos: [],
         selection: new Set<string>(),
         selectionMode: 'explicit',
+        selectionRevision: state.selectionRevision + 1,
         lightboxId: null,
         inspectorOpen: false,
         inspectorDetached: false,
@@ -228,6 +238,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selection,
         selectionMode: 'explicit',
+        selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
       };
@@ -238,6 +249,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selection,
         selectionMode: 'all',
+        selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
       };
@@ -248,6 +260,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selection,
         selectionMode: 'explicit',
+        selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
       };
@@ -257,6 +270,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selection: new Set<string>(),
         selectionMode: 'explicit',
+        selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId: state.inspectorSource === 'selection' ? null : state.inspectorPhotoId,
       };
     case 'lightbox/opened':

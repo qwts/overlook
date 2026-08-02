@@ -14,7 +14,7 @@ function hasActiveChips(chips: LibraryQuery['chips']): boolean {
 
 /** Resolves Select All against the complete current collection, not loaded rows. */
 export function useSelectAll(): () => void {
-  const { source, query, chips, sortOrder, album, selection } = useAppState();
+  const { source, query, chips, sortOrder, album, selectionRevision } = useAppState();
   const dispatch = useAppDispatch();
   const requestRef = useRef(0);
   const scopeKeyRef = useRef('');
@@ -31,18 +31,17 @@ export function useSelectAll(): () => void {
     [album, chips, query, sortOrder, source],
   );
   const scopeKey = JSON.stringify(request);
-  const selectionIntentKey = useMemo(() => [...selection].sort().join('\u0000'), [selection]);
   useEffect(() => {
     scopeKeyRef.current = scopeKey;
   }, [scopeKey]);
   useEffect(() => {
-    selectionIntentKeyRef.current = selectionIntentKey;
-  }, [selectionIntentKey]);
+    selectionIntentKeyRef.current = String(selectionRevision);
+  }, [selectionRevision]);
 
   return useCallback(() => {
     const requestId = (requestRef.current += 1);
     const requestedScope = scopeKey;
-    const requestedSelectionIntent = selectionIntentKey;
+    const requestedSelectionIntent = String(selectionRevision);
     void window.overlook.library
       .selectAll(request)
       .then(({ photoIds }) => {
@@ -63,5 +62,5 @@ export function useSelectAll(): () => void {
           return;
         dispatch({ type: 'toast/shown', toast: { title: 'Could not select all photos', tone: 'red' } });
       });
-  }, [dispatch, request, scopeKey, selectionIntentKey]);
+  }, [dispatch, request, scopeKey, selectionRevision]);
 }

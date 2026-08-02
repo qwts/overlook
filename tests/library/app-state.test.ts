@@ -84,6 +84,21 @@ describe('app state reducer', () => {
     assert.deepEqual([...landed.selection], ['b']);
   });
 
+  test('mutation refresh clears complete selection and advances selection intent', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b'] });
+    const cleared = apply(selected, {
+      type: 'photos/loaded',
+      photos: [{ id: 'a' } as AppState['photos'][number]],
+      append: false,
+      preserveSelection: false,
+    });
+    assert.equal(cleared.selection.size, 0);
+    assert.equal(cleared.selectionMode, 'explicit');
+    assert.equal(cleared.selectionRevision, selected.selectionRevision + 1);
+    const emptyClear = apply(cleared, { type: 'selection/cleared' });
+    assert.equal(emptyClear.selectionRevision, cleared.selectionRevision + 1);
+  });
+
   test('escape exits the lightbox when open, otherwise clears selection', () => {
     const withBoth = apply(initialAppState, { type: 'selection/all', photoIds: ['a'] }, { type: 'lightbox/opened', photoId: 'a' });
     const afterFirst = apply(withBoth, { type: 'escape' });
