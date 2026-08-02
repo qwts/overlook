@@ -234,8 +234,8 @@ export function LibraryGridView({
       event.preventDefault();
       setOriginalDeleteIds(targetIds);
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [originalDeleteIds, platform, purgeIds, quickAlbumIds, state]);
   const trashPolicy = intl.formatMessage(retentionDays === null ? messages.trashPolicyOff : messages.trashPolicyDays, {
     days: retentionDays,
