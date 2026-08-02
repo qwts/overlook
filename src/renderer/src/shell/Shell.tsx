@@ -85,7 +85,9 @@ export function Shell({
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
+  const [exportAllPhotos, setExportAllPhotos] = useState(false);
   const openExport = (photoIds: readonly string[]): void => {
+    setExportAllPhotos(false);
     setExportPhotoIds([...photoIds]);
     dispatch({ type: 'dialog/set', dialog: 'export', open: true });
   };
@@ -226,6 +228,7 @@ export function Shell({
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
+    setExportAllPhotos,
     setAlbumPickerIds: setMenuAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry: () => setInteropEntry(null),
@@ -253,6 +256,7 @@ export function Shell({
       hasTarget: target !== undefined,
       targetTrashable: target?.deletedAt === null,
       inAlbum: state.album !== null,
+      protectedAlbumOpen: state.protectedAlbum !== null,
       selectionCount: state.selection.size,
       appLockConfigured: lockConfigured,
       providerBusy: false,
@@ -504,6 +508,7 @@ export function Shell({
       <MoveResumeBanner />
       <Toolbar
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
+        onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {
           // #237: the dialog owns source discovery (SD scan, folder picker,
           // no-card empty state) — the toolbar just opens it.
@@ -541,7 +546,9 @@ export function Shell({
         <ExportDialog
           open
           photoIds={exportPhotoIds ?? (state.lightboxId !== null ? [state.lightboxId] : [...state.selection])}
+          allPhotos={exportAllPhotos}
           onClose={() => {
+            setExportAllPhotos(false);
             setExportPhotoIds(null);
             dispatch({ type: 'dialog/set', dialog: 'export', open: false });
           }}

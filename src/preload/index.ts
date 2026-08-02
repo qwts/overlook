@@ -247,6 +247,7 @@ const overlook: OverlookApi = {
   export: Object.freeze({
     pickDestination: createInvoker(channels.exportPickDestination, invokeTransport),
     run: createInvoker(channels.exportRun, invokeTransport),
+    runAll: createInvoker(channels.exportRunAll, invokeTransport),
     cancel: createInvoker(channels.exportCancel, invokeTransport),
     onProgress: createSubscriber(events.exportProgress, subscribeTransport),
   }),

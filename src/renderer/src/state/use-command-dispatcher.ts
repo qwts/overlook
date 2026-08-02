@@ -40,6 +40,7 @@ export function useCommandDispatcher(
         case 'library.move':
         case 'library.new':
         case 'library.import':
+        case 'library.exportAll':
         case 'view.sidebar.toggle':
         case 'view.mode.feed':
         case 'library.source.all':

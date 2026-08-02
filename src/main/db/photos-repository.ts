@@ -9,6 +9,7 @@ import type { PreviewFailureReason } from '../../shared/library/preview.js';
 import { parseMediaInfo, type MediaInfo } from '../../shared/library/media-info.js';
 import type { DimensionStatus } from '../../shared/library/types.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
+import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
@@ -219,9 +220,12 @@ export class PhotosRepository {
   }
 
   get(photoId: string): PhotoRecord | undefined {
-    const rows = queryAll<PhotoRow>(this.db, `${SELECT} WHERE p.id = @id LIMIT 1`, { id: photoId });
-    const row = rows[0];
+    const row = queryAll<PhotoRow>(this.db, `${SELECT} WHERE p.id = @id LIMIT 1`, { id: photoId })[0];
     return row === undefined ? undefined : toRecord(row);
+  }
+
+  exportableIds(): readonly string[] {
+    return readExportablePhotoIds(this.db);
   }
 
   /** Startup maintenance (#390): FTS5's 'integrity-check' command, with the
@@ -582,9 +586,7 @@ export class PhotosRepository {
     photoIds: readonly string[],
   ): { moved: string[]; alreadyInTarget: number } {
     return this.db.transaction(() => {
-      if (sourceAlbumId === targetAlbumId) {
-        throw new Error('source and target albums must differ');
-      }
+      if (sourceAlbumId === targetAlbumId) throw new Error('source and target albums must differ');
       for (const albumId of [sourceAlbumId, targetAlbumId]) {
         if (queryGet<{ one: number }>(this.db, 'SELECT 1 AS one FROM albums WHERE id = ?', albumId) === undefined) {
           throw new Error(`album ${albumId} does not exist`);

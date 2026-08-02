@@ -176,6 +176,9 @@
   "commands.history.undo": {
     "defaultMessage": "Undo"
   },
+  "commands.library.exportAll": {
+    "defaultMessage": "Export All Unencrypted…"
+  },
   "commands.library.import": {
     "defaultMessage": "Import Photos…"
   },
@@ -298,6 +301,21 @@
   },
   "common.cancel": {
     "defaultMessage": "Cancel"
+  },
+  "export.allPhotos": {
+    "defaultMessage": "Export all photos"
+  },
+  "export.allPhotosHint": {
+    "defaultMessage": "Every original will be written as a plain, openable file to the folder you choose."
+  },
+  "export.everyPhoto": {
+    "defaultMessage": "Every photo in this library"
+  },
+  "export.itemFailures": {
+    "defaultMessage": "View item failures"
+  },
+  "export.unencryptedOriginals": {
+    "defaultMessage": "Unencrypted originals"
   },
   "favorite.add": {
     "defaultMessage": "Add to Favorites"
