@@ -16,13 +16,16 @@ describe('release workflow publication', () => {
 
   test('rejects real pending releases but permits empty governance changesets', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
-    const verify = workflow.split('- name: Verify tag and version provenance')[1]?.split('- name: Verify exact-commit')[0] ?? '';
+    const evidenceIndex = workflow.indexOf('- name: Verify exact-commit');
+    const installIndex = workflow.indexOf('- name: Install release verification dependencies');
+    const semanticVerify = workflow.split('- name: Verify semantic changeset state')[1]?.split('\n  build:')[0] ?? '';
 
     assert.match(workflow, /npm ci --ignore-scripts/u);
-    assert.match(verify, /npx changeset status --output/u);
-    assert.match(verify, /\.releases\.length/u);
-    assert.match(verify, /test "\$releases" -eq 0/u);
-    assert.doesNotMatch(verify, /find \.changeset/u);
+    assert.ok(evidenceIndex >= 0 && installIndex > evidenceIndex, 'release dependencies execute only after evidence verification');
+    assert.match(semanticVerify, /npx changeset status --output/u);
+    assert.match(semanticVerify, /\.releases\.length/u);
+    assert.match(semanticVerify, /test "\$releases" -eq 0/u);
+    assert.doesNotMatch(semanticVerify, /find \.changeset/u);
   });
 
   test('uploads files recursively instead of passing artifact directories to gh', () => {
