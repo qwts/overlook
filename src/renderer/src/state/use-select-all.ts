@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 
 import type { LibraryQuery } from '../../../shared/library/types.js';
 import { useAppDispatch, useAppState } from './app-state-context';
@@ -31,12 +31,10 @@ export function useSelectAll(): () => void {
     [album, chips, query, sortOrder, source],
   );
   const scopeKey = JSON.stringify(request);
-  useEffect(() => {
+  useLayoutEffect(() => {
     scopeKeyRef.current = scopeKey;
-  }, [scopeKey]);
-  useEffect(() => {
     selectionIntentKeyRef.current = String(selectionRevision);
-  }, [selectionRevision]);
+  }, [scopeKey, selectionRevision]);
 
   return useCallback(() => {
     if (protectedAlbum !== null) return;
