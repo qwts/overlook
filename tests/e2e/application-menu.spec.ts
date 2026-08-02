@@ -251,6 +251,12 @@ test('Windows/Linux draw no native menu and expose Help from the titlebar (#699)
     // No native application menu bar on these platforms (ADR-0024 §5).
     expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)).toBe(true);
 
+    // Export All remains reachable without macOS's native File menu. It uses
+    // the same registry command handler as the native menu surface.
+    await page.getByRole('button', { name: 'Export All Unencrypted…' }).click();
+    await expect(page.getByRole('dialog', { name: 'Export' }).getByText('Every photo in this library')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
     // The titlebar Help menu carries the two otherwise menu-only commands.
     const help = page.getByRole('button', { name: 'Help' });
     await help.click();

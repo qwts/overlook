@@ -505,6 +505,7 @@ export function Shell({
       <MoveResumeBanner />
       <Toolbar
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
+        onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {
           // #237: the dialog owns source discovery (SD scan, folder picker,
           // no-card empty state) — the toolbar just opens it.
