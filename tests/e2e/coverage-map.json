@@ -613,6 +613,7 @@
     {
       "id": "m07-export-dialog",
       "wiki": "User-Story-M07-Export",
+      "$note": "#885 adds library-wide unencrypted Original export. ExportDialog.stories.tsx covers the dialog variants; application-menu.spec.ts covers native File-menu parity and the Windows/Linux toolbar entry point.",
       "coverage": [
         {
           "type": "storybook",
@@ -620,7 +621,7 @@
         },
         {
           "type": "playwright-e2e",
-          "path": "tests/e2e/export-flow.spec.ts"
+          "paths": ["tests/e2e/export-flow.spec.ts", "tests/e2e/application-menu.spec.ts"]
         }
       ]
     },
