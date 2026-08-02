@@ -3,7 +3,16 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { HistoryLibraryRepository } from '../history/history-library-repository.js';
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
-import type { AlbumSummary, LibraryStats, PageRequest, PageResult, PhotoRecord, SourceCounts } from '../../shared/library/types.js';
+import type {
+  AlbumSummary,
+  LibraryStats,
+  PageRequest,
+  PageResult,
+  PhotoRecord,
+  SelectionRangeRequest,
+  SelectionRangeResult,
+  SourceCounts,
+} from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
 
 // The renderer's typed window into the library (#71) — the contract M04
@@ -51,6 +60,10 @@ export class LibraryService {
 
   page(request: PageRequest): PageResult {
     return this.repo.page(request);
+  }
+
+  selectionRange(request: SelectionRangeRequest): SelectionRangeResult {
+    return { photoIds: this.repo.selectionRange(request) };
   }
 
   get(photoId: string): PhotoRecord | undefined {

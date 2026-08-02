@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useState, type RefObject } from 'react';
 
 import type { GridLayout } from '../../../shared/library/grid-layout.js';
 import { tilePosition } from '../../../shared/library/grid-layout.js';
@@ -26,7 +26,8 @@ interface GridKeyboardOptions<Photo extends { readonly id: string }> {
   readonly viewportHeight: number;
   readonly direction: 'ltr' | 'rtl';
   readonly onOpen?: ((photo: Photo) => void) | undefined;
-  readonly onSelection?: ((photoIds: readonly string[], mode: 'replace' | 'toggle') => void) | undefined;
+  readonly onSelection?: ((photoId: string, extend: boolean) => void) | undefined;
+  readonly onAnchorChange?: ((photoId: string) => void) | undefined;
   readonly onScrollPositionChange: (scrollTop: number) => void;
 }
 
@@ -46,11 +47,10 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
   direction,
   onOpen,
   onSelection,
+  onAnchorChange,
   onScrollPositionChange,
 }: GridKeyboardOptions<Photo>): number {
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [selectionAnchor, setSelectionAnchor] = useState(0);
-  const preserveAnchorRef = useRef(false);
   const activeIndex = Math.min(focusedIndex, Math.max(0, photos.length - 1));
 
   const focusAt = useCallback(
@@ -77,14 +77,6 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
   useEffect(() => {
     const node = containerRef.current;
     if (node === null) return;
-    const selectRange = (to: number): void => {
-      const first = Math.min(selectionAnchor, to);
-      const last = Math.max(selectionAnchor, to);
-      onSelection?.(
-        photos.slice(first, last + 1).map((photo) => photo.id),
-        'replace',
-      );
-    };
     const onFocusIn = (event: FocusEvent): void => {
       if (event.target === node) {
         focusAt(activeIndex);
@@ -93,8 +85,8 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
       const index = gridIndex(event.target);
       if (index !== null) {
         setFocusedIndex(index);
-        if (preserveAnchorRef.current) preserveAnchorRef.current = false;
-        else setSelectionAnchor(index);
+        const photo = photos[index];
+        if (photo !== undefined) onAnchorChange?.(photo.id);
       }
     };
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
@@ -104,11 +96,7 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
       if (index === null || photo === undefined) return;
       if (event.key === 'Enter') onOpen?.(photo);
       else if (event.key === ' ') {
-        if (event.shiftKey) selectRange(index);
-        else {
-          onSelection?.([photo.id], 'toggle');
-          setSelectionAnchor(index);
-        }
+        onSelection?.(photo.id, event.shiftKey);
       } else if (isNavigationKey(event.key)) {
         const next = moveGridFocus({
           key: event.key,
@@ -118,10 +106,12 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
           pageRows: Math.max(1, Math.floor(viewportHeight / Math.max(1, layout.rowHeight))),
           direction,
         });
-        preserveAnchorRef.current = event.shiftKey;
         focusAt(next);
-        if (event.shiftKey) selectRange(next);
-        else setSelectionAnchor(next);
+        const nextPhoto = photos[next];
+        if (nextPhoto !== undefined) {
+          if (event.shiftKey) onSelection?.(nextPhoto.id, true);
+          else onAnchorChange?.(nextPhoto.id);
+        }
       } else return;
       event.preventDefault();
       event.stopPropagation();
@@ -132,7 +122,7 @@ export function useGridKeyboard<Photo extends { readonly id: string }>({
       node.removeEventListener('focusin', onFocusIn);
       node.removeEventListener('keydown', onKeyDown);
     };
-  }, [activeIndex, containerRef, direction, focusAt, layout, onOpen, onSelection, photos, selectionAnchor, viewportHeight]);
+  }, [activeIndex, containerRef, direction, focusAt, layout, onAnchorChange, onOpen, onSelection, photos, viewportHeight]);
 
   return activeIndex;
 }

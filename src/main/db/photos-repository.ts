@@ -2,7 +2,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
 import type { BackupIntegrityItem } from '../backup/integrity-scrubber.js';
-import type { BackupManifestPhotoV2, BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import type { ExtractedMetadata } from '../import/exif.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
@@ -11,6 +11,8 @@ import type { DimensionStatus } from '../../shared/library/types.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
+import { buildQueryPlan, ORDERINGS, select, selectRankedWithProjection, selectWithProjection, sourceWhere } from './photo-query.js';
+import { manifestSnapshot as readManifestSnapshot, restoreManifest as restoreManifestFromBackup } from './photo-backup-repository.js';
 
 import type {
   AlbumSummary,
@@ -20,6 +22,7 @@ import type {
   PageResult,
   PhotoInsert,
   PhotoRecord,
+  SelectionRangeRequest,
   SourceCounts,
   SyncStatus,
 } from '../../shared/library/types.js';
@@ -96,72 +99,7 @@ export function toRecord(row: PhotoRow): PhotoRecord {
   };
 }
 
-// The grid's sort orders (#113). Direction rides along so the keyset cursor
-// compares the right way: DESC pages with <, ASC with >.
-const ORDERINGS = {
-  date: { expr: 'COALESCE(p.taken_at, p.imported_at)', dir: 'DESC', cmp: '<' },
-  name: { expr: 'lower(p.file_name)', dir: 'ASC', cmp: '>' },
-  size: { expr: 'p.bytes', dir: 'DESC', cmp: '<' },
-} as const;
-
-function select(order: keyof typeof ORDERINGS): string {
-  return `
-  SELECT p.*, l.status AS sync_state, ${ORDERINGS[order].expr} AS sort_key
-  FROM ordinary_visible_photos p
-  LEFT JOIN sync_ledger l ON l.photo_id = p.id
-`;
-}
-
-// Search ranking (#390): photos_fts drives the FROM clause and `ORDER BY
-// rank` stays a bare, unaliased reference to FTS5's hidden rank column —
-// that's the exact pattern SQLite's query planner recognizes to stream
-// results already sorted straight off the FTS index. Wrapping it in bm25()
-// or aliasing/pairing it with a second ORDER BY column (both tried first)
-// forces a full materialize-then-sort of every match instead — ~20x slower
-// at 200K rows in measurement. The `p.id` tiebreak for ties lives in WHERE,
-// which doesn't defeat the optimization, so pagination stays gapless.
-function selectRanked(): string {
-  return `
-  SELECT p.*, l.status AS sync_state, photos_fts.rank AS sort_key
-  FROM photos_fts
-  JOIN photos ph ON ph.rowid = photos_fts.rowid
-  JOIN ordinary_visible_photos p ON p.id = ph.id
-  LEFT JOIN sync_ledger l ON l.photo_id = p.id
-`;
-}
-
 export const SELECT = select('date');
-
-/** Tokenizes `raw` into a safe FTS5 MATCH expression: each token becomes a
- * quoted phrase-prefix match (`"foo"*`), joined with AND. Quoting sidesteps
- * FTS5's query-syntax operators entirely (a raw `AND`/`NOT`/`"` from the user
- * can never be parsed as one) — so unlike the substring path this can't
- * throw on user input. Returns null when the query tokenizes to nothing
- * (pure punctuation/whitespace), signaling the caller to fall back to the
- * substring path instead of matching on nothing. */
-function toFtsMatchQuery(raw: string): string | null {
-  const tokens = raw.match(/[\p{L}\p{N}_]+/gu);
-  if (tokens === null || tokens.length === 0) return null;
-  return tokens.map((token) => `"${token.replace(/"/g, '""')}"*`).join(' AND ');
-}
-
-function sourceWhere(source: PageRequest['source']): string {
-  switch (source) {
-    case 'all':
-      return 'p.deleted_at IS NULL';
-    case 'favorites':
-      return 'p.deleted_at IS NULL AND p.favorite = 1';
-    case 'recent':
-      return 'p.deleted_at IS NULL AND p.imported_at >= @recentSince';
-    case 'offloaded':
-      // Join-based (photo_id is the ledger PK, so the join is 1:1): usable
-      // in page() AND as a single-pass counts() FILTER clause (#124 — the
-      // IN-subquery form cost ~700ms at 200K).
-      return `p.deleted_at IS NULL AND l.status = 'offloaded'`;
-    case 'deleted':
-      return 'p.deleted_at IS NOT NULL';
-  }
-}
 
 export class PhotosRepository {
   constructor(private readonly db: BetterSqlite3.Database) {}
@@ -194,35 +132,7 @@ export class PhotosRepository {
    * A query that tokenizes to nothing (pure punctuation/whitespace) falls
    * back to the legacy case-insensitive substring match. */
   page(request: PageRequest): PageResult {
-    if (request.source === 'recent' && request.recentSince === undefined) {
-      throw new Error(`the 'recent' source requires recentSince`);
-    }
-    const filters: string[] = [];
-    if (request.chips?.favorites === true) {
-      filters.push('p.favorite = 1');
-    }
-    if (request.chips?.raw === true) {
-      filters.push(`p.file_kind = 'raw'`);
-    }
-    if (request.chips?.offloaded === true) {
-      filters.push(`p.id IN (SELECT photo_id FROM sync_ledger WHERE status = 'offloaded')`);
-    }
-    if (request.chips?.localOnly === true) {
-      filters.push(`p.id IN (SELECT photo_id FROM sync_ledger WHERE status = 'local')`);
-    }
-    if (request.albumId !== undefined) {
-      filters.push('p.id IN (SELECT photo_id FROM album_photos WHERE album_id = @albumId)');
-    }
-    const ftsQuery = request.query !== undefined && request.query !== '' ? toFtsMatchQuery(request.query) : null;
-    if (request.query !== undefined && request.query !== '' && ftsQuery === null) {
-      filters.push(
-        `(instr(lower(p.file_name), @query) > 0 OR instr(lower(COALESCE(p.place, '')), @query) > 0 OR instr(lower(COALESCE(p.camera, '')), @query) > 0)`,
-      );
-    }
-    if (ftsQuery !== null) {
-      filters.push('photos_fts MATCH @ftsQuery');
-    }
-    const chipClause = filters.length > 0 ? `AND ${filters.join(' AND ')}` : '';
+    const plan = buildQueryPlan(request);
     // The ranked branch's ORDER BY must stay the literal `rank` token (see
     // selectRanked) — it can't reuse ORDERINGS' generic `sort_key`/tuple-
     // cursor shape without losing the index-order optimization, so the tie
@@ -234,8 +144,8 @@ export class PhotosRepository {
     // the cursor still carries it for API consistency; the tiebreak resolves
     // it back to a rowid via an indexed point lookup.
     let fromClause: string, orderByClause: string, cursorClause: string;
-    if (ftsQuery !== null) {
-      fromClause = selectRanked();
+    if (plan.ftsQuery !== null) {
+      fromClause = plan.fromClause;
       orderByClause = 'ORDER BY rank';
       cursorClause =
         request.cursor === undefined
@@ -243,30 +153,44 @@ export class PhotosRepository {
           : 'AND (rank > @cursorKey OR (rank = @cursorKey AND ph.rowid > (SELECT rowid FROM photos WHERE id = @cursorId)))';
     } else {
       const ordering = ORDERINGS[request.order ?? 'date'];
-      fromClause = select(request.order ?? 'date');
-      orderByClause = `ORDER BY sort_key ${ordering.dir}, p.id ${ordering.dir}`;
+      fromClause = plan.fromClause;
+      orderByClause = plan.orderByClause;
       cursorClause = request.cursor === undefined ? '' : `AND (${ordering.expr}, p.id) ${ordering.cmp} (@cursorKey, @cursorId)`;
     }
     const rows = queryAll<PhotoRow>(
       this.db,
       `${fromClause}
-       WHERE ${sourceWhere(request.source)} ${chipClause} ${cursorClause}
+       WHERE ${plan.whereClause} ${cursorClause}
        ${orderByClause}
        LIMIT @limit`,
       {
+        ...plan.params,
         limit: request.limit,
-        recentSince: request.recentSince ?? null,
         cursorKey: request.cursor?.sortKey ?? null,
         cursorId: request.cursor?.id ?? null,
-        query: request.query?.toLowerCase() ?? null,
-        ftsQuery: ftsQuery ?? null,
-        albumId: request.albumId ?? null,
       },
     );
     const last = rows[rows.length - 1];
     const nextCursor: PageCursor | null =
       rows.length === request.limit && last !== undefined ? { sortKey: last.sort_key, id: last.id } : null;
     return { photos: rows.map(toRecord), nextCursor };
+  }
+
+  /** Resolves one inclusive range against the complete active projection. */
+  selectionRange(request: SelectionRangeRequest): readonly string[] {
+    const plan = buildQueryPlan(request);
+    const order = request.order ?? 'date';
+    const ids = queryAll<{ id: string }>(
+      this.db,
+      `${plan.ftsQuery !== null ? selectRankedWithProjection('p.id') : selectWithProjection(order, 'p.id')}
+       WHERE ${plan.whereClause}
+       ${plan.orderByClause}`,
+      plan.params,
+    ).map(({ id }) => id);
+    const anchorIndex = ids.indexOf(request.anchorId);
+    const targetIndex = ids.indexOf(request.targetId);
+    if (anchorIndex === -1 || targetIndex === -1) return [];
+    return ids.slice(Math.min(anchorIndex, targetIndex), Math.max(anchorIndex, targetIndex) + 1);
   }
 
   /** Toggles favorite and marks the ledger dirty (feeds pendingCount). */
@@ -785,63 +709,8 @@ export class PhotosRepository {
     ).map(({ id }) => id);
   }
 
-  /** One read transaction captures every remotely recoverable row plus
-   * album ordering/membership (#289). Deleted rows join only when their
-   * original is already remote; a never-backed-up deleted blob cannot be
-   * promised by a disaster-recovery manifest. */
   manifestSnapshot(): BackupManifestSnapshot {
-    return this.db.transaction(() => {
-      const recoverable = `(p.deleted_at IS NULL OR (p.deleted_at IS NOT NULL AND l.status IN ('synced', 'offloaded')))`;
-      const photos = queryAll<PhotoRow>(this.db, `${select('date')} WHERE ${recoverable} ORDER BY p.imported_at, p.id`).map(
-        (row): BackupManifestPhotoV2 => {
-          const { previewFailure: _previewFailure, dimensionStatus: _dimensionStatus, syncState: _syncState, ...photo } = toRecord(row);
-          const { isOriginal, ...base } = photo;
-          return {
-            ...base,
-            ...(isOriginal ? { isOriginal: true } : {}),
-            blobPath: `blobs/${photo.contentHash.slice(0, 2)}/${photo.contentHash}`,
-          };
-        },
-      );
-      const photoIds = new Set(photos.map((photo) => photo.id));
-      const albumRows = queryAll<{ id: string; name: string; createdAt: string; position: number }>(
-        this.db,
-        `SELECT id, name, created_at AS createdAt, position FROM albums ORDER BY position, id`,
-      );
-      const members = queryAll<{ albumId: string; photoId: string }>(
-        this.db,
-        `SELECT ap.album_id AS albumId, ap.photo_id AS photoId
-           FROM album_photos ap
-           JOIN albums a ON a.id = ap.album_id
-           JOIN ordinary_visible_photos p ON p.id = ap.photo_id
-           JOIN sync_ledger l ON l.photo_id = p.id
-          WHERE ${recoverable}
-          ORDER BY a.position, a.id, ap.position, ap.photo_id`,
-      );
-      const membersByAlbum = new Map<string, string[]>();
-      for (const member of members) {
-        if (!photoIds.has(member.photoId)) {
-          continue;
-        }
-        const existing = membersByAlbum.get(member.albumId) ?? [];
-        existing.push(member.photoId);
-        membersByAlbum.set(member.albumId, existing);
-      }
-      const albums = albumRows.map((album) => ({ ...album, photoIds: membersByAlbum.get(album.id) ?? [] }));
-      const databaseSchema = queryGet<{ version: number }>(this.db, 'SELECT max(version) AS version FROM schema_migrations')?.version ?? 1;
-      const keyIds = [...new Set(photos.map((photo) => photo.keyId))].sort((a, b) => a - b);
-      return {
-        databaseSchema,
-        keyIds,
-        photos,
-        albums,
-        totals: {
-          photos: photos.length,
-          bytes: photos.reduce((sum, photo) => sum + photo.bytes, 0),
-          albums: albums.length,
-        },
-      };
-    })();
+    return readManifestSnapshot(this.db, toRecord);
   }
 
   /** Rebuilds a fresh catalog from a verified manifest (#288). The staged
@@ -849,62 +718,7 @@ export class PhotosRepository {
    * disaster recovery into silent data loss. All restored originals are
    * already verified remote copies, so their ledgers start clean + synced. */
   restoreManifest(manifest: RestorableBackupManifest, keys: readonly WrappedKeyRecord[]): void {
-    this.db.transaction(() => {
-      const occupied = queryGet<{ count: number }>(
-        this.db,
-        `SELECT (SELECT count(*) FROM photos) + (SELECT count(*) FROM albums) + (SELECT count(*) FROM keys) + (SELECT count(*) FROM boards) AS count`,
-      );
-      if ((occupied?.count ?? 0) !== 0) throw new Error('restore requires an empty staged catalog');
-      for (const key of keys) {
-        runNamed(
-          this.db,
-          `INSERT INTO keys (id, wrapped_key, created_at, retired_at)
-           VALUES (@id, @wrappedKey, @createdAt, @retiredAt)`,
-          {
-            id: key.id,
-            wrappedKey: key.wrappedKey,
-            createdAt: key.createdAt,
-            retiredAt: key.status === 'retired' ? manifest.generatedAt : null,
-          },
-        );
-      }
-      for (const photo of manifest.photos) {
-        runNamed(
-          this.db,
-          `INSERT INTO photos (
-             id, file_name, file_kind, width, height, bytes, content_hash,
-             camera, lens, iso, aperture, shutter, focal_length, taken_at,
-             gps_lat, gps_lon, place, imported_at, import_source, favorite,
-             is_original, key_id, deleted_at, media_info
-           ) VALUES (
-             @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
-             @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
-             @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite,
-             @isOriginal, @keyId, @deletedAt, @mediaInfoJson
-           )`,
-          {
-            ...photo,
-            favorite: photo.favorite ? 1 : 0,
-            isOriginal: photo.isOriginal === true ? 1 : 0,
-            mediaInfo: null,
-            mediaInfoJson: mediaInfoJson(photo.mediaInfo),
-          },
-        );
-        run(
-          this.db,
-          `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty)
-           VALUES (?, 'synced', ?, 0)`,
-          photo.id,
-          manifest.generatedAt,
-        );
-      }
-      for (const album of manifest.albums) {
-        runNamed(this.db, `INSERT INTO albums (id, name, created_at, position) VALUES (@id, @name, @createdAt, @position)`, album);
-        for (const [position, photoId] of album.photoIds.entries()) {
-          run(this.db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES (?, ?, ?)`, album.id, photoId, position);
-        }
-      }
-    })();
+    restoreManifestFromBackup(this.db, manifest, keys);
   }
 
   /** The backup queue's input (#105): dirty, not-deleted photos. */
