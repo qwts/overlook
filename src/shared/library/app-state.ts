@@ -225,8 +225,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     case 'sortOrder/set':
       // Fed by settings:changed pushes (#113) — the query hook refetches
-      // and the next photos/loaded intersects the selection as usual.
-      return { ...state, sortOrder: action.order, selectionMode: 'explicit' };
+      // without changing collection membership, so complete selection stays.
+      return { ...state, sortOrder: action.order };
     case 'selection/toggled': {
       const selection = new Set(state.selection);
       if (selection.has(action.photoId)) {

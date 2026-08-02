@@ -70,6 +70,7 @@ export type PhotoInsert = Omit<
 
 /** The sidebar's library sources (design §Sidebar). */
 export type SourceFilter = 'all' | 'favorites' | 'recent' | 'offloaded' | 'deleted';
+export type LibraryMembershipChange = 'none' | 'favorite' | 'album' | 'library';
 
 /** The grid's sort orders (#113): date newest-first, name A→Z, size
  * largest-first (decisions recorded on the PR). */

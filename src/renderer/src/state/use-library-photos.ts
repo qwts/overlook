@@ -15,6 +15,18 @@ function chipsActive(chips: ChipFilters): boolean {
   return Object.values(chips).some(Boolean);
 }
 
+function membershipChanged(
+  membership: 'none' | 'favorite' | 'album' | 'library' | undefined,
+  source: PageRequest['source'],
+  chips: ChipFilters,
+  album: string | null,
+): boolean {
+  if (membership === 'none') return false;
+  if (membership === 'favorite') return source === 'favorites' || chips.favorites === true;
+  if (membership === 'album') return album !== null;
+  return true;
+}
+
 function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (preserveSelection?: boolean) => void): void {
   const dispatch = useAppDispatch();
   useEffect(() => {
@@ -113,7 +125,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
   // leave stale cells or permanent loading placeholders. Replace semantics
   // reset the cursor; the selection intersects safely in the reducer.
   useEffect(() => {
-    return window.overlook.library.onChanged(({ photoIds, derivativeOnly }) => {
+    return window.overlook.library.onChanged(({ photoIds, derivativeOnly, membership }) => {
       // A derivative can change in place (video poster captured post-import, a
       // repaired RAW preview) without altering the record or its stable thumb
       // URL — so bump those ids' cache-bust epoch to force the tiles to reload.
@@ -121,9 +133,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage(false);
+      if (derivativeOnly !== true) fetchFirstPage(!membershipChanged(membership, source, chips, album));
     });
-  }, [dispatch, fetchFirstPage]);
+  }, [album, chips, dispatch, fetchFirstPage, source]);
 
   // Backup changes only syncState, so patch loaded records instead of
   // replacing the first page (which used to flicker, trim deep selection,

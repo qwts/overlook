@@ -192,8 +192,8 @@ function getLibraryService(): LibraryService {
       broadcast((win) => win.webContents.send(name, payload));
     });
     libraryService = new LibraryService(db, {
-      libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+      libraryChanged: (photoIds, membership) => {
+        emitLibraryChanged({ photoIds: [...photoIds], ...(membership === undefined ? {} : { membership }) });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {

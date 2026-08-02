@@ -14,7 +14,7 @@ function hasActiveChips(chips: LibraryQuery['chips']): boolean {
 
 /** Resolves Select All against the complete current collection, not loaded rows. */
 export function useSelectAll(): () => void {
-  const { source, query, chips, sortOrder, album, selectionRevision } = useAppState();
+  const { source, query, chips, sortOrder, album, protectedAlbum, selectionRevision } = useAppState();
   const dispatch = useAppDispatch();
   const requestRef = useRef(0);
   const scopeKeyRef = useRef('');
@@ -39,6 +39,7 @@ export function useSelectAll(): () => void {
   }, [selectionRevision]);
 
   return useCallback(() => {
+    if (protectedAlbum !== null) return;
     const requestId = (requestRef.current += 1);
     const requestedScope = scopeKey;
     const requestedSelectionIntent = String(selectionRevision);
@@ -62,5 +63,5 @@ export function useSelectAll(): () => void {
           return;
         dispatch({ type: 'toast/shown', toast: { title: 'Could not select all photos', tone: 'red' } });
       });
-  }, [dispatch, request, scopeKey, selectionRevision]);
+  }, [dispatch, protectedAlbum, request, scopeKey, selectionRevision]);
 }

@@ -833,7 +833,14 @@ export const events = {
   // or metadata change — the renderer refreshes just those tiles' images and
   // must NOT refetch/replace the page (which would reset scroll and drop the
   // lightbox/selection for items beyond page 1). #744 review.
-  libraryChanged: defineEvent('library:changed', z.object({ photoIds: z.array(z.string()), derivativeOnly: z.boolean().optional() })),
+  libraryChanged: defineEvent(
+    'library:changed',
+    z.object({
+      photoIds: z.array(z.string()),
+      derivativeOnly: z.boolean().optional(),
+      membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
+    }),
+  ),
   ...originalPolicy.originalPolicyEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',

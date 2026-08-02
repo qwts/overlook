@@ -84,6 +84,14 @@ describe('app state reducer', () => {
     assert.deepEqual([...landed.selection], ['b']);
   });
 
+  test('complete Select All survives sort changes', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b', 'c'] });
+    const sorted = apply(selected, { type: 'sortOrder/set', order: 'name' });
+    const refreshed = apply(sorted, { type: 'photos/loaded', photos: [{ id: 'c' } as AppState['photos'][number]], append: false });
+    assert.equal(refreshed.selectionMode, 'all');
+    assert.deepEqual([...refreshed.selection].sort(), ['a', 'b', 'c']);
+  });
+
   test('mutation refresh clears complete selection and advances selection intent', () => {
     const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b'] });
     const cleared = apply(selected, {

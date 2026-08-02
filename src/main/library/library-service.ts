@@ -5,6 +5,7 @@ import { HistoryLibraryRepository } from '../history/history-library-repository.
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
 import type {
   AlbumSummary,
+  LibraryMembershipChange,
   LibraryQuery,
   LibraryStats,
   PageRequest,
@@ -19,7 +20,7 @@ import type { Board } from '../../shared/moodboard/board.js';
 // targeted change events instead of refetch-the-world signals.
 
 export interface LibraryEvents {
-  libraryChanged(photoIds: readonly string[]): void;
+  libraryChanged(photoIds: readonly string[], membership?: LibraryMembershipChange): void;
   originalClassificationChanged?(photoIds: readonly string[]): void;
   pendingCountChanged(count: number): void;
 }
@@ -73,7 +74,7 @@ export class LibraryService {
     const repaired = this.repo.repairDimensions(photoId, width, height);
     const pendingCount = this.repo.pendingCount();
     if (repaired) {
-      this.events.libraryChanged([photoId]);
+      this.events.libraryChanged([photoId], 'none');
       this.events.pendingCountChanged(pendingCount);
     }
     return { repaired, pendingCount };
@@ -82,7 +83,7 @@ export class LibraryService {
   toggleFavorite(photoId: string): { favorite: boolean; pendingCount: number } {
     const favorite = this.repo.toggleFavorite(photoId);
     const pendingCount = this.repo.pendingCount();
-    this.events.libraryChanged([photoId]);
+    this.events.libraryChanged([photoId], 'favorite');
     this.events.pendingCountChanged(pendingCount);
     return { favorite, pendingCount };
   }
@@ -90,7 +91,7 @@ export class LibraryService {
   setFavorite(photoId: string, favorite: boolean): { favorite: boolean; pendingCount: number } {
     const updated = this.historyRepo.setFavorite(photoId, favorite);
     const pendingCount = this.repo.pendingCount();
-    this.events.libraryChanged([photoId]);
+    this.events.libraryChanged([photoId], 'favorite');
     this.events.pendingCountChanged(pendingCount);
     return { favorite: updated, pendingCount };
   }
@@ -117,13 +118,13 @@ export class LibraryService {
 
   reorderAlbum(albumId: string, position: number): { changed: boolean; before: readonly string[]; after: readonly string[] } {
     const result = this.repo.reorderAlbum(albumId, position);
-    if (result.changed) this.events.libraryChanged([]);
+    if (result.changed) this.events.libraryChanged([], 'none');
     return result;
   }
 
   setAlbumOrder(order: readonly string[]): { changed: boolean; before: readonly string[]; after: readonly string[] } {
     const result = this.repo.setAlbumOrder(order);
-    if (result.changed) this.events.libraryChanged([]);
+    if (result.changed) this.events.libraryChanged([], 'none');
     return result;
   }
 
@@ -132,32 +133,32 @@ export class LibraryService {
   // per ADR-0007), so pendingCount rides along.
   createAlbum(id: string, name: string): AlbumSummary {
     const album = this.repo.createAlbum(id, name);
-    this.events.libraryChanged([]);
+    this.events.libraryChanged([], 'none');
     return album;
   }
 
   renameAlbum(albumId: string, name: string): void {
     const members = this.repo.renameAlbum(albumId, name);
-    this.events.libraryChanged(members);
+    this.events.libraryChanged(members, 'none');
     this.events.pendingCountChanged(this.repo.pendingCount());
   }
 
   deleteAlbum(albumId: string): void {
     const members = this.repo.deleteAlbum(albumId);
-    this.events.libraryChanged(members);
+    this.events.libraryChanged(members, 'album');
     this.events.pendingCountChanged(this.repo.pendingCount());
   }
 
   addToAlbum(albumId: string, photoIds: readonly string[]): { added: number; changedPhotoIds: readonly string[] } {
     const added = this.repo.addToAlbum(albumId, photoIds);
-    this.events.libraryChanged(added);
+    this.events.libraryChanged(added, 'album');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { added: added.length, changedPhotoIds: added };
   }
 
   removeFromAlbum(albumId: string, photoIds: readonly string[]): { removed: number; changedPhotoIds: readonly string[] } {
     const removed = this.repo.removeFromAlbum(albumId, photoIds);
-    this.events.libraryChanged(removed);
+    this.events.libraryChanged(removed, 'album');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { removed: removed.length, changedPhotoIds: removed };
   }
@@ -168,7 +169,7 @@ export class LibraryService {
 
   moveBetweenAlbums(sourceAlbumId: string, targetAlbumId: string, photoIds: readonly string[]): { moved: number; alreadyInTarget: number } {
     const result = this.repo.moveBetweenAlbums(sourceAlbumId, targetAlbumId, photoIds);
-    this.events.libraryChanged(result.moved);
+    this.events.libraryChanged(result.moved, 'album');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { moved: result.moved.length, alreadyInTarget: result.alreadyInTarget };
   }
@@ -182,7 +183,7 @@ export class LibraryService {
     changedPhotoIds: readonly string[];
   } {
     const result = this.repo.softDelete(photoIds);
-    this.events.libraryChanged(result.deleted);
+    this.events.libraryChanged(result.deleted, 'library');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return {
       deleted: result.deleted.length,
@@ -199,7 +200,7 @@ export class LibraryService {
     const result = this.repo.setOriginal(photoIds, isOriginal);
     const pendingCount = this.repo.pendingCount();
     if (result.changed.length > 0) {
-      this.events.libraryChanged(result.changed);
+      this.events.libraryChanged(result.changed, 'none');
       this.events.originalClassificationChanged?.(result.changed);
       this.events.pendingCountChanged(pendingCount);
     }
@@ -214,7 +215,7 @@ export class LibraryService {
 
   restorePhotos(photoIds: readonly string[]): { restored: number; changedPhotoIds: readonly string[] } {
     const restored = this.repo.restore(photoIds);
-    this.events.libraryChanged(restored);
+    this.events.libraryChanged(restored, 'library');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { restored: restored.length, changedPhotoIds: restored };
   }
