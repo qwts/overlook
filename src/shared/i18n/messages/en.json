@@ -176,6 +176,9 @@
   "commands.history.undo": {
     "defaultMessage": "Undo"
   },
+  "commands.library.exportAll": {
+    "defaultMessage": "Export All Unencrypted…"
+  },
   "commands.library.import": {
     "defaultMessage": "Import Photos…"
   },

@@ -576,6 +576,18 @@ export const channels = {
       failed: z.number().int().nonnegative(),
       cancelled: z.number().int().nonnegative(),
       previewTranscodes: z.number().int().nonnegative(),
+      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
+    }),
+  ),
+  exportRunAll: defineChannel(
+    'export:run-all',
+    z.object({ destination: z.string().min(1) }),
+    z.object({
+      exported: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+      cancelled: z.number().int().nonnegative(),
+      previewTranscodes: z.number().int().nonnegative(),
+      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
     }),
   ),
   exportCancel: defineChannel('export:cancel', z.object({}), z.object({})),

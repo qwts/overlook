@@ -23,6 +23,7 @@ export interface NativeCommandRouterDeps {
   readonly setShortcutSurface: (surface: CommandSurface | null) => void;
   readonly setSettingsSection: (section: SettingsSection | undefined) => void;
   readonly setExportPhotoIds: (ids: readonly string[] | null) => void;
+  readonly setExportAllPhotos: (allPhotos: boolean) => void;
   readonly setAlbumPickerIds: (ids: readonly string[] | null) => void;
   readonly setLibrariesCreating: (creating: boolean) => void;
   readonly resetInteropEntry: () => void;
@@ -40,6 +41,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
+    setExportAllPhotos,
     setAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry,
@@ -61,6 +63,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         closeOffload();
         resetDropped();
         setExportPhotoIds(null);
+        setExportAllPhotos(false);
         dispatch({ type: 'lightbox/closed' });
         dispatch({ type: 'dialog/set', dialog: 'import', open: false });
         dispatch({ type: 'dialog/set', dialog: 'export', open: false });
@@ -103,6 +106,12 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         case 'library.import':
           closeOverlays();
           dispatch({ type: 'dialog/set', dialog: 'import', open: true });
+          return;
+        case 'library.exportAll':
+          if (state.protectedAlbum !== null) return;
+          closeOverlays();
+          setExportAllPhotos(true);
+          dispatch({ type: 'dialog/set', dialog: 'export', open: true });
           return;
         case 'library.source.all':
         case 'library.source.favorites':
@@ -194,6 +203,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         }
         case 'photo.export':
+          setExportAllPhotos(false);
           setExportPhotoIds(targetIds);
           dispatch({ type: 'dialog/set', dialog: 'export', open: true });
           return;
@@ -275,6 +285,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
       setShortcutSurface,
       setSettingsSection,
       setExportPhotoIds,
+      setExportAllPhotos,
       setAlbumPickerIds,
       setLibrariesCreating,
       resetInteropEntry,

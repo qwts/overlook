@@ -161,10 +161,11 @@ test('macOS application menu is the six-menu design-system spec projected from t
     // Six menus, exact order, no Window menu.
     expect(await topLevelMenuLabels(app)).toEqual(['Overlook', 'File', 'Edit', 'View', 'Photo', 'Help']);
 
-    // File carries Import + Export Selection + the library trio, in order.
+    // File carries Import + Export Selection + Export All + the library trio, in order.
     expect(await submenuItemIds(app, 'File')).toEqual([
       'library.import',
       'photo.export',
+      'library.exportAll',
       '—',
       'library.switch',
       'library.move',
@@ -173,7 +174,7 @@ test('macOS application menu is the six-menu design-system spec projected from t
 
     // Library + sidebar entries are enabled with a library open; Moodboard is a
     // real view (#515) while Feed has no view yet, so it stays disabled.
-    for (const id of ['library.move', 'library.new', 'view.sidebar.toggle', 'view.mode.moodboard']) {
+    for (const id of ['library.move', 'library.new', 'library.exportAll', 'view.sidebar.toggle', 'view.mode.moodboard']) {
       await expect.poll(() => menuState(app, id)).toMatchObject({ enabled: true });
     }
     await expect.poll(() => menuState(app, 'view.mode.feed')).toMatchObject({ enabled: false });
@@ -211,6 +212,12 @@ test('#689 File/View/Photo menu commands drive their shared handlers (parity)', 
     await expect.poll(() => menuState(app, 'photo.export')).toMatchObject({ enabled: true });
     await invokeMenu(app, 'photo.export');
     await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await invokeMenu(app, 'library.exportAll');
+    const allDialog = page.getByRole('dialog', { name: 'Export' });
+    await expect(allDialog.getByText('Every photo in this library')).toBeVisible();
+    await expect(allDialog.getByText('Unencrypted originals')).toBeVisible();
   } finally {
     await app.close();
   }

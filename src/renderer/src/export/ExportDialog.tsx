@@ -21,6 +21,8 @@ export interface ExportDialogProps {
   readonly open: boolean;
   /** The selection to export. */
   readonly photoIds: readonly string[];
+  /** Export all ordinary visible library photos through the main-process scope. */
+  readonly allPhotos?: boolean | undefined;
   readonly onClose: () => void;
 }
 
@@ -31,7 +33,7 @@ interface Bar {
   readonly total: number;
 }
 
-export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): ReactElement | null {
+export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: ExportDialogProps): ReactElement | null {
   const { formatCount } = useFormats();
   const { announce } = useAnnouncer();
   const formatLabelId = useId();
@@ -40,9 +42,10 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
   const [format, setFormat] = useState<'original' | 'jpeg'>('original');
   const [decrypt, setDecrypt] = useState(true);
   const [destination, setDestination] = useState<string | null>(null);
-  const [bar, setBar] = useState<Bar>({ done: 0, total: photoIds.length });
+  const [bar, setBar] = useState<Bar>({ done: 0, total: allPhotos ? 0 : photoIds.length });
   const [exported, setExported] = useState(0);
   const [failed, setFailed] = useState(0);
+  const [failures, setFailures] = useState<readonly { readonly fileName: string; readonly reason: string }[]>([]);
   const [cancelled, setCancelled] = useState(0);
   const [previewTranscodes, setPreviewTranscodes] = useState(0);
   const [runError, setRunError] = useState(false);
@@ -74,17 +77,21 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
 
   const count = photoIds.length;
   const noun = count === 1 ? 'photo' : 'photos';
+  const exportLabel = allPhotos ? 'Export all photos' : `Export ${formatCount(count)} ${noun}`;
 
   const start = (): void => {
     if (destination === null) {
       return;
     }
     setPhase('running');
-    void window.overlook.export
-      .run({ photoIds: [...photoIds], destination, format })
+    const run = allPhotos
+      ? window.overlook.export.runAll({ destination })
+      : window.overlook.export.run({ photoIds: [...photoIds], destination, format });
+    void run
       .then((summary) => {
         setExported(summary.exported);
         setFailed(summary.failed);
+        setFailures(summary.failures);
         setCancelled(summary.cancelled);
         setPreviewTranscodes(summary.previewTranscodes);
         setPhase('done');
@@ -119,7 +126,7 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
               Cancel
             </Button>
             <Button variant="primary" icon="share" disabled={!decrypt || destination === null} onClick={start}>
-              Export {formatCount(count)} {noun}
+              {exportLabel}
             </Button>
           </>
         ) : phase === 'running' ? (
@@ -143,29 +150,33 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
           <div className="ovl-export__card">
             <Icon name="image" size={16} />
             <div className="ovl-export__cardTitle">
-              {formatCount(count)} {noun} selected
+              {allPhotos ? 'Every photo in this library' : `${formatCount(count)} ${noun} selected`}
             </div>
           </div>
-          <div className="ovl-export__row" role="group" aria-labelledby={formatLabelId}>
-            <span id={formatLabelId}>Format</span>
-            <Segmented
-              label="Format"
-              value={format}
-              onChange={setFormat}
-              options={[
-                { value: 'original', label: 'Original' },
-                { value: 'jpeg', label: 'JPEG' },
-              ]}
-            />
-          </div>
+          {allPhotos ? null : (
+            <div className="ovl-export__row" role="group" aria-labelledby={formatLabelId}>
+              <span id={formatLabelId}>Format</span>
+              <Segmented
+                label="Format"
+                value={format}
+                onChange={setFormat}
+                options={[
+                  { value: 'original', label: 'Original' },
+                  { value: 'jpeg', label: 'JPEG' },
+                ]}
+              />
+            </div>
+          )}
           <div className="ovl-export__decrypt">
             <div>
-              <div className="ovl-export__decryptTitle">Decrypt originals</div>
+              <div className="ovl-export__decryptTitle">{allPhotos ? 'Unencrypted originals' : 'Decrypt originals'}</div>
               <div className="ovl-export__decryptHint">
-                Files are stored encrypted. Turn this on to write plain, openable files to disk.
+                {allPhotos
+                  ? 'Every original will be written as a plain, openable file to the folder you choose.'
+                  : 'Files are stored encrypted. Turn this on to write plain, openable files to disk.'}
               </div>
             </div>
-            <Switch checked={decrypt} onChange={setDecrypt} label="Decrypt originals" />
+            {allPhotos ? null : <Switch checked={decrypt} onChange={setDecrypt} label="Decrypt originals" />}
           </div>
           {!decrypt ? (
             <div className="ovl-export__warning mono-data" role="alert">
@@ -211,6 +222,18 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
                       ...(failed > 0 ? [`${formatCount(failed)} failed`] : []),
                       ...(cancelled > 0 ? [`${formatCount(cancelled)} cancelled`] : []),
                     ].join(' · ')}.`}
+                {failures.length > 0 ? (
+                  <details>
+                    <summary>View item failures</summary>
+                    <ul>
+                      {failures.map(({ fileName, reason }) => (
+                        <li key={`${fileName}:${reason}`} className="mono-data">
+                          {fileName}: {reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </div>
             ) : (
               <div className="ovl-export__done">

@@ -652,24 +652,43 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
 }
 
 export interface ExportFacade {
-  run(
-    photoIds: readonly string[],
-    destination: string,
-    format?: 'original' | 'jpeg',
-  ): Promise<{ exported: number; failed: number; cancelled: number; previewTranscodes: number }>;
+  run(photoIds: readonly string[], destination: string, format?: 'original' | 'jpeg'): Promise<ExportRunResult>;
+  runAll(destination: string): Promise<ExportRunResult>;
   cancel(): void;
   pickDestination(): Promise<string | null>;
+}
+
+export interface ExportRunResult {
+  readonly exported: number;
+  readonly failed: number;
+  readonly cancelled: number;
+  readonly previewTranscodes: number;
+  readonly failures: { photoId: string; fileName: string; reason: string }[];
 }
 
 export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
   ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
     wrapHandler(channels.exportRun, async ({ photoIds, destination, format }) => {
       const result = await getFacade().run(photoIds, destination, format);
+      const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: format ?? 'original', ...result },
+        payload: { format: format ?? 'original', ...summary },
+      });
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.exportRunAll.name, (_event, request: unknown) =>
+    wrapHandler(channels.exportRunAll, async ({ destination }) => {
+      const result = await getFacade().runAll(destination);
+      const { failures: _failures, ...summary } = result;
+      getActivity?.().record({
+        eventType: 'photo.exported',
+        entityIds: [],
+        outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
+        payload: { format: 'original', scope: 'all', ...summary },
       });
       return result;
     })(request),

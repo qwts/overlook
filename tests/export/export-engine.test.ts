@@ -222,6 +222,7 @@ describe('export engine (#97)', () => {
     const world = await seededWorld(1);
     const summary = await world.engine.exportPhotos(['GHOST', ...world.rows.keys()], world.destination);
     assert.deepEqual({ exported: summary.exported, failed: summary.failed }, { exported: 1, failed: 1 });
+    assert.deepEqual(summary.failures, [{ photoId: 'GHOST', fileName: 'GHOST', reason: 'photo GHOST is not in the library' }]);
   });
 });
 
