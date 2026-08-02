@@ -22,9 +22,10 @@ import type { TouchIdEnableResult, TouchIdStatus } from './crypto/touch-id.js';
 import type { DiagnosticEvent } from './diagnostics/event-contract.js';
 import { mutateWithActivity } from './activity/activity-publication.js';
 import type { ActivityFacade } from './activity/activity-publication.js';
-import { favoriteCommand, moveCompensationCommand, trashCommand } from './history/command-drafts.js';
+import { moveCompensationCommand, trashCommand } from './history/command-drafts.js';
 import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
+import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './library/favorite-mutation-handler.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -165,19 +166,10 @@ export function registerLibraryHandlers(
     wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) => getService().repairDimensions(id, width, height))(request),
   );
   ipcMain.handle(channels.libraryToggleFavorite.name, (_event, request: unknown) =>
-    wrapHandler(channels.libraryToggleFavorite, ({ id }) => {
-      return mutateWithActivity(
-        getActivity,
-        () => getService().toggleFavorite(id),
-        (result) => ({
-          eventType: 'photo.favorite-changed',
-          entityIds: [id],
-          outcome: 'succeeded',
-          payload: { favorite: result.favorite },
-        }),
-        (result) => favoriteCommand(id, result.favorite),
-      );
-    })(request),
+    wrapHandler(channels.libraryToggleFavorite, ({ id }) => toggleFavoriteWithActivity(getService, getActivity, id))(request),
+  );
+  ipcMain.handle(channels.libraryToggleFavorites.name, (_event, request: unknown) =>
+    wrapHandler(channels.libraryToggleFavorites, ({ photoIds }) => toggleFavoritesWithActivity(getService, getActivity, photoIds))(request),
   );
   ipcMain.handle(channels.libraryCounts.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryCounts, ({ recentSince }) => getService().counts(recentSince))(request),

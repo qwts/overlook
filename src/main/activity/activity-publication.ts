@@ -28,7 +28,7 @@ export interface ActivityFacade {
   recordMutation<T>(
     mutation: () => T,
     activity: (result: T) => ActivityDraft | undefined,
-    command?: (result: T) => CommandDraft | undefined,
+    command?: (result: T) => CommandDraft | readonly CommandDraft[] | undefined,
   ): T;
 }
 
@@ -36,7 +36,7 @@ export function mutateWithActivity<T>(
   getActivity: (() => ActivityFacade) | undefined,
   mutation: () => T,
   activity: (result: T) => ActivityDraft | undefined,
-  command?: (result: T) => CommandDraft | undefined,
+  command?: (result: T) => CommandDraft | readonly CommandDraft[] | undefined,
 ): T {
   return getActivity === undefined ? mutation() : getActivity().recordMutation(mutation, activity, command);
 }
@@ -121,7 +121,8 @@ export function createActivityFacade(db: BetterSqlite3.Database, onChanged: () =
         if (event !== undefined) {
           const appended = append(event);
           const undoable = command?.(completed);
-          if (undoable !== undefined) commands.append(materializeCommand(undoable, appended));
+          const drafts = undoable === undefined ? [] : 'commandId' in undoable ? [undoable] : undoable;
+          for (const draft of drafts) commands.append(materializeCommand(draft, appended));
           recorded = true;
         }
         return completed;

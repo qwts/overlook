@@ -31,6 +31,7 @@ import {
 import { resolveCommand, type CommandPlatform, type QuickActionCommandId } from '../../../shared/commands/registry.js';
 import { DEFAULT_QUICK_ACTIONS } from '../../../shared/settings/settings.js';
 import { QuickActions, type QuickActionItem } from './QuickActions';
+import { useFavoriteMutations } from '../state/use-favorite-mutations';
 
 const messages = defineMessages({
   trashPolicyDays: {
@@ -121,7 +122,7 @@ export function LibraryGridView({
             selectionAnchorRef.current = photoId;
             return;
           }
-          dispatch({ type: 'selection/all', photoIds });
+          dispatch({ type: 'selection/replaced', photoIds });
         });
     },
     [dispatch, projectionKey, state.album, state.chips, state.query, state.sortOrder, state.source],
@@ -146,8 +147,7 @@ export function LibraryGridView({
     readonly y: number;
     readonly origin: HTMLButtonElement;
   } | null>(null);
-  const favoritePendingRef = useRef<ReadonlySet<string>>(new Set());
-  const [favoritePending, setFavoritePending] = useState<ReadonlySet<string>>(() => new Set());
+  const { pending: favoritePending, toggleFavorite, toggleFavorites } = useFavoriteMutations();
   const [retentionNow] = useState(() => Date.now());
   const [trashRetention, setTrashRetention] = useState<TrashRetention>(DEFAULT_TRASH_RETENTION);
   const [quickActionIds, setQuickActionIds] = useState<readonly QuickActionCommandId[]>(DEFAULT_QUICK_ACTIONS);
@@ -173,28 +173,6 @@ export function LibraryGridView({
       unsubscribe();
     };
   }, []);
-
-  const toggleFavorite = (photo: PhotoRecord): void => {
-    if (favoritePendingRef.current.has(photo.id)) return;
-    const pending = new Set(favoritePendingRef.current);
-    pending.add(photo.id);
-    favoritePendingRef.current = pending;
-    setFavoritePending(pending);
-    void window.overlook.library
-      .toggleFavorite({ id: photo.id })
-      .then(({ pendingCount }) => {
-        dispatch({ type: 'pendingCount/set', count: pendingCount });
-      })
-      .catch(() => {
-        dispatch({ type: 'toast/shown', toast: { title: `Couldn't update favorite — ${photo.fileName}`, tone: 'red' } });
-      })
-      .finally(() => {
-        const remaining = new Set(favoritePendingRef.current);
-        remaining.delete(photo.id);
-        favoritePendingRef.current = remaining;
-        setFavoritePending(remaining);
-      });
-  };
 
   const openContextMenu = (
     photo: PhotoRecord,
@@ -337,7 +315,8 @@ export function LibraryGridView({
     dispatchQuickActionVisibility({ type: 'dismiss' });
     switch (commandId) {
       case 'photo.favorite.toggle':
-        toggleFavorite(photo);
+        if (photoIds.length === 1) toggleFavorite(photo);
+        else toggleFavorites(photoIds);
         return;
       case 'photo.export':
         onExport(photoIds);
@@ -603,8 +582,8 @@ export function LibraryGridView({
           }}
           onOpen={() => dispatch({ type: 'lightbox/opened', photoId: contextPhoto.photo.id })}
           onToggleFavorite={() => {
-            const targetIds = new Set(contextPhoto.targetIds);
-            for (const photo of state.photos.filter(({ id }) => targetIds.has(id))) toggleFavorite(photo);
+            if (contextPhoto.targetIds.length === 1) toggleFavorite(contextPhoto.photo);
+            else toggleFavorites(contextPhoto.targetIds);
           }}
           onSetOriginal={(isOriginal) => {
             void window.overlook.library.setOriginal({ photoIds: [...contextPhoto.targetIds], isOriginal });

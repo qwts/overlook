@@ -237,7 +237,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection,
-        selectionMode: 'explicit',
+        selectionMode: state.selectionMode === 'all' && selection.size > 0 ? 'all' : 'explicit',
         selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,
@@ -248,7 +248,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection,
-        selectionMode: 'all',
+        selectionMode: selection.size > 0 ? 'all' : 'explicit',
         selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId:
           state.inspectorSource === 'selection' ? selectedPhotoId(state.photos, selection, state.inspectorPhotoId) : state.inspectorPhotoId,

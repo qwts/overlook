@@ -28,6 +28,7 @@ import * as originalPolicy from './original-policy-channels.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
+import { favoriteChannels } from './favorite-channels.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -312,11 +313,7 @@ export const channels = {
     }),
     z.object({ repaired: z.boolean(), pendingCount: z.number().int().nonnegative() }),
   ),
-  libraryToggleFavorite: defineChannel(
-    'library:toggle-favorite',
-    z.object({ id: z.string() }),
-    z.object({ favorite: z.boolean(), pendingCount: z.number().int().nonnegative() }),
-  ),
+  ...favoriteChannels,
   ...originalPolicy.originalPolicyChannels,
   libraryCounts: defineChannel(
     'library:counts',

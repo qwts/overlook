@@ -89,6 +89,9 @@ function rendererClient(service: LibraryService): {
   toggleFavorite: ReturnType<
     typeof createInvoker<typeof channels.libraryToggleFavorite.request, typeof channels.libraryToggleFavorite.response>
   >;
+  toggleFavorites: ReturnType<
+    typeof createInvoker<typeof channels.libraryToggleFavorites.request, typeof channels.libraryToggleFavorites.response>
+  >;
   repairDimensions: ReturnType<
     typeof createInvoker<typeof channels.libraryRepairDimensions.request, typeof channels.libraryRepairDimensions.response>
   >;
@@ -99,6 +102,9 @@ function rendererClient(service: LibraryService): {
     [channels.librarySelectAll.name]: wrapHandler(channels.librarySelectAll, (req) => ({ photoIds: service.selectAllIds(req) })),
     [channels.librarySelectionRange.name]: wrapHandler(channels.librarySelectionRange, (req) => service.selectionRange(req)),
     [channels.libraryToggleFavorite.name]: wrapHandler(channels.libraryToggleFavorite, ({ id }) => service.toggleFavorite(id)),
+    [channels.libraryToggleFavorites.name]: wrapHandler(channels.libraryToggleFavorites, ({ photoIds }) =>
+      service.toggleFavorites(photoIds),
+    ),
     [channels.libraryRepairDimensions.name]: wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) =>
       service.repairDimensions(id, width, height),
     ),
@@ -116,6 +122,7 @@ function rendererClient(service: LibraryService): {
     selectAll: createInvoker(channels.librarySelectAll, transport),
     selectionRange: createInvoker(channels.librarySelectionRange, transport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, transport),
+    toggleFavorites: createInvoker(channels.libraryToggleFavorites, transport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, transport),
     stats: createInvoker(channels.libraryStats, transport),
   };
@@ -248,6 +255,19 @@ describe('library IPC contract', () => {
     assert.equal(result.favorite, true);
     assert.equal(result.pendingCount, before + 1);
     assert.deepEqual(events.changed.at(-1), ['01J8LIB004']);
+    assert.equal(events.pending.at(-1), before + 1);
+  });
+
+  test('bulk favorite toggle updates unloaded ids through one validated request', async () => {
+    const { service, events } = seededService();
+    const client = rendererClient(service);
+    const before = service.pendingCount();
+
+    const result = await client.toggleFavorites({ photoIds: ['01J8LIB004', '01J8LIB006', 'missing', '01J8LIB004'] });
+    assert.deepEqual(result, { updated: 2, missing: 1, pendingCount: before + 1 });
+    assert.equal(service.get('01J8LIB004')?.favorite, true);
+    assert.equal(service.get('01J8LIB006')?.favorite, true);
+    assert.deepEqual(events.changed.at(-1), ['01J8LIB004', '01J8LIB006']);
     assert.equal(events.pending.at(-1), before + 1);
   });
 

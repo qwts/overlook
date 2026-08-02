@@ -92,6 +92,18 @@ describe('app state reducer', () => {
     assert.deepEqual([...refreshed.selection].sort(), ['a', 'b', 'c']);
   });
 
+  test('refining complete Select All preserves unloaded ids across page replacement', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b', 'c'] });
+    const refined = apply(selected, { type: 'selection/toggled', photoId: 'b' });
+    const refreshed = apply(refined, {
+      type: 'photos/loaded',
+      photos: [{ id: 'a' } as AppState['photos'][number]],
+      append: false,
+    });
+    assert.equal(refreshed.selectionMode, 'all');
+    assert.deepEqual([...refreshed.selection].sort(), ['a', 'c']);
+  });
+
   test('mutation refresh clears complete selection and advances selection intent', () => {
     const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b'] });
     const cleared = apply(selected, {

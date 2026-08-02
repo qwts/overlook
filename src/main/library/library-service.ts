@@ -94,6 +94,22 @@ export class LibraryService {
     return { favorite, pendingCount };
   }
 
+  toggleFavorites(photoIds: readonly string[]): {
+    updated: number;
+    missing: number;
+    pendingCount: number;
+    changes: readonly { readonly id: string; readonly favorite: boolean }[];
+  } {
+    const result = this.repo.toggleFavorites(photoIds);
+    const pendingCount = this.repo.pendingCount();
+    const changedIds = result.changed.map(({ id }) => id);
+    if (changedIds.length > 0) {
+      this.events.libraryChanged(changedIds, 'favorite');
+      this.events.pendingCountChanged(pendingCount);
+    }
+    return { updated: result.changed.length, missing: result.missing.length, pendingCount, changes: result.changed };
+  }
+
   setFavorite(photoId: string, favorite: boolean): { favorite: boolean; pendingCount: number } {
     const updated = this.historyRepo.setFavorite(photoId, favorite);
     const pendingCount = this.repo.pendingCount();
