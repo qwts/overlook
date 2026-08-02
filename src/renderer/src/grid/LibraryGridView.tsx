@@ -465,17 +465,23 @@ export function LibraryGridView({
           onOffload={() => onOffload([...state.selection], true)}
           onTransfer={onTransfer === undefined ? undefined : () => onTransfer('selection', [...state.selection])}
           onMarkOriginal={
-            state.photos.some((photo) => state.selection.has(photo.id) && !photo.isOriginal)
+            state.selectionMode === 'all' || state.photos.some((photo) => state.selection.has(photo.id) && !photo.isOriginal)
               ? () => {
-                  const photoIds = state.photos.filter((photo) => state.selection.has(photo.id) && !photo.isOriginal).map(({ id }) => id);
+                  const photoIds =
+                    state.selectionMode === 'all'
+                      ? [...state.selection]
+                      : state.photos.filter((photo) => state.selection.has(photo.id) && !photo.isOriginal).map(({ id }) => id);
                   void window.overlook.library.setOriginal({ photoIds, isOriginal: true });
                 }
               : undefined
           }
           onUnmarkOriginal={
-            state.photos.some((photo) => state.selection.has(photo.id) && photo.isOriginal)
+            state.selectionMode === 'all' || state.photos.some((photo) => state.selection.has(photo.id) && photo.isOriginal)
               ? () => {
-                  const photoIds = state.photos.filter((photo) => state.selection.has(photo.id) && photo.isOriginal).map(({ id }) => id);
+                  const photoIds =
+                    state.selectionMode === 'all'
+                      ? [...state.selection]
+                      : state.photos.filter((photo) => state.selection.has(photo.id) && photo.isOriginal).map(({ id }) => id);
                   void window.overlook.library.setOriginal({ photoIds, isOriginal: false });
                 }
               : undefined

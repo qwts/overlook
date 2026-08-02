@@ -14,10 +14,11 @@ function hasActiveChips(chips: LibraryQuery['chips']): boolean {
 
 /** Resolves Select All against the complete current collection, not loaded rows. */
 export function useSelectAll(): () => void {
-  const { source, query, chips, sortOrder, album } = useAppState();
+  const { source, query, chips, sortOrder, album, selection } = useAppState();
   const dispatch = useAppDispatch();
   const requestRef = useRef(0);
   const scopeKeyRef = useRef('');
+  const selectionIntentKeyRef = useRef('');
   const request = useMemo<LibraryQuery>(
     () => ({
       source,
@@ -30,22 +31,37 @@ export function useSelectAll(): () => void {
     [album, chips, query, sortOrder, source],
   );
   const scopeKey = JSON.stringify(request);
+  const selectionIntentKey = useMemo(() => [...selection].sort().join('\u0000'), [selection]);
   useEffect(() => {
     scopeKeyRef.current = scopeKey;
   }, [scopeKey]);
+  useEffect(() => {
+    selectionIntentKeyRef.current = selectionIntentKey;
+  }, [selectionIntentKey]);
 
   return useCallback(() => {
     const requestId = (requestRef.current += 1);
     const requestedScope = scopeKey;
+    const requestedSelectionIntent = selectionIntentKey;
     void window.overlook.library
       .selectAll(request)
       .then(({ photoIds }) => {
-        if (requestRef.current !== requestId || scopeKeyRef.current !== requestedScope) return;
+        if (
+          requestRef.current !== requestId ||
+          scopeKeyRef.current !== requestedScope ||
+          selectionIntentKeyRef.current !== requestedSelectionIntent
+        )
+          return;
         dispatch({ type: 'selection/all', photoIds: [...new Set(photoIds)] });
       })
       .catch(() => {
-        if (requestRef.current !== requestId || scopeKeyRef.current !== requestedScope) return;
+        if (
+          requestRef.current !== requestId ||
+          scopeKeyRef.current !== requestedScope ||
+          selectionIntentKeyRef.current !== requestedSelectionIntent
+        )
+          return;
         dispatch({ type: 'toast/shown', toast: { title: 'Could not select all photos', tone: 'red' } });
       });
-  }, [dispatch, request, scopeKey]);
+  }, [dispatch, request, scopeKey, selectionIntentKey]);
 }
