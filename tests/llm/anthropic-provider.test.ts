@@ -1,5 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import Anthropic from '@anthropic-ai/sdk';
 
 import { AnthropicProvider, type AnthropicClientLike } from '../../src/main/llm/anthropic-provider.js';
 import { LlmRefusalError, LlmRequestError, type LlmQaCall } from '../../src/main/llm/provider.js';
@@ -32,6 +33,13 @@ function clientReturning(message: unknown): { client: AnthropicClientLike; lastB
 }
 
 describe('anthropic provider adapter', () => {
+  test('installed SDK exposes the client surface used by the adapter', () => {
+    const client = new Anthropic({ apiKey: 'test-key' });
+
+    assert.equal(typeof client.messages.create, 'function');
+    assert.equal(typeof client.models.list, 'function');
+  });
+
   test('sends the balanced model, image, and composed prompt; normalises usage', async () => {
     const { client, lastBody } = clientReturning({
       content: [{ type: 'text', text: 'A cat on a sofa.' }],

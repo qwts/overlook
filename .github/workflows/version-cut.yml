@@ -10,9 +10,8 @@
 #     workflow.
 #
 # Both halves authenticate as chores-dumb[bot], a GitHub App whose installation
-# token is minted per run. RELEASE_TOKEN (a human PAT) stays only as a fallback
-# for a repo where the App is not installed yet. Two reasons for a bot rather
-# than a PAT:
+# token is minted per run from the repository's App client ID and private key.
+# There is no PAT or GITHUB_TOKEN write fallback. Two reasons for the App:
 #  - GITHUB_TOKEN events cannot trigger other workflows. A bot-refreshed version
 #    PR got no pull_request CI runs even though main requires the "CI" and
 #    "E2E gate" checks, and a GITHUB_TOKEN tag push fired no on:push:tags run.
@@ -28,9 +27,7 @@
 # No dispatch steps, no `actions: write` on the version job. Repository tokens
 # reach only actions/* steps and first-party command steps that need them;
 # third-party tooling runs without credentials.
-# If RELEASE_TOKEN is ever absent, the jobs fall back to GITHUB_TOKEN and still
-# version and tag correctly; only downstream runs fail to start. Recovery stays
-# explicit because github-actions[bot] is not an authorized workflow actor.
+# Missing or unreadable App credentials fail closed before any repository write.
 name: Version cut
 
 on:
@@ -48,6 +45,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   policy:
@@ -61,35 +59,16 @@ jobs:
     needs: policy
     name: Version packages PR
     runs-on: ubuntu-latest
-    # These scopes exist only for the `|| secrets.GITHUB_TOKEN` fallback below;
-    # a PAT carries its own.
-    permissions:
-      contents: write
-      pull-requests: write
+    outputs:
+      has-releases: ${{ steps.version.outputs.has-releases }}
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
-      - name: Mint the chores-dumb token
-        id: chores
-        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
-        # then github.token, but a *failed* step aborts the job before any of that
-        # applies — so an unreadable App key took the whole release pipeline down
-        # instead of degrading it (PR #836 follow-up).
-        continue-on-error: true
-        # actions/* — first-party, so the App key never reaches a third-party
-        # action (AGENTS.md → Branch And GitHub Hygiene).
-        if: env.HAS_CHORES_DUMB == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          # client-id, not app-id: v3 deprecated the latter, and the two are
-          # easy to confuse with the bot's *user* id, which is a third number
-          # entirely (PR #838 review).
-          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
-          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Changesets resolves its configured base branch from full Git history.
+          fetch-depth: 0
           # The versioning CLI must not inherit a persisted repository token.
           persist-credentials: false
 
@@ -113,10 +92,16 @@ jobs:
           BRANCH: changeset-release/main
         run: |
           set -euo pipefail
-          if [ -z "$(find .changeset -name '*.md' ! -name 'README.md' -print -quit)" ]; then
-            echo "No changesets pending — nothing to version."
+          git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+          status_file="$RUNNER_TEMP/changeset-status.json"
+          npx changeset status --output "$status_file"
+          releases=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).releases.length' "$status_file")
+          if [ "$releases" -eq 0 ]; then
+            echo 'has-releases=false' >> "$GITHUB_OUTPUT"
+            echo "No package releases pending — nothing to version."
             exit 0
           fi
+          echo 'has-releases=true' >> "$GITHUB_OUTPUT"
           npx changeset version
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -129,10 +114,24 @@ jobs:
           git commit -m 'Version packages'
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
+      - name: Require chores-dumb credentials
+        if: steps.version.outputs.ready == 'true'
+        run: test "$HAS_CHORES_DUMB" = true
+
+      - name: Mint the chores-dumb token
+        if: steps.version.outputs.ready == 'true'
+        id: chores
+        # actions/* — first-party, so the App key never reaches a third-party
+        # action (AGENTS.md → Branch And GitHub Hygiene).
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
+          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
+
       - name: Push and refresh the Version packages PR
         if: steps.version.outputs.ready == 'true'
         env:
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
           BRANCH: changeset-release/main
         run: |
           set -euo pipefail
@@ -170,49 +169,27 @@ jobs:
             --body-file "$RUNNER_TEMP/pr-body.md"
 
   tag:
-    needs: policy
+    needs: [policy, version-pr]
     name: Tag version merges
     runs-on: ubuntu-latest
-    # Scopes for the `|| github.token` fallback only; `actions: write` covers the
-    # stranded-tag recovery dispatch below.
-    permissions:
-      contents: write
-      actions: write
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
-      - name: Mint the chores-dumb token
-        id: chores
-        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
-        # then github.token, but a *failed* step aborts the job before any of that
-        # applies — so an unreadable App key took the whole release pipeline down
-        # instead of degrading it (PR #836 follow-up).
-        continue-on-error: true
-        # actions/* — first-party, so the App key never reaches a third-party
-        # action (AGENTS.md → Branch And GitHub Hygiene).
-        if: env.HAS_CHORES_DUMB == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          # client-id, not app-id: v3 deprecated the latter, and the two are
-          # easy to confuse with the bot's *user* id, which is a third number
-          # entirely (PR #838 review).
-          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
-          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Tags + history for the already-tagged check.
           fetch-depth: 0
-          # The tag push has to start release.yml by itself, so it must carry the
-          # PAT's credentials rather than GITHUB_TOKEN's.
-          token: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          persist-credentials: false
 
-      - name: Tag when the current version is a fresh cut
+      - name: Determine release operation
+        id: release-plan
         env:
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          HAS_RELEASES: ${{ needs.version-pr.outputs.has-releases }}
         run: |
+          set -euo pipefail
           # Push events only tag when this push actually changed the version —
           # otherwise the first changeset-free push after this workflow lands
           # would tag the never-cut 0.1.0 at an arbitrary commit. Manual
@@ -223,15 +200,17 @@ jobs:
             cur=$(node -p 'require("./package.json").version')
             if [ "$prev" = "$cur" ]; then
               echo "Version unchanged ($cur) — not a version-cut merge."
+              echo 'kind=none' >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
-          pending=$(find .changeset -name '*.md' ! -name 'README.md' | head -1)
-          if [ -n "$pending" ]; then
-            echo "Changesets pending — nothing to tag."
+          if [ "$HAS_RELEASES" = true ]; then
+            echo "Package releases pending — nothing to tag."
+            echo 'kind=none' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           version="v$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
             echo "$version already tagged."
             # Recovery path (PR #178 review): a tag whose release run failed —
@@ -239,15 +218,24 @@ jobs:
             # push event can be replayed for a tag that already exists.
             # Dispatch from main (which contains release.yml — a stranded tag
             # by definition does not; PR #181 review), tag passed as input.
-            # Needs the App/PAT identity: github-actions[bot] is not an
+            # Needs the App identity: github-actions[bot] is not an
             # authorized initiator for governed release recovery.
             if ! gh release view "$version" >/dev/null 2>&1; then
-              echo "$version has no release — dispatching."
-              gh workflow run release.yml --ref main -f tag="$version" \
-                || echo "::notice::release.yml not dispatchable — $version still has no release."
+              echo "$version has no release — recovery is required."
+              echo 'kind=recover' >> "$GITHUB_OUTPUT"
+            else
+              echo 'kind=none' >> "$GITHUB_OUTPUT"
             fi
             exit 0
           fi
+          echo 'kind=tag' >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact main-push CI
+        if: steps.release-plan.outputs.kind == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           # The tag must never outrun the main-push CI run for this exact SHA.
           # Wait for its stable gate instead of dispatching an equivalent suite.
           ci_run=''
@@ -267,13 +255,40 @@ jobs:
           test -n "$ci_run"
           test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run/jobs?filter=latest&per_page=100" \
             --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')" = true
+
+      - name: Require chores-dumb credentials
+        if: steps.release-plan.outputs.kind != 'none'
+        run: test "$HAS_CHORES_DUMB" = true
+
+      # Mint after the potentially hour-long CI wait: installation tokens expire
+      # after one hour, so an earlier token could be stale before the tag push.
+      - name: Mint the chores-dumb token
+        if: steps.release-plan.outputs.kind != 'none'
+        id: chores
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
+          private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
+
+      - name: Publish tag or recover release
+        if: steps.release-plan.outputs.kind != 'none'
+        env:
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
+          KIND: ${{ steps.release-plan.outputs.kind }}
+          VERSION: ${{ steps.release-plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$KIND" = recover ]; then
+            echo "$VERSION has no release — dispatching recovery."
+            gh workflow run release.yml --ref main -f tag="$VERSION" \
+              || echo "::notice::release.yml not dispatchable — $VERSION still has no release."
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git tag -a "$version" -m "Release $version"
-          git push origin "$version"
-          echo "Tagged $version."
-          # No dispatch: pushed under the PAT, this tag fires release.yml's
-          # on:push:tags trigger directly. Without RELEASE_TOKEN the push is a
-          # GITHUB_TOKEN push and starts nothing — re-run this workflow via
-          # workflow_dispatch once the secret is present and the already-tagged
-          # recovery path above picks the tag up.
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
+            push origin "$VERSION"
+          echo "Tagged $VERSION."
+          # No dispatch: pushed under the App, this tag fires release.yml's
+          # on:push:tags trigger directly.

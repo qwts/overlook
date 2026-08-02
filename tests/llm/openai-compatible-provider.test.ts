@@ -1,5 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import OpenAI from 'openai';
 
 import { OpenAiCompatibleProvider, type OpenAiClientLike } from '../../src/main/llm/openai-compatible-provider.js';
 import { LlmRefusalError, LlmRequestError, type LlmQaCall } from '../../src/main/llm/provider.js';
@@ -39,6 +40,13 @@ const OK_RESPONSE = {
 };
 
 describe('openai-compatible provider adapter', () => {
+  test('installed SDK exposes the client surface used by the adapter', () => {
+    const client = new OpenAI({ apiKey: 'test-key' });
+
+    assert.equal(typeof client.chat.completions.create, 'function');
+    assert.equal(typeof client.models.list, 'function');
+  });
+
   test('openai uses max_completion_tokens and the openai balanced model; normalises usage', async () => {
     const { client, lastBody } = clientReturning(OK_RESPONSE);
     const provider = new OpenAiCompatibleProvider({ id: 'openai', tokenParam: 'max_completion_tokens' }, () => client);
