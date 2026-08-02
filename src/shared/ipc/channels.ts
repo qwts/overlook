@@ -25,6 +25,7 @@ import { historyExecuteRequestSchema, historyExecuteResponseSchema, historyStatu
 import { inspectorWindowChannels, windowEvents } from '../inspector-window-contract.js';
 import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
+import * as librarySelection from './library-selection-channels.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
@@ -288,20 +289,7 @@ export const channels = {
     }),
     z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
   ),
-  librarySelectionRange: defineChannel(
-    'library:selection-range',
-    z.object({
-      source: sourceFilterSchema,
-      anchorId: z.string().min(1),
-      targetId: z.string().min(1),
-      recentSince: z.string().optional(),
-      query: z.string().optional(),
-      chips: chipFiltersSchema.optional(),
-      order: z.enum(['date', 'name', 'size']).optional(),
-      albumId: z.string().optional(),
-    }),
-    z.object({ photoIds: z.array(z.string()).readonly() }),
-  ),
+  ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
