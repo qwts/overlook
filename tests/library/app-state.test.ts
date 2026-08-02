@@ -110,13 +110,31 @@ describe('app state reducer', () => {
       type: 'photos/loaded',
       photos: [{ id: 'a' } as AppState['photos'][number]],
       append: false,
-      preserveSelection: false,
+      invalidateCompleteSelection: true,
     });
     assert.equal(cleared.selection.size, 0);
     assert.equal(cleared.selectionMode, 'explicit');
     assert.equal(cleared.selectionRevision, selected.selectionRevision + 1);
     const emptyClear = apply(cleared, { type: 'selection/cleared' });
     assert.equal(emptyClear.selectionRevision, cleared.selectionRevision + 1);
+  });
+
+  test('membership refresh intersects explicit selection without clearing surviving ids', () => {
+    const photos = ['a', 'b', 'c'].map((id) => ({ id }) as AppState['photos'][number]);
+    const selected = apply(
+      initialAppState,
+      { type: 'photos/loaded', photos, append: false },
+      { type: 'selection/toggled', photoId: 'a' },
+      { type: 'selection/toggled', photoId: 'b' },
+    );
+    const refreshed = apply(selected, {
+      type: 'photos/loaded',
+      photos: [photos[0]!, photos[2]!],
+      append: false,
+      invalidateCompleteSelection: true,
+    });
+    assert.deepEqual([...refreshed.selection], ['a']);
+    assert.equal(refreshed.selectionRevision, selected.selectionRevision);
   });
 
   test('escape exits the lightbox when open, otherwise clears selection', () => {
@@ -126,6 +144,7 @@ describe('app state reducer', () => {
     assert.equal(afterFirst.selection.size, 1, 'selection survives the lightbox exit');
     const afterSecond = apply(afterFirst, { type: 'escape' });
     assert.equal(afterSecond.selection.size, 0);
+    assert.equal(afterSecond.selectionRevision, afterFirst.selectionRevision + 1);
   });
 
   test('opening a shell dialog is exclusive while closing one preserves the active dialog (#486)', () => {

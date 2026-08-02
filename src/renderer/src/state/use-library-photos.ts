@@ -16,7 +16,7 @@ function chipsActive(chips: ChipFilters): boolean {
   return Object.values(chips).some(Boolean);
 }
 
-function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (preserveSelection?: boolean) => void): void {
+function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateCompleteSelection?: boolean) => void): void {
   const dispatch = useAppDispatch();
   useEffect(() => {
     const pending = new Map<string, SyncStatus>();
@@ -25,7 +25,7 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (preserveSelect
       timer = null;
       if (localOnly) {
         pending.clear();
-        fetchFirstPage(false);
+        fetchFirstPage(true);
         return;
       }
       const updates = [...pending].map(([id, syncState]) => ({ id, syncState }));
@@ -82,7 +82,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
   );
 
   const fetchFirstPage = useCallback(
-    (preserveSelection = true) => {
+    (invalidateCompleteSelection = false) => {
       const requestId = (requestRef.current += 1);
       inFlightRef.current = true;
       cursorRef.current = null;
@@ -94,7 +94,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
           }
           cursorRef.current = nextCursor;
           setExhaustedKey(nextCursor === null ? setKey : null);
-          dispatch({ type: 'photos/loaded', photos, append: false, preserveSelection });
+          dispatch({ type: 'photos/loaded', photos, append: false, invalidateCompleteSelection });
         })
         .finally(() => {
           if (requestRef.current === requestId) {
@@ -122,7 +122,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage(!membershipChanged(membership, source, chips, album, albumIds));
+      if (derivativeOnly !== true) fetchFirstPage(membershipChanged(membership, source, chips, album, albumIds));
     });
   }, [album, chips, dispatch, fetchFirstPage, source]);
 

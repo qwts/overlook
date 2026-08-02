@@ -99,7 +99,7 @@ export const initialAppState: AppState = {
 };
 
 export type AppAction =
-  | { type: 'photos/loaded'; photos: readonly PhotoRecord[]; append: boolean; preserveSelection?: boolean }
+  | { type: 'photos/loaded'; photos: readonly PhotoRecord[]; append: boolean; invalidateCompleteSelection?: boolean }
   | {
       type: 'photos/sync-state-patched';
       updates: readonly { readonly id: string; readonly syncState: PhotoRecord['syncState'] }[];
@@ -145,8 +145,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       // intact while the same collection refetches (#884). The lightbox follows
       // visibility independently (#92): a photo that left the set closes it.
       const visible = new Set(action.photos.map((photo) => photo.id));
-      const preserveSelection = action.preserveSelection !== false;
-      const selection = !preserveSelection
+      const invalidateCompleteSelection = action.invalidateCompleteSelection === true && state.selectionMode === 'all';
+      const selection = invalidateCompleteSelection
         ? new Set<string>()
         : state.selectionMode === 'all'
           ? new Set(state.selection)
@@ -163,8 +163,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         photos: action.photos,
         selection,
-        selectionMode: preserveSelection ? state.selectionMode : 'explicit',
-        selectionRevision: preserveSelection ? state.selectionRevision : state.selectionRevision + 1,
+        selectionMode: invalidateCompleteSelection ? 'explicit' : state.selectionMode,
+        selectionRevision: invalidateCompleteSelection ? state.selectionRevision + 1 : state.selectionRevision,
         lightboxId,
         inspectorOpen: inspectorClosedWithLightbox ? false : state.inspectorOpen,
         inspectorSource: inspectorClosedWithLightbox ? null : detachedFallbackToSelection ? 'selection' : state.inspectorSource,
@@ -399,6 +399,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selection: new Set<string>(),
+        selectionMode: 'explicit',
+        selectionRevision: state.selectionRevision + 1,
         inspectorPhotoId: state.inspectorSource === 'selection' ? null : state.inspectorPhotoId,
       };
   }
