@@ -38,6 +38,9 @@ App identity exists at all.
 Repository credentials must be **absent while third-party tools run**: checkouts
 that precede them use `persist-credentials: false`, and tokens are injected only
 into first-party steps containing the `git` / `gh` commands that need them.
+Release verification establishes exact-commit CI and reviewed-PR evidence before
+installing or executing dependencies from the release tag, so tag-controlled
+tools cannot influence those evidence checks.
 
 **The App credential may reach only `actions/*` steps and our own `run:` blocks
 — never a third-party action**, whose future versions nobody here controls. When a
