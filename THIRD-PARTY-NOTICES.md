@@ -56,7 +56,7 @@ components; their full license texts ship inside the Electron distribution at
 | `define-data-property` | 1.1.4 | MIT |
 | `define-properties` | 1.2.1 | MIT |
 | `detect-libc` | 2.1.2 | Apache-2.0 |
-| `electron` | 42.7.0 | MIT |
+| `electron` | 42.7.1 | MIT |
 | `end-of-stream` | 1.4.5 | MIT |
 | `es-define-property` | 1.0.1 | MIT |
 | `es-errors` | 1.3.0 | MIT |
@@ -1021,7 +1021,7 @@ Apache License
 
 ---
 
-## electron 42.7.0
+## electron 42.7.1
 
 License: MIT
 
