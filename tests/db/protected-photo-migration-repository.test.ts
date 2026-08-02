@@ -121,6 +121,7 @@ describe('ProtectedPhotoMigrationRepository', () => {
     assert.deepEqual(photos.removeFromAlbum('ordinary-a', ['photo-a']), []);
     assert.throws(() => photos.toggleFavorite('photo-a'), /does not exist/u);
     assert.deepEqual(photos.allRows(), [], 'diagnostics receive no hidden row or identifier');
+    assert.deepEqual(photos.exportableIds(), [], 'ordinary Export All cannot enumerate protected content');
     assert.deepEqual(photos.migrationOwnedContentHashes(), ['a'.repeat(64)], 'orphan repair retains ownership without a row');
     assert.deepEqual(photos.dirtyPhotos(), []);
     assert.deepEqual(photos.integrityItems({ afterId: null, limit: 10 }), []);

@@ -24,6 +24,7 @@ Lane B. The counterpart to encrypted storage: exporting writes real, openable fi
 | Entry points: pill + lightbox with exact counts, selection preserved                                                                         | ✅ #100 (PR #198) | `tests/e2e/export-entry.spec.ts` — ledger id `m07-export-entry-points`                                              |
 | Acceptance: select→export→files on disk (sha256-vs-contentHash byte fidelity) + full-circle RAF import → JPEG export                         | ✅ #101 (PR #199) | `tests/e2e/export-flow.spec.ts`                                                                                     |
 | Offloaded export reads verified encrypted temporary custody and releases it without silently changing the ledger to synced                   | ✅ #306           | `tests/export/export-engine.test.ts` + `tests/e2e/offload-ui.spec.ts` — ledger id `m08-ephemeral-offloaded-viewing` |
+| Export All Unencrypted resolves every ordinary, non-trashed library photo in main, retains original formats, and reports individual failures | 🚧 #885           | `tests/db/library-db.test.ts` + `tests/export/export-runtime.test.ts` + `ExportDialog.stories.tsx`                  |
 
 Recorded decisions: v1 ships no encrypted-export format (decrypt-off just disables Export); transcode quality 90; EXIF/GPS stripped on transcode — metadata travels only with Original exports.
 

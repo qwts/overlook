@@ -38,6 +38,14 @@ export interface ExportSummary {
   /** Companion sidecars written beside their originals (#484). */
   readonly sidecarsExported: number;
   readonly files: readonly ExportedFile[];
+  /** Every source item that could not produce a destination file. */
+  readonly failures: readonly ExportFailure[];
+}
+
+export interface ExportFailure {
+  readonly photoId: string;
+  readonly fileName: string;
+  readonly reason: string;
 }
 
 export class ExportPreflightError extends Error {
@@ -130,6 +138,7 @@ export class ExportEngine {
     }
 
     const files: ExportedFile[] = [];
+    const failures: ExportFailure[] = [];
     const total = photoIds.length;
     let done = 0;
     let failed = 0;
@@ -165,8 +174,10 @@ export class ExportEngine {
         files.push({ photoId: photo.id, fileName, renamed: fileName !== targetName, fromPreview, sidecarNames });
       } catch (error) {
         failed += 1;
+        const reason = error instanceof Error ? error.message : String(error);
+        failures.push({ photoId: id, fileName: photo?.fileName ?? id, reason });
         if (this.deps.failure === undefined) {
-          console.error(`[overlook] export failed for ${photo?.fileName ?? id}: ${error instanceof Error ? error.message : String(error)}`);
+          console.error(`[overlook] export failed for ${photo?.fileName ?? id}: ${reason}`);
         } else {
           this.deps.failure(id, error);
         }
@@ -183,6 +194,7 @@ export class ExportEngine {
       previewTranscodes: files.filter((file) => file.fromPreview).length,
       sidecarsExported: files.reduce((sum, file) => sum + file.sidecarNames.length, 0),
       files,
+      failures,
     };
   }
 

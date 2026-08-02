@@ -54,6 +54,7 @@ export type CommandId =
   | 'library.move'
   | 'library.new'
   | 'library.import'
+  | 'library.exportAll'
   | 'library.source.all'
   | 'library.source.favorites'
   | 'library.source.recent'
@@ -136,6 +137,7 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'library.move': { id: 'commands.library.move', defaultMessage: 'Move Library…' },
   'library.new': { id: 'commands.library.new', defaultMessage: 'New Library…' },
   'library.import': { id: 'commands.library.import', defaultMessage: 'Import Photos…' },
+  'library.exportAll': { id: 'commands.library.exportAll', defaultMessage: 'Export All Unencrypted…' },
   'library.source.all': { id: 'commands.library.source.all', defaultMessage: 'All Photos' },
   'library.source.favorites': { id: 'commands.library.source.favorites', defaultMessage: 'Favorites' },
   'library.source.recent': { id: 'commands.library.source.recent', defaultMessage: 'Recent Imports' },
@@ -277,6 +279,13 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     key: 'i',
     primaryModifier: true,
     native: { menu: 'file', lockSafe: false, queueable: true },
+  },
+  {
+    id: 'library.exportAll',
+    label: label('library.exportAll', 'Export All Unencrypted…'),
+    surfaces: [],
+    target: 'application',
+    native: { menu: 'file', lockSafe: false, queueable: false },
   },
   {
     id: 'library.source.all',

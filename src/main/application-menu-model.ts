@@ -47,6 +47,8 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return context.appLockConfigured && !locked(context);
     case 'library.import':
       return context.hasLibrary && !context.providerBusy && !locked(context);
+    case 'library.exportAll':
+      return context.hasLibrary && context.dialog === 'none' && !context.protectedAlbumOpen;
     case 'library.source.all':
     case 'library.source.favorites':
     case 'library.source.recent':
@@ -248,6 +250,7 @@ function macApplicationMenuTemplate(
       submenu: [
         commandItem('library.import', context, dispatch, translate),
         commandItem('photo.export', context, dispatch, translate),
+        commandItem('library.exportAll', context, dispatch, translate),
         separator,
         commandItem('library.switch', context, dispatch, translate),
         commandItem('library.move', context, dispatch, translate),
