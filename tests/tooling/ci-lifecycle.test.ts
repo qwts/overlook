@@ -27,7 +27,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11/u);
+    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@060af0b6a71ed32c04bb04efd07f2c87b46eec03/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
   });
@@ -46,7 +46,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     for (const workflow of workflows) {
       assert.match(workflow, /^ {2}policy:$/mu);
       assert.match(workflow, /authorization-only: 'true'/u);
-      assert.match(workflow, /ci-policy@edc54f94b2afdb4ef48e1f5716aef0192942cb11/u);
+      assert.match(workflow, /ci-policy@060af0b6a71ed32c04bb04efd07f2c87b46eec03/u);
     }
     for (const [workflow, jobs] of [
       [autoUpdate, ['update']],
