@@ -1,5 +1,12 @@
 # photos
 
+## 0.65.2
+
+### Patch Changes
+
+- ddbf2df: Add library-wide export of unencrypted original files.
+- 5d66b23: Select complete Shift-click and Shift-keyboard ranges across virtualized gallery rows and active album, search, and filter projections.
+
 ## 0.65.1
 
 ### Patch Changes
