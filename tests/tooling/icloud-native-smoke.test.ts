@@ -52,7 +52,7 @@ describe('packaged iCloud native smoke (#656)', () => {
       readonly scripts?: Record<string, string>;
     };
     const command = packageJson.scripts?.['test:icloud:native-smoke'] ?? '';
-    assert.match(command, /scripts\/run-guarded\.mjs/u);
+    assert.match(command, /tools\/agent-guard\/run-guarded\.mjs/u);
     assert.match(command, /--label test:icloud:native-smoke/u);
     assert.match(command, /scripts\/verify-macos-icloud-native-smoke\.mjs/u);
   });

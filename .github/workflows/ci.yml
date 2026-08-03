@@ -209,12 +209,10 @@ jobs:
             --test-reporter=node-test-github-reporter --test-reporter-destination=stdout
         run: npm run test:cov
 
-      # Peak-RSS/duration record from the process-tree guard (scripts/run-guarded.mjs) for the
-      # test:cov run above — the data source for ratcheting the guard ceilings. Runs even on
-      # failure: an rss-limit/timeout kill is exactly when the record matters.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
+      # No guard diagnostics step here: ENG-0138 makes the memory guard a no-op under
+      # CI/GITHUB_ACTIONS, so tools/agent-guard/run-guarded.mjs passes the command straight
+      # through and never writes .guard/last-run.json on a runner. Hosted runners are
+      # disposable and bounded by timeout-minutes; the guard exists for local machines.
 
       # Render c8 totals vs. the floor into the run summary. Runs even when test:cov failed
       # (dropped below the floor) — that is when the numbers matter most.
@@ -260,12 +258,11 @@ jobs:
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
-    # This is a whole-job limit, not the guard's own budget: npm run test:e2e runs under
-    # scripts/run-guarded.mjs with --timeout-s 1800 (30 min). Checkout/npm ci/Electron system
-    # deps run before that step and the report upload runs after it, so the job timeout must
-    # exceed the guard timeout with headroom — otherwise GitHub can cancel the job outright
-    # before the guard records .guard/last-run.json or the report uploads (as perf.yml already
-    # does for its own guarded step).
+    # The only bound on this job. npm run test:e2e carries --timeout-s 1800 (30 min), but
+    # the memory guard is exempt in CI (ENG-0138) so that timeout does not apply on a
+    # runner. 45 keeps headroom over it — checkout/npm ci/Electron system deps run before
+    # the test step and the report upload runs after it — for the local case and in case
+    # the exemption is ever narrowed.
     timeout-minutes: 45
     env:
       OVERLOOK_E2E_WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_workers || '1' }}

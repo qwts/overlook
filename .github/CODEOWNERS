@@ -22,5 +22,5 @@ CLAUDE.md   @qwts
 # Targets the entries above delegate to. A hook config is only as protected as
 # the file it executes, and an instruction file only as protected as the guide
 # it tells agents to go read.
-scripts/guard-agent-command.mjs    @qwts
+tools/agent-guard/                 @qwts
 docs/Contributing.md               @qwts

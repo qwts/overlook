@@ -22,10 +22,9 @@ jobs:
     needs: policy
     name: 200K perf harness
     runs-on: ubuntu-latest
-    # Outer backstop only — the harness itself runs under scripts/run-guarded.mjs
-    # (aggregate-RSS ceiling + a 2700s/45min wall-clock timeout, generous pending a
-    # real measured peak — see docs/agent-process-guard.md). Raised from the prior
-    # 30 to leave headroom around that guard timeout for setup/Electron-install/upload.
+    # The only bound on this job. The memory guard is exempt in CI (ENG-0138), so the
+    # --timeout-s 2700 on npm run test:perf does not apply here; 60 leaves headroom over
+    # that 45 min for setup/Electron-install/upload if the guard ever does run.
     timeout-minutes: 60
 
     steps:
@@ -52,13 +51,10 @@ jobs:
       - name: Run the perf harness (Electron under Xvfb)
         run: xvfb-run --auto-servernum -- npm run test:perf
 
-      # Peak-RSS/duration record from the process-tree guard (scripts/run-guarded.mjs).
-      # The perf lane's ceilings are provisional (docs/agent-process-guard.md) — this
-      # is the data source for ratcheting them from a measured peak. Runs even on
-      # failure: an rss-limit/timeout kill is exactly when the record matters.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
+      # No guard diagnostics step here: ENG-0138 makes the memory guard a no-op under
+      # CI/GITHUB_ACTIONS, so it never writes .guard/last-run.json on a runner. The perf
+      # lane's local cost is still unmeasured (docs/agent-process-guard.md); measuring it
+      # needs an owner-granted local run, not this job.
 
       - name: Upload perf report
         if: ${{ !cancelled() }}

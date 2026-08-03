@@ -150,51 +150,57 @@ Machine data (EXIF, counts, sync states) renders with the `.mono-data` utility.
 
 ## Validation
 
-Before claiming done:
+Run the cheap gates locally, one at a time:
 
 ```sh
-npm run ci              # interop acceptance, lint chain, format, changesets,
-                        # acceptance + a11y budgets, docs:gov, test:cov, build
-npm run test:e2e        # additionally, for E2E-relevant changes
-npm run test:stories:ci # additionally, for renderer/story-relevant changes
+npm run lint     # agent-context, pins, colors, contrast, eslint, cycles, dead, types, i18n, licenses
+npm test         # typecheck, compile, Electron-hosted unit + happy-dom DOM, guard conformance
+npm run docs:gov
 ```
+
+Then push and let CI verify the heavy lanes — `test:cov`, `test:e2e`,
+`test:stories:ci`, `test:perf`, `build` and the full `ci` chain. **CI is the
+authoritative lane** and is exempt from the memory guard, so nothing is lost but
+latency; running them locally is what exhausted the owner's machine. Ask first.
 
 - Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a
   `qwts/playbook-engineering` checkout at `v1`) and `INTEROP_IMAGE_TRAIL_ROOT`.
 - **Floors are ratchets — raise them as quality improves, never lower them to
   pass.** The a11y violation budget ratchets the other way: its counts only
   shrink, and coming in under budget fails until the entry is tightened.
-- **Never push a fix for a red check without running that same check locally
-  first.** CI is a verifier, not a test runner. A deterministic gate that fails
-  in CI means the push skipped local validation. E2E under Xvfb is the one lane
-  that can legitimately disagree with a local pass; say so on the PR when
-  claiming it.
+- **A red check you can run locally gets run locally before the fix is pushed.**
+  For CI-only lanes reason from the failing job's log, and say which lane a claim
+  rests on — E2E under Xvfb can disagree with a local pass.
 - **Never bypass the Husky pre-push hook with `--no-verify`.** It runs the exact
   `npm run lint` entrypoint the hosted lint job uses.
 - **Never suppress an a11y rule bare** — every `eslint-disable` carries a reason
   or the issue that owns the debt.
-- Do not report a build you did not run.
+- Do not report a build, or any lane, you did not run — "CI will verify" is an
+  honest status; "passing" is not.
 
 Gate-by-gate detail, ratchet values, the three a11y lanes, license policy,
 dependency pins and overrides, packaging checks, and the release/signing flow:
-[Validation And Release Gates](docs/Validation-And-Release-Gates.md).
+[Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
 
-## Process-Tree Guard
+## Memory Guard
 
-- Every test entrypoint (`npm test`, `test:dom`, `test:cov`, `test:stories*`,
-  `test:e2e*`, `test:perf`) runs through `scripts/run-guarded.mjs`: an aggregate
-  RSS ceiling over the whole descendant tree, a per-process Node heap cap, a
-  wall-clock timeout, and one guarded run at a time per worktree.
+- This machine has **one** memory budget, shared by every worktree, repo and
+  agent session on it. Every test entrypoint (`npm test`, `test:dom`, `test:cov`,
+  `test:stories*`, `test:e2e*`, `test:perf`) runs through
+  `tools/agent-guard/run-guarded.mjs`, which leases against that budget before
+  spawning; ceilings derive from the machine's RAM, so none can be set out of reach.
 - Never invoke `electron --test`, `node --test`, `.test-dist`/`.test-dist-dom`
   output, `playwright test`, `test-storybook`, or `c8` directly, and never call
-  `:run`/`:inner` npm scripts. Claude Code and Cursor deny these mechanically via
-  the checked-in hooks in `.claude/settings.json` and `.cursor/hooks.json`;
-  Codex and raw terminals rely on this rule.
-- If a command returns while still running, poll or terminate it before launching
-  anything else. "Another guarded run is active" is a stop, not a prompt to retry.
-- A run killed for `rss-limit`/`timeout` is a real failure: read
-  `.guard/last-run.json`, report it, and do not rerun with a higher limit to make
-  it pass. Knobs and details: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
+  `:run`/`:inner` npm scripts. Claude Code, Cursor and Codex deny these
+  mechanically through their checked-in hooks; raw terminals rely on this rule.
+- **A refusal is a result, not an obstacle.** Report a headroom refusal or an
+  `rss-limit`/`timeout` kill with its arithmetic (`.guard/last-run.json`) and
+  leave the lane to CI. Never retry it, raise a ceiling, or use the owner's
+  escape hatch — the heavy-lane opt-in is a grant only the owner can create.
+- `node tools/agent-guard/arbiter.mjs status` shows the machine's limits and what
+  is holding budget. `tools/agent-guard/` is governance-owned and synced — never
+  edit it; fixes go to `qwts/playbook-engineering`. Reference:
+  [machine memory guard](https://github.com/qwts/playbook-engineering/blob/master/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling
 
@@ -202,7 +208,6 @@ dependency pins and overrides, packaging checks, and the release/signing flow:
   the same file — bump it to move local and CI together.
 - Install with `npm ci`; it also installs the husky pre-commit hook (lint-staged:
   `eslint --fix` + prettier on staged files).
-- The `/check` command (`.claude/commands/check.md`) wraps the full gate run.
 - Invoke tools through `PATH` (or `npx`); never hardcode machine-specific paths.
 - Local macOS `test:e2e` windows stay hidden and must never activate or take
   desktop focus, including through `second-instance`, `open-file`, or Dock
@@ -216,9 +221,9 @@ The files that steer agents — this one, the vendor adapters, `.claude/commands
 hooks, and tool permissions — are **code**: reviewed by PR, least-privilege, and
 never carrying secrets. `npm run lint:agent-context` enforces the length ratchet,
 the adapter pointers, and cross-file duplication;
-`tests/tooling/agent-primitives.test.ts` locks the guard hooks and permission
-shape, because a governance sync once replaced `.claude/settings.json` wholesale
-and silently dropped the process-guard hook.
+`tests/tooling/agent-primitives.test.ts` and the guard's own conformance test
+lock the hook wiring and permission shape, because a governance sync once
+replaced `.claude/settings.json` wholesale and dropped the guard hook silently.
 
 Instruction changes that claim to improve agent behavior cite evidence against
 the [Agent Golden Tasks](docs/Agent-Golden-Tasks.md) set. "It reads better" is

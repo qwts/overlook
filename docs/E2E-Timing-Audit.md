@@ -144,9 +144,10 @@ library-switch are now the fixture's `appExited` helper.
 
 ## Harness bounds (outer envelope)
 
-- `scripts/run-guarded.mjs` wraps every test entrypoint with a wall-clock
-  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A
-  guard kill is a real failure — see [agent-process-guard](agent-process-guard.md).
+- `tools/agent-guard/run-guarded.mjs` wraps every test entrypoint with a wall-clock
+  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A guard kill is a
+  real failure — see [agent-process-guard](agent-process-guard.md). The guard is exempt
+  in CI (ENG-0138), so on a runner the job's `timeout-minutes` is the operative bound.
 - `playwright.config.ts`: per-test `timeout: 30_000`, `expect.timeout: 5_000`,
   CI `workers: 1`, CI `retries: 0`, `fullyParallel: false` (spec files run
   concurrently, tests within a file serially).
