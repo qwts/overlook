@@ -144,9 +144,10 @@ library-switch are now the fixture's `appExited` helper.
 
 ## Harness bounds (outer envelope)
 
-- `scripts/run-guarded.mjs` wraps every test entrypoint with a wall-clock
-  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A
-  guard kill is a real failure — see [agent-process-guard](agent-process-guard.md).
+- `tools/agent-guard/run-guarded.mjs` wraps every test entrypoint with a wall-clock
+  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A guard kill is a
+  real failure — see [agent-process-guard](agent-process-guard.md). The guard is exempt
+  in CI (ENG-0138), so on a runner the job's `timeout-minutes` is the operative bound.
 - `playwright.config.ts`: per-test `timeout: 30_000`, `expect.timeout: 5_000`,
   CI `workers: 1`, CI `retries: 0`, `fullyParallel: false` (spec files run
   concurrently, tests within a file serially).
@@ -158,8 +159,10 @@ library-switch are now the fixture's `appExited` helper.
 
 `scripts/measure-runner-capacity.mjs` wraps the guarded E2E entrypoint in CI and
 records elapsed time, logical/available CPUs, memory, normalized load, and Linux
-CPU/I/O pressure samples. The process-tree guard remains the source for peak RSS
-and process count. Manual `workflow_dispatch` inputs select one, two, or three
+CPU/I/O pressure samples. It is the only source of these numbers for a CI run:
+the memory guard is exempt in CI (ENG-0138) and writes no peak-RSS or
+process-count record on a runner. Manual `workflow_dispatch` inputs select one,
+two, or three
 workers and zero retries, producing a retained `runner-capacity-*` artifact for
 each comparison. Ordinary required runs use one worker and zero retries.
 

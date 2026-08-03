@@ -119,12 +119,11 @@ jobs:
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
-    # This is a whole-job limit, not the sum of the guard's own budgets: the Test step
-    # (test:cov, --timeout-s 900) and the Storybook step (test:stories:ci, --timeout-s 1800)
-    # alone total 45 min of guard-permitted runtime, before counting checkout/npm ci/lint/
-    # format/build/Playwright-install. Sized with headroom above that 45 min guard sum so
-    # GitHub doesn't cancel the job outright before a guard step records .guard/last-run.json
-    # (same reasoning as the E2E job's timeout-minutes below).
+    # The outer bound on this job. The memory guard is exempt in CI (ENG-0138), so the
+    # --timeout-s values on test:cov (900) and test:stories:ci (1800) do not apply on a
+    # runner; the per-step timeout-minutes below are what bound an individual hang, and
+    # this is the backstop over their sum plus checkout/npm ci/lint/format/build/
+    # Playwright-install.
     timeout-minutes: 65
     env:
       INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/node_modules/.interop-image-trail
@@ -207,18 +206,18 @@ jobs:
       # so local runs keep the plain spec output. Non-test node processes under the same step (tsc,
       # c8, npm itself) accept and ignore the flags.
       - name: Test
+        # Step-level bound, replacing the guard's --timeout-s 900 (inert in CI, ENG-0138).
+        timeout-minutes: 20
         env:
           NODE_OPTIONS: >-
             --test-reporter=spec --test-reporter-destination=stdout
             --test-reporter=node-test-github-reporter --test-reporter-destination=stdout
         run: npm run test:cov
 
-      # Peak-RSS/duration record from the process-tree guard (scripts/run-guarded.mjs) for the
-      # test:cov run above — the data source for ratcheting the guard ceilings. Runs even on
-      # failure: an rss-limit/timeout kill is exactly when the record matters.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
+      # No guard diagnostics step here: ENG-0138 makes the memory guard a no-op under
+      # CI/GITHUB_ACTIONS, so tools/agent-guard/run-guarded.mjs passes the command straight
+      # through and never writes .guard/last-run.json on a runner. Hosted runners are
+      # disposable and bounded by timeout-minutes; the guard exists for local machines.
 
       # Render c8 totals vs. the floor into the run summary. Runs even when test:cov failed
       # (dropped below the floor) — that is when the numbers matter most.
@@ -245,14 +244,13 @@ jobs:
       - name: Install Playwright browsers (interaction tests)
         run: npx playwright install --with-deps chromium
 
+      # Step-level bound: the guard's --timeout-s 1800 is inert in CI (ENG-0138), so
+      # without this a hung Storybook run would burn the whole job timeout instead of
+      # failing this step. No guard diagnostics follow it — the guard writes no
+      # .guard/last-run.json on a runner.
       - name: Storybook interaction tests
+        timeout-minutes: 30
         run: npm run test:stories:ci
-
-      # See the guard diagnostics note on the Test step above — same record, for the
-      # Storybook lane's guard.
-      - name: Guard diagnostics (Storybook)
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
 
   # E2E is its own complete-suite job so it runs in parallel with the
   # lint/unit/build lane. test:e2e builds once via Playwright global setup.
@@ -264,12 +262,11 @@ jobs:
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
-    # This is a whole-job limit, not the guard's own budget: npm run test:e2e runs under
-    # scripts/run-guarded.mjs with --timeout-s 1800 (30 min). Checkout/npm ci/Electron system
-    # deps run before that step and the report upload runs after it, so the job timeout must
-    # exceed the guard timeout with headroom — otherwise GitHub can cancel the job outright
-    # before the guard records .guard/last-run.json or the report uploads (as perf.yml already
-    # does for its own guarded step).
+    # The only bound on this job. npm run test:e2e carries --timeout-s 1800 (30 min), but
+    # the memory guard is exempt in CI (ENG-0138) so that timeout does not apply on a
+    # runner. 45 keeps headroom over it — checkout/npm ci/Electron system deps run before
+    # the test step and the report upload runs after it — for the local case and in case
+    # the exemption is ever narrowed.
     timeout-minutes: 45
     env:
       OVERLOOK_E2E_WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_workers || '1' }}
@@ -305,7 +302,12 @@ jobs:
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
 
+      # Step-level bound, replacing the guard's --timeout-s 1800 (inert in CI per
+      # ENG-0138). It must stay below the job's timeout-minutes so a hung Playwright run
+      # fails this step and the report upload below still runs, instead of GitHub
+      # cancelling the whole job with no artifact.
       - name: Playwright E2E tests (Electron under Xvfb)
+        timeout-minutes: 30
         run: |
           set +e
           xvfb-run --auto-servernum -- node scripts/measure-runner-capacity.mjs -- npm run test:e2e 2>&1 | tee test-results/e2e-output.log
@@ -316,11 +318,6 @@ jobs:
             echo "::error file=tests/e2e/offload-ui.spec.ts,line=23,title=E2E failure::$detail"
           fi
           exit "$status"
-
-      # See the CI job's "Guard diagnostics" step — same record, for the e2e ceiling.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
 
       - name: Runner capacity summary
         if: ${{ !cancelled() }}

@@ -5,20 +5,8 @@ import { describe, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 
 import type { evaluateAgentContext as EvaluateAgentContext, paragraphs as Paragraphs } from '../../scripts/check-agent-context.mjs';
-import type { GuardVerdict } from '../../scripts/guard-agent-command.mjs';
 
 const root = process.cwd();
-
-interface GuardModule {
-  readonly evaluateCommand: (command: unknown) => GuardVerdict;
-}
-
-// Loaded from the repository root at runtime: the compiled test lives under
-// .test-dist, where a relative specifier would resolve to a path that does not
-// exist (the macos-signing.test.ts precedent).
-function guardModule(): Promise<GuardModule> {
-  return import(pathToFileURL(join(root, 'scripts/guard-agent-command.mjs')).href) as Promise<GuardModule>;
-}
 
 interface AgentContextModule {
   readonly paragraphs: typeof Paragraphs;
@@ -56,22 +44,16 @@ interface ClaudeSettings {
 // treatment. These are contract tests, not style checks — `e1d86f6a`
 // ("governance: sync .codex from playbook-engineering") replaced
 // .claude/settings.json wholesale and silently dropped the process-guard hook,
-// leaving AGENTS.md and docs/agent-process-guard.md describing an enforcement
-// point that no longer existed. A wholesale rewrite now fails here first.
+// leaving AGENTS.md and the guard docs describing an enforcement point that no
+// longer existed.
+//
+// The guard's own wiring is asserted by the conformance test that ships with it
+// (`tools/agent-guard/tests/conformance.test.mjs`, wired into `test:run`), and is
+// deliberately not restated here — a shared fact asserted in two places is the
+// ENG-0006 bug this file exists to prevent. What stays here is what is specific
+// to this repo's primitives.
 describe('agent primitives (#718, ENG-0006)', () => {
-  test('Claude Code registers the process-guard hook on Bash', () => {
-    const settings = json('.claude/settings.json') as ClaudeSettings;
-    const preToolUse = settings.hooks?.['PreToolUse'] ?? [];
-    const bash = preToolUse.find((entry) => entry.matcher === 'Bash');
-    assert.ok(bash, '.claude/settings.json must register a PreToolUse hook matching Bash');
-    const commands = (bash.hooks ?? []).map((hook) => hook.command ?? '');
-    assert.ok(
-      commands.some((command) => command.includes('guard-agent-command.mjs') && command.includes('--protocol=claude')),
-      'the Bash PreToolUse hook must invoke scripts/guard-agent-command.mjs --protocol=claude',
-    );
-  });
-
-  test('the worktree-identity hook survives alongside it', () => {
+  test('the worktree-identity hook survives alongside the guard', () => {
     const settings = json('.claude/settings.json') as ClaudeSettings;
     const commands = (settings.hooks?.['WorktreeCreate'] ?? []).flatMap((entry) => (entry.hooks ?? []).map((hook) => hook.command ?? ''));
     assert.ok(
@@ -80,14 +62,18 @@ describe('agent primitives (#718, ENG-0006)', () => {
     );
   });
 
-  test('Cursor registers the same guard on its own protocol', () => {
-    const hooks = json('.cursor/hooks.json') as {
-      readonly hooks?: { readonly beforeShellExecution?: readonly HookCommand[] };
+  // Every harness that drives this repo needs its own adapter file, and Codex is
+  // the one that had none: the enforcement point used to be the npm scripts
+  // alone there, and Codex sessions caused half the memory incidents behind
+  // ENG-0138. A vendor adapter this repo supports but does not wire is the gap.
+  test('Codex has a hooks adapter, not just written rules', () => {
+    const hooks = json('.codex/hooks.json') as {
+      readonly hooks?: Record<string, readonly HookMatcher[]>;
     };
-    const commands = (hooks.hooks?.beforeShellExecution ?? []).map((hook) => hook.command ?? '');
+    const commands = (hooks.hooks?.['PreToolUse'] ?? []).flatMap((entry) => (entry.hooks ?? []).map((hook) => hook.command ?? ''));
     assert.ok(
-      commands.some((command) => command.includes('guard-agent-command.mjs') && command.includes('--protocol=cursor')),
-      '.cursor/hooks.json must invoke the shared guard with --protocol=cursor',
+      commands.some((command) => command.includes('guard-agent-command.mjs') && command.includes('--protocol=codex')),
+      '.codex/hooks.json must invoke the shared guard with --protocol=codex',
     );
   });
 
@@ -100,19 +86,11 @@ describe('agent primitives (#718, ENG-0006)', () => {
     }
   });
 
-  test('the guard actually denies the entrypoints the hooks exist to block', async () => {
-    const { evaluateCommand } = await guardModule();
-    for (const command of [
-      'ELECTRON_RUN_AS_NODE=1 electron --test .test-dist/**/*.test.js',
-      'node --test .test-dist-dom/index.js',
-      'npx playwright test',
-      'test-storybook --ci',
-      'npm run test:unit:run',
-    ]) {
-      assert.equal(evaluateCommand(command).allow, false, `expected the guard to deny: ${command}`);
-    }
-    assert.equal(evaluateCommand('npm run test:cov').allow, true);
-    assert.equal(evaluateCommand('node scripts/run-guarded.mjs -- npm run test:unit:inner').allow, true);
+  // The conformance test only protects this repo if this repo actually runs it.
+  test('the guard conformance test is wired into the test command', () => {
+    const scripts = (json('package.json') as { readonly scripts?: Record<string, string> }).scripts ?? {};
+    assert.match(scripts['test:guard:conformance'] ?? '', /tools\/agent-guard\/tests\/conformance\.test\.mjs/u);
+    assert.match(scripts['test:run'] ?? '', /test:guard:conformance/u);
   });
 
   test('a copied list item is caught, not hidden inside its list (PR #863 review)', async () => {
