@@ -66,15 +66,25 @@ export class HistoryService {
       const reason = this.move.capability(record.inverse);
       return reason === 'ready' ? capability : unavailable(capability, reason);
     }
-    const source = direction === 'undo' ? record.inverse.after : record.inverse.before;
-    const target = direction === 'undo' ? record.inverse.before : record.inverse.after;
     switch (record.inverse.kind) {
       case 'favorite': {
+        const source = direction === 'undo' ? record.inverse.after : record.inverse.before;
+        const target = direction === 'undo' ? record.inverse.before : record.inverse.after;
         const current = this.library.favoriteState(record.inverse.photoId);
         if (current === undefined) return unavailable(capability, 'resource-missing');
         return current === source || current === target ? capability : unavailable(capability, 'state-changed');
       }
+      case 'favorites': {
+        const changes = record.inverse.changes;
+        const states = changes.map(({ photoId }) => this.library.favoriteState(photoId));
+        if (states.some((state) => state === undefined)) return unavailable(capability, 'resource-missing');
+        const matchesBefore = states.every((state, index) => state === changes[index]?.before);
+        const matchesAfter = states.every((state, index) => state === changes[index]?.after);
+        return matchesBefore || matchesAfter ? capability : unavailable(capability, 'state-changed');
+      }
       case 'album-membership': {
+        const source = direction === 'undo' ? record.inverse.after : record.inverse.before;
+        const target = direction === 'undo' ? record.inverse.before : record.inverse.after;
         const expectedSource = source === 'present';
         const expectedTarget = target === 'present';
         const membership = this.library.albumMembership(record.inverse.albumId, record.inverse.photoIds);
@@ -84,6 +94,8 @@ export class HistoryService {
         return unavailable(capability, 'state-changed');
       }
       case 'trash': {
+        const source = direction === 'undo' ? record.inverse.after : record.inverse.before;
+        const target = direction === 'undo' ? record.inverse.before : record.inverse.after;
         const states = [...this.library.trashState(record.inverse.photoIds).values()];
         if (states.includes('missing')) return unavailable(capability, 'resource-missing');
         if (states.every((state) => state === source) || states.every((state) => state === target)) return capability;
@@ -188,6 +200,15 @@ export class HistoryService {
         this.library.setFavorite(record.inverse.photoId, target);
         break;
       }
+      case 'favorites': {
+        this.library.setFavorites(
+          record.inverse.changes.map(({ photoId, before, after }) => ({
+            photoId,
+            favorite: direction === 'undo' ? before : after,
+          })),
+        );
+        break;
+      }
       case 'album-membership': {
         const target = direction === 'undo' ? record.inverse.before : record.inverse.after;
         if (target === 'present') this.library.addToAlbum(record.inverse.albumId, record.inverse.photoIds);
@@ -220,6 +241,8 @@ export class HistoryService {
       case 'favorite':
       case 'move-compensation':
         return [record.inverse.photoId];
+      case 'favorites':
+        return record.inverse.changes.map(({ photoId }) => photoId);
       case 'album-membership':
         return [record.inverse.albumId, ...record.inverse.photoIds];
       case 'trash':

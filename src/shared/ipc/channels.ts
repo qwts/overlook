@@ -26,10 +26,11 @@ import { inspectorWindowChannels, windowEvents } from '../inspector-window-contr
 import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
-import { chipFiltersSchema, sourceFilterSchema } from './library-query-schemas.js';
+import { libraryQuerySchema } from './library-query-schemas.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
+import { favoriteChannels } from './favorite-channels.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -59,6 +60,12 @@ const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload
 
 const pageCursorSchema = z.object({ sortKey: z.union([z.string(), z.number()]), id: z.string() });
 
+const libraryChangedSchema = z.object({
+  photoIds: z.array(z.string()),
+  derivativeOnly: z.boolean().optional(),
+  membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
+  albumIds: z.array(z.string()).optional(),
+});
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({
   state: appLockStateSchema,
@@ -270,15 +277,9 @@ export const channels = {
   // Library contract (#71) — the renderer's typed window into the library.
   libraryPage: defineChannel(
     'library:page',
-    z.object({
-      source: sourceFilterSchema,
+    libraryQuerySchema.extend({
       limit: z.number().int().positive().max(500),
       cursor: pageCursorSchema.optional(),
-      recentSince: z.string().optional(),
-      query: z.string().optional(),
-      chips: chipFiltersSchema.optional(),
-      order: z.enum(['date', 'name', 'size']).optional(),
-      albumId: z.string().optional(),
     }),
     z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
   ),
@@ -293,11 +294,7 @@ export const channels = {
     }),
     z.object({ repaired: z.boolean(), pendingCount: z.number().int().nonnegative() }),
   ),
-  libraryToggleFavorite: defineChannel(
-    'library:toggle-favorite',
-    z.object({ id: z.string() }),
-    z.object({ favorite: z.boolean(), pendingCount: z.number().int().nonnegative() }),
-  ),
+  ...favoriteChannels,
   ...originalPolicy.originalPolicyChannels,
   libraryCounts: defineChannel(
     'library:counts',
@@ -832,12 +829,9 @@ export const events = {
   ...boardEvents,
   ...embeddingEvents,
   // Targeted library pushes (#71) — never refetch-the-world signals.
-  // `derivativeOnly` marks a change that only regenerated a thumb/poster
-  // derivative (a captured video poster, a repaired preview) with no membership
-  // or metadata change — the renderer refreshes just those tiles' images and
-  // must NOT refetch/replace the page (which would reset scroll and drop the
-  // lightbox/selection for items beyond page 1). #744 review.
-  libraryChanged: defineEvent('library:changed', z.object({ photoIds: z.array(z.string()), derivativeOnly: z.boolean().optional() })),
+  // `derivativeOnly` refreshes tile images without replacing the page or
+  // dropping deep scroll/lightbox/selection state (#744).
+  libraryChanged: defineEvent('library:changed', libraryChangedSchema),
   ...originalPolicy.originalPolicyEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',

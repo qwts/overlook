@@ -20,6 +20,7 @@ export interface NativeCommandRouterDeps {
   readonly nativeCommand: { readonly id: CommandId; readonly sequence: number } | null;
   readonly state: AppState;
   readonly dispatch: Dispatch<AppAction>;
+  readonly onSelectAll: () => void;
   readonly setShortcutSurface: (surface: CommandSurface | null) => void;
   readonly setSettingsSection: (section: SettingsSection | undefined) => void;
   readonly setExportPhotoIds: (ids: readonly string[] | null) => void;
@@ -38,6 +39,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     nativeCommand,
     state,
     dispatch,
+    onSelectAll,
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
@@ -131,7 +133,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           });
           return;
         case 'selection.selectAll':
-          dispatch({ type: 'selection/all', photoIds: state.photos.map(({ id }) => id) });
+          onSelectAll();
           return;
         case 'selection.clear':
           dispatch({ type: 'selection/cleared' });
@@ -175,11 +177,14 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           dispatch({ type: 'lightbox/closed' });
           return;
         case 'photo.favorite.toggle':
-          for (const id of targetIds) {
-            void window.overlook.library.toggleFavorite({ id }).then(({ pendingCount }) => {
-              dispatch({ type: 'pendingCount/set', count: pendingCount });
-            });
-          }
+          if (targetIds[0] === undefined) return;
+          void (
+            targetIds.length === 1
+              ? window.overlook.library.toggleFavorite({ id: targetIds[0] })
+              : window.overlook.library.toggleFavorites({ photoIds: targetIds })
+          ).then(({ pendingCount }) => {
+            dispatch({ type: 'pendingCount/set', count: pendingCount });
+          });
           return;
         case 'photo.trash': {
           if (state.lightboxId !== null) {
@@ -282,6 +287,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     [
       dispatch,
       state,
+      onSelectAll,
       setShortcutSurface,
       setSettingsSection,
       setExportPhotoIds,

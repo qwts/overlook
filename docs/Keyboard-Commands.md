@@ -6,13 +6,13 @@ registry and shows only commands active in the current surface.
 
 ## Library
 
-| Action                   | Shortcut     |
-| ------------------------ | ------------ |
-| Focus search             | `Cmd/Ctrl+K` |
-| Select all loaded photos | `Cmd/Ctrl+A` |
-| Clear selection          | `Esc`        |
-| Show or hide Inspector   | `I`          |
-| Show keyboard shortcuts  | `?`          |
+| Action                                     | Shortcut     |
+| ------------------------------------------ | ------------ |
+| Focus search                               | `Cmd/Ctrl+K` |
+| Select all photos in the active collection | `Cmd/Ctrl+A` |
+| Clear selection                            | `Esc`        |
+| Show or hide Inspector                     | `I`          |
+| Show keyboard shortcuts                    | `?`          |
 
 Photo focus is roving: only one tile is in the Tab order. Arrow keys move by
 cell or row, Home/End move to the row boundary, and Page Up/Page Down move by a

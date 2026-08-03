@@ -19,7 +19,7 @@ export const commandMenuContextSchema = z
     inAlbum: z.boolean(),
     /** Protected albums have their own authorized export boundary. */
     protectedAlbumOpen: z.boolean(),
-    selectionCount: z.number().int().nonnegative().max(100_000),
+    selectionCount: z.number().int().nonnegative(),
     appLockConfigured: z.boolean(),
     providerBusy: z.boolean(),
     pcloudEnabled: z.boolean(),

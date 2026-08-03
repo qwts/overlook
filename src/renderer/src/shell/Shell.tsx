@@ -18,6 +18,7 @@ import { Inspector } from '../inspector/Inspector';
 import { Lightbox } from '../lightbox/Lightbox';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { commandPlatform, useCommandDispatcher } from '../state/use-command-dispatcher';
+import { useSelectAll } from '../state/use-select-all';
 import { commandMenuDialogClass } from '../state/command-menu-dialog';
 import { useNativeCommandRouter } from './use-native-command-router';
 import { AlbumPicker } from '../grid/AlbumPicker';
@@ -95,7 +96,8 @@ export function Shell({
   // Menu → File → New Library… opens the switcher straight into create mode.
   const [librariesCreating, setLibrariesCreating] = useState(false);
   const [editableFocus, setEditableFocus] = useState(false);
-  useCommandDispatcher(platform, setShortcutSurface, shortcutSurface !== null);
+  const selectAll = useSelectAll();
+  useCommandDispatcher(platform, setShortcutSurface, shortcutSurface !== null, selectAll);
 
   useEffect(() => {
     const update = (): void => {
@@ -222,6 +224,7 @@ export function Shell({
     nativeCommand,
     state,
     dispatch,
+    onSelectAll: selectAll,
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,

@@ -8,3 +8,12 @@ export const chipFiltersSchema = z.object({
   offloaded: z.boolean().optional(),
   localOnly: z.boolean().optional(),
 });
+
+export const libraryQuerySchema = z.object({
+  source: sourceFilterSchema,
+  recentSince: z.string().optional(),
+  query: z.string().optional(),
+  chips: chipFiltersSchema.optional(),
+  order: z.enum(['date', 'name', 'size']).optional(),
+  albumId: z.string().optional(),
+});

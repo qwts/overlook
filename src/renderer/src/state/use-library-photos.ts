@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChipFilters, PageCursor, PageRequest, SyncStatus } from '../../../shared/library/types.js';
+import { membershipChanged } from '../../../shared/library/library-membership-change.js';
 import { useAppState, useAppDispatch } from './app-state-context';
 
 const PAGE_SIZE = 500; // channel max — fewest round-trips on deep scrolls
@@ -15,7 +16,7 @@ function chipsActive(chips: ChipFilters): boolean {
   return Object.values(chips).some(Boolean);
 }
 
-function useSyncStatePatches(localOnly: boolean, fetchFirstPage: () => void): void {
+function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateCompleteSelection?: boolean) => void): void {
   const dispatch = useAppDispatch();
   useEffect(() => {
     const pending = new Map<string, SyncStatus>();
@@ -24,7 +25,7 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: () => void): vo
       timer = null;
       if (localOnly) {
         pending.clear();
-        fetchFirstPage();
+        fetchFirstPage(true);
         return;
       }
       const updates = [...pending].map(([id, syncState]) => ({ id, syncState }));
@@ -80,26 +81,29 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
     [source, query, chips, sortOrder, album],
   );
 
-  const fetchFirstPage = useCallback(() => {
-    const requestId = (requestRef.current += 1);
-    inFlightRef.current = true;
-    cursorRef.current = null;
-    void window.overlook.library
-      .page(baseRequest())
-      .then(({ photos, nextCursor }) => {
-        if (requestRef.current !== requestId) {
-          return;
-        }
-        cursorRef.current = nextCursor;
-        setExhaustedKey(nextCursor === null ? setKey : null);
-        dispatch({ type: 'photos/loaded', photos, append: false });
-      })
-      .finally(() => {
-        if (requestRef.current === requestId) {
-          inFlightRef.current = false;
-        }
-      });
-  }, [baseRequest, setKey, dispatch]);
+  const fetchFirstPage = useCallback(
+    (invalidateCompleteSelection = false) => {
+      const requestId = (requestRef.current += 1);
+      inFlightRef.current = true;
+      cursorRef.current = null;
+      void window.overlook.library
+        .page(baseRequest())
+        .then(({ photos, nextCursor }) => {
+          if (requestRef.current !== requestId) {
+            return;
+          }
+          cursorRef.current = nextCursor;
+          setExhaustedKey(nextCursor === null ? setKey : null);
+          dispatch({ type: 'photos/loaded', photos, append: false, invalidateCompleteSelection });
+        })
+        .finally(() => {
+          if (requestRef.current === requestId) {
+            inFlightRef.current = false;
+          }
+        });
+    },
+    [baseRequest, setKey, dispatch],
+  );
 
   useEffect(() => {
     fetchFirstPage();
@@ -110,7 +114,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
   // leave stale cells or permanent loading placeholders. Replace semantics
   // reset the cursor; the selection intersects safely in the reducer.
   useEffect(() => {
-    return window.overlook.library.onChanged(({ photoIds, derivativeOnly }) => {
+    return window.overlook.library.onChanged(({ photoIds, derivativeOnly, membership, albumIds }) => {
       // A derivative can change in place (video poster captured post-import, a
       // repaired RAW preview) without altering the record or its stable thumb
       // URL — so bump those ids' cache-bust epoch to force the tiles to reload.
@@ -118,9 +122,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage();
+      if (derivativeOnly !== true) fetchFirstPage(membershipChanged(membership, source, chips, album, albumIds));
     });
-  }, [dispatch, fetchFirstPage]);
+  }, [album, chips, dispatch, fetchFirstPage, source]);
 
   // Backup changes only syncState, so patch loaded records instead of
   // replacing the first page (which used to flicker, trim deep selection,

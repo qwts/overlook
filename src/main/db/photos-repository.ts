@@ -11,12 +11,14 @@ import type { DimensionStatus } from '../../shared/library/types.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
+import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
 import { buildQueryPlan, ORDERINGS, select, selectRankedWithProjection, selectWithProjection, sourceWhere } from './photo-query.js';
 import { manifestSnapshot as readManifestSnapshot, restoreManifest as restoreManifestFromBackup } from './photo-backup-repository.js';
 
 import type {
   AlbumSummary,
+  LibraryQuery,
   LibraryStats,
   PageCursor,
   PageRequest,
@@ -101,7 +103,6 @@ export function toRecord(row: PhotoRow): PhotoRecord {
 }
 
 export const SELECT = select('date');
-
 export class PhotosRepository {
   constructor(private readonly db: BetterSqlite3.Database) {}
 
@@ -135,7 +136,7 @@ export class PhotosRepository {
   page(request: PageRequest): PageResult {
     const plan = buildQueryPlan(request);
     // The ranked branch's ORDER BY must stay the literal `rank` token (see
-    // selectRanked) — it can't reuse ORDERINGS' generic `sort_key`/tuple-
+    // fromRanked) — it can't reuse ORDERINGS' generic `sort_key`/tuple-
     // cursor shape without losing the index-order optimization, so the tie
     // break for its cursor lives in an OR'd WHERE predicate instead. The tie
     // break itself must be `ph.rowid`, not `p.id`: FTS5 only guarantees rank
@@ -177,6 +178,20 @@ export class PhotosRepository {
     return { photos: rows.map(toRecord), nextCursor };
   }
 
+  /** Returns every ID in the logical collection, independent of paging. */
+  selectAllIds(request: LibraryQuery): readonly string[] {
+    const plan = buildQueryPlan(request);
+    const order = request.order ?? 'date';
+    const rows = queryAll<{ id: string }>(
+      this.db,
+      `${plan.ftsQuery !== null ? selectRankedWithProjection('p.id') : selectWithProjection(order, 'p.id')}
+       WHERE ${plan.whereClause}
+       ${plan.orderByClause}`,
+      plan.params,
+    );
+    return [...new Set(rows.map(({ id }) => id))];
+  }
+
   /** Resolves one inclusive range against the complete active projection. */
   selectionRange(request: SelectionRangeRequest): readonly string[] {
     const plan = buildQueryPlan(request);
@@ -196,20 +211,12 @@ export class PhotosRepository {
 
   /** Toggles favorite and marks the ledger dirty (feeds pendingCount). */
   toggleFavorite(photoId: string): boolean {
-    return this.db.transaction(() => {
-      const updated = queryGet<{ favorite: number }>(
-        this.db,
-        `UPDATE photos SET favorite = 1 - favorite
-          WHERE id = ? AND id IN (SELECT id FROM ordinary_visible_photos)
-          RETURNING favorite`,
-        photoId,
-      );
-      if (updated === undefined) {
-        throw new Error(`photo ${photoId} does not exist`);
-      }
-      markDirty(this.db, photoId);
-      return updated.favorite === 1;
-    })();
+    return toggleFavoritePhoto(this.db, photoId, (id) => markDirty(this.db, id));
+  }
+
+  /** Toggles a complete selection atomically, including unloaded rows. */
+  toggleFavorites(photoIds: readonly string[]): ReturnType<typeof toggleFavoritePhotos> {
+    return toggleFavoritePhotos(this.db, photoIds, (id) => markDirty(this.db, id));
   }
 
   get(photoId: string): PhotoRecord | undefined {

@@ -144,7 +144,7 @@
       "coverage": [
         {
           "type": "playwright-e2e",
-          "path": "tests/e2e/browse.spec.ts"
+          "paths": ["tests/e2e/browse.spec.ts", "tests/e2e/grid.spec.ts"]
         },
         {
           "type": "playwright-e2e",
@@ -191,6 +191,20 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/grid/SelectionPill.stories.tsx"
+        }
+      ]
+    },
+    {
+      "id": "m04-complete-select-all",
+      "wiki": "User-Story-M04-Library-browsing",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "paths": ["tests/e2e/browse.spec.ts", "tests/e2e/grid.spec.ts"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/app-state.test.ts", "tests/library/library-service.test.ts"]
         }
       ]
     },

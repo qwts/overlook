@@ -70,6 +70,7 @@ export type PhotoInsert = Omit<
 
 /** The sidebar's library sources (design §Sidebar). */
 export type SourceFilter = 'all' | 'favorites' | 'recent' | 'offloaded' | 'deleted';
+export type LibraryMembershipChange = 'none' | 'favorite' | 'album' | 'library';
 
 /** The grid's sort orders (#113): date newest-first, name A→Z, size
  * largest-first (decisions recorded on the PR). */
@@ -90,10 +91,9 @@ export interface ChipFilters {
   readonly localOnly?: boolean | undefined;
 }
 
-export interface PageRequest {
+/** The complete logical collection query shared by paging and Select All. */
+export interface LibraryQuery {
   readonly source: SourceFilter;
-  readonly limit: number;
-  readonly cursor?: PageCursor | undefined;
   /** 'recent' cutoff (ISO); callers own the "recent" window policy. */
   readonly recentSince?: string | undefined;
   /** FTS5-ranked search over name/place/camera, prefix-matched per token
@@ -105,6 +105,11 @@ export interface PageRequest {
   readonly order?: SortOrder | undefined;
   /** Restrict to one album's members (#117) — AND-combined with source. */
   readonly albumId?: string | undefined;
+}
+
+export interface PageRequest extends LibraryQuery {
+  readonly limit: number;
+  readonly cursor?: PageCursor | undefined;
 }
 
 export interface PageResult {

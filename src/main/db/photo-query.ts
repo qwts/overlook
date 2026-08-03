@@ -1,5 +1,4 @@
-import type { PageRequest, SelectionRangeRequest } from '../../shared/library/types.js';
-
+import type { LibraryQuery, PageRequest, SelectionRangeRequest } from '../../shared/library/types.js';
 export const ORDERINGS = {
   date: { expr: 'COALESCE(p.taken_at, p.imported_at)', dir: 'DESC', cmp: '<' },
   name: { expr: 'lower(p.file_name)', dir: 'ASC', cmp: '>' },
@@ -71,7 +70,7 @@ export interface QueryPlan {
   readonly params: Readonly<Record<string, string | number | null>>;
 }
 
-export function buildQueryPlan(request: PageRequest | SelectionRangeRequest): QueryPlan {
+export function buildQueryPlan(request: LibraryQuery | PageRequest | SelectionRangeRequest): QueryPlan {
   if (request.source === 'recent' && request.recentSince === undefined) {
     throw new Error(`the 'recent' source requires recentSince`);
   }

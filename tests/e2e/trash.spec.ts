@@ -224,11 +224,14 @@ test('protected Original: ordinary deletion preserves it and Shift+Delete requir
     await expect(page.getByRole('button', { name: `Open ${target.fileName}` })).toBeVisible();
 
     const search = page.getByRole('searchbox');
-    await search.fill('editable shortcut guard');
-    await page.keyboard.press('Shift+Delete');
+    await search.focus();
+    await search.press('Shift+Delete');
     await expect(page.getByRole('dialog', { name: 'Authenticate Original deletion' })).toHaveCount(0);
-    await search.fill('');
     await search.blur();
+    await expect(page.getByRole('button', { name: `Open ${target.fileName}` })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: `Select ${target.fileName}` }).click();
+    await expect(page.getByTestId('selection-pill')).toContainText('1 selected');
 
     await page.keyboard.press('Shift+Delete');
     const authenticate = page.getByRole('dialog', { name: 'Authenticate Original deletion' });

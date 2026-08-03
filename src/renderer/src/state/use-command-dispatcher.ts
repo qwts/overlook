@@ -16,7 +16,12 @@ function editableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 }
 
-export function useCommandDispatcher(platform: string, onHelp: (surface: CommandSurface) => void, helpOpen: boolean): void {
+export function useCommandDispatcher(
+  platform: string,
+  onHelp: (surface: CommandSurface) => void,
+  helpOpen: boolean,
+  onSelectAll: () => void,
+): void {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const direction = directionOf(useIntl().locale);
@@ -90,7 +95,7 @@ export function useCommandDispatcher(platform: string, onHelp: (surface: Command
           document.querySelector<HTMLInputElement>('[role="searchbox"]')?.focus();
           return true;
         case 'selection.selectAll':
-          dispatch({ type: 'selection/all', photoIds: state.photos.map((photo) => photo.id) });
+          onSelectAll();
           return true;
         case 'selection.clear':
           dispatch({ type: 'selection/cleared' });
@@ -169,7 +174,7 @@ export function useCommandDispatcher(platform: string, onHelp: (surface: Command
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [direction, dispatch, helpOpen, onHelp, platform, state]);
+  }, [direction, dispatch, helpOpen, onHelp, onSelectAll, platform, state]);
 }
 
 export { commandPlatform };

@@ -36,6 +36,11 @@ test('virtualizes and cursor-pages a synthetic library', async () => {
     expect(planeBox === null || gridBox === null).toBe(false);
     expect((planeBox?.height ?? 0) > (gridBox?.height ?? 1) * 10).toBe(true);
 
+    // Select All resolves the whole active library, not only the first cursor page.
+    await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+A`);
+    await expect(page.getByTestId('selection-pill')).toContainText('2,000 selected');
+    await expect(grid.locator('[data-index="0"] .ovl-tile__select')).toHaveAttribute('aria-pressed', 'true');
+
     // Wheel to the bottom: the engine must page the cursor (4× limit 500)
     // until the final photo's tile renders as a real PhotoTile (#76), not
     // the loading placeholder.
@@ -45,6 +50,7 @@ test('virtualizes and cursor-pages a synthetic library', async () => {
       await page.mouse.wheel(0, 1_000_000);
       await expect(lastTile).toBeVisible({ timeout: 500 });
     }).toPass({ timeout: 15_000 });
+    await expect(grid.locator('.ovl-grid__cell[data-index="1999"] .ovl-tile__select')).toHaveAttribute('aria-pressed', 'true');
 
     // Frame instrumentation recorded the scroll for M11's budgets.
     // type-coverage:ignore-next-line

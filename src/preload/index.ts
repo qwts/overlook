@@ -153,10 +153,12 @@ const overlook: OverlookApi = {
   }),
   library: Object.freeze({
     page: createInvoker(channels.libraryPage, invokeTransport),
+    selectAll: createInvoker(channels.librarySelectAll, invokeTransport),
     selectionRange: createInvoker(channels.librarySelectionRange, invokeTransport),
     get: createInvoker(channels.libraryGet, invokeTransport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, invokeTransport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, invokeTransport),
+    toggleFavorites: createInvoker(channels.libraryToggleFavorites, invokeTransport),
     setOriginal: createInvoker(channels.librarySetOriginal, invokeTransport),
     counts: createInvoker(channels.libraryCounts, invokeTransport),
     stats: async () => libraryStats({}),

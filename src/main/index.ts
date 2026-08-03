@@ -177,7 +177,7 @@ function getLibraryService(): LibraryService {
       workflowProgress: (progress) => broadcast((win) => win.webContents.send(events.protectedWorkflowProgress.name, progress)),
       workflowChanged: () => broadcast((win) => win.webContents.send(events.protectedAlbumsChanged.name, {})),
       ordinaryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        emitLibraryChanged({ photoIds: [...photoIds], membership: 'library' });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
     });
@@ -192,8 +192,8 @@ function getLibraryService(): LibraryService {
       broadcast((win) => win.webContents.send(name, payload));
     });
     libraryService = new LibraryService(db, {
-      libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+      libraryChanged: (photoIds, membership, albumIds) => {
+        emitLibraryChanged({ photoIds: [...photoIds], membership, ...(albumIds === undefined ? {} : { albumIds: [...albumIds] }) });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {
@@ -264,7 +264,7 @@ function ensureMaintenanceServices(): void {
     runtime,
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
-    emitChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds] }),
+    emitChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], membership: 'none' }),
     emitThumbsChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
@@ -540,7 +540,7 @@ function getBackupEngine(): BackupEngine {
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        emitLibraryChanged({ photoIds: [...photoIds], membership: 'library' });
       },
       audit,
       retention: () => getSettingsStore().get().trashRetention,
@@ -555,7 +555,7 @@ function getBackupEngine(): BackupEngine {
         ledger.repairStatus(photoId, status);
       },
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        emitLibraryChanged({ photoIds: [...photoIds], membership: 'none' });
       },
       audit,
     });
