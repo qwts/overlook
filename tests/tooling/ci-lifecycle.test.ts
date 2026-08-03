@@ -145,11 +145,21 @@ describe('workflow run selectors', () => {
     .filter((entry) => entry.endsWith('.yml') || entry.endsWith('.yaml'))
     .map((entry) => ({ entry, body: readFileSync(join(root, '.github/workflows', entry), 'utf8') }));
 
+  // Scan each jq program whole rather than matching a `select(...)` predicate:
+  // a `[^)]*` predicate match stops at the first `)`, so a nested group before
+  // the clause (`select(.path == x and (.conclusion == "success") and .name ==
+  // "CI")`) would slip through. jq programs here are single-quoted, so the slice
+  // from `workflow_runs[]` to the next `'` is the rest of that program, and
+  // spans continuation lines. `.jobs[]` programs are separate calls, so their
+  // legitimate job-name checks never land in this slice.
   test('never identify a workflow run by .name', () => {
     assert.notEqual(workflows.length, 0);
-    const offenders = workflows
-      .filter(({ body }) => /workflow_runs\[\]\s*\|\s*select\([^)]*\.name\s*==/u.test(body))
-      .map(({ entry }) => entry);
+    const selectsRunByName = (body: string): boolean =>
+      body
+        .split('workflow_runs[]')
+        .slice(1)
+        .some((rest) => /\.name\s*==/u.test(rest.split("'")[0] ?? ''));
+    const offenders = workflows.filter(({ body }) => selectsRunByName(body)).map(({ entry }) => entry);
 
     assert.deepEqual(offenders, [], 'select workflow runs on .path — .name is the evaluated run-name');
   });
