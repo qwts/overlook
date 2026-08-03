@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
@@ -130,5 +130,37 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     );
     assert.match(autoUpdate, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
     assert.doesNotMatch(autoUpdate, /RELEASE_TOKEN|\|\| github\.token/u);
+  });
+});
+
+// A workflow RUN's `.name` is its evaluated `run-name:`, not the workflow's
+// `name:`. ci.yml carries a dynamic run-name, so every
+// `workflow_runs[] | select(.name == "CI" ...)` silently matched nothing —
+// which stranded the tag after v0.65.1 and failed release evidence for v0.65.3.
+// Six selectors carried the bug; fixing them one at a time missed five, so this
+// scans every workflow instead. `.path` is the stable identifier. Job-level
+// `.name` checks are JOB names and are unaffected.
+describe('workflow run selectors', () => {
+  const workflows = readdirSync(join(root, '.github/workflows'))
+    .filter((entry) => entry.endsWith('.yml') || entry.endsWith('.yaml'))
+    .map((entry) => ({ entry, body: readFileSync(join(root, '.github/workflows', entry), 'utf8') }));
+
+  // Scan each jq program whole rather than matching a `select(...)` predicate:
+  // a `[^)]*` predicate match stops at the first `)`, so a nested group before
+  // the clause (`select(.path == x and (.conclusion == "success") and .name ==
+  // "CI")`) would slip through. jq programs here are single-quoted, so the slice
+  // from `workflow_runs[]` to the next `'` is the rest of that program, and
+  // spans continuation lines. `.jobs[]` programs are separate calls, so their
+  // legitimate job-name checks never land in this slice.
+  test('never identify a workflow run by .name', () => {
+    assert.notEqual(workflows.length, 0);
+    const selectsRunByName = (body: string): boolean =>
+      body
+        .split('workflow_runs[]')
+        .slice(1)
+        .some((rest) => /\.name\s*==/u.test(rest.split("'")[0] ?? ''));
+    const offenders = workflows.filter(({ body }) => selectsRunByName(body)).map(({ entry }) => entry);
+
+    assert.deepEqual(offenders, [], 'select workflow runs on .path — .name is the evaluated run-name');
   });
 });
