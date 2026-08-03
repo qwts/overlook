@@ -12,7 +12,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/guard-agent-command.mjs --protocol=claude"
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/tools/agent-guard/guard-agent-command.mjs --protocol=claude"
           }
         ]
       }
