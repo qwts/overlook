@@ -1,5 +1,12 @@
 # photos
 
+## 0.65.3
+
+### Patch Changes
+
+- 329a40c: Select every photo in the complete active library, album, search, and filter result instead of only the loaded gallery page.
+- d3b8faa: Apply complete Select All favorite actions to unloaded photos, preserve refined complete selections across page refreshes, and let Shift+Delete escalate protected Originals that sit on pages the grid has not loaded yet.
+
 ## 0.65.2
 
 ### Patch Changes
