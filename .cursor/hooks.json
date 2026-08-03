@@ -3,7 +3,7 @@
   "hooks": {
     "beforeShellExecution": [
       {
-        "command": "node scripts/guard-agent-command.mjs --protocol=cursor"
+        "command": "node tools/agent-guard/guard-agent-command.mjs --protocol=cursor"
       }
     ]
   }
