@@ -238,10 +238,20 @@ jobs:
           set -euo pipefail
           # The tag must never outrun the main-push CI run for this exact SHA.
           # Wait for its stable gate instead of dispatching an equivalent suite.
+          #
+          # Identify that run by `.path` ONLY. A workflow run's `.name` is its
+          # evaluated `run-name:`, not the workflow's `name:` — ci.yml grew a
+          # dynamic `run-name` in 5e62cf12, so `.name` reads "CI push
+          # purpose=automatic retries=0" and a `.name == "CI"` match silently
+          # selects nothing. That left ci_run empty, made the fail-fast branch
+          # below unreachable, and spun this step for the full 70-minute poll
+          # before failing — no release cut between v0.65.1 and this fix. The
+          # job-level `.name == "CI"` check further down is a JOB name, which
+          # `run-name` does not touch, so it stays.
           ci_run=''
           for _ in $(seq 1 140); do
             ci_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=push&head_sha=$GITHUB_SHA&per_page=100" \
-              --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml") | .id) // empty')
+              --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml") | .id) // empty')
             if [ -n "$ci_run" ]; then
               conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run" --jq '.conclusion // empty')
               if [ "$conclusion" = success ]; then break; fi
