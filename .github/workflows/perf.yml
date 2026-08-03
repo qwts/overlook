@@ -48,7 +48,10 @@ jobs:
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
 
+      # Step-level bound, replacing the guard's --timeout-s 2700 (inert in CI, ENG-0138).
+      # Below the job's 60 so a hang fails here and the report upload below still runs.
       - name: Run the perf harness (Electron under Xvfb)
+        timeout-minutes: 45
         run: xvfb-run --auto-servernum -- npm run test:perf
 
       # No guard diagnostics step here: ENG-0138 makes the memory guard a no-op under

@@ -47,7 +47,7 @@ function fakeBridge(): ICloudDriveNativeBridge & { readonly deleted: string[] } 
 }
 
 describe('packaged iCloud native smoke (#656)', () => {
-  test('the documented npm entrypoint runs under the process-tree guard', () => {
+  test('the documented npm entrypoint runs under the memory guard', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
       readonly scripts?: Record<string, string>;
     };

@@ -159,8 +159,10 @@ library-switch are now the fixture's `appExited` helper.
 
 `scripts/measure-runner-capacity.mjs` wraps the guarded E2E entrypoint in CI and
 records elapsed time, logical/available CPUs, memory, normalized load, and Linux
-CPU/I/O pressure samples. The process-tree guard remains the source for peak RSS
-and process count. Manual `workflow_dispatch` inputs select one, two, or three
+CPU/I/O pressure samples. It is the only source of these numbers for a CI run:
+the memory guard is exempt in CI (ENG-0138) and writes no peak-RSS or
+process-count record on a runner. Manual `workflow_dispatch` inputs select one,
+two, or three
 workers and zero retries, producing a retained `runner-capacity-*` artifact for
 each comparison. Ordinary required runs use one worker and zero retries.
 
