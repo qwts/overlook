@@ -114,3 +114,15 @@ describe('version-cut workflow', () => {
     assert.doesNotMatch(workflow, /gh workflow run ci\.yml/u);
   });
 });
+
+// A run's `.name` is its evaluated `run-name:`, so ci.yml's dynamic run-name
+// makes `.name == "CI"` match nothing — it blocked every release after v0.65.1.
+// Rationale in full at the wait step in version-cut.yml.
+describe('version-cut exact-SHA CI run matching', () => {
+  const workflow = readFileSync(join(process.cwd(), '.github/workflows/version-cut.yml'), 'utf8');
+
+  test('identifies the run by workflow path, never by run name', () => {
+    assert.match(workflow, /select\(\.path == "\.github\/workflows\/ci\.yml"\) \| \.id\)/u);
+    assert.doesNotMatch(workflow, /workflow_runs\[\] \| select\(\.name/u);
+  });
+});
