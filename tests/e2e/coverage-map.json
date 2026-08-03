@@ -200,7 +200,7 @@
       "coverage": [
         {
           "type": "playwright-e2e",
-          "path": "tests/e2e/browse.spec.ts"
+          "paths": ["tests/e2e/browse.spec.ts", "tests/e2e/grid.spec.ts"]
         },
         {
           "type": "unit-dom",

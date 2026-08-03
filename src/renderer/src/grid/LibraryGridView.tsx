@@ -229,10 +229,28 @@ export function LibraryGridView({
       });
       if (command?.id !== 'photo.purge') return;
       const targetIds = state.selection.size > 0 ? [...state.selection] : state.lightboxId === null ? [] : [state.lightboxId];
-      const containsOriginal = state.photos.some((photo) => targetIds.includes(photo.id) && photo.isOriginal);
-      if (!containsOriginal) return;
+      if (targetIds.length === 0) return;
+      if (state.photos.some((photo) => targetIds.includes(photo.id) && photo.isOriginal)) {
+        event.preventDefault();
+        setOriginalDeleteIds(targetIds);
+        return;
+      }
+      // A complete Select All spans unloaded pages (#884), so loaded rows can
+      // never rule a protected Original out. Main owns that answer: preflight
+      // rejects a selection with nothing protected, and the probe challenge is
+      // cancelled straight away so the dialog opens its own ceremony.
+      const loaded = new Set(state.photos.map(({ id }) => id));
+      if (targetIds.every((id) => loaded.has(id))) return;
       event.preventDefault();
-      setOriginalDeleteIds(targetIds);
+      void window.overlook.library
+        .originalDeletePreflight({ photoIds: targetIds })
+        .then(({ challengeId }) => {
+          void window.overlook.library.originalDeleteCancel({ challengeId });
+          setOriginalDeleteIds(targetIds);
+        })
+        .catch(() => {
+          // Nothing protected in the unloaded pages: no ceremony is owed.
+        });
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
