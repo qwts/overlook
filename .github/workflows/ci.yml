@@ -57,9 +57,10 @@ jobs:
       mode: ${{ steps.policy.outputs.mode }}
       run_full: ${{ steps.policy.outputs.run_full }}
       run_post_merge: ${{ steps.policy.outputs.run_post_merge }}
+      release_gate_mode: ${{ steps.policy.outputs.release_gate_mode }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@060af0b6a71ed32c04bb04efd07f2c87b46eec03
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@c7d95401590a7d38bc90f5b51df66edcc4104528
 
   merge-evidence:
     name: Verify merged commit evidence
@@ -170,7 +171,15 @@ jobs:
         # name. A PR checkout has origin/main but does not create local main.
         run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
 
+      # A source PR proves release intent by carrying a changeset. The generated
+      # Version packages PR has already consumed those changesets into
+      # package.json and CHANGELOG.md, so asking it for one can never pass —
+      # that broke #890 (playbook-engineering#134). The shared policy decides
+      # which of the two this run is, from reviewed configuration plus fields
+      # only GitHub controls; a branch name or author string here would be
+      # forgeable and would drift from the other governed repos.
       - name: Check changesets
+        if: needs.policy.outputs.release_gate_mode != 'generated-projection'
         run: npm run check:changesets
 
       # Acceptance-coverage gates (#82): the map validator (every spec mapped,
