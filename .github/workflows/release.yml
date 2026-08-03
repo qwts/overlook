@@ -69,14 +69,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Identify CI runs by `.path` ONLY. A workflow run's `.name` is its
+          # evaluated `run-name:`, so ci.yml's dynamic run-name makes a
+          # `.name == "CI"` match select nothing (see version-cut.yml). Job-level
+          # `.name` checks below are JOB names, which `run-name` does not touch.
           queue_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=merge_group&head_sha=$RELEASE_SHA&per_page=100" \
-            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+            --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
           if [ -n "$queue_run" ]; then
             complete=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$queue_run/jobs?filter=latest&per_page=100" \
               --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
           else
             push_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=push&head_sha=$RELEASE_SHA&per_page=100" \
-              --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+              --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
             test -n "$push_run"
             complete=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$push_run/jobs?filter=latest&per_page=100" \
               --jq 'any(.jobs[]; .name == "Complete suite" and .conclusion == "success")')
@@ -91,7 +95,7 @@ jobs:
           test "$approved" = true
           pr_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq '.head.sha')
           pr_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=pull_request&head_sha=$pr_head&per_page=100" \
-            --jq 'first(.workflow_runs[] | select(.name == "CI" and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+            --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
           test -n "$pr_run"
           verified=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$pr_run/jobs?filter=latest&per_page=100" \
             --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
