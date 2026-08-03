@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
@@ -130,5 +130,27 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     );
     assert.match(autoUpdate, /GH_TOKEN: \$\{\{ steps\.chores\.outputs\.token \}\}/u);
     assert.doesNotMatch(autoUpdate, /RELEASE_TOKEN|\|\| github\.token/u);
+  });
+});
+
+// A workflow RUN's `.name` is its evaluated `run-name:`, not the workflow's
+// `name:`. ci.yml carries a dynamic run-name, so every
+// `workflow_runs[] | select(.name == "CI" ...)` silently matched nothing —
+// which stranded the tag after v0.65.1 and failed release evidence for v0.65.3.
+// Six selectors carried the bug; fixing them one at a time missed five, so this
+// scans every workflow instead. `.path` is the stable identifier. Job-level
+// `.name` checks are JOB names and are unaffected.
+describe('workflow run selectors', () => {
+  const workflows = readdirSync(join(root, '.github/workflows'))
+    .filter((entry) => entry.endsWith('.yml') || entry.endsWith('.yaml'))
+    .map((entry) => ({ entry, body: readFileSync(join(root, '.github/workflows', entry), 'utf8') }));
+
+  test('never identify a workflow run by .name', () => {
+    assert.notEqual(workflows.length, 0);
+    const offenders = workflows
+      .filter(({ body }) => /workflow_runs\[\]\s*\|\s*select\([^)]*\.name\s*==/u.test(body))
+      .map(({ entry }) => entry);
+
+    assert.deepEqual(offenders, [], 'select workflow runs on .path — .name is the evaluated run-name');
   });
 });
