@@ -93,6 +93,10 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /git branch main origin\/main/u);
   });
 
+  test('embeds the configured pCloud client ID in release package builds', () => {
+    assert.match(packageWorkflow, /OVERLOOK_PCLOUD_CLIENT_ID: \$\{\{ secrets\.PCLOUD_CLIENT_ID \}\}/u);
+  });
+
   test('runs advanced CodeQL for both existing languages through CI only', () => {
     assert.match(codeql, /^ {2}workflow_call:$/mu);
     assert.doesNotMatch(codeql, /^ {2}(?:pull_request|push|workflow_dispatch|schedule):$/mu);

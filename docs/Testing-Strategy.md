@@ -320,13 +320,15 @@ roughly a third of WCAG issues, so a green gate is not a claim of accessibility.
 
 ## pCloud live contract run (owner-executed, never CI)
 
-pCloud is a disabled-by-default build feature (#762). A build exposes the
-pCloud backup/restore adapter and its pCloud-only Transfer & Sync surfaces
-only when both `OVERLOOK_PCLOUD_ENABLED=1` and a public
-`OVERLOOK_PCLOUD_CLIENT_ID` are present while bundling. Without both values,
-the provider is absent from the catalog, the interoperability IPC handlers
-are not registered, and every pCloud-only UI entry is hidden. Disabling the
-feature does not delete any previously sealed local authorization.
+pCloud is enabled in standard release packages by the public OAuth client ID
+stored in the `PCLOUD_CLIENT_ID` repository secret. The Package workflow maps
+that value to `OVERLOOK_PCLOUD_CLIENT_ID` while bundling. Local and test builds
+can set the same environment variable directly. A non-empty client ID exposes
+the pCloud backup/restore adapter and its pCloud-only Transfer & Sync surfaces;
+without one, the provider and its IPC/UI entries remain fail-closed.
+`OVERLOOK_PCLOUD_ENABLED=0` is an explicit build-time kill switch, while `1`
+can still opt in when exercising the legacy flag path. Disabling the feature
+does not delete any previously sealed local authorization.
 
 The provider contract suite also runs against **live pCloud** (#256, the
 #109 epic) — env-gated so CI stays mock-only:
