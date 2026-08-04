@@ -53,7 +53,7 @@ export function SettingsDialog({
   onClose,
   selectedPhotoIds = [],
   onTransfer,
-  transferEnabled = false,
+  transferEnabled = true,
   requestedSection,
 }: SettingsDialogProps): ReactElement | null {
   const intl = useIntl();

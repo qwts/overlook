@@ -24,6 +24,7 @@ import { activityPageRequestSchema, activityPageResponseSchema } from '../activi
 import { historyExecuteRequestSchema, historyExecuteResponseSchema, historyStatusSchema } from '../history/schemas.js';
 import { inspectorWindowChannels, windowEvents } from '../inspector-window-contract.js';
 import { interopChannels, interopEvents } from './interop-channels.js';
+import { localTransferChannels } from './local-transfer-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
 import { libraryQuerySchema } from './library-query-schemas.js';
@@ -244,6 +245,7 @@ export const channels = {
   ),
   appLockRemove: defineChannel('app-lock:remove', z.object({ password: z.string().min(1).max(1024) }), z.object({ removed: z.boolean() })),
   ...interopChannels,
+  ...localTransferChannels,
   appLockPickRecovery: defineChannel('app-lock:pick-recovery', z.object({}), z.object({ path: z.string().nullable() })),
   appLockRecover: defineChannel(
     'app-lock:recover',

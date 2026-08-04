@@ -71,6 +71,11 @@ export interface OverlookApi {
     readonly retry: () => Promise<Res<typeof channels.interopRetry>>;
     readonly onChanged: (listener: (payload: z.output<typeof events.interopStatusChanged.payload>) => void) => () => void;
   };
+  readonly localTransfer: {
+    readonly status: () => Promise<Res<typeof channels.localTransferStatus>>;
+    readonly enable: () => Promise<Res<typeof channels.localTransferEnable>>;
+    readonly disable: () => Promise<Res<typeof channels.localTransferDisable>>;
+  };
   readonly library: {
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;
     readonly selectAll: (request: Req<typeof channels.librarySelectAll>) => Promise<Res<typeof channels.librarySelectAll>>;

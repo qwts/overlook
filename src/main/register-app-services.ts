@@ -50,6 +50,7 @@ import { getDiagnosticsService } from './diagnostics/diagnostics-runtime.js';
 import { OriginalDeletionService } from './library/original-deletion-service.js';
 import type { AppLockState, AppAuthorizationResult } from './crypto/app-lock-controller.js';
 import { registerInboundMoveHandlers } from './interop/inbound-move-ipc.js';
+import { LocalTransferRuntime, registerLocalTransferHandlers } from './transfer-sync/local-transfer-ipc.js';
 import { getProductionInboundMoveController } from './interop/inbound-move-production.js';
 import { registerEmbeddingHandlers } from './embedding/embedding-ipc.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
@@ -171,4 +172,8 @@ export function registerAppServices(options: AppServicesOptions): void {
   if (options.pcloudEnabled) {
     registerInboundMoveHandlers(getProductionInboundMoveController, options.requireContentAccess);
   }
+  registerLocalTransferHandlers(
+    new LocalTransferRuntime({ importFiles: (paths) => options.getImport().runFiles(paths, 'copy') }),
+    options.requireContentAccess,
+  );
 }

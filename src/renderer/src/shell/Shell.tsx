@@ -586,7 +586,7 @@ export function Shell({
           open
           requestedSection={settingsSection}
           selectedPhotoIds={[...state.selection]}
-          transferEnabled={pcloudEnabled}
+          transferEnabled={true}
           onTransfer={pcloudEnabled ? () => openInterop('settings', [...state.selection]) : undefined}
           onClose={() => {
             setSettingsSection(undefined);

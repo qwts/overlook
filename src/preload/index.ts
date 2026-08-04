@@ -151,6 +151,11 @@ const overlook: OverlookApi = {
     retry: async () => interopRetry({}),
     onChanged: createSubscriber(events.interopStatusChanged, subscribeTransport),
   }),
+  localTransfer: Object.freeze({
+    status: async () => createInvoker(channels.localTransferStatus, invokeTransport)({}),
+    enable: async () => createInvoker(channels.localTransferEnable, invokeTransport)({}),
+    disable: async () => createInvoker(channels.localTransferDisable, invokeTransport)({}),
+  }),
   library: Object.freeze({
     page: createInvoker(channels.libraryPage, invokeTransport),
     selectAll: createInvoker(channels.librarySelectAll, invokeTransport),
