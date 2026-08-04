@@ -1338,25 +1338,25 @@
     "defaultMessage": "Settings"
   },
   "settings.transfer.body": {
-    "defaultMessage": "Receive encrypted Image Trail moves through a pCloud authorization used only for interoperability."
+    "defaultMessage": "Receive photos from Image Trail on this Mac. Enable, then paste the sync code into Image Trail once."
   },
-  "settings.transfer.checking": {
-    "defaultMessage": "Checking…"
+  "settings.transfer.copied": {
+    "defaultMessage": "Copied"
   },
-  "settings.transfer.connect": {
-    "defaultMessage": "Connect pCloud"
+  "settings.transfer.copy": {
+    "defaultMessage": "Copy"
   },
-  "settings.transfer.connected": {
-    "defaultMessage": "connected"
+  "settings.transfer.disable": {
+    "defaultMessage": "Disable"
   },
-  "settings.transfer.disconnect": {
-    "defaultMessage": "Disconnect"
+  "settings.transfer.disabledState": {
+    "defaultMessage": "Off"
   },
-  "settings.transfer.disconnected": {
-    "defaultMessage": "not connected"
+  "settings.transfer.enable": {
+    "defaultMessage": "Enable"
   },
-  "settings.transfer.expired": {
-    "defaultMessage": "reconnect required"
+  "settings.transfer.enabled": {
+    "defaultMessage": "Listening for transfers"
   },
   "settings.transfer.heading": {
     "defaultMessage": "Transfer & Sync"
@@ -1364,41 +1364,11 @@
   "settings.transfer.label": {
     "defaultMessage": "Transfer and Sync settings"
   },
-  "settings.transfer.locked": {
-    "defaultMessage": "locked"
+  "settings.transfer.syncCode": {
+    "defaultMessage": "Sync code"
   },
-  "settings.transfer.notConfigured": {
-    "defaultMessage": "not configured"
-  },
-  "settings.transfer.pairing": {
-    "defaultMessage": "Image Trail pairing"
-  },
-  "settings.transfer.password": {
-    "defaultMessage": "Pairing bundle password"
-  },
-  "settings.transfer.provider": {
-    "defaultMessage": "pCloud for interoperability"
-  },
-  "settings.transfer.refresh": {
-    "defaultMessage": "Check for incoming transfers"
-  },
-  "settings.transfer.replace": {
-    "defaultMessage": "Replace bundle…"
-  },
-  "settings.transfer.review": {
-    "defaultMessage": "{count, plural, one {Review # incoming item} other {Review # incoming items}}"
-  },
-  "settings.transfer.select": {
-    "defaultMessage": "Select bundle…"
-  },
-  "settings.transfer.unavailable": {
-    "defaultMessage": "Outbound Move and Sync are not available yet."
-  },
-  "settings.transfer.unlock": {
-    "defaultMessage": "Unlock for this session"
-  },
-  "settings.transfer.unlocked": {
-    "defaultMessage": "unlocked"
+  "settings.transfer.syncCodeHint": {
+    "defaultMessage": "A new code is generated each time transfers are enabled."
   },
   "shell.results.count": {
     "defaultMessage": "{count, plural, one {# result} other {# results}}"
