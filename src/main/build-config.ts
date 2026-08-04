@@ -27,14 +27,16 @@ export interface PCloudFeatureConfig {
   readonly clientId: string | null;
 }
 
-/** pCloud is disabled unless both the opt-in flag and a public OAuth client
- * ID are supplied. Unpackaged harness values override the bundled inputs;
- * packaged callers pass an env reader that always returns undefined. */
+/** A public OAuth client ID enables pCloud by default. The legacy feature flag
+ * remains as an explicit kill switch. Unpackaged harness values override the
+ * bundled inputs; packaged callers pass an env reader that always returns
+ * undefined. */
 export function pcloudFeatureConfig(harnessEnv: (name: string) => string | undefined): PCloudFeatureConfig {
   const bundledEnabled = typeof __OVERLOOK_PCLOUD_ENABLED__ === 'string' ? __OVERLOOK_PCLOUD_ENABLED__.trim() : '';
   const bundledClientId = typeof __OVERLOOK_PCLOUD_CLIENT_ID__ === 'string' ? __OVERLOOK_PCLOUD_CLIENT_ID__.trim() : '';
-  const requested = (harnessEnv('OVERLOOK_PCLOUD_ENABLED') ?? bundledEnabled) === '1';
+  const enabledOverride = harnessEnv('OVERLOOK_PCLOUD_ENABLED') ?? bundledEnabled;
   const clientId = (harnessEnv('OVERLOOK_PCLOUD_CLIENT_ID') ?? bundledClientId).trim();
+  const requested = enabledOverride === '' ? clientId !== '' : enabledOverride === '1';
   return requested && clientId !== '' ? { enabled: true, clientId } : { enabled: false, clientId: null };
 }
 
