@@ -1,5 +1,12 @@
 # photos
 
+## 0.65.4
+
+### Patch Changes
+
+- 5a9851f: Re-enable pCloud in release builds when the configured OAuth client ID is
+  available, while retaining the explicit build-time kill switch.
+
 ## 0.65.3
 
 ### Patch Changes
