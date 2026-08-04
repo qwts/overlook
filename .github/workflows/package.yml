@@ -80,6 +80,9 @@ jobs:
         env:
           # Public installed-app OAuth identifier embedded at build time.
           OVERLOOK_GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          # Public pCloud OAuth identifier. Supplying it enables the provider;
+          # an empty secret keeps unsigned/pre-release builds fail-closed.
+          OVERLOOK_PCLOUD_CLIENT_ID: ${{ secrets.PCLOUD_CLIENT_ID }}
           # Generated Desktop credential required by this issued client. Like
           # the client ID it is extractable installed-app metadata, but it is
           # kept out of source and injected only into the main-process bundle.

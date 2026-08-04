@@ -13,7 +13,7 @@ test('unconfigured Google Drive build credentials fail closed', () => {
   assert.equal(bundledGoogleDriveClientSecret(), null);
 });
 
-test('pCloud requires both the opt-in flag and a supplied client ID', () => {
+test('pCloud is enabled by a supplied client ID and remains fail-closed without one', () => {
   assert.deepEqual(
     pcloudFeatureConfig(() => undefined),
     { enabled: false, clientId: null },
@@ -24,6 +24,19 @@ test('pCloud requires both the opt-in flag and a supplied client ID', () => {
       enabled: false,
       clientId: null,
     },
+  );
+  assert.deepEqual(
+    pcloudFeatureConfig((name) => (name === 'OVERLOOK_PCLOUD_CLIENT_ID' ? 'public-test-id' : undefined)),
+    { enabled: true, clientId: 'public-test-id' },
+  );
+});
+
+test('pCloud retains an explicit feature kill switch', () => {
+  assert.deepEqual(
+    pcloudFeatureConfig((name) =>
+      name === 'OVERLOOK_PCLOUD_ENABLED' ? '0' : name === 'OVERLOOK_PCLOUD_CLIENT_ID' ? 'public-test-id' : undefined,
+    ),
+    { enabled: false, clientId: null },
   );
   assert.deepEqual(
     pcloudFeatureConfig((name) =>
