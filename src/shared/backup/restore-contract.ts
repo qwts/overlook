@@ -43,6 +43,16 @@ export const restoreDiscoverResponseSchema = z.object({
   error: restoreErrorSchema.nullable(),
 });
 
+/** An object a partial restore could not recover (#915): absent from the
+ * provider or failed decrypt/content-address verification. Reported in full —
+ * never just the first — so recovery is one pass, not rediscovery. */
+export const restoreMissingObjectSchema = z.object({
+  path: z.string().min(1),
+  kind: z.enum(['original', 'sidecar', 'protected']),
+  photoId: z.string().nullable(),
+  reason: z.enum(['not-found', 'failed-verification']),
+});
+
 export const restoreRunResponseSchema = z.object({
   result: z
     .object({
@@ -52,12 +62,14 @@ export const restoreRunResponseSchema = z.object({
       resumed: z.boolean(),
       fallbackFromGeneration: z.number().int().positive().nullable(),
       relaunching: z.boolean(),
+      missing: z.array(restoreMissingObjectSchema).readonly(),
     })
     .nullable(),
   error: restoreErrorSchema.nullable(),
 });
 
 export type RestoreFailure = z.output<typeof restoreFailureSchema>;
+export type RestoreMissingObject = z.output<typeof restoreMissingObjectSchema>;
 export type RestoreProgressContract = z.output<typeof restoreProgressSchema>;
 export type RestoreLibrarySummary = z.output<typeof restoreLibrarySummarySchema>;
 export type RestoreDiscoverResponse = z.output<typeof restoreDiscoverResponseSchema>;

@@ -64,7 +64,7 @@ test('restore coordinator discovers validated metadata and runs through an opaqu
   const runner: RestoreRunner = {
     run: ({ signal }) => {
       assert.equal(signal?.aborted, false);
-      return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
+      return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
     },
   };
   const coordinator = new RestoreCoordinator({
@@ -133,7 +133,7 @@ test('cancelled runs preserve the discovery session for resumable retry', async 
     createRunner: () => ({
       run: async ({ signal }) => {
         attempt += 1;
-        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: true };
+        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: true, missing: [] };
         await new Promise<void>((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
         });
@@ -192,7 +192,7 @@ test("this Mac's stored master key discovers and restores without a recovery-key
     readRecoveryKey: () => Promise.reject(new Error('the key file must not be read')),
     localMasterKey: () => Buffer.from(world.masterKey),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({ run: () => Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false }) }),
+    createRunner: () => ({ run: () => Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] }) }),
     sessionId: () => 'session-local-key',
     progress: () => undefined,
   });
@@ -229,7 +229,7 @@ test('expireSession makes a discovered session unrunnable but never disturbs an 
     createRunner: () => ({
       run: async ({ signal }) => {
         attempt += 1;
-        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false };
+        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] };
         await new Promise<void>((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
         });
@@ -269,7 +269,7 @@ test('the verified custody password rides the session into the runner request (#
     createRunner: () => ({
       run: (request) => {
         requests.push(request);
-        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
+        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
       },
     }),
     sessionId: () => 'session-custody',
@@ -290,7 +290,7 @@ test('recovery-key sessions never carry a custody password (#754)', async () => 
     createRunner: () => ({
       run: (request) => {
         requests.push(request);
-        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
+        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
       },
     }),
     sessionId: () => 'session-rk',

@@ -1919,6 +1919,17 @@
       ]
     },
     {
+      "id": "915-partial-restore-not-found-report",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "When no retained generation is complete, restore recovers everything that verifies, marks NOT FOUND originals ledger 'error', and reports the full missing list on the complete screen and in restore-report.json (#915). The strict complete-generation fallback (#741) is unchanged.",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/restore-engine.test.ts", "tests/dom/restore-workflow-missing.test.tsx"]
+        }
+      ]
+    },
+    {
       "id": "391-semantic-embedding-index",
       "wiki": "Acceptance-Test-Semantic-Embedding-Index",
       "coverage": [

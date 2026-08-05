@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
-import type { RestoreLibrarySummary, RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
+import type { RestoreLibrarySummary, RestoreMissingObject, RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { Badge } from '../components/Badge.js';
 import { Button } from '../components/Button.js';
@@ -59,6 +59,16 @@ const messages = defineMessages({
     defaultMessage: "This library's stored key restores its own backups — no key file needed.",
   },
   localKeyNoMatch: { id: 'restore.localKey.noMatch', defaultMessage: "No cloud library matches this Mac's stored key." },
+  missingHeading: { id: 'restore.missing.heading', defaultMessage: 'Restore complete — some items were NOT FOUND' },
+  missingCount: {
+    id: 'restore.missing.count',
+    defaultMessage: '{count, plural, one {# object was} other {# objects were}} not found in the cloud backup',
+  },
+  missingHelp: {
+    id: 'restore.missing.help',
+    defaultMessage:
+      'They stay in the library marked as errored instead of being dropped. If you find or recover them on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder.',
+  },
   localKeyPasswordLabel: { id: 'restore.localKey.passwordLabel', defaultMessage: 'App password' },
   localKeyPasswordHelp: {
     id: 'restore.localKey.passwordHelp',
@@ -156,6 +166,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [progress, setProgress] = useState<RestoreProgressContract | null>(null);
   const [error, setError] = useState<{ reason: string; message: string } | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [missing, setMissing] = useState<readonly RestoreMissingObject[]>([]);
 
   const descriptor = providers.find((provider) => provider.id === providerId) ?? null;
   const selected = useMemo(() => libraries.find((library) => library.libraryId === selectedId) ?? null, [libraries, selectedId]);
@@ -197,6 +208,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setLibraries([]);
     setSelectedId(null);
     setFallbackNotice(null);
+    setMissing([]);
   };
 
   const runDiscovery = (request: Parameters<typeof window.overlook.restore.discover>[0], noMatch: string): void => {
@@ -257,6 +269,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           `Generation ${String(response.result.fallbackFromGeneration)} failed validation; restored generation ${String(response.result.generation)}.`,
         );
       }
+      setMissing(response.result?.missing ?? []);
       setStep('complete');
     });
   };
@@ -500,9 +513,20 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         </div>
       ) : (
         <div className="ovl-restore__complete" aria-live="polite">
-          <Icon name="circle-check" size={28} color="var(--accent-green)" />
-          <strong>Restore complete</strong>
+          <Icon name="circle-check" size={28} color={missing.length === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'} />
+          <strong>{missing.length === 0 ? 'Restore complete' : intl.formatMessage(messages.missingHeading)}</strong>
           <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+          {missing.length === 0 ? null : (
+            <div className="ovl-restore__warnings ovl-restore__missing" data-testid="restore-missing">
+              <strong>{intl.formatMessage(messages.missingCount, { count: missing.length })}</strong>
+              <span>{intl.formatMessage(messages.missingHelp)}</span>
+              <ul className="mono-data">
+                {missing.map((object) => (
+                  <li key={object.path}>{object.path}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

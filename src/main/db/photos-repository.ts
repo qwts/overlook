@@ -725,9 +725,11 @@ export class PhotosRepository {
   /** Rebuilds a fresh catalog from a verified manifest (#288). The staged
    * DB must be empty: merge semantics could retain local-only rows and turn
    * disaster recovery into silent data loss. All restored originals are
-   * already verified remote copies, so their ledgers start clean + synced. */
-  restoreManifest(manifest: RestorableBackupManifest, keys: readonly WrappedKeyRecord[]): void {
-    restoreManifestFromBackup(this.db, manifest, keys);
+   * already verified remote copies, so their ledgers start clean + synced —
+   * except NOT FOUND originals from a partial restore (#915), whose rows
+   * survive with ledger status 'error' so the loss stays visible. */
+  restoreManifest(manifest: RestorableBackupManifest, keys: readonly WrappedKeyRecord[], missingPhotoIds?: ReadonlySet<string>): void {
+    restoreManifestFromBackup(this.db, manifest, keys, missingPhotoIds);
   }
 
   /** The backup queue's input (#105): dirty, not-deleted photos. */
