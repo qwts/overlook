@@ -23,7 +23,6 @@ this file in the same PR as the change — never after the fact.
 - Be brief: minimum words, bullets over paragraphs, no preamble, recap, or filler.
 - Fix the problem; no sycophancy, apologies, or narrating past mistakes unless
   required for the fix.
-- On correction: one-sentence restatement of updated requirements, then proceed.
 - Disagree plainly when mistaken; cite code or docs.
 - Do not narrate unsolicited intent or process, announce next steps, or confess
   partial completion. The pre-edit checkpoints in **Before Changing Code** are
@@ -76,7 +75,6 @@ this file in the same PR as the change — never after the fact.
 ready`; otherwise the ready transition runs the complete suite.
 - **Use the status footer only during an active validation/build run or while
   pairing on manual testing.** Omit it from routine turns. When it applies:
-  - `Working dir:` absolute path of the active worktree/checkout
   - `Build:` result of the relevant gates (`npm run ci` pass/fail, or "not run"
     with the reason)
   - `Commit:` current branch + short SHA, noting any dirty state

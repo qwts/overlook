@@ -35,7 +35,7 @@ State, explicitly:
 - The a11y violation budget total, and whether any surface came in **under**
   budget (which fails, and is fixed by tightening the entry — never by raising
   it).
-- The `AGENTS.md` status footer (Working dir / Build / Commit), because `/check`
+- The `AGENTS.md` status footer (Build / Commit), because `/check`
   is a validation run.
 
 No product-invariant checks exist yet — when `AGENTS.md` → Product Invariants
