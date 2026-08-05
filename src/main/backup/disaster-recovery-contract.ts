@@ -133,7 +133,7 @@ export async function exerciseDisasterRecoveryContract(
       }),
       events: { progress: () => undefined },
     }).run({ masterKey, allowReplace: false });
-    assert.deepEqual(result, { libraryId, generation: 1, photos: 2, resumed: false });
+    assert.deepEqual(result, { libraryId, generation: 1, photos: 2, resumed: false, missing: [] });
     assert.equal(existsSync(`${targetDir}.restore-staging`), false);
     assert.equal(existsSync(`${targetDir}.restore-previous`), false);
 

@@ -62,12 +62,12 @@ const messages = defineMessages({
   missingHeading: { id: 'restore.missing.heading', defaultMessage: 'Restore complete — some items were NOT FOUND' },
   missingCount: {
     id: 'restore.missing.count',
-    defaultMessage: '{count, plural, one {# object was} other {# objects were}} not found in the cloud backup',
+    defaultMessage: '{count, plural, one {# object was} other {# objects were}} not found or failed verification in the cloud backup',
   },
   missingHelp: {
     id: 'restore.missing.help',
     defaultMessage:
-      'They stay in the library marked as errored instead of being dropped. If you find or recover them on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder.',
+      'Missing photos stay in the library marked as errored instead of being dropped; missing companion files are left out until recovered. If you find or recover the objects on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder.',
   },
   localKeyPasswordLabel: { id: 'restore.localKey.passwordLabel', defaultMessage: 'App password' },
   localKeyPasswordHelp: {

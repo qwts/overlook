@@ -130,7 +130,7 @@ test('repaired bootstrap and manifest restore the complete library into a fresh 
       }),
       events: { progress: () => undefined },
     }).run({ masterKey, allowReplace: false });
-    assert.deepEqual(restored, { libraryId: LIBRARY_ID, generation: 3, photos: 1, resumed: false });
+    assert.deepEqual(restored, { libraryId: LIBRARY_ID, generation: 3, photos: 1, resumed: false, missing: [] });
 
     const restoredKeys = KeyStore.open({ safeStorage, dataDir: targetDir });
     const restoredDbKey = restoredKeys.resolver()(1);
