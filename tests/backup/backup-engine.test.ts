@@ -537,6 +537,45 @@ describe('backup engine (#105)', () => {
     assert.deepEqual(result.integrity, NO_INTEGRITY_FINDINGS, 'no scrub runs against unprovable claims');
   });
 
+  test('publication preflight blocks ledger-error claims even when the remote path is listed (#915)', async () => {
+    // Partial-restore aftermath (PR #916 review): a failed-verification
+    // original leaves a LISTED remote object whose ciphertext already failed
+    // decrypt, a ledger 'error' row, and no local original. Path presence
+    // alone must not let a generation publish over that claim.
+    const w = await world(1);
+    await w.engine.run();
+    const [claimed] = await w.provider.list('blobs');
+    assert.ok(claimed !== undefined);
+    const contentHash = claimed.path.split('/').at(-1) ?? '';
+    await w.store.deleteOriginal(contentHash);
+    // repairStatus, not setStatus: restore rebuilds rows outside the ledger
+    // machine exactly like the consistency tool, and synced → error is not a
+    // machine transition.
+    w.ledger.repairStatus('P0', 'error');
+
+    const restarted = new BackupEngine(w.deps);
+    restarted.oweManifest();
+    const result = await restarted.run();
+    assert.equal(result.manifestUploaded, false, 'no generation publishes over an unprovable error claim');
+    assert.ok(
+      w.audits.some((line) => line.startsWith('MANIFEST-INCOMPLETE count=1')),
+      'the blocked claim is audited',
+    );
+    assert.deepEqual(
+      (await w.provider.list('manifest')).map((entry) => entry.path),
+      ['manifest/gen-1.ovlk'],
+      'nothing published, nothing pruned',
+    );
+
+    // Recovery releases the claim: the local original returns (re-import /
+    // re-run restore), the reconcile pass re-uploads, and publication heals.
+    await w.store.putOriginal(Readable.from([sampleJpeg(0)]), { id: 1, key: randomBytes(32) }, 'P0');
+    w.ledger.markDirty('P0');
+    const healed = await new BackupEngine(w.deps).run();
+    assert.equal(healed.manifestUploaded, true, 'a recovered claim publishes again');
+    assert.equal(w.ledger.status('P0'), 'synced');
+  });
+
   test('a failed recovery-repair refresh remains debt for the next clean run', async () => {
     const w = await world(1);
     await w.engine.run();

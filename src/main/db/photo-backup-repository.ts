@@ -64,7 +64,12 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
   })();
 }
 
-export function restoreManifest(db: BetterSqlite3.Database, manifest: RestorableBackupManifest, keys: readonly WrappedKeyRecord[]): void {
+export function restoreManifest(
+  db: BetterSqlite3.Database,
+  manifest: RestorableBackupManifest,
+  keys: readonly WrappedKeyRecord[],
+  missingPhotoIds: ReadonlySet<string> = new Set(),
+): void {
   db.transaction(() => {
     const occupied = queryGet<{ count: number }>(
       db,
@@ -106,11 +111,15 @@ export function restoreManifest(db: BetterSqlite3.Database, manifest: Restorable
           mediaInfoJson: mediaInfoJson(photo.mediaInfo),
         },
       );
+      // A NOT FOUND original from a partial restore (#915) keeps its row but
+      // enters the ledger as 'error' — the scrubber's confirmed-remote-loss
+      // vocabulary — with no backup claim to lie about.
       run(
         db,
-        `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty) VALUES (?, 'synced', ?, 0)`,
+        `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty) VALUES (?, ?, ?, 0)`,
         photo.id,
-        manifest.generatedAt,
+        missingPhotoIds.has(photo.id) ? 'error' : 'synced',
+        missingPhotoIds.has(photo.id) ? null : manifest.generatedAt,
       );
     }
     for (const album of manifest.albums) {

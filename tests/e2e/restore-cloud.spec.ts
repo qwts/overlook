@@ -220,7 +220,7 @@ test('corrupt newest manifest falls back and reports the rejected generation (#2
   }
 });
 
-test('corrupt only-generation blob fails without publishing a library (#291)', async () => {
+test('corrupt only-generation blob partial-restores and reports the NOT FOUND object (#291/#915)', async () => {
   const source = mkE2eTmpDir('overlook-e2e-corrupt-source-');
   const target = mkE2eTmpDir('overlook-e2e-corrupt-target-');
   const keyPath = join(mkE2eTmpDir('overlook-e2e-corrupt-key-'), 'overlook-recovery.key');
@@ -247,10 +247,15 @@ test('corrupt only-generation blob fails without publishing a library (#291)', a
       },
       { recoveryKeyPath: keyPath, password: PASSWORD },
     );
+    // #915: with no complete retained generation, the restore recovers what
+    // verifies and reports the unverifiable object instead of failing whole.
     expect(response.discoveryError).toBeNull();
-    expect(response.run?.result).toBeNull();
-    expect(response.run?.error).toMatchObject({ reason: 'corrupt' });
-    expect(existsSync(join(target, 'library', 'library.db'))).toBe(false);
+    expect(response.run?.error).toBeNull();
+    expect(response.run?.result).toMatchObject({
+      missing: [{ kind: 'original', reason: 'failed-verification', path: `blobs/${firstHash?.slice(0, 2) ?? ''}/${firstHash ?? ''}` }],
+    });
+    expect(existsSync(join(target, 'library', 'library.db'))).toBe(true);
+    expect(existsSync(join(target, 'library', 'restore-report.json'))).toBe(true);
   } finally {
     await app.close();
   }

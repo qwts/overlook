@@ -253,6 +253,7 @@ function installStub(options?: {
           resumed: true,
           fallbackFromGeneration: 9,
           relaunching: true,
+          missing: [],
         },
         error: null,
       }),

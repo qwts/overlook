@@ -4,6 +4,15 @@
   gap: var(--space-4);
   min-width: 0;
   color: var(--text-body);
+  /* Restore results are working data — error messages, generation numbers,
+     blob paths — and must be copy/pasteable despite the app-wide
+     user-select: none (#915). Interactive controls opt back out below. */
+  user-select: text;
+}
+
+.ovl-restore button,
+.ovl-restore label {
+  user-select: none;
 }
 
 .ovl-restore__hero {
@@ -154,6 +163,27 @@
 
 .ovl-restore__error span {
   color: var(--text-muted);
+}
+
+/* Partial-restore NOT FOUND report (#915): the path list is machine data —
+   mono, scrollable, and selectable for copy/paste recovery work. */
+.ovl-restore__missing {
+  justify-items: start;
+  text-align: left;
+  color: var(--accent-amber);
+}
+
+.ovl-restore__missing span {
+  color: var(--text-muted);
+}
+
+.ovl-restore__missing ul {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  max-height: 250px;
+  overflow-y: auto;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .ovl-restore__running,

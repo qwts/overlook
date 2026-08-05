@@ -787,6 +787,16 @@ export class BackupEngine {
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.
+    // Ledger-'error' rows are blocked by status, not just path presence
+    // (#915 / PR #916 review): a partial restore's failed-verification
+    // original leaves a LISTED remote object whose ciphertext already
+    // failed decrypt/content-address, and the ordinary scrub never walks
+    // 'error' rows — presence alone would seal a generation promising a
+    // blob the provider provably corrupted. Recovery or deleting the row
+    // releases the claim; local-backed 'error' rows heal through the
+    // reconcile pass below like any other missing claim.
+    const unprovable = manifest.photos.filter((photo) => this.deps.ledger.status(photo.id) === 'error').map((photo) => photo.blobPath);
+    if (unprovable.length > 0) throw new ManifestIncompleteError(unprovable);
     await this.assertManifestComplete(
       manifest.photos,
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
