@@ -1,22 +1,27 @@
 # Agent Instructions
 
-The canonical, vendor-neutral **agent-context file** for this repo
-([ENG-0006](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)).
-`CLAUDE.md`, `.github/copilot-instructions.md`, and `.cursor/rules/` are thin
-adapters that point here and carry only genuinely vendor-specific content — a
-shared fact stated in two agent files is a bug, not redundancy.
+<!-- governed:shared-agent-discovery:start -->
 
-Read `CONTRIBUTING.md`, then the guide it links:
-[`docs/Contributing.md`](docs/Contributing.md), the canonical contributor and
-agent workflow.
+## Shared agent conventions and skills
 
-**This file is a map, not a manual.** It carries what an agent cannot derive
-from the code, the ESLint config, or CI; depth lives in [`docs/`](docs/README.md)
-and loads on demand. Its length ratchets downward like a coverage floor
-(`npm run lint:agent-context`) — growth needs a reason in the PR that adds it.
+PR-first workflow, validation-before-push, commit and PR hygiene, and the
+untrusted-input threat model are defined once, for every repo, in the
+[org-wide agent conventions](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-conventions.md).
+Before creating or copying a repo-local skill, consult the
+[shared agent skills](https://github.com/qwts/playbook-engineering/blob/main/skills/README.md)
+index. Reuse a shared skill when it fits; only a skill genuinely specific
+to this repository belongs in its local context.
+This repository is governed by
+[playbook-engineering](https://github.com/qwts/playbook-engineering) — its
+[shared SOPs](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/README.md)
+and [engineering decisions](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/README.md)
+apply here by default
+([ENG-0008](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0008-shared-sop-inheritance.md):
+inherit by default, vary by explicit delta).
+<!-- governed:shared-agent-discovery:end -->
 
-**Maintenance convention:** when workflow, gates, or invariants change, update
-this file in the same PR as the change — never after the fact.
+Read `CONTRIBUTING.md` and [`docs/Contributing.md`](docs/Contributing.md).
+Keep this file as a map; depth belongs under [`docs/`](docs/README.md).
 
 ## Communication
 
@@ -59,9 +64,6 @@ this file in the same PR as the change — never after the fact.
   completion. If something genuinely blocks ready-for-review, name the blocker on
   the PR and in your summary; silence reads as abandonment. **"Ready for review"
   is the definition of done** — "pushed" and "CI is green" are not.
-- **Documentation-only work goes through a PR like any other change.** ADRs and
-  SOPs live in `docs/`; the former "wiki-only work has no PR" exemption no longer
-  applies.
 - **Commit frequently.** Small, coherent commits per meaningful slice; push
   regularly. No end-of-session mega-commits.
 - **Queue the merge yourself.** Right after `gh pr ready`, run
@@ -137,7 +139,7 @@ Machine data (EXIF, counts, sync states) renders with the `.mono-data` utility.
   [Repo Documentation Pointer Map](docs/Repo-Documentation-Pointer-Map.md) says
   which page is canonical for a given repo path. The GitHub wiki is retired; its
   pages are stubs kept only so existing links resolve
-  ([ENG-0003](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
+  ([ENG-0003](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
 - **ADR gate:** an issue labeled `adr` changes an architectural contract — do not
   start its implementation until the governing ADR in [`docs/adr/`](docs/adr/)
   reads `Status: Accepted` (precedent: ADR-0022 ↔ #483, ADR-0023 ↔ #534). The
@@ -178,7 +180,7 @@ latency; running them locally is what exhausted the owner's machine. Ask first.
 
 Gate-by-gate detail, ratchet values, the three a11y lanes, license policy,
 dependency pins and overrides, packaging checks, and the release/signing flow:
-[Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
+[Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
 
 ## Memory Guard
 
@@ -198,7 +200,7 @@ dependency pins and overrides, packaging checks, and the release/signing flow:
 - `node tools/agent-guard/arbiter.mjs status` shows the machine's limits and what
   is holding budget. `tools/agent-guard/` is governance-owned and synced — never
   edit it; fixes go to `qwts/playbook-engineering`. Reference:
-  [machine memory guard](https://github.com/qwts/playbook-engineering/blob/master/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
+  [machine memory guard](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling
 
