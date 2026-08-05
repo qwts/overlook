@@ -548,7 +548,10 @@ describe('backup engine (#105)', () => {
     assert.ok(claimed !== undefined);
     const contentHash = claimed.path.split('/').at(-1) ?? '';
     await w.store.deleteOriginal(contentHash);
-    w.ledger.setStatus('P0', 'error');
+    // repairStatus, not setStatus: restore rebuilds rows outside the ledger
+    // machine exactly like the consistency tool, and synced → error is not a
+    // machine transition.
+    w.ledger.repairStatus('P0', 'error');
 
     const restarted = new BackupEngine(w.deps);
     restarted.oweManifest();
