@@ -98,7 +98,7 @@ async function runToComplete(): Promise<HTMLElement> {
     root = createRoot(container as HTMLElement);
     root.render(
       <IntlHost>
-        <RestoreWorkflow context="onboarding" />
+        <RestoreWorkflow context="settings" />
       </IntlHost>,
     );
     await Promise.resolve();
@@ -108,7 +108,7 @@ async function runToComplete(): Promise<HTMLElement> {
   const localKeyButton = [...(container.querySelectorAll('button') ?? [])].find((button) =>
     (button.textContent ?? '').includes("Restore with this Mac's key"),
   );
-  assert.ok(localKeyButton, 'the local-key action is offered');
+  assert.ok(localKeyButton, 'the settings context offers the local-key action');
   act(() => {
     localKeyButton.click();
   });
@@ -118,6 +118,13 @@ async function runToComplete(): Promise<HTMLElement> {
   assert.ok(review, 'a valid library enables review');
   act(() => {
     review.click();
+  });
+  await flush();
+
+  const authorize = container.querySelector('input[type="checkbox"]');
+  assert.ok(authorize instanceof HTMLInputElement, 'the settings context requires replacement authorization');
+  act(() => {
+    authorize.click();
   });
   await flush();
 
