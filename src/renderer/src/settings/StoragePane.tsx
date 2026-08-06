@@ -138,7 +138,11 @@ export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore, on
             setStatusLoad({ targetId, state: 'error' });
             return;
           }
-          if (operation === 'disconnect') setDisconnectConfirmation(false);
+          if (operation === 'disconnect') {
+            setDisconnectConfirmation(false);
+            const provider = providers.find((candidate) => candidate.id === targetId);
+            if (provider !== undefined) onProviderSelection?.(provider);
+          }
           refresh();
         })
         .catch(() => {
@@ -150,7 +154,7 @@ export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore, on
           setConnectionOperation(null);
         });
     },
-    [intl, refresh, targetId],
+    [intl, onProviderSelection, providers, refresh, targetId],
   );
 
   // providerId is part of `settings`, so a connect/disconnect patch

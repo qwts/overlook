@@ -84,6 +84,7 @@ export function Shell({
   const emptyTrash = useEmptyTrash();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
+  const selectedProviderIdRef = useRef<string | null>(null);
   const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
   const [exportAllPhotos, setExportAllPhotos] = useState(false);
   const openExport = (photoIds: readonly string[]): void => {
@@ -335,7 +336,11 @@ export function Shell({
   useEffect(() => {
     const syncProvider = (selectedId: string | null): void => {
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
-        const providerId = providers.some((provider) => provider.id === selectedId) ? (selectedId ?? defaultProviderId) : defaultProviderId;
+        if (selectedId !== null) selectedProviderIdRef.current = null;
+        const presentationId = selectedId ?? selectedProviderIdRef.current;
+        const providerId = providers.some((provider) => provider.id === presentationId)
+          ? (presentationId ?? defaultProviderId)
+          : defaultProviderId;
         const descriptor = providers.find((provider) => provider.id === providerId);
         if (descriptor === undefined) {
           dispatch({ type: 'provider/set', connected: false, label: 'Cloud' });
@@ -589,6 +594,7 @@ export function Shell({
           transferEnabled={pcloudEnabled}
           onTransfer={pcloudEnabled ? () => openInterop('settings', [...state.selection]) : undefined}
           onProviderSelection={(provider) => {
+            selectedProviderIdRef.current = provider.id;
             dispatch({ type: 'provider/set', connected: false, label: provider.label });
           }}
           onClose={() => {
