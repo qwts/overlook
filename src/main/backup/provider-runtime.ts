@@ -240,9 +240,6 @@ export class ProviderRuntime {
 
   private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<AccountIdentityAttempt> {
     try {
-      if ((providerId === 'pcloud' || providerId === 'google-drive') && this.persistedAccountIdentity(providerId) !== null) {
-        return { ok: true };
-      }
       const identity = await withDeadline(provider.accountIdentity(), this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS);
       if (!this.persistAccountIdentity(providerId, identity)) {
         return { ok: false, reauthenticate: false, result: identityUnavailable(provider.label) };

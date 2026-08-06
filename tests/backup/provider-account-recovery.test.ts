@@ -33,7 +33,7 @@ function runtime(overrides: Partial<ProviderRuntimeOptions>): ProviderRuntime {
 }
 
 describe('provider account authentication recovery (#730)', () => {
-  test('revoked legacy pCloud authority is cleared and Connect falls back to OAuth', async () => {
+  test('revoked current pCloud authority is cleared and Connect falls back to OAuth', async () => {
     let browserOpens = 0;
     const providerRuntime = runtime({
       fetchImpl: () => Promise.resolve(Response.json({ result: 2000, error: 'invalid access token' })),
@@ -46,6 +46,8 @@ describe('provider account authentication recovery (#730)', () => {
       accessToken: 'revoked-token',
       apiHost: 'api.pcloud.com',
       connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '73001',
+      accountLabel: 'owner@pcloud.test',
     });
     providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-pcloud-reauth'), fault: undefined });
 
@@ -56,7 +58,7 @@ describe('provider account authentication recovery (#730)', () => {
     assert.match(result.reason ?? '', /scripted browser stop/u);
   });
 
-  test('revoked legacy Google Drive authority is cleared and Connect falls back to OAuth', async () => {
+  test('revoked current Google Drive authority is cleared and Connect falls back to OAuth', async () => {
     let browserOpens = 0;
     const providerRuntime = runtime({
       googleDriveClientId: () => 'desktop.apps.googleusercontent.com',
@@ -70,6 +72,8 @@ describe('provider account authentication recovery (#730)', () => {
       clientId: 'desktop.apps.googleusercontent.com',
       refreshToken: 'revoked-refresh-token',
       connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
     });
     providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-google-reauth'), fault: undefined });
 

@@ -21,6 +21,17 @@ const fakeSafeStorage: SafeStorageLike = {
   decryptString: (encrypted) => encrypted.toString('utf8'),
 };
 
+function providerIdentityFetch(input: string | URL | Request): Promise<Response> {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (url.startsWith('https://oauth2.googleapis.com/token')) {
+    return Promise.resolve(Response.json({ access_token: 'test-google-access', expires_in: 3600 }));
+  }
+  if (url.startsWith('https://www.googleapis.com/drive/v3/about')) {
+    return Promise.resolve(Response.json({ user: { permissionId: 'permission-1', emailAddress: 'owner@google.test' } }));
+  }
+  return Promise.resolve(Response.json({ result: 0, userid: 1001, email: 'owner@pcloud.test' }));
+}
+
 function runtime(overrides: Partial<ProviderRuntimeOptions> = {}) {
   const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-runtime-')), 'library');
   return {
@@ -35,6 +46,7 @@ function runtime(overrides: Partial<ProviderRuntimeOptions> = {}) {
       harnessEnv: (name) => (name === 'OVERLOOK_E2E' ? '1' : undefined),
       pcloudEnabled: true,
       pcloudClientId: () => 'public-test-client',
+      fetchImpl: providerIdentityFetch,
       iCloudDriveBridge: new DeterministicICloudDriveBridge(),
       ...overrides,
     }),
@@ -193,6 +205,8 @@ describe('provider runtime policy (#256)', () => {
     const root = mkdtempSync(join(tmpdir(), 'overlook-runtime-pcloud-identity-'));
     let providerId: string | null = null;
     let identityAvailable = true;
+    let accountId = 9001;
+    let accountLabel = 'owner@pcloud.test';
     const options = {
       dataDir: () => join(root, 'library'),
       providerCredentialDir: (id: string) => join(root, 'provider-auth', id),
@@ -202,7 +216,7 @@ describe('provider runtime policy (#256)', () => {
       },
       fetchImpl: (() =>
         Promise.resolve(
-          Response.json({ result: 0, userid: 9001, ...(identityAvailable ? { email: 'owner@pcloud.test' } : {}) }),
+          Response.json({ result: 0, userid: accountId, ...(identityAvailable ? { email: accountLabel } : {}) }),
         )) as typeof fetch,
     };
     const first = runtime(options).runtime;
@@ -219,6 +233,17 @@ describe('provider runtime policy (#256)', () => {
     restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
     assert.equal(restarted.activeId(), 'pcloud');
     assert.equal((await restarted.status('pcloud')).accountLabel, 'owner@pcloud.test');
+
+    accountId = 9002;
+    accountLabel = 'replacement@pcloud.test';
+    assert.deepEqual(await restarted.connect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(restarted.tokenStore().load(), {
+      accessToken: 'provisional-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '9002',
+      accountLabel: 'replacement@pcloud.test',
+    });
 
     providerId = null;
     identityAvailable = false;
