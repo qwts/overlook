@@ -92,6 +92,7 @@ export function StoragePane({
   const [connectError, setConnectError] = useState<string | null>(null);
   const statusRequestRef = useRef(0);
   const storageRequestRef = useRef(0);
+  const providerCatalogRequestRef = useRef(0);
   const operationRef = useRef<ConnectionOperation | null>(null);
 
   const loadCapacity = useCallback((providerId: string) => {
@@ -169,10 +170,16 @@ export function StoragePane({
   // providerId is part of `settings`, so a connect/disconnect patch
   // re-renders this pane and the effect refetches the card's truth.
   useEffect(() => {
+    const request = providerCatalogRequestRef.current + 1;
+    providerCatalogRequestRef.current = request;
     void window.overlook.backup.providers().then(({ providers: loaded, defaultProviderId }) => {
+      if (providerCatalogRequestRef.current !== request) return;
       setProviders(loaded);
       setTargetId((current) => resolveProviderTargetId(loaded, settings.providerId, current, preferredProviderId, defaultProviderId));
     });
+    return () => {
+      providerCatalogRequestRef.current += 1;
+    };
   }, [preferredProviderId, settings.providerId]);
 
   useEffect(() => {

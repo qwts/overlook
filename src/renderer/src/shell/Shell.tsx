@@ -342,25 +342,44 @@ export function Shell({
       providerStatusRequestRef.current = request;
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
         if (providerStatusRequestRef.current !== request) return;
-        const presentationId = selectedProviderId ?? selectedId;
-        const providerId = providers.some((provider) => provider.id === presentationId)
-          ? (presentationId ?? defaultProviderId)
-          : defaultProviderId;
-        const descriptor = providers.find((provider) => provider.id === providerId);
-        if (descriptor === undefined) {
-          dispatch({ type: 'provider/set', connected: false, label: 'Cloud' });
+        const preferred = providers.find((provider) => provider.id === selectedProviderId);
+        const persisted = providers.find((provider) => provider.id === selectedId);
+        const fallback = providers.find((provider) => provider.id === defaultProviderId);
+        const publish = (descriptor: (typeof providers)[number] | undefined): void => {
+          if (descriptor === undefined) {
+            dispatch({ type: 'provider/set', connected: false, label: 'Cloud' });
+            return;
+          }
+          void window.overlook.backup
+            .providerStatus({ providerId: descriptor.id })
+            .then(({ connected, provider }) => {
+              if (providerStatusRequestRef.current !== request) return;
+              dispatch({ type: 'provider/set', connected, label: provider.label });
+            })
+            .catch(() => {
+              if (providerStatusRequestRef.current !== request) return;
+              dispatch({ type: 'provider/set', connected: false, label: descriptor.label });
+            });
+        };
+        if (preferred !== undefined && persisted !== undefined && preferred.id !== persisted.id) {
+          void window.overlook.backup
+            .providerStatus({ providerId: persisted.id })
+            .then(({ connected, provider }) => {
+              if (providerStatusRequestRef.current !== request) return;
+              if (connected) {
+                setSelectedProviderId(null);
+                dispatch({ type: 'provider/set', connected: true, label: provider.label });
+                return;
+              }
+              publish(preferred);
+            })
+            .catch(() => {
+              if (providerStatusRequestRef.current !== request) return;
+              publish(preferred);
+            });
           return;
         }
-        void window.overlook.backup
-          .providerStatus({ providerId })
-          .then(({ connected, provider }) => {
-            if (providerStatusRequestRef.current !== request) return;
-            dispatch({ type: 'provider/set', connected, label: provider.label });
-          })
-          .catch(() => {
-            if (providerStatusRequestRef.current !== request) return;
-            dispatch({ type: 'provider/set', connected: false, label: descriptor.label });
-          });
+        publish(preferred ?? persisted ?? fallback);
       });
     };
     void window.overlook.settings.get().then(({ settings }) => {

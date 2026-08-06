@@ -10,7 +10,7 @@ export function resolveProviderTargetId(
   // A preferred/retained target is an explicit disconnected selection. It
   // must outrank a persisted provider whose authorization may have expired;
   // a successful connection persists the same target, so the values converge.
-  for (const candidate of [preferredId, retainedId, persistedId, defaultId]) {
+  for (const candidate of [preferredId, persistedId, retainedId, defaultId]) {
     if (candidate !== null && providers.some((provider) => provider.id === candidate)) return candidate;
   }
   return null;
