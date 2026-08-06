@@ -92,7 +92,8 @@ export interface OffloadDeps {
    * fallback target while disconnected, so authState alone is insufficient. */
   readonly providerConnected: () => boolean;
   /** Captures the verified backup target before local custody is removed. */
-  readonly offloadAuthority: () => Promise<number>;
+  readonly offloadAuthority: (bytes: number) => Promise<number>;
+  readonly custodyChanged: () => void;
   /** Sole-remote reads resolve from row provenance, never provider selection. */
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: SyncLedger;
@@ -164,7 +165,7 @@ export class OffloadService {
       }
       let authorityId: number;
       try {
-        authorityId = await this.deps.offloadAuthority();
+        authorityId = await this.deps.offloadAuthority(photo.bytes);
       } catch (error) {
         failed += 1;
         results.push({ photoId, outcome: 'failed', reason: 'remote-unverified' });
@@ -180,6 +181,7 @@ export class OffloadService {
       } catch (error) {
         try {
           this.deps.ledger.setStatus(photoId, 'synced');
+          this.deps.custodyChanged();
         } catch (rollbackError) {
           this.deps.audit(
             `OFFLOAD-FAIL photo=${photoId} stage=rollback reason=${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
@@ -190,6 +192,7 @@ export class OffloadService {
         this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=delete reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
+      this.deps.custodyChanged();
       this.deps.audit(`OFFLOAD photo=${photoId} bytes=${String(photo.bytes)}`);
       offloaded += 1;
       freedBytes += photo.bytes;
@@ -325,6 +328,7 @@ export class OffloadService {
       });
     }
     this.deps.ledger.setStatus(photoId, 'synced');
+    this.deps.custodyChanged();
     this.deps.audit(`REHYDRATE-OK photo=${photoId}`);
   }
 

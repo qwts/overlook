@@ -100,7 +100,6 @@ function installStub(options?: {
       return () => listeners.delete(listener);
     },
   };
-  const embeddingApi = createEmbeddingStoryController().api;
   const initialProviderStatus =
     options?.deferInitialProviderStatus === true
       ? new Promise<void>((resolve) => {
@@ -214,6 +213,7 @@ function installStub(options?: {
       apply({ providerId: null });
       return { ok: true, reason: null };
     },
+    removeAuthorizationAnyway: () => Promise.resolve({ ok: true, reason: null }),
     openCapacitySettings: () => Promise.resolve({ ok: true }),
   };
   const keysApi = {
@@ -394,7 +394,7 @@ function installStub(options?: {
   };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     settings: settingsApi,
-    embedding: embeddingApi,
+    embedding: createEmbeddingStoryController().api,
     backup: backupApi,
     keys: keysApi,
     restore: restoreApi,

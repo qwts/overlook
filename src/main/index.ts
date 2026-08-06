@@ -364,6 +364,7 @@ function getProviderRuntime(): ProviderRuntime {
     // Only an ALREADY-OPEN library's parts — never requireParts, which would
     // bootstrap an empty library into a fresh onboarding-restore profile.
     guardParts: () => libraryParts ?? null,
+    libraryRegistry: registryRuntime,
   });
   return providerRuntime;
 }
@@ -465,6 +466,10 @@ function getBackupEngine(): BackupEngine {
       backupTargetConnected: () => getProviderRuntime().activeId() !== null,
       status: (photoId) => ledger.status(photoId),
       now: () => new Date().toISOString(),
+      writeCustodyHints: (hints) => {
+        registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
+      },
+      audit,
     });
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
@@ -529,6 +534,7 @@ function getBackupEngine(): BackupEngine {
       connected: () => getProviderRuntime().activeId() !== null,
       offloadAuthority: custodyRouting.offloadAuthority,
       custody: custodyRouting.resolver,
+      custodyChanged: custodyRouting.custodyChanged,
       ledger,
       repo,
       blobs: parts.blobStore,
@@ -549,6 +555,7 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobStore: parts.blobStore,
       remoteProvider: custodyRouting.remoteProvider,
+      custodyChanged: custodyRouting.custodyChanged,
       // Purging changes manifestSnapshot() — same owed-generation rule (and
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
@@ -722,9 +729,6 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   releaseLibraryLock = undefined;
 }
 
-const closeLibraryForRestore = (): Promise<void> => closeLibrary('restore');
-const closeLibraryForLock = (): Promise<void> => closeLibrary('lock');
-
 // Live switch (#385) + relocation (#483): see library/switch-runtime.ts,
 // library/relocation-runtime.ts, and library-lifecycle-wiring.ts for the
 // contracts — both runtimes are built from this one deps bag.
@@ -770,7 +774,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
         releasedMaster = undefined;
       }
     },
-    closeAuthorized: closeLibraryForLock,
+    closeAuthorized: () => closeLibrary('lock'),
     failClosed: relaunchLocked,
   });
 }
@@ -794,7 +798,7 @@ function getRestoreRuntime(): RestoreRuntime {
     progress: createEmitter(events.restoreProgress, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     }),
-    beforeActivate: closeLibraryForRestore,
+    beforeActivate: () => closeLibrary('restore'),
     harnessEnv,
     workChanged: changeProviderWork,
   });
@@ -897,7 +901,7 @@ if (!productionInterop.nativeHostRequested) {
   registerQuitTeardown({
     isLibraryOpen: () => libraryService !== undefined,
     lockState: () => appLockHost?.snapshot().state,
-    close: closeLibraryForLock,
+    close: () => closeLibrary('lock'),
   });
 }
 

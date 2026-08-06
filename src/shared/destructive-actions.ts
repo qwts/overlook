@@ -67,6 +67,13 @@ export const destructiveActions = {
     label: 'Disconnect provider',
     survival: 'Local photos and existing provider copies remain.',
   },
+  removeProviderAuthorizationAnyway: {
+    id: 'provider.remove-authorization-anyway',
+    tier: 'structural',
+    label: 'Remove authorization anyway',
+    authorization: 'provider.remove-authorization-anyway.v1',
+    survival: 'Provider copies remain, but cloud-only originals require reconnecting the same provider account.',
+  },
   clearDiagnostics: {
     id: 'diagnostics.clear',
     tier: 'structural',
@@ -83,3 +90,4 @@ export const destructiveActions = {
 
 export const PHOTO_PURGE_AUTHORIZATION = destructiveActions.deletePhotosPermanently.authorization;
 export const ORIGINAL_DELETE_AUTHORIZATION = destructiveActions.deleteProtectedOriginals.authorization;
+export const PROVIDER_AUTHORIZATION_REMOVAL = destructiveActions.removeProviderAuthorizationAnyway.authorization;

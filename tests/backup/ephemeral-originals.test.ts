@@ -82,6 +82,7 @@ async function world(
         return { authority: AUTHORITY, provider };
       },
     },
+    custodyChanged: () => undefined,
     ledger: {
       status: (id) => statuses.get(id),
       setStatus: (id, status) => statuses.set(id, status),

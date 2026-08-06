@@ -45,6 +45,7 @@ export interface PurgeDeps {
   };
   /** Captures the row's source authority before purge cascades provenance. */
   readonly remoteProvider: (photoId: string) => Promise<StorageProvider>;
+  readonly custodyChanged: () => void;
   /** Purging changes manifestSnapshot() — the remote is owed a generation. */
   readonly oweManifest: () => void;
   readonly libraryChanged: (photoIds: readonly string[]) => void;
@@ -127,6 +128,7 @@ export class PurgeService {
       changed.push(photoId);
     }
     if (changed.length > 0) {
+      this.deps.custodyChanged();
       // The purged rows left manifestSnapshot() with nothing dirty — the host
       // owes (and quietly pushes) a fresh generation, like soft delete.
       this.deps.oweManifest();

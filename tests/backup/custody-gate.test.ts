@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import type { SoleCustodyCount } from '../../src/main/backup/custody-authority-repository.js';
-import { CustodyGate } from '../../src/main/backup/custody-gate.js';
+import { CustodyGate, CustodyHintCoordinator, custodyHintPreflight } from '../../src/main/backup/custody-gate.js';
 import type { LibraryEntry } from '../../src/shared/library/registry.js';
 
 const credential = { providerId: 'pcloud', accountId: '42' };
@@ -70,5 +70,30 @@ describe('custody-gated provider changes (#732)', () => {
       libraries: () => [active],
     });
     assert.deepEqual(gate.preflight(credential), { credential, totalItems: 0, totalBytes: 0, libraries: [] });
+  });
+
+  test('writes a conservative prospective hint before binding and clears it only from an exact recount', () => {
+    let counts: readonly SoleCustodyCount[] = [count('42', 2, 200)];
+    const writes: LibraryEntry['custodyHints'][] = [];
+    const coordinator = new CustodyHintCoordinator({
+      authorities: { soleCustodyCounts: () => counts },
+      write: (hints) => writes.push(hints),
+    });
+
+    coordinator.beforeBinding(credential, 75);
+    assert.deepEqual(writes.at(-1), [{ providerId: 'pcloud', accountId: '42', soleCustodyItems: 3, soleCustodyBytes: 275 }]);
+    counts = [];
+    coordinator.refresh();
+    assert.deepEqual(writes.at(-1), []);
+  });
+
+  test('sealed active libraries remain fail-closed from registry hints', () => {
+    const sealed = library('sealed', 'Sealed', [{ providerId: 'pcloud', accountId: '42', soleCustodyItems: 3, soleCustodyBytes: 300 }]);
+    assert.deepEqual(custodyHintPreflight(credential, [sealed]), {
+      credential,
+      totalItems: 3,
+      totalBytes: 300,
+      libraries: [{ libraryId: 'sealed', name: 'Sealed', items: 3, bytes: 300, legacyUnbound: false }],
+    });
   });
 });

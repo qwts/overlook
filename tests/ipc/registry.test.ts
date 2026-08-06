@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { channels, events } from '../../src/shared/ipc/channels.js';
 import { createEmitter, createInvoker, createSubscriber, IpcRemoteError, wrapHandler } from '../../src/shared/ipc/registry.js';
-import { PHOTO_PURGE_AUTHORIZATION } from '../../src/shared/destructive-actions.js';
+import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../../src/shared/destructive-actions.js';
 
 describe('channel registry', () => {
   test('channel and event names are unique', () => {
@@ -149,6 +149,20 @@ describe('channel registry', () => {
       photoIds: ['P1'],
       authorization: PHOTO_PURGE_AUTHORIZATION,
     });
+  });
+
+  test('emergency provider removal requires its ADR-0023 risk acknowledgement (#732)', () => {
+    assert.throws(() => channels.backupRemoveAuthorizationAnyway.request.parse({ providerId: 'pcloud' }));
+    assert.throws(() =>
+      channels.backupRemoveAuthorizationAnyway.request.parse({ providerId: 'pcloud', authorization: 'stale-confirmation' }),
+    );
+    assert.deepEqual(
+      channels.backupRemoveAuthorizationAnyway.request.parse({
+        providerId: 'pcloud',
+        authorization: PROVIDER_AUTHORIZATION_REMOVAL,
+      }),
+      { providerId: 'pcloud', authorization: PROVIDER_AUTHORIZATION_REMOVAL },
+    );
   });
 });
 

@@ -85,6 +85,7 @@ describe('custody composition factories (#484)', () => {
       repo: w.repo,
       blobStore: w.store,
       remoteProvider: () => Promise.resolve(w.provider),
+      custodyChanged: () => undefined,
       oweManifest: () => undefined,
       libraryChanged: () => undefined,
       audit: (line) => audits.push(line),

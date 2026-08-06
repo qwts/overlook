@@ -100,6 +100,8 @@ describe('custody authority provenance (#729)', () => {
     assert.equal(authorities.forPhoto('A'), undefined);
     assert.deepEqual(authorities.offloadedAuthorities(), []);
     assert.equal(authorities.soleCustodyCounts().length, 0, 'durable verified local bytes clear the binding atomically');
+    authorities.deleteUnreferenced('pcloud', '42');
+    assert.equal(authorities.get(authority.id), undefined, 'ordinary disconnect can remove unreferenced authority metadata');
   });
 
   test('legacy unbound offloaded rows are counted separately and never assigned to a new authority', () => {

@@ -226,4 +226,19 @@ export class CustodyAuthorityRepository {
   providerRequirements(): readonly SoleCustodyCount[] {
     return this.soleCustodyCounts().filter(({ authority }) => authority.state === 'provider-required');
   }
+
+  /** Ordinary disconnect removes only authority metadata that no ledger row
+   * references. Remote objects and referenced provenance are untouched. */
+  deleteUnreferenced(providerId: string, accountId: string): void {
+    run(
+      this.db,
+      `DELETE FROM custody_authorities
+        WHERE provider_id = ? AND account_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM sync_ledger l WHERE l.custody_authority_id = custody_authorities.id
+          )`,
+      providerId,
+      accountId,
+    );
+  }
 }
