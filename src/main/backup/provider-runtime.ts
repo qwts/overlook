@@ -286,6 +286,9 @@ export class ProviderRuntime {
     provider: StorageProvider,
     attempt: Extract<AccountIdentityAttempt, { readonly ok: true }>,
   ): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before switching providers.' };
+    }
     const iCloudProvider = provider instanceof ICloudDriveProvider ? provider : null;
     if (attempt.requiresSwitchGuard && this.options.providerId() === providerId) {
       this.options.setProviderId(null);
@@ -484,6 +487,9 @@ export class ProviderRuntime {
       const custody = this.options.custodyPreflight?.(credential);
       if (custody !== undefined && custody.totalItems !== 0) return restoreRequired(custody);
     }
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
+    }
     const result = this.disconnectAuthorization(providerId);
     if (result.ok && credential !== null) this.options.deleteUnreferencedAuthorities?.(credential);
     return result;
@@ -518,6 +524,9 @@ export class ProviderRuntime {
     const credential = await this.custodyCredential(providerId);
     if (credential === null) {
       return custodyUnavailable('Could not verify which provider account is being removed.');
+    }
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
     }
     this.options.markProviderRequired?.(credential);
     return this.disconnectAuthorization(providerId);
