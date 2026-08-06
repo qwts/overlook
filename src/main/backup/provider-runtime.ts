@@ -245,7 +245,11 @@ export class ProviderRuntime {
         this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS,
       );
       if (!this.persistAccountIdentity(providerId, identity)) {
-        return { ok: false, reauthenticate: false, result: identityUnavailable(provider.label) };
+        return {
+          ok: false,
+          reauthenticate: false,
+          result: providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label),
+        };
       }
       if (provider instanceof ICloudDriveProvider) provider.resetAccountAuthority(identity.accountId);
       return { ok: true };
@@ -412,13 +416,6 @@ export class ProviderRuntime {
       if (!status.available || status.accountToken === null) {
         return { ok: false, reason: iCloudUnavailableCopy(status.reason ?? 'native-unavailable') };
       }
-      try {
-        const identity = { accountId: status.accountToken, accountLabel: status.accountLabel ?? 'iCloud account' };
-        if (!this.persistAccountIdentity('icloud-drive', identity)) return iCloudAuthoritySaveFailure();
-      } catch {
-        return iCloudAuthoritySaveFailure();
-      }
-      provider.resetAccountAuthority(status.accountToken);
     }
     if (provider instanceof FaultInjectingProvider) {
       provider.disarm('auth-expired');
