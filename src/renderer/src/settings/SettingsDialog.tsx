@@ -11,6 +11,7 @@ import { StoragePane } from './StoragePane';
 import { RestoreWorkflow } from '../restore/RestoreWorkflow';
 import { AppPasswordDialog, type AppPasswordMode } from './AppPasswordDialog';
 import type { AppSettings, SettingsPatch } from '../../../shared/settings/settings.js';
+import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
 import { TransferPane } from './TransferPane.js';
 
 import './settings.css';
@@ -29,6 +30,8 @@ export interface SettingsDialogProps {
   readonly onTransfer?: (() => void) | undefined;
   readonly transferEnabled?: boolean | undefined;
   readonly requestedSection?: SettingsSection | undefined;
+  readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
+  readonly preferredProviderId?: string | null | undefined;
 }
 
 const messages = defineMessages({
@@ -55,6 +58,8 @@ export function SettingsDialog({
   onTransfer,
   transferEnabled = false,
   requestedSection,
+  onProviderSelection,
+  preferredProviderId,
 }: SettingsDialogProps): ReactElement | null {
   const intl = useIntl();
   const [section, setSection] = useState<SettingsSection>(
@@ -201,7 +206,14 @@ export function SettingsDialog({
           {settings === null ? null : activeSection === 'general' ? (
             <GeneralPane settings={settings} onPatch={patch} />
           ) : activeSection === 'storage' ? (
-            <StoragePane settings={settings} selectedPhotoIds={selectedPhotoIds} onPatch={patch} onRestore={() => setRestoreOpen(true)} />
+            <StoragePane
+              settings={settings}
+              selectedPhotoIds={selectedPhotoIds}
+              onPatch={patch}
+              onRestore={() => setRestoreOpen(true)}
+              onProviderSelection={onProviderSelection}
+              preferredProviderId={preferredProviderId}
+            />
           ) : activeSection === 'transfer' && transferEnabled ? (
             <TransferPane onOpen={onTransfer} />
           ) : (
