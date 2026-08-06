@@ -1,4 +1,5 @@
 import { ProviderError, type StorageProvider } from '../backup/provider.js';
+import { CustodyResolutionError } from '../backup/custody-handle.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 import { trashRetentionDays, type TrashRetention } from '../../shared/library/trash.js';
 
@@ -42,8 +43,8 @@ export interface PurgeDeps {
     /** Removes the photo's whole companion set (#484). */
     readonly deleteSidecars: (photoId: string) => Promise<void>;
   };
-  readonly provider: StorageProvider;
-  readonly connected: () => boolean;
+  /** Captures the row's source authority before purge cascades provenance. */
+  readonly remoteProvider: (photoId: string) => Promise<StorageProvider>;
   /** Purging changes manifestSnapshot() — the remote is owed a generation. */
   readonly oweManifest: () => void;
   readonly libraryChanged: (photoIds: readonly string[]) => void;
@@ -95,6 +96,13 @@ export class PurgeService {
       // CASCADEs the companion rows away, deleted with the photo, and a
       // failed remote delete stays visible via the same audited counter.
       const sidecarHashes = this.deps.repo.sidecarHashesForPhoto(photoId);
+      let remoteProvider: StorageProvider | undefined;
+      let remoteFailureReason: string | null = null;
+      try {
+        remoteProvider = await this.deps.remoteProvider(photoId);
+      } catch (error) {
+        remoteFailureReason = error instanceof CustodyResolutionError ? error.reason : 'custody-unavailable';
+      }
       if (authorized) this.deps.repo.purgeRowAuthorized(photoId);
       else this.deps.repo.purgeRow(photoId);
       // Content-addressed blobs may back other rows (deleted twins count —
@@ -102,11 +110,17 @@ export class PurgeService {
       if (this.deps.repo.countAnyByContentHash(photo.contentHash) === 0) {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
         await this.deps.blobs.deleteThumbs(photo.contentHash);
-        remoteFailures += await this.deleteRemote(photoId, photo.contentHash, blobPath(photo.contentHash));
+        remoteFailures += await this.deleteRemote(
+          photoId,
+          photo.contentHash,
+          blobPath(photo.contentHash),
+          remoteProvider,
+          remoteFailureReason,
+        );
       }
       await this.deps.blobs.deleteSidecars(photoId);
       for (const hash of sidecarHashes) {
-        remoteFailures += await this.deleteRemote(photoId, hash, `sidecars/${photoId}/${hash}`);
+        remoteFailures += await this.deleteRemote(photoId, hash, `sidecars/${photoId}/${hash}`, remoteProvider, remoteFailureReason);
       }
       this.deps.audit(`PURGE photo=${photoId} bytes=${String(photo.bytes)}`);
       purged += 1;
@@ -138,14 +152,22 @@ export class PurgeService {
   /** Remote last, tolerated: 'not-found' is success (already gone),
    * transient errors retry with backoff, a final failure is audited as an
    * orphan for M11's audits — the local state never lies either way. */
-  private async deleteRemote(photoId: string, contentHash: string, remotePath: string): Promise<0 | 1> {
-    if (!this.deps.connected()) {
-      this.deps.audit(`ORPHAN-REMOTE photo=${photoId} hash=${contentHash} path=${remotePath} reason=disconnected`);
+  private async deleteRemote(
+    photoId: string,
+    contentHash: string,
+    remotePath: string,
+    provider: StorageProvider | undefined,
+    failureReason: string | null,
+  ): Promise<0 | 1> {
+    if (provider === undefined) {
+      this.deps.audit(
+        `ORPHAN-REMOTE photo=${photoId} hash=${contentHash} path=${remotePath} reason=${failureReason ?? 'custody-unavailable'}`,
+      );
       return 1;
     }
     for (let attempt = 1; attempt <= REMOTE_ATTEMPTS; attempt += 1) {
       try {
-        await this.deps.provider.delete(remotePath);
+        await provider.delete(remotePath);
         return 0;
       } catch (error) {
         if (error instanceof ProviderError && error.kind === 'not-found') {

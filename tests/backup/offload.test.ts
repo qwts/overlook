@@ -11,6 +11,8 @@ import { buffer } from 'node:stream/consumers';
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, type BackupEngineDeps } from '../../src/main/backup/backup-engine.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
+import { CustodyAuthorityRepository } from '../../src/main/backup/custody-authority-repository.js';
+import { CustodyHandleResolver, custodyRemoteRoot } from '../../src/main/backup/custody-handle.js';
 import { OffloadService, RehydrateError } from '../../src/main/backup/offload.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -63,6 +65,13 @@ async function world(count: number, providerConnected = true) {
   }
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-remote-')) });
   const ledger = new SyncLedger(db);
+  const authorities = new CustodyAuthorityRepository(db);
+  const remoteRoot = custodyRemoteRoot('01JZZZZZZZZZZZZZZZZZZZZZZZ');
+  const custody = new CustodyHandleResolver({
+    authorityForPhoto: (photoId) => authorities.forPhoto(photoId),
+    provider: (providerId) => (providerId === provider.id ? provider : undefined),
+    remoteRoot: () => remoteRoot,
+  });
   const audits: string[] = [];
   const engineDeps: BackupEngineDeps = {
     provider,
@@ -89,6 +98,17 @@ async function world(count: number, providerConnected = true) {
   const service = new OffloadService({
     provider,
     providerConnected: () => providerConnected,
+    offloadAuthority: async () => {
+      const identity = await provider.accountIdentity();
+      return authorities.create({
+        providerId: provider.id,
+        accountId: identity.accountId,
+        accountLabel: identity.accountLabel,
+        remoteRoot,
+        createdAt: '2026-07-13T03:00:00.000Z',
+      }).id;
+    },
+    custody,
     ledger,
     repo: {
       get: (id) => repo.get(id),
@@ -111,6 +131,7 @@ async function world(count: number, providerConnected = true) {
     repo,
     store,
     provider,
+    authorities,
     ledger,
     key,
     plaintexts,
@@ -128,6 +149,11 @@ describe('offload + rehydrate (#107)', () => {
     await w.engine.run();
     const photo = w.repo.get('P0');
     assert.notEqual(photo, undefined);
+    const deleteOriginal = w.store.deleteOriginal.bind(w.store);
+    w.store.deleteOriginal = async (hash) => {
+      assert.notEqual(w.authorities.forPhoto('P0'), undefined, 'the binding is durable before local deletion starts');
+      await deleteOriginal(hash);
+    };
 
     const summary = await w.service.offload(['P0']);
     assert.deepEqual({ offloaded: summary.offloaded, skipped: summary.skipped }, { offloaded: 1, skipped: 0 });
@@ -135,6 +161,7 @@ describe('offload + rehydrate (#107)', () => {
     assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'offloaded', reason: null }]);
     assert.equal(summary.freedBytes, photo?.bytes);
     assert.equal(w.ledger.status('P0'), 'offloaded');
+    assert.equal(w.authorities.forPhoto('P0')?.accountId, 'mock-account', 'sole-remote state records the verified account');
     assert.equal(w.store.hasOriginal(photo?.contentHash ?? ''), false, 'original evicted');
     // Thumbs stay: the grid keeps browsing offline (ADR-0007).
     const thumb = await buffer(w.store.getThumbStream(photo?.contentHash ?? '', 'thumb', () => w.key.key, 'P0'));
@@ -252,6 +279,7 @@ describe('offload + rehydrate (#107)', () => {
     ]);
     assert.equal(w.store.hasOriginal(failedHash ?? ''), true);
     assert.equal(w.ledger.status('P0'), 'synced');
+    assert.equal(w.authorities.forPhoto('P0'), undefined, 'a failed eviction rolls back its pending custody binding');
     assert.equal(w.ledger.status('P1'), 'offloaded');
   });
 
@@ -337,7 +365,26 @@ describe('offload + rehydrate (#107)', () => {
     await w.service.offload(['P0']);
     w.provider.setConnected(false);
     const summary = await w.service.restoreOriginals(['P0']);
-    assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'failed', reason: 'provider-disconnected' }]);
+    assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'failed', reason: 'custody-disconnected' }]);
+    assert.equal(w.ledger.status('P0'), 'offloaded');
+  });
+
+  test('a different account receives no restore read for a bound row (#731)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    await w.service.offload(['P0']);
+    let reads = 0;
+    const getStream = w.provider.getStream.bind(w.provider);
+    w.provider.getStream = (path) => {
+      reads += 1;
+      return getStream(path);
+    };
+    w.provider.setAccountIdentity({ accountId: 'different-account', accountLabel: 'other@example.test' });
+
+    assert.deepEqual((await w.service.restoreOriginals(['P0'])).results, [
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-wrong-account' },
+    ]);
+    assert.equal(reads, 0);
     assert.equal(w.ledger.status('P0'), 'offloaded');
   });
 
@@ -347,7 +394,7 @@ describe('offload + rehydrate (#107)', () => {
     await expired.service.offload(['P0']);
     expired.provider.authState = () => Promise.resolve('expired');
     assert.deepEqual((await expired.service.restoreOriginals(['P0'])).results, [
-      { photoId: 'P0', outcome: 'failed', reason: 'provider-expired' },
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-unavailable' },
     ]);
     assert.equal(expired.ledger.status('P0'), 'offloaded');
 
@@ -356,7 +403,7 @@ describe('offload + rehydrate (#107)', () => {
     await offline.service.offload(['P0']);
     offline.provider.authState = () => Promise.reject(new Error('offline'));
     assert.deepEqual((await offline.service.restoreOriginals(['P0'])).results, [
-      { photoId: 'P0', outcome: 'failed', reason: 'provider-offline' },
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-unavailable' },
     ]);
     assert.equal(offline.ledger.status('P0'), 'offloaded');
   });

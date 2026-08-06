@@ -8,13 +8,26 @@ import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 
 import { EphemeralOriginalError, EphemeralOriginalService } from '../../src/main/backup/ephemeral-originals.js';
+import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
+import type { ProviderAuthState } from '../../src/main/backup/provider.js';
+import type { CustodyAuthority } from '../../src/main/backup/custody-authority-repository.js';
 import type { SyncStatus } from '../../src/shared/library/types.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
 const HASH_C = 'c'.repeat(64);
+const AUTHORITY: CustodyAuthority = {
+  id: 1,
+  providerId: 'mock',
+  accountId: 'mock-account',
+  accountLabel: 'Mock account',
+  remoteRoot: '/Overlook/mock-library/',
+  state: 'bound',
+  createdAt: '2026-08-06T00:00:00.000Z',
+  lastVerifiedAt: null,
+};
 
 async function world(
   options: {
@@ -55,8 +68,20 @@ async function world(
   let policy = options.policy ?? true;
   let providerConnected = true;
   const service = new EphemeralOriginalService({
-    provider,
-    providerConnected: () => providerConnected,
+    custody: {
+      resolve: async () => {
+        if (!providerConnected) throw new CustodyResolutionError('custody-disconnected');
+        let state: ProviderAuthState;
+        try {
+          state = await provider.authState();
+        } catch {
+          throw new CustodyResolutionError('custody-unavailable');
+        }
+        if (state === 'not-connected') throw new CustodyResolutionError('custody-disconnected');
+        if (state !== 'connected') throw new CustodyResolutionError('custody-unavailable');
+        return { authority: AUTHORITY, provider };
+      },
+    },
     ledger: {
       status: (id) => statuses.get(id),
       setStatus: (id, status) => statuses.set(id, status),
@@ -244,28 +269,28 @@ describe('ephemeral originals (#306)', () => {
     disconnected.setProviderConnected(false);
     await assert.rejects(
       disconnected.service.open('P0', 'view'),
-      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'provider-unavailable',
+      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'custody-disconnected',
     );
 
     const expired = await world();
     expired.provider.authState = () => Promise.resolve('expired');
     await assert.rejects(
       expired.service.open('P0', 'view'),
-      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'provider-unavailable',
+      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'custody-unavailable',
     );
 
     const offline = await world();
     offline.provider.authState = () => Promise.reject(new Error('network offline'));
     await assert.rejects(
       offline.service.open('P0', 'view'),
-      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'provider-unavailable',
+      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'custody-unavailable',
     );
 
     const transient = await world();
     transient.provider.getStream = () => Promise.reject(new ProviderError('connection reset', 'transient'));
     await assert.rejects(
       transient.service.open('P0', 'view'),
-      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'provider-unavailable',
+      (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'custody-unavailable',
     );
 
     const corrupt = await world({ stageError: new Error('authentication failed') });

@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
+import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js';
 import { PurgeService } from '../../src/main/library/purge-service.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
@@ -65,7 +66,6 @@ async function world(count: number, options: { contentHash?: string; retention?:
   const audits: string[] = [];
   const owed: number[] = [];
   const changed: string[][] = [];
-  const connected = true;
   const service = new PurgeService({
     repo: {
       getDeleted: (id) => repo.getDeleted(id),
@@ -85,8 +85,10 @@ async function world(count: number, options: { contentHash?: string; retention?:
       deleteThumbs: async (hash) => store.deleteThumbs(hash),
       deleteSidecars: async (photoId) => store.deleteSidecars(photoId),
     },
-    provider,
-    connected: () => connected,
+    remoteProvider: async () => {
+      if ((await provider.authState()) !== 'connected') throw new CustodyResolutionError('custody-disconnected');
+      return provider;
+    },
     oweManifest: () => owed.push(1),
     libraryChanged: (ids) => changed.push([...ids]),
     audit: (line) => audits.push(line),

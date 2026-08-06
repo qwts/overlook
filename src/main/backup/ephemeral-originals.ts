@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 
-import { ProviderError, type StorageProvider } from './provider.js';
+import { CustodyResolutionError, type CustodyHandle, type CustodyHandleResolver } from './custody-handle.js';
+import { ProviderError } from './provider.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 
 export type OriginalPurpose = 'view' | 'prefetch' | 'export';
@@ -12,15 +13,22 @@ export class EphemeralOriginalError extends Error {
 
   constructor(
     message: string,
-    readonly reason: 'not-found' | 'not-offloaded' | 'provider-unavailable' | 'remote-missing' | 'verify-failed' | 'cache-full',
+    readonly reason:
+      | 'not-found'
+      | 'not-offloaded'
+      | 'custody-disconnected'
+      | 'custody-wrong-account'
+      | 'custody-unavailable'
+      | 'remote-missing'
+      | 'verify-failed'
+      | 'cache-full',
   ) {
     super(message);
   }
 }
 
 export interface EphemeralOriginalDeps {
-  readonly provider: StorageProvider;
-  readonly providerConnected: () => boolean;
+  readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: {
     readonly status: (photoId: string) => SyncStatus | undefined;
     readonly setStatus: (photoId: string, status: SyncStatus) => void;
@@ -186,14 +194,22 @@ export class EphemeralOriginalService {
     let staged = false;
     let published = false;
     try {
-      await this.assertProviderAvailable();
+      let custody: CustodyHandle;
+      try {
+        custody = await this.deps.custody.resolve(photoId);
+      } catch (error) {
+        if (error instanceof CustodyResolutionError) {
+          throw new EphemeralOriginalError(error.message, error.reason);
+        }
+        throw new EphemeralOriginalError('custody is unavailable', 'custody-unavailable');
+      }
       let ciphertext: Readable;
       try {
-        ciphertext = await this.deps.provider.getStream(remotePath(contentHash));
+        ciphertext = await custody.provider.getStream(remotePath(contentHash));
       } catch (error) {
         throw new EphemeralOriginalError(
           error instanceof Error ? error.message : 'remote original unavailable',
-          error instanceof ProviderError && error.kind === 'not-found' ? 'remote-missing' : 'provider-unavailable',
+          error instanceof ProviderError && error.kind === 'not-found' ? 'remote-missing' : 'custody-unavailable',
         );
       }
       this.changeState(photoId, 'verifying');
@@ -222,18 +238,6 @@ export class EphemeralOriginalService {
       throw error;
     } finally {
       this.deps.workChanged(-1);
-    }
-  }
-
-  private async assertProviderAvailable(): Promise<void> {
-    if (!this.deps.providerConnected()) throw new EphemeralOriginalError('provider is disconnected', 'provider-unavailable');
-    try {
-      if ((await this.deps.provider.authState()) !== 'connected') {
-        throw new EphemeralOriginalError('provider authentication is unavailable', 'provider-unavailable');
-      }
-    } catch (error) {
-      if (error instanceof EphemeralOriginalError) throw error;
-      throw new EphemeralOriginalError('provider is offline', 'provider-unavailable');
     }
   }
 
