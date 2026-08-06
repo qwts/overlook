@@ -85,6 +85,7 @@ export function Shell({
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const providerStatusRequestRef = useRef(0);
   const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
   const [exportAllPhotos, setExportAllPhotos] = useState(false);
   const openExport = (photoIds: readonly string[]): void => {
@@ -335,7 +336,10 @@ export function Shell({
   // live via the query hook's refetch.
   useEffect(() => {
     const syncProvider = (selectedId: string | null): void => {
+      const request = providerStatusRequestRef.current + 1;
+      providerStatusRequestRef.current = request;
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
+        if (providerStatusRequestRef.current !== request) return;
         const presentationId = selectedId ?? selectedProviderId;
         const providerId = providers.some((provider) => provider.id === presentationId)
           ? (presentationId ?? defaultProviderId)
@@ -348,9 +352,11 @@ export function Shell({
         void window.overlook.backup
           .providerStatus({ providerId })
           .then(({ connected, provider }) => {
+            if (providerStatusRequestRef.current !== request) return;
             dispatch({ type: 'provider/set', connected, label: provider.label });
           })
           .catch(() => {
+            if (providerStatusRequestRef.current !== request) return;
             dispatch({ type: 'provider/set', connected: false, label: descriptor.label });
           });
       });
@@ -359,10 +365,14 @@ export function Shell({
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });
-    return window.overlook.settings.onChanged(({ settings }) => {
+    const unsubscribe = window.overlook.settings.onChanged(({ settings }) => {
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });
+    return () => {
+      providerStatusRequestRef.current += 1;
+      unsubscribe();
+    };
   }, [dispatch, selectedProviderId]);
 
   // Backup completion (#106): failures surface as the red toast with a
