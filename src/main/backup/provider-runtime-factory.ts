@@ -30,7 +30,7 @@ export interface ProviderRuntimeFactoryDeps {
   readonly guardParts?: (() => LibraryParts | null) | undefined;
   readonly libraryRegistry?: Pick<LibraryRegistryRuntime, 'resolveActive' | 'getRegistry'> | undefined;
   readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
-  readonly markProviderRequired?: ((credential: CustodyCredential) => void) | undefined;
+  readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
 }

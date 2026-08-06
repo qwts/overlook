@@ -58,7 +58,7 @@ export interface ProviderRuntimeOptions {
    * Absent in tests that exercise pure selection mechanics. */
   readonly switchGuard?: ((target: { providerId: string; provider: StorageProvider }) => Promise<PCloudConnectResult>) | undefined;
   readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
-  readonly markProviderRequired?: ((credential: CustodyCredential) => void) | undefined;
+  readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
   /** Test seams; production probes connection for at most 5s and capacity for 30s. */
@@ -528,8 +528,10 @@ export class ProviderRuntime {
     if (this.options.isWorkActive?.() === true) {
       return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
     }
-    this.options.markProviderRequired?.(credential);
-    return this.disconnectAuthorization(providerId);
+    const rollbackRequired = this.options.markProviderRequired?.(credential);
+    const result = this.disconnectAuthorization(providerId);
+    if (!result.ok && this.samePersistedCredential(credential)) rollbackRequired?.();
+    return result;
   }
 
   private async custodyChangeBlocked(providerId: string): Promise<PCloudConnectResult | null> {
@@ -551,6 +553,10 @@ export class ProviderRuntime {
     } catch {
       return null;
     }
+  }
+
+  private samePersistedCredential(credential: CustodyCredential): boolean {
+    return this.persistedAccountIdentity(credential.providerId)?.accountId === credential.accountId;
   }
 
   private disconnectPCloud(): PCloudConnectResult {

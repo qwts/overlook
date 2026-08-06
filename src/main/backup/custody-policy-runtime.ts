@@ -13,7 +13,7 @@ export interface CustodyPolicyRuntimeOptions {
 
 export interface CustodyPolicyRuntime {
   readonly preflight: (credential: CustodyCredential) => CustodyPreflight;
-  readonly markProviderRequired: (credential: CustodyCredential) => void;
+  readonly markProviderRequired: (credential: CustodyCredential) => () => void;
   readonly deleteUnreferenced: (credential: CustodyCredential) => void;
   readonly requirements: () => readonly CustodyRequirement[];
 }
@@ -24,7 +24,8 @@ export function createCustodyPolicyRuntime(options: CustodyPolicyRuntimeOptions)
   return {
     preflight: (credential) => gate.preflight(credential),
     markProviderRequired: (credential) => {
-      authorities.markProviderRequired(credential.providerId, credential.accountId);
+      const changed = authorities.markProviderRequired(credential.providerId, credential.accountId);
+      return () => authorities.restoreBound(changed);
     },
     deleteUnreferenced: (credential) => {
       authorities.deleteUnreferenced(credential.providerId, credential.accountId);

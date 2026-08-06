@@ -88,12 +88,14 @@ describe('custody authority provenance (#729)', () => {
 
     ledger.repairStatus('A', 'error');
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }], 'remote-loss truth keeps the source binding');
-    assert.equal(authorities.markProviderRequired('pcloud', 'other'), 0);
-    assert.equal(authorities.markProviderRequired('pcloud', '42'), 1);
+    assert.deepEqual(authorities.markProviderRequired('pcloud', 'other'), []);
+    assert.deepEqual(authorities.markProviderRequired('pcloud', '42'), [authority.id]);
     assert.equal(authorities.forPhoto('A')?.state, 'provider-required');
     assert.deepEqual(authorities.providerRequirements(), [
       { authority: { ...authority, state: 'provider-required' }, items: 1, bytes: 42 },
     ]);
+    authorities.restoreBound([authority.id]);
+    assert.equal(authorities.forPhoto('A')?.state, 'bound');
 
     run(db, `UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = 'A'`);
     ledger.setStatus('A', 'synced');

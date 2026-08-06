@@ -114,4 +114,27 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(r.tokenStore().load(), null);
     assert.equal(providerId, null);
   });
+
+  test('failed emergency removal rolls back only when the same credential demonstrably remains', async () => {
+    let rolledBack = 0;
+    const r = runtime({
+      providerId: () => 'pcloud',
+      setProviderId: () => undefined,
+      markProviderRequired: () => () => {
+        rolledBack += 1;
+      },
+    });
+    r.tokenStore().save({
+      accessToken: 'retained-emergency-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-emergency-rollback'), fault: undefined });
+
+    assert.equal((await r.removeAuthorizationAnyway('pcloud')).ok, false);
+    assert.equal(rolledBack, 1);
+    assert.equal(r.tokenStore().load()?.accountId, '1001');
+  });
 });

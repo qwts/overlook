@@ -206,21 +206,35 @@ export class CustodyAuthorityRepository {
 
   /** Emergency authorization removal preserves every binding field and row;
    * only the derived authority state changes (ADR-0028 §5). */
-  markProviderRequired(providerId: string, accountId: string): number {
+  markProviderRequired(providerId: string, accountId: string): readonly number[] {
     const affected = this.soleCustodyCounts().filter(
-      ({ authority }) => authority.providerId === providerId && authority.accountId === accountId,
+      ({ authority }) => authority.providerId === providerId && authority.accountId === accountId && authority.state === 'bound',
     );
-    if (affected.length === 0) return 0;
+    if (affected.length === 0) return [];
     run(
       this.db,
       `UPDATE custody_authorities
           SET state = 'provider-required'
         WHERE provider_id = ? AND account_id = ?
-          AND id IN (SELECT custody_authority_id FROM sync_ledger WHERE custody_authority_id IS NOT NULL)`,
+          AND state = 'bound'
+          AND id IN (
+            SELECT custody_authority_id FROM sync_ledger
+             WHERE custody_authority_id IS NOT NULL AND status IN ('offloaded', 'error')
+          )`,
       providerId,
       accountId,
     );
-    return affected.length;
+    return affected.map(({ authority }) => authority.id);
+  }
+
+  /** Rollback for a failed emergency removal. Only rows transitioned by that
+   * attempt are restored; older provider-required state remains untouched. */
+  restoreBound(authorityIds: readonly number[]): void {
+    this.db.transaction(() => {
+      for (const id of authorityIds) {
+        run(this.db, `UPDATE custody_authorities SET state = 'bound' WHERE id = ? AND state = 'provider-required'`, id);
+      }
+    })();
   }
 
   providerRequirements(): readonly SoleCustodyCount[] {
