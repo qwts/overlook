@@ -62,8 +62,15 @@ export class DeterministicICloudDriveBridge implements ICloudDriveNativeBridge {
 
   status(): Promise<ICloudDriveNativeStatus> {
     this.calls.push('status');
-    if (!this.available) return Promise.resolve({ available: false, reason: 'account-unavailable', accountToken: null });
-    return Promise.resolve({ available: true, reason: null, accountToken: this.accountToken });
+    if (!this.available) {
+      return Promise.resolve({ available: false, reason: 'account-unavailable', accountToken: null, accountLabel: null });
+    }
+    return Promise.resolve({
+      available: true,
+      reason: null,
+      accountToken: this.accountToken,
+      accountLabel: 'Deterministic iCloud account',
+    });
   }
 
   async replaceFile(path: string, sourceFile: string, accountToken: string): Promise<void> {

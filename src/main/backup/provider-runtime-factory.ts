@@ -10,6 +10,10 @@ import { getSettingsStore } from '../settings/settings-runtime.js';
 import { createNativeICloudDriveBridge } from './icloud-drive/native-bridge.js';
 import { DeterministicICloudDriveBridge } from './icloud-drive/deterministic-bridge.js';
 import { pcloudFeatureConfig } from '../build-config.js';
+import type { CustodyCredential, CustodyPreflight, CustodyRequirement } from '../../shared/backup/provider-descriptor.js';
+import { createCustodyPolicyRuntime } from './custody-policy-runtime.js';
+import { custodyHintPreflight } from './custody-gate.js';
+import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
 
 // ProviderRuntime wiring (#256), extracted from the composition root.
 // Provider credentials are profile-level (they survive library replacement
@@ -24,9 +28,30 @@ export interface ProviderRuntimeFactoryDeps {
    * (#741), or null when none is open. Must never bootstrap a library —
    * a fresh onboarding-restore profile stays empty (PR #743 review). */
   readonly guardParts?: (() => LibraryParts | null) | undefined;
+  readonly libraryRegistry?: Pick<LibraryRegistryRuntime, 'resolveActive' | 'getRegistry'> | undefined;
+  readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
+  readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
+  readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
+  readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
 }
 
 export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): ProviderRuntime {
+  const custodyPolicy = () => {
+    const parts = deps.guardParts?.();
+    const registry = deps.libraryRegistry;
+    if (parts === null || parts === undefined || registry === undefined) return null;
+    return createCustodyPolicyRuntime({
+      db: parts.db,
+      activeLibrary: () => registry.resolveActive(),
+      libraries: () => registry.getRegistry().list(),
+    });
+  };
+  const custodyPreflight = (credential: CustodyCredential): CustodyPreflight => {
+    const policy = custodyPolicy();
+    if (policy !== null) return policy.preflight(credential);
+    const libraries = deps.libraryRegistry?.getRegistry().list() ?? [];
+    return custodyHintPreflight(credential, libraries);
+  };
   const pcloud = pcloudFeatureConfig(deps.harnessEnv);
   const iCloudDriveBridge =
     deps.harnessEnv('OVERLOOK_ICLOUD_FAKE') === '1'
@@ -49,6 +74,10 @@ export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): Provide
     iCloudDriveBridge,
     switchGuard:
       deps.guardParts === undefined ? undefined : createProviderSwitchGuard({ parts: deps.guardParts, libraryDataDir: deps.dataDir }),
+    custodyPreflight: deps.custodyPreflight ?? custodyPreflight,
+    markProviderRequired: deps.markProviderRequired ?? ((credential) => custodyPolicy()?.markProviderRequired(credential)),
+    deleteUnreferencedAuthorities: deps.deleteUnreferencedAuthorities ?? ((credential) => custodyPolicy()?.deleteUnreferenced(credential)),
+    providerRequirements: deps.providerRequirements ?? (() => custodyPolicy()?.requirements() ?? []),
   });
 }
 

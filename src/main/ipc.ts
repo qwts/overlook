@@ -9,7 +9,12 @@ import type { HandlerErrorReport } from '../shared/ipc/registry.js';
 import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js';
 import type { LibraryDescriptor } from '../shared/library/registry.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
-import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../shared/backup/provider-descriptor.js';
+import type {
+  ProviderCapacityStatus,
+  ProviderConnectionStatus,
+  ProviderConnectResult,
+  ProviderDescriptor,
+} from '../shared/backup/provider-descriptor.js';
 import type { RestoreDiscoverResponse, RestoreRunResponse } from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
 import type { LibraryService } from './library/library-service.js';
@@ -721,8 +726,9 @@ export interface BackupFacade {
   providerStatus(providerId: string): Promise<ProviderConnectionStatus>;
   providerStorage(providerId: string): Promise<ProviderCapacityStatus>;
   /** Runs the addressed provider's instant or interactive handshake. */
-  connect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
+  connect(providerId: string): Promise<ProviderConnectResult>;
   disconnect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
+  removeAuthorizationAnyway(providerId: string): Promise<ProviderConnectResult>;
   openCapacitySettings(providerId: string): Promise<{ ok: boolean }>;
 }
 
@@ -779,6 +785,11 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
   );
   ipcMain.handle(channels.backupDisconnect.name, (_event, request: unknown) =>
     wrapHandler(channels.backupDisconnect, async ({ providerId }) => getFacade().disconnect(providerId))(request),
+  );
+  ipcMain.handle(channels.backupRemoveAuthorizationAnyway.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupRemoveAuthorizationAnyway, async ({ providerId }) => getFacade().removeAuthorizationAnyway(providerId))(
+      request,
+    ),
   );
   ipcMain.handle(channels.backupOpenCapacitySettings.name, (_event, request: unknown) =>
     wrapHandler(channels.backupOpenCapacitySettings, async ({ providerId }) => getFacade().openCapacitySettings(providerId))(request),

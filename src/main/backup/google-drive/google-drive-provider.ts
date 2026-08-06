@@ -6,6 +6,7 @@ import { buffer } from 'node:stream/consumers';
 import {
   assertSafeRemotePath,
   ProviderError,
+  type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
   type RemoteEntry,
@@ -98,6 +99,7 @@ export class GoogleDriveProvider implements StorageProvider {
     platforms: ['darwin', 'win32', 'linux'],
     interactiveAuth: true,
     reconnectRequired: true,
+    accountIdentity: 'stable-subject',
   } as const;
 
   private readonly fetchImpl: typeof fetch;
@@ -118,6 +120,19 @@ export class GoogleDriveProvider implements StorageProvider {
 
   authState(): Promise<ProviderAuthState> {
     return Promise.resolve(this.options.auth.authState());
+  }
+
+  async accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity> {
+    const url = new URL(`${API}/about`);
+    url.searchParams.set('fields', 'user(permissionId,emailAddress)');
+    const data = await this.json(url.toString(), undefined, 'read account identity', signal);
+    const user = typeof data['user'] === 'object' && data['user'] !== null ? (data['user'] as Record<string, unknown>) : {};
+    const accountId = typeof user['permissionId'] === 'string' ? user['permissionId'].trim() : '';
+    const accountLabel = typeof user['emailAddress'] === 'string' ? user['emailAddress'].trim() : '';
+    if (accountId === '' || accountLabel === '') {
+      throw new ProviderError('Google Drive account identity is unavailable', 'transient');
+    }
+    return { accountId, accountLabel };
   }
 
   forLibrary(libraryId: string): StorageProvider {
@@ -551,7 +566,7 @@ export class GoogleDriveProvider implements StorageProvider {
     if (parsed.protocol !== 'https:' || (parsed.hostname !== 'www.googleapis.com' && parsed.hostname !== 'content.googleapis.com')) {
       throw new ProviderError('refusing to send Google credentials to an unexpected host', 'corrupt');
     }
-    const token = await this.options.auth.accessToken(retried);
+    const token = await this.options.auth.accessToken(retried, init.signal ?? undefined);
     const headers = new Headers(init.headers);
     headers.set('authorization', `Bearer ${token}`);
     let response: Response;

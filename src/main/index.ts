@@ -36,6 +36,7 @@ import { createRecoveryHealthCheck } from './backup/recovery-health.js';
 import type { OffloadService } from './backup/offload.js';
 import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { createOriginalCustodyRuntime } from './backup/original-custody-runtime.js';
+import { createCustodyRoutingRuntime, refreshCustodyHints } from './backup/custody-routing-runtime.js';
 import type { ProviderRuntime } from './backup/provider-runtime.js';
 import { createProviderRuntime } from './backup/provider-runtime-factory.js';
 import type { RestoreRuntime } from './backup/restore-runtime.js';
@@ -139,6 +140,7 @@ function getLibraryService(): LibraryService {
     }
     const db = openLibraryDatabase({ path: path.join(dataDir, 'library.db'), dbKey });
     registryRuntime.markOpened();
+    refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
     // photos.key_id references keys(id): the current key's row must exist
@@ -336,7 +338,6 @@ const changeProviderWork = (delta: 1 | -1): void => {
   providerWork.change(delta);
   embeddingRuntime?.service.notifyWorkAvailable();
 };
-const providerIdle = (): Promise<void> => providerWork.idle();
 
 let embeddingRuntime: EmbeddingRuntime | undefined;
 
@@ -363,6 +364,7 @@ function getProviderRuntime(): ProviderRuntime {
     // Only an ALREADY-OPEN library's parts — never requireParts, which would
     // bootstrap an empty library into a fresh onboarding-restore profile.
     guardParts: () => libraryParts ?? null,
+    libraryRegistry: registryRuntime,
   });
   return providerRuntime;
 }
@@ -456,12 +458,27 @@ function getBackupEngine(): BackupEngine {
       mockRootDir: path.join(app.getPath('userData'), 'mock-remote'),
       fault: harnessEnv('OVERLOOK_BACKUP_FAULT'),
     });
+    const custodyRouting = createCustodyRoutingRuntime({
+      db: parts.db,
+      backupTarget: provider,
+      libraryId: () => getProviderRuntime().libraryId(),
+      provider: (providerId) => getProviderRuntime().provider(providerId),
+      backupTargetConnected: () => getProviderRuntime().activeId() !== null,
+      status: (photoId) => ledger.status(photoId),
+      now: () => new Date().toISOString(),
+      writeCustodyHints: (hints) => {
+        registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
+      },
+      audit,
+    });
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
+      authorities: custodyRouting.authorities,
+      custody: custodyRouting.resolver,
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
@@ -515,6 +532,9 @@ function getBackupEngine(): BackupEngine {
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
+      offloadAuthority: custodyRouting.offloadAuthority,
+      custody: custodyRouting.resolver,
+      custodyChanged: custodyRouting.custodyChanged,
       ledger,
       repo,
       blobs: parts.blobStore,
@@ -534,8 +554,8 @@ function getBackupEngine(): BackupEngine {
       db: parts.db,
       repo,
       blobStore: parts.blobStore,
-      provider,
-      connected: () => getProviderRuntime().activeId() !== null,
+      remoteProvider: custodyRouting.remoteProvider,
+      custodyChanged: custodyRouting.custodyChanged,
       // Purging changes manifestSnapshot() — same owed-generation rule (and
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
@@ -545,7 +565,7 @@ function getBackupEngine(): BackupEngine {
       audit,
       retention: () => getSettingsStore().get().trashRetention,
     });
-    purgeRuntime = createPurgeRuntime(purgeService);
+    purgeRuntime = createPurgeRuntime(purgeService, changeProviderWork);
     consistencyChecker = createConsistencyChecker({
       db: parts.db,
       repo,
@@ -671,7 +691,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     startupMaintenance.drain(),
     Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
     full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
-    full ? providerIdle() : Promise.resolve(),
+    full ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
     importRuntime?.pool.close() ?? Promise.resolve(),
     ...(full ? [session.defaultSession.clearCache()] : []),
@@ -708,9 +728,6 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   releaseLibraryLock?.();
   releaseLibraryLock = undefined;
 }
-
-const closeLibraryForRestore = (): Promise<void> => closeLibrary('restore');
-const closeLibraryForLock = (): Promise<void> => closeLibrary('lock');
 
 // Live switch (#385) + relocation (#483): see library/switch-runtime.ts,
 // library/relocation-runtime.ts, and library-lifecycle-wiring.ts for the
@@ -757,7 +774,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
         releasedMaster = undefined;
       }
     },
-    closeAuthorized: closeLibraryForLock,
+    closeAuthorized: () => closeLibrary('lock'),
     failClosed: relaunchLocked,
   });
 }
@@ -781,7 +798,7 @@ function getRestoreRuntime(): RestoreRuntime {
     progress: createEmitter(events.restoreProgress, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     }),
-    beforeActivate: closeLibraryForRestore,
+    beforeActivate: () => closeLibrary('restore'),
     harnessEnv,
     workChanged: changeProviderWork,
   });
@@ -884,7 +901,7 @@ if (!productionInterop.nativeHostRequested) {
   registerQuitTeardown({
     isLibraryOpen: () => libraryService !== undefined,
     lockState: () => appLockHost?.snapshot().state,
-    close: closeLibraryForLock,
+    close: () => closeLibrary('lock'),
   });
 }
 

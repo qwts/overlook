@@ -15,6 +15,7 @@ describe('provider descriptor contract (#280)', () => {
         platforms: ['darwin'],
         interactiveAuth: true,
         reconnectRequired: true,
+        accountIdentity: 'stable-subject',
       },
       available: false,
       unavailableReason: 'Adapter not installed.',

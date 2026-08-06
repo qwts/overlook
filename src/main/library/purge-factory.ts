@@ -13,8 +13,8 @@ export interface PurgeFactoryDeps {
   readonly db: BetterSqlite3.Database;
   readonly repo: PhotosRepository;
   readonly blobStore: BlobStore;
-  readonly provider: PurgeDeps['provider'];
-  readonly connected: PurgeDeps['connected'];
+  readonly remoteProvider: PurgeDeps['remoteProvider'];
+  readonly custodyChanged: PurgeDeps['custodyChanged'];
   readonly oweManifest: PurgeDeps['oweManifest'];
   readonly libraryChanged: PurgeDeps['libraryChanged'];
   readonly audit: PurgeDeps['audit'];
@@ -29,8 +29,8 @@ export function createPurgeService(deps: PurgeFactoryDeps): PurgeService {
       deleteThumbs: async (hash) => deps.blobStore.deleteThumbs(hash),
       deleteSidecars: async (photoId) => deps.blobStore.deleteSidecars(photoId),
     },
-    provider: deps.provider,
-    connected: deps.connected,
+    remoteProvider: deps.remoteProvider,
+    custodyChanged: deps.custodyChanged,
     oweManifest: deps.oweManifest,
     libraryChanged: deps.libraryChanged,
     audit: deps.audit,

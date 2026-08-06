@@ -20,6 +20,9 @@ export interface PCloudAuthRecord {
   readonly accessToken: string;
   readonly apiHost: PCloudApiHost;
   readonly connectedAt: string;
+  /** Non-secret subject captured after OAuth; absent on legacy/provisional records. */
+  readonly accountId?: string | undefined;
+  readonly accountLabel?: string | undefined;
 }
 
 function isAuthRecord(value: unknown): value is PCloudAuthRecord {
@@ -27,11 +30,17 @@ function isAuthRecord(value: unknown): value is PCloudAuthRecord {
     return false;
   }
   const record = value as Record<string, unknown>;
+  const accountId = record['accountId'];
+  const accountLabel = record['accountLabel'];
+  const identityValid =
+    (accountId === undefined && accountLabel === undefined) ||
+    (typeof accountId === 'string' && accountId !== '' && typeof accountLabel === 'string' && accountLabel !== '');
   return (
     typeof record['accessToken'] === 'string' &&
     record['accessToken'] !== '' &&
     (record['apiHost'] === 'api.pcloud.com' || record['apiHost'] === 'eapi.pcloud.com') &&
-    typeof record['connectedAt'] === 'string'
+    typeof record['connectedAt'] === 'string' &&
+    identityValid
   );
 }
 

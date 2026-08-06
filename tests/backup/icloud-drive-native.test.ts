@@ -9,7 +9,7 @@ const ACCOUNT_TOKEN = '0123456789abcdef';
 
 function nativeBinding() {
   const calls: Array<readonly [string, ...unknown[]]> = [];
-  let statusResult: unknown = { available: true, reason: null, accountToken: ACCOUNT_TOKEN };
+  let statusResult: unknown = { available: true, reason: null, accountToken: ACCOUNT_TOKEN, accountLabel: 'Owner iCloud' };
   let listResult: unknown = { entries: [], nextCursor: null, accountToken: ACCOUNT_TOKEN };
   let operationError: Error | undefined;
   const fail = (): void => {
@@ -103,8 +103,9 @@ describe('iCloud Drive native bridge gating (#656)', () => {
       available: false,
       reason: 'unsupported-platform',
       accountToken: null,
+      accountLabel: null,
     });
-    assert.deepEqual(await unsigned.status(), { available: false, reason: 'unsigned-build', accountToken: null });
+    assert.deepEqual(await unsigned.status(), { available: false, reason: 'unsigned-build', accountToken: null, accountLabel: null });
     assert.equal(loads, 0);
     await assert.rejects(unsigned.delete('Overlook/library/object', ACCOUNT_TOKEN), errorWithCode('unavailable'));
   });
@@ -118,8 +119,8 @@ describe('iCloud Drive native bridge gating (#656)', () => {
       },
     });
     const malformed = createNativeICloudDriveBridge({ platform: 'darwin', packaged: true, loadBinding: () => ({}) });
-    assert.deepEqual(await missing.status(), { available: false, reason: 'native-unavailable', accountToken: null });
-    assert.deepEqual(await malformed.status(), { available: false, reason: 'native-unavailable', accountToken: null });
+    assert.deepEqual(await missing.status(), { available: false, reason: 'native-unavailable', accountToken: null, accountLabel: null });
+    assert.deepEqual(await malformed.status(), { available: false, reason: 'native-unavailable', accountToken: null, accountLabel: null });
   });
 });
 
@@ -127,7 +128,12 @@ describe('iCloud Drive native bridge contract (#656)', () => {
   test('pins identities and forwards coordinated file operations', async () => {
     const native = nativeBinding();
     const bridge = createNativeICloudDriveBridge({ platform: 'darwin', packaged: true, loadBinding: () => native.binding });
-    assert.deepEqual(await bridge.status(), { available: true, reason: null, accountToken: ACCOUNT_TOKEN });
+    assert.deepEqual(await bridge.status(), {
+      available: true,
+      reason: null,
+      accountToken: ACCOUNT_TOKEN,
+      accountLabel: 'Owner iCloud',
+    });
     await bridge.replaceFile('Overlook/library/object', '/tmp/source', ACCOUNT_TOKEN);
     await bridge.materializeFile('Overlook/library/object', '/tmp/destination', ACCOUNT_TOKEN);
     await bridge.list('Overlook/library', null, 100, ACCOUNT_TOKEN);
@@ -146,10 +152,10 @@ describe('iCloud Drive native bridge contract (#656)', () => {
     const bridge = createNativeICloudDriveBridge({ platform: 'darwin', packaged: true, loadBinding: () => native.binding });
     for (const reason of ['unentitled', 'account-unavailable'] as const) {
       native.setStatus({ available: false, reason, accountToken: null });
-      assert.deepEqual(await bridge.status(), { available: false, reason, accountToken: null });
+      assert.deepEqual(await bridge.status(), { available: false, reason, accountToken: null, accountLabel: null });
     }
     native.setStatus({ available: true, reason: null, accountToken: 'account detail' });
-    assert.deepEqual(await bridge.status(), { available: false, reason: 'native-unavailable', accountToken: null });
+    assert.deepEqual(await bridge.status(), { available: false, reason: 'native-unavailable', accountToken: null, accountLabel: null });
   });
 
   test('maps only stable offline, account-change, materialization, conflict, and replacement errors', async () => {

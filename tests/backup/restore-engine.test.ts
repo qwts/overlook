@@ -63,6 +63,10 @@ class CountingProvider implements StorageProvider {
     return this.inner.authState();
   }
 
+  accountIdentity(signal?: AbortSignal) {
+    return this.inner.accountIdentity(signal);
+  }
+
   put(path: string, bytes: Readable): Promise<{ bytes: number }> {
     return this.inner.put(path, bytes);
   }

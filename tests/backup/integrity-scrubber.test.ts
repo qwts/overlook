@@ -21,6 +21,8 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
+import type { CustodyAuthority } from '../../src/main/backup/custody-authority-repository.js';
+import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 const HASH_A = 'aa'.repeat(32);
@@ -224,10 +226,25 @@ test('runtime composition persists progress and marks missing remote-only rows (
   });
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-runtime-remote-')) });
   const marked: string[] = [];
+  const authority: CustodyAuthority = {
+    id: 7,
+    providerId: provider.id,
+    accountId: 'mock-account',
+    accountLabel: 'Mock account',
+    remoteRoot: '/Overlook/mock-library/',
+    state: 'bound',
+    createdAt: '2026-07-15T00:00:00.000Z',
+    lastVerifiedAt: null,
+  };
   const runtime = createBackupIntegrityRuntime({
     db,
     provider,
-    repo: { integrityItems: () => [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] },
+    authorities: { offloadedAuthorities: () => [authority] },
+    custody: { resolveAuthority: () => Promise.resolve({ authority, provider }) },
+    repo: {
+      integrityItems: (_page, scope) =>
+        scope?.syncState === 'offloaded' ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+    },
     blobs: {
       hasOriginal: () => false,
       getEncryptedStream: () => {
@@ -242,5 +259,56 @@ test('runtime composition persists progress and marks missing remote-only rows (
   assert.deepEqual(await runtime.scrub(), { checked: 1, repaired: 0, unrecoverable: 1, cycleComplete: true });
   assert.deepEqual(marked, ['P1']);
   assert.notEqual((await new BackupIntegrityCursorStore(db, provider.id).load()).completedAt, null);
+  assert.notEqual((await new BackupIntegrityCursorStore(db, 'custody-authority:7').load()).completedAt, null);
+  db.close();
+});
+
+test('a custody identity failure neither reads the backup target nor marks the bound row corrupt (#731)', async () => {
+  const db = openLibraryDatabase({
+    path: join(mkdtempSync(join(tmpdir(), 'overlook-integrity-custody-fail-')), 'library.db'),
+    dbKey: randomBytes(32),
+  });
+  const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-wrong-target-')) });
+  let reads = 0;
+  provider.getStream = () => {
+    reads += 1;
+    return Promise.reject(new Error('wrong target read'));
+  };
+  const marked: string[] = [];
+  const audits: string[] = [];
+  const authority: CustodyAuthority = {
+    id: 8,
+    providerId: 'other-provider',
+    accountId: 'bound-account',
+    accountLabel: 'bound@example.test',
+    remoteRoot: '/Overlook/bound-library/',
+    state: 'bound',
+    createdAt: '2026-07-15T00:00:00.000Z',
+    lastVerifiedAt: null,
+  };
+  const runtime = createBackupIntegrityRuntime({
+    db,
+    provider,
+    authorities: { offloadedAuthorities: () => [authority] },
+    custody: { resolveAuthority: () => Promise.reject(new CustodyResolutionError('custody-wrong-account')) },
+    repo: {
+      integrityItems: (_page, scope) =>
+        scope?.syncState === 'offloaded' ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+    },
+    blobs: {
+      hasOriginal: () => false,
+      getEncryptedStream: () => {
+        throw new Error('remote-only row has no local envelope');
+      },
+    },
+    resolveKey: () => undefined,
+    markUnrecoverable: (photoId) => marked.push(photoId),
+    audit: (line) => audits.push(line),
+  });
+
+  assert.deepEqual(await runtime.scrub(), { checked: 0, repaired: 0, unrecoverable: 0, cycleComplete: false });
+  assert.equal(reads, 0);
+  assert.deepEqual(marked, []);
+  assert.ok(audits.includes('INTEGRITY-CUSTODY-SKIP authority=8 reason=custody-wrong-account'));
   db.close();
 });

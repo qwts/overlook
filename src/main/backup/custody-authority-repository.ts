@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { queryAll, queryGet, runNamed } from '../db/sql.js';
+import { queryAll, queryGet, run, runNamed } from '../db/sql.js';
 
 export type CustodyAuthorityState = 'bound' | 'provider-required';
 
@@ -93,6 +93,30 @@ export class CustodyAuthorityRepository {
     return row === undefined ? undefined : fromRow(row);
   }
 
+  /** Resolves sole-remote work through the row's durable provenance, never
+   * through the provider currently selected for new backups. */
+  forPhoto(photoId: string): CustodyAuthority | undefined {
+    const row = queryGet<{
+      id: number;
+      providerId: string;
+      accountId: string;
+      accountLabel: string;
+      remoteRoot: string;
+      state: CustodyAuthorityState;
+      createdAt: string;
+      lastVerifiedAt: string | null;
+    }>(
+      this.db,
+      `SELECT a.id, a.provider_id AS providerId, a.account_id AS accountId, a.account_label AS accountLabel,
+              a.remote_root AS remoteRoot, a.state, a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
+         FROM sync_ledger l
+         JOIN custody_authorities a ON a.id = l.custody_authority_id
+        WHERE l.photo_id = ?`,
+      photoId,
+    );
+    return row === undefined ? undefined : fromRow(row);
+  }
+
   find(providerId: string, accountId: string, remoteRoot: string): CustodyAuthority | undefined {
     const row = queryGet<{
       id: number;
@@ -143,6 +167,30 @@ export class CustodyAuthorityRepository {
     ).map((row) => ({ authority: fromRow(row), items: row.items, bytes: row.bytes }));
   }
 
+  /** Authorities with offloaded rows, used to partition integrity work and
+   * its resume cursor by durable source rather than current selection. */
+  offloadedAuthorities(): readonly CustodyAuthority[] {
+    return queryAll<{
+      id: number;
+      providerId: string;
+      accountId: string;
+      accountLabel: string;
+      remoteRoot: string;
+      state: CustodyAuthorityState;
+      createdAt: string;
+      lastVerifiedAt: string | null;
+    }>(
+      this.db,
+      `SELECT DISTINCT a.id, a.provider_id AS providerId, a.account_id AS accountId,
+              a.account_label AS accountLabel, a.remote_root AS remoteRoot, a.state,
+              a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
+         FROM custody_authorities a
+         JOIN sync_ledger l ON l.custody_authority_id = a.id
+        WHERE l.status = 'offloaded'
+        ORDER BY a.id`,
+    ).map(fromRow);
+  }
+
   /** Legacy rows are intentionally separate: no connected account earns them
    * a binding without ADR-0028 §7 verification. */
   legacyUnboundCount(): { readonly items: number; readonly bytes: number } {
@@ -153,6 +201,58 @@ export class CustodyAuthorityRepository {
            FROM sync_ledger l JOIN photos p ON p.id = l.photo_id
           WHERE l.status = 'offloaded' AND l.custody_authority_id IS NULL`,
       ) ?? { items: 0, bytes: 0 }
+    );
+  }
+
+  /** Emergency authorization removal preserves every binding field and row;
+   * only the derived authority state changes (ADR-0028 §5). */
+  markProviderRequired(providerId: string, accountId: string): readonly number[] {
+    const affected = this.soleCustodyCounts().filter(
+      ({ authority }) => authority.providerId === providerId && authority.accountId === accountId && authority.state === 'bound',
+    );
+    if (affected.length === 0) return [];
+    run(
+      this.db,
+      `UPDATE custody_authorities
+          SET state = 'provider-required'
+        WHERE provider_id = ? AND account_id = ?
+          AND state = 'bound'
+          AND id IN (
+            SELECT custody_authority_id FROM sync_ledger
+             WHERE custody_authority_id IS NOT NULL AND status IN ('offloaded', 'error')
+          )`,
+      providerId,
+      accountId,
+    );
+    return affected.map(({ authority }) => authority.id);
+  }
+
+  /** Rollback for a failed emergency removal. Only rows transitioned by that
+   * attempt are restored; older provider-required state remains untouched. */
+  restoreBound(authorityIds: readonly number[]): void {
+    this.db.transaction(() => {
+      for (const id of authorityIds) {
+        run(this.db, `UPDATE custody_authorities SET state = 'bound' WHERE id = ? AND state = 'provider-required'`, id);
+      }
+    })();
+  }
+
+  providerRequirements(): readonly SoleCustodyCount[] {
+    return this.soleCustodyCounts().filter(({ authority }) => authority.state === 'provider-required');
+  }
+
+  /** Ordinary disconnect removes only authority metadata that no ledger row
+   * references. Remote objects and referenced provenance are untouched. */
+  deleteUnreferenced(providerId: string, accountId: string): void {
+    run(
+      this.db,
+      `DELETE FROM custody_authorities
+        WHERE provider_id = ? AND account_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM sync_ledger l WHERE l.custody_authority_id = custody_authorities.id
+          )`,
+      providerId,
+      accountId,
     );
   }
 }

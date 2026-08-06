@@ -11,6 +11,7 @@ import {
 } from '../library/relocation.js';
 import {
   providerConnectionStatusSchema,
+  providerConnectResultSchema,
   providerDescriptorSchema,
   providerIdSchema,
   providerCapacityStatusSchema,
@@ -18,7 +19,7 @@ import {
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import { restoreDiscoverResponseSchema, restoreProgressSchema, restoreRunResponseSchema } from '../backup/restore-contract.js';
-import { PHOTO_PURGE_AUTHORIZATION } from '../destructive-actions.js';
+import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../destructive-actions.js';
 import { commandIdSchema, commandMenuContextSchema } from '../commands/menu-contract.js';
 import { activityPageRequestSchema, activityPageResponseSchema } from '../activity/schemas.js';
 import { historyExecuteRequestSchema, historyExecuteResponseSchema, historyStatusSchema } from '../history/schemas.js';
@@ -165,9 +166,9 @@ const offloadPreflightSchema = z.object({
 });
 const restoreOriginalFailureReasonSchema = z.enum([
   'not-offloaded',
-  'provider-disconnected',
-  'provider-expired',
-  'provider-offline',
+  'custody-disconnected',
+  'custody-wrong-account',
+  'custody-unavailable',
   'download-failed',
   'verify-failed',
 ]);
@@ -664,15 +665,12 @@ export const channels = {
   // registered provider needs — local providers connect instantly while
   // interactive providers open a system-browser OAuth flow. Tokens never cross
   // this boundary; the renderer only learns ok/reason.
-  backupConnect: defineChannel(
-    'backup:connect',
-    z.object({ providerId: providerIdSchema }),
-    z.object({ ok: z.boolean(), reason: z.string().nullable() }),
-  ),
-  backupDisconnect: defineChannel(
-    'backup:disconnect',
-    z.object({ providerId: providerIdSchema }),
-    z.object({ ok: z.boolean(), reason: z.string().nullable() }),
+  backupConnect: defineChannel('backup:connect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
+  backupDisconnect: defineChannel('backup:disconnect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
+  backupRemoveAuthorizationAnyway: defineChannel(
+    'backup:remove-authorization-anyway',
+    z.object({ providerId: providerIdSchema, authorization: z.literal(PROVIDER_AUTHORIZATION_REMOVAL) }),
+    providerConnectResultSchema,
   ),
   // Capacity route (#684): when a provider has no in-app account-capacity figure
   // (iCloud), the card routes the user to the OS surface that owns it. Main opens

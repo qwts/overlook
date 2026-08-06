@@ -8,6 +8,7 @@ import { buffer } from 'node:stream/consumers';
 import { PCloudProvider } from '../../src/main/backup/pcloud/pcloud-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import type { PCloudAuthRecord } from '../../src/main/backup/pcloud/token-store.js';
+import { exerciseProviderAccountContract } from './provider-account-contract.js';
 
 // #255 exit criteria: every StorageProvider method and every error-mapping
 // class proven against a scripted pCloud API — no network.
@@ -74,7 +75,22 @@ describe('pCloud provider adapter (#255)', () => {
       platforms: ['darwin', 'win32', 'linux'],
       interactiveAuth: true,
       reconnectRequired: true,
+      accountIdentity: 'stable-subject',
     });
+  });
+
+  test('captures a stable account subject and rejects anonymous identity', async () => {
+    const current = world({ userinfo: () => ok({ userid: 4242, email: 'owner@pcloud.test' }) });
+    await exerciseProviderAccountContract(current.provider, { accountId: '4242', accountLabel: 'owner@pcloud.test' });
+
+    const changed = world({ userinfo: () => ok({ userid: 5252, email: 'replacement@pcloud.test' }) });
+    assert.deepEqual(await changed.provider.accountIdentity(), { accountId: '5252', accountLabel: 'replacement@pcloud.test' });
+
+    const anonymous = world({ userinfo: () => ok({ userid: 4242 }) });
+    await assert.rejects(
+      anonymous.provider.accountIdentity(),
+      (error: unknown) => error instanceof ProviderError && error.kind === 'transient',
+    );
   });
 
   test('discovers only completed recovery homes; ignores in-progress backups and empty scratch folders (#291)', async () => {

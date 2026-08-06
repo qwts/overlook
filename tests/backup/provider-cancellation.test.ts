@@ -92,7 +92,9 @@ function iCloudProvider(operation: StorageOperation): { readonly provider: IClou
   const bridge: ICloudDriveNativeBridge = {
     drain: () => Promise.resolve(),
     status: () =>
-      operation === 'quota' ? stalledStatus() : Promise.resolve({ available: true, reason: null, accountToken: ACCOUNT_TOKEN }),
+      operation === 'quota'
+        ? stalledStatus()
+        : Promise.resolve({ available: true, reason: null, accountToken: ACCOUNT_TOKEN, accountLabel: 'Test account' }),
     list: () => stalledList(),
     replaceFile: () => Promise.reject(new Error('unused')),
     materializeFile: () => Promise.reject(new Error('unused')),
