@@ -588,6 +588,9 @@ export function Shell({
           selectedPhotoIds={[...state.selection]}
           transferEnabled={pcloudEnabled}
           onTransfer={pcloudEnabled ? () => openInterop('settings', [...state.selection]) : undefined}
+          onProviderSelection={(provider) => {
+            dispatch({ type: 'provider/set', connected: false, label: provider.label });
+          }}
           onClose={() => {
             setSettingsSection(undefined);
             dispatch({ type: 'dialog/set', dialog: 'settings', open: false });

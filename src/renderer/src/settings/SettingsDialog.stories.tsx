@@ -577,7 +577,8 @@ export const ICloudUnavailableSetup: Story = {
 };
 
 export const GoogleDriveSelection: Story = {
-  play: async ({ canvasElement }) => {
+  args: { onProviderSelection: fn() },
+  play: async ({ canvasElement, args }) => {
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('button', { name: 'Disconnect provider' })).toBeVisible());
     await userEvent.click(body.getByRole('button', { name: 'Disconnect provider' }));
@@ -585,6 +586,7 @@ export const GoogleDriveSelection: Story = {
       within(body.getByRole('dialog', { name: 'Disconnect Local mock?' })).getByRole('button', { name: 'Disconnect provider' }),
     );
     await userEvent.click(await waitFor(() => body.getByRole('radio', { name: 'Google Drive' })));
+    await expect(args.onProviderSelection).toHaveBeenCalledWith(expect.objectContaining({ id: 'google-drive', label: 'Google Drive' }));
     await userEvent.click(body.getByRole('button', { name: 'Connect Google Drive' }));
     // Google Drive: account-wide capacity comes from about.storageQuota.
     await waitFor(() => expect(body.getByText('42 GB of 100 GB used')).toBeVisible());

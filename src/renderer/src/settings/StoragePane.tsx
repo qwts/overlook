@@ -64,6 +64,7 @@ export interface StoragePaneProps {
   readonly settings: AppSettings;
   readonly selectedPhotoIds: readonly string[];
   readonly onRestore?: (() => void) | undefined;
+  readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
   readonly onPatch: (
     patch: Partial<
       Pick<AppSettings, 'autoBackupOnImport' | 'reOffloadAfterViewing' | 'importMode' | 'wifiOnly' | 'bandwidthLimit' | 'providerId'>
@@ -71,7 +72,7 @@ export interface StoragePaneProps {
   ) => void;
 }
 
-export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore }: StoragePaneProps): ReactElement {
+export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore, onProviderSelection }: StoragePaneProps): ReactElement {
   const intl = useIntl();
   const [statusLoad, setStatusLoad] = useState<ProviderStatusLoad | null>(null);
   const [storageLoad, setStorageLoad] = useState<ProviderStorageLoad | null>(null);
@@ -283,6 +284,8 @@ export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore }: 
             options={providers.map((provider) => ({ value: provider.id, label: provider.label, disabled: !provider.available }))}
             onChange={(providerId) => {
               setTargetId(providerId);
+              const provider = providers.find((candidate) => candidate.id === providerId);
+              if (provider !== undefined) onProviderSelection?.(provider);
               setStatusLoad(null);
               setStorageLoad(null);
               setConnectError(null);
