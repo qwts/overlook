@@ -43,6 +43,7 @@ describe('iCloud Drive StorageProvider adapter (#657)', () => {
         platforms: ['darwin'],
         interactiveAuth: false,
         reconnectRequired: false,
+        accountIdentity: 'stable-subject',
       });
       await exerciseObjectProviderContract(state.provider, LIBRARY_ID);
       await exerciseRestoreProviderContract(state.provider, LIBRARY_ID);

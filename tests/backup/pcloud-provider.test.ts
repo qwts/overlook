@@ -74,6 +74,7 @@ describe('pCloud provider adapter (#255)', () => {
       platforms: ['darwin', 'win32', 'linux'],
       interactiveAuth: true,
       reconnectRequired: true,
+      accountIdentity: 'stable-subject',
     });
   });
 

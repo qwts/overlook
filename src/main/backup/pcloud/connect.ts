@@ -22,7 +22,12 @@ export interface PCloudConnectOptions {
   readonly timeoutMs?: number;
 }
 
-export type PCloudConnectResult = { ok: boolean; reason: string | null };
+export type PCloudConnectResult = {
+  readonly ok: boolean;
+  readonly reason: string | null;
+  readonly code?: 'identity-unavailable' | undefined;
+  readonly retryable?: boolean | undefined;
+};
 
 export function createPCloudConnect(options: PCloudConnectOptions): () => Promise<PCloudConnectResult> {
   // One flow at a time — a second Connect while the browser tab is open

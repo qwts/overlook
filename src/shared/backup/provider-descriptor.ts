@@ -12,6 +12,7 @@ export const providerCapabilitiesSchema = z.object({
     .readonly(),
   interactiveAuth: z.boolean(),
   reconnectRequired: z.boolean(),
+  accountIdentity: z.literal('stable-subject'),
 });
 
 export const providerDescriptorSchema = z.object({
@@ -37,8 +38,8 @@ export const providerCapacitySchema = z.object({
 export const providerConnectionStatusSchema = z.object({
   provider: providerDescriptorSchema,
   connected: z.boolean(),
-  /** Account label when the provider exposes one; otherwise null. */
-  account: z.string().nullable(),
+  /** Non-secret account label captured with the stable provider subject. */
+  accountLabel: z.string().min(1).nullable(),
 });
 
 /** Informational account capacity from the provider's native quota API.

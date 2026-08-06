@@ -31,7 +31,7 @@ function mockOverlook(): { discovered: DiscoverRequest[]; restore: () => void } 
     },
     backup: {
       providers: () => Promise.resolve({ providers, defaultProviderId: 'prov-a' }),
-      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], account: null }),
+      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], accountLabel: null }),
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {
@@ -143,7 +143,7 @@ test('a discovery that resolves AFTER the provider changes is ignored (#748 stal
     settings: { get: () => Promise.resolve({ settings: { providerId: 'prov-a' } }), onChanged: () => () => undefined },
     backup: {
       providers: () => Promise.resolve({ providers, defaultProviderId: 'prov-a' }),
-      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], account: null }),
+      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], accountLabel: null }),
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {

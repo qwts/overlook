@@ -37,6 +37,7 @@ export function createActiveProvider(options: ActiveProviderOptions): StoragePro
     listLibraries: (signal) => delegate().listLibraries(signal),
     forLibrary: (libraryId) => delegate().forLibrary(libraryId),
     authState: () => delegate().authState(),
+    accountIdentity: (signal) => delegate().accountIdentity(signal),
     put: (path, bytes) => delegate().put(path, bytes),
     getStream: (path) => delegate().getStream(path),
     list: (prefix, signal) => delegate().list(prefix, signal),
