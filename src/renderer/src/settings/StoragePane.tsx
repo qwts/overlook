@@ -10,6 +10,7 @@ import { Switch } from '../components/Switch';
 import { Field } from './Field';
 import { OffloadedStorage } from './OffloadedStorage';
 import { ProviderCard, type ProviderCapacityView, type ProviderConnectionState } from './ProviderCard';
+import { resolveProviderTargetId } from './provider-presentation.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
 import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
@@ -65,6 +66,7 @@ export interface StoragePaneProps {
   readonly selectedPhotoIds: readonly string[];
   readonly onRestore?: (() => void) | undefined;
   readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
+  readonly preferredProviderId?: string | null | undefined;
   readonly onPatch: (
     patch: Partial<
       Pick<AppSettings, 'autoBackupOnImport' | 'reOffloadAfterViewing' | 'importMode' | 'wifiOnly' | 'bandwidthLimit' | 'providerId'>
@@ -72,12 +74,19 @@ export interface StoragePaneProps {
   ) => void;
 }
 
-export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore, onProviderSelection }: StoragePaneProps): ReactElement {
+export function StoragePane({
+  settings,
+  selectedPhotoIds,
+  onPatch,
+  onRestore,
+  onProviderSelection,
+  preferredProviderId = null,
+}: StoragePaneProps): ReactElement {
   const intl = useIntl();
   const [statusLoad, setStatusLoad] = useState<ProviderStatusLoad | null>(null);
   const [storageLoad, setStorageLoad] = useState<ProviderStorageLoad | null>(null);
   const [providers, setProviders] = useState<readonly ProviderDescriptor[]>([]);
-  const [targetId, setTargetId] = useState<string | null>(settings.providerId);
+  const [targetId, setTargetId] = useState<string | null>(settings.providerId ?? preferredProviderId);
   const [connectionOperation, setConnectionOperation] = useState<ConnectionOperation | null>(null);
   const [disconnectConfirmation, setDisconnectConfirmation] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -162,13 +171,9 @@ export function StoragePane({ settings, selectedPhotoIds, onPatch, onRestore, on
   useEffect(() => {
     void window.overlook.backup.providers().then(({ providers: loaded, defaultProviderId }) => {
       setProviders(loaded);
-      setTargetId((current) => {
-        const selected = loaded.some((provider) => provider.id === settings.providerId) ? settings.providerId : null;
-        const retained = loaded.some((provider) => provider.id === current) ? current : null;
-        return selected ?? retained ?? defaultProviderId;
-      });
+      setTargetId((current) => resolveProviderTargetId(loaded, settings.providerId, current, preferredProviderId, defaultProviderId));
     });
-  }, [settings.providerId]);
+  }, [preferredProviderId, settings.providerId]);
 
   useEffect(() => {
     refresh();

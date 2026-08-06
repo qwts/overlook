@@ -84,7 +84,7 @@ export function Shell({
   const emptyTrash = useEmptyTrash();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
-  const selectedProviderIdRef = useRef<string | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
   const [exportAllPhotos, setExportAllPhotos] = useState(false);
   const openExport = (photoIds: readonly string[]): void => {
@@ -336,8 +336,7 @@ export function Shell({
   useEffect(() => {
     const syncProvider = (selectedId: string | null): void => {
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
-        if (selectedId !== null) selectedProviderIdRef.current = null;
-        const presentationId = selectedId ?? selectedProviderIdRef.current;
+        const presentationId = selectedId ?? selectedProviderId;
         const providerId = providers.some((provider) => provider.id === presentationId)
           ? (presentationId ?? defaultProviderId)
           : defaultProviderId;
@@ -364,7 +363,7 @@ export function Shell({
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });
-  }, [dispatch]);
+  }, [dispatch, selectedProviderId]);
 
   // Backup completion (#106): failures surface as the red toast with a
   // Retry action; the pending/count refresh rides the existing pushes.
@@ -593,8 +592,9 @@ export function Shell({
           selectedPhotoIds={[...state.selection]}
           transferEnabled={pcloudEnabled}
           onTransfer={pcloudEnabled ? () => openInterop('settings', [...state.selection]) : undefined}
+          preferredProviderId={selectedProviderId}
           onProviderSelection={(provider) => {
-            selectedProviderIdRef.current = provider.id;
+            setSelectedProviderId(provider.id);
             dispatch({ type: 'provider/set', connected: false, label: provider.label });
           }}
           onClose={() => {

@@ -31,6 +31,7 @@ export interface SettingsDialogProps {
   readonly transferEnabled?: boolean | undefined;
   readonly requestedSection?: SettingsSection | undefined;
   readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
+  readonly preferredProviderId?: string | null | undefined;
 }
 
 const messages = defineMessages({
@@ -58,6 +59,7 @@ export function SettingsDialog({
   transferEnabled = false,
   requestedSection,
   onProviderSelection,
+  preferredProviderId,
 }: SettingsDialogProps): ReactElement | null {
   const intl = useIntl();
   const [section, setSection] = useState<SettingsSection>(
@@ -210,6 +212,7 @@ export function SettingsDialog({
               onPatch={patch}
               onRestore={() => setRestoreOpen(true)}
               onProviderSelection={onProviderSelection}
+              preferredProviderId={preferredProviderId}
             />
           ) : activeSection === 'transfer' && transferEnabled ? (
             <TransferPane onOpen={onTransfer} />
