@@ -166,16 +166,20 @@ export class OffloadService {
       let authorityId: number;
       try {
         authorityId = await this.deps.offloadAuthority(photo.bytes);
+        // The authority may have become provider-required after identity was
+        // captured. Keep the prospective hint conservative, then let the
+        // ledger's transactional state check refuse the binding.
+        this.deps.ledger.markOffloaded(photoId, authorityId);
       } catch (error) {
+        this.deps.custodyChanged();
         failed += 1;
         results.push({ photoId, outcome: 'failed', reason: 'remote-unverified' });
-        this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=authority reason=${error instanceof Error ? error.message : String(error)}`);
+        this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=binding reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       // Persist the sole-remote state and exact authority before removing
       // local bytes. A crash can leave a harmless extra local copy, never an
       // unbound cloud-only row that startup repair cannot recover.
-      this.deps.ledger.markOffloaded(photoId, authorityId);
       try {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
       } catch (error) {

@@ -359,6 +359,21 @@ describe('offload + rehydrate (#107)', () => {
     assert.equal(providerId, null);
   });
 
+  test('provider-required authority refuses a new binding without aborting the batch (#732)', async () => {
+    const w = await world(2);
+    await w.engine.run();
+    assert.equal((await w.service.offload(['P0'])).offloaded, 1);
+    const authority = w.authorities.forPhoto('P0');
+    assert.ok(authority);
+    run(w.db, `UPDATE custody_authorities SET state = 'provider-required' WHERE id = ?`, authority.id);
+
+    assert.deepEqual((await w.service.offload(['P1'])).results, [{ photoId: 'P1', outcome: 'failed', reason: 'remote-unverified' }]);
+    assert.equal(w.ledger.status('P1'), 'synced');
+    assert.deepEqual(w.custodyHints.at(-1), [
+      { providerId: 'mock', accountId: 'mock-account', soleCustodyItems: 1, soleCustodyBytes: w.repo.get('P0')?.bytes },
+    ]);
+  });
+
   test('a corrupt download never publishes: record stays cleanly offloaded', async () => {
     const w = await world(1);
     await w.engine.run();
