@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { queryAll, queryGet, runNamed } from '../db/sql.js';
+import { queryAll, queryGet, run, runNamed } from '../db/sql.js';
 
 export type CustodyAuthorityState = 'bound' | 'provider-required';
 
@@ -202,5 +202,28 @@ export class CustodyAuthorityRepository {
           WHERE l.status = 'offloaded' AND l.custody_authority_id IS NULL`,
       ) ?? { items: 0, bytes: 0 }
     );
+  }
+
+  /** Emergency authorization removal preserves every binding field and row;
+   * only the derived authority state changes (ADR-0028 §5). */
+  markProviderRequired(providerId: string, accountId: string): number {
+    const affected = this.soleCustodyCounts().filter(
+      ({ authority }) => authority.providerId === providerId && authority.accountId === accountId,
+    );
+    if (affected.length === 0) return 0;
+    run(
+      this.db,
+      `UPDATE custody_authorities
+          SET state = 'provider-required'
+        WHERE provider_id = ? AND account_id = ?
+          AND id IN (SELECT custody_authority_id FROM sync_ledger WHERE custody_authority_id IS NOT NULL)`,
+      providerId,
+      accountId,
+    );
+    return affected.length;
+  }
+
+  providerRequirements(): readonly SoleCustodyCount[] {
+    return this.soleCustodyCounts().filter(({ authority }) => authority.state === 'provider-required');
   }
 }
