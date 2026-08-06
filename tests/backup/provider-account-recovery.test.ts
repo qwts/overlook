@@ -32,6 +32,45 @@ function runtime(overrides: Partial<ProviderRuntimeOptions>): ProviderRuntime {
   });
 }
 
+test('same-provider account changes run the switch guard before identity persistence (#730)', async () => {
+  let providerId: string | null = 'pcloud';
+  let guardCalls = 0;
+  const providerRuntime = runtime({
+    providerId: () => providerId,
+    setProviderId: (id) => {
+      providerId = id;
+    },
+    fetchImpl: () => Promise.resolve(Response.json({ result: 0, userid: 73002, email: 'replacement@pcloud.test' })),
+    switchGuard: () => {
+      guardCalls += 1;
+      return Promise.resolve({ ok: false, reason: 'cloud-only originals remain in the original account' });
+    },
+  });
+  providerRuntime.tokenStore().save({
+    accessToken: 'account-changed-token',
+    apiHost: 'api.pcloud.com',
+    connectedAt: '2026-08-06T00:00:00.000Z',
+    accountId: '73001',
+    accountLabel: 'original@pcloud.test',
+  });
+  providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-pcloud-account-change'), fault: undefined });
+
+  assert.deepEqual(await providerRuntime.connect('pcloud'), {
+    ok: false,
+    reason: 'cloud-only originals remain in the original account',
+  });
+  assert.equal(guardCalls, 1);
+  assert.equal(providerId, null, 'a rejected account replacement is no longer selected');
+  assert.equal(providerRuntime.activeId(), null);
+  assert.deepEqual(providerRuntime.tokenStore().load(), {
+    accessToken: 'account-changed-token',
+    apiHost: 'api.pcloud.com',
+    connectedAt: '2026-08-06T00:00:00.000Z',
+    accountId: '73001',
+    accountLabel: 'original@pcloud.test',
+  });
+});
+
 describe('provider account authentication recovery (#730)', () => {
   test('revoked current pCloud authority is cleared and Connect falls back to OAuth', async () => {
     let browserOpens = 0;

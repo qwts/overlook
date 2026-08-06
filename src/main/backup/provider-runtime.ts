@@ -59,7 +59,14 @@ const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
 const DEFAULT_STORAGE_TIMEOUT_MS = 30_000;
 
 type AccountIdentityAttempt =
-  { readonly ok: true } | { readonly ok: false; readonly reauthenticate: boolean; readonly result: PCloudConnectResult };
+  | {
+      readonly ok: true;
+      readonly identity: ProviderAccountIdentity;
+      readonly previousIdentity: ProviderAccountIdentity | null;
+      readonly accountChanged: boolean;
+      readonly requiresSwitchGuard: boolean;
+    }
+  | { readonly ok: false; readonly reauthenticate: boolean; readonly result: PCloudConnectResult };
 
 export class ProviderRuntime {
   private readonly options: ProviderRuntimeOptions;
@@ -166,7 +173,7 @@ export class ProviderRuntime {
     if (provider === undefined) return identityUnavailable('pCloud');
     const identity = await this.establishAccountIdentity('pcloud', provider);
     if (!identity.ok) return identity.result;
-    return this.activate('pcloud');
+    return this.activate('pcloud', provider, identity);
   }
 
   private async connectGoogleDrive(): Promise<PCloudConnectResult> {
@@ -187,7 +194,7 @@ export class ProviderRuntime {
     if (provider === undefined) return identityUnavailable('Google Drive');
     const identity = await this.establishAccountIdentity('google-drive', provider);
     if (!identity.ok) return identity.result;
-    return this.activate('google-drive');
+    return this.activate('google-drive', provider, identity);
   }
 
   private persistAccountIdentity(providerId: string, identity: ProviderAccountIdentity): boolean {
@@ -239,20 +246,20 @@ export class ProviderRuntime {
   }
 
   private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<AccountIdentityAttempt> {
+    const previousIdentity = this.persistedAccountIdentity(providerId);
     try {
       const identity = await withAbortableDeadline(
         (signal) => provider.accountIdentity(signal),
         this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS,
       );
-      if (!this.persistAccountIdentity(providerId, identity)) {
-        return {
-          ok: false,
-          reauthenticate: false,
-          result: providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label),
-        };
-      }
-      if (provider instanceof ICloudDriveProvider) provider.resetAccountAuthority(identity.accountId);
-      return { ok: true };
+      const accountChanged = previousIdentity !== null && previousIdentity.accountId !== identity.accountId;
+      return {
+        ok: true,
+        identity,
+        previousIdentity,
+        accountChanged,
+        requiresSwitchGuard: this.activeId() !== providerId || (providerId !== 'mock' && (previousIdentity === null || accountChanged)),
+      };
     } catch (error) {
       const authenticationFailed = error instanceof ProviderError && error.kind === 'auth';
       return {
@@ -265,17 +272,34 @@ export class ProviderRuntime {
 
   /** Moves settings.providerId, fail-closed (#741): switching to a
    * different provider first proves the target holds every remote-only
-   * object the library claims. Re-activating the current provider skips the
-   * proof — nothing about the claims changes. */
-  private async activate(providerId: string): Promise<PCloudConnectResult> {
-    if (this.options.switchGuard !== undefined && this.activeId() !== providerId) {
-      const provider = this.provider(providerId);
-      if (provider === undefined) {
-        return { ok: false, reason: 'This provider is not available on this device.' };
+   * object the library claims. Re-activating the same account skips the
+   * proof; a changed account under the same provider ID does not. */
+  private async activate(
+    providerId: string,
+    provider: StorageProvider,
+    attempt: Extract<AccountIdentityAttempt, { readonly ok: true }>,
+  ): Promise<PCloudConnectResult> {
+    const iCloudProvider = provider instanceof ICloudDriveProvider ? provider : null;
+    if (this.options.switchGuard !== undefined && attempt.requiresSwitchGuard) {
+      if (iCloudProvider !== null) iCloudProvider.resetAccountAuthority(attempt.identity.accountId);
+      let verdict: PCloudConnectResult;
+      try {
+        verdict = await this.options.switchGuard({ providerId, provider });
+      } catch (error) {
+        iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
+        throw error;
       }
-      const verdict = await this.options.switchGuard({ providerId, provider });
-      if (!verdict.ok) return verdict;
+      if (!verdict.ok) {
+        iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
+        if (attempt.accountChanged && this.options.providerId() === providerId) this.options.setProviderId(null);
+        return verdict;
+      }
     }
+    if (!this.persistAccountIdentity(providerId, attempt.identity)) {
+      iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
+      return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
+    }
+    iCloudProvider?.resetAccountAuthority(attempt.identity.accountId);
     this.options.setProviderId(providerId);
     return { ok: true, reason: null };
   }
@@ -403,7 +427,7 @@ export class ProviderRuntime {
         if (identity.reauthenticate && providerId === 'google-drive') return this.connectGoogleDrive();
         return identity.result;
       }
-      return this.activate(providerId);
+      return this.activate(providerId, provider, identity);
     }
     if (providerId === 'pcloud') {
       return this.connectPCloud();
@@ -422,7 +446,7 @@ export class ProviderRuntime {
     }
     const identity = await this.establishAccountIdentity(providerId, provider);
     if (!identity.ok) return identity.result;
-    return this.activate(providerId);
+    return this.activate(providerId, provider, identity);
   }
 
   disconnect(providerId: string): Promise<PCloudConnectResult> {
