@@ -36,7 +36,7 @@ import { createRecoveryHealthCheck } from './backup/recovery-health.js';
 import type { OffloadService } from './backup/offload.js';
 import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { createOriginalCustodyRuntime } from './backup/original-custody-runtime.js';
-import { createCustodyRoutingRuntime } from './backup/custody-routing-runtime.js';
+import { createCustodyRoutingRuntime, refreshCustodyHints } from './backup/custody-routing-runtime.js';
 import type { ProviderRuntime } from './backup/provider-runtime.js';
 import { createProviderRuntime } from './backup/provider-runtime-factory.js';
 import type { RestoreRuntime } from './backup/restore-runtime.js';
@@ -140,6 +140,7 @@ function getLibraryService(): LibraryService {
     }
     const db = openLibraryDatabase({ path: path.join(dataDir, 'library.db'), dbKey });
     registryRuntime.markOpened();
+    refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
     // photos.key_id references keys(id): the current key's row must exist
@@ -337,7 +338,6 @@ const changeProviderWork = (delta: 1 | -1): void => {
   providerWork.change(delta);
   embeddingRuntime?.service.notifyWorkAvailable();
 };
-const providerIdle = (): Promise<void> => providerWork.idle();
 
 let embeddingRuntime: EmbeddingRuntime | undefined;
 
@@ -691,7 +691,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     startupMaintenance.drain(),
     Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
     full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
-    full ? providerIdle() : Promise.resolve(),
+    full ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
     importRuntime?.pool.close() ?? Promise.resolve(),
     ...(full ? [session.defaultSession.clearCache()] : []),

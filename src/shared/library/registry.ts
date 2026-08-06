@@ -21,14 +21,23 @@ export const libraryEntrySchema = z
      * Omitted for pre-ADR-0028 registry entries. */
     custodyHints: z
       .array(
-        z
-          .object({
-            providerId: z.string().min(1),
-            accountId: z.string().min(1),
-            soleCustodyItems: z.number().int().nonnegative(),
-            soleCustodyBytes: z.number().int().nonnegative(),
-          })
-          .strict(),
+        z.union([
+          z
+            .object({
+              providerId: z.string().min(1),
+              accountId: z.string().min(1),
+              soleCustodyItems: z.number().int().nonnegative(),
+              soleCustodyBytes: z.number().int().nonnegative(),
+            })
+            .strict(),
+          z
+            .object({
+              legacyUnbound: z.literal(true),
+              soleCustodyItems: z.number().int().positive(),
+              soleCustodyBytes: z.number().int().nonnegative(),
+            })
+            .strict(),
+        ]),
       )
       .optional(),
   })

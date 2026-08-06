@@ -11,22 +11,41 @@ export interface CustodyGateDependencies {
 /** Conservative preflight when a library database is sealed. Hints may
  * overcount, but credential removal must never treat them as zero. */
 export function custodyHintPreflight(credential: CustodyCredential, libraries: readonly LibraryEntry[]): CustodyPreflight {
+  const unverifiedLibraries = libraries
+    .filter((library) => library.custodyHints === undefined)
+    .map((library) => ({ libraryId: library.id, name: library.name }));
   const risks = libraries.flatMap((library): CustodyRiskLibrary[] => {
-    const stake = (library.custodyHints ?? [])
-      .filter((hint) => hint.providerId === credential.providerId && hint.accountId === credential.accountId)
+    const hints = library.custodyHints ?? [];
+    const stake = hints
+      .filter((hint) => 'providerId' in hint && hint.providerId === credential.providerId && hint.accountId === credential.accountId)
       .reduce((total, hint) => ({ items: total.items + hint.soleCustodyItems, bytes: total.bytes + hint.soleCustodyBytes }), {
         items: 0,
         bytes: 0,
       });
-    return stake.items === 0
+    const legacy = hints
+      .filter((hint) => 'legacyUnbound' in hint)
+      .reduce((total, hint) => ({ items: total.items + hint.soleCustodyItems, bytes: total.bytes + hint.soleCustodyBytes }), {
+        items: 0,
+        bytes: 0,
+      });
+    return stake.items + legacy.items === 0
       ? []
-      : [{ libraryId: library.id, name: library.name, items: stake.items, bytes: stake.bytes, legacyUnbound: false }];
+      : [
+          {
+            libraryId: library.id,
+            name: library.name,
+            items: stake.items + legacy.items,
+            bytes: stake.bytes + legacy.bytes,
+            legacyUnbound: legacy.items > 0,
+          },
+        ];
   });
   return {
     credential,
     totalItems: risks.reduce((total, library) => total + library.items, 0),
     totalBytes: risks.reduce((total, library) => total + library.bytes, 0),
     libraries: risks,
+    ...(unverifiedLibraries.length === 0 ? {} : { unverifiedLibraries }),
   };
 }
 
@@ -53,31 +72,32 @@ export class CustodyGate {
       });
     }
 
-    libraries.push(
-      ...custodyHintPreflight(
-        credential,
-        this.deps.libraries().filter((library) => library.id !== active.id),
-      ).libraries,
+    const hinted = custodyHintPreflight(
+      credential,
+      this.deps.libraries().filter((library) => library.id !== active.id),
     );
+    libraries.push(...hinted.libraries);
 
     return {
       credential,
       totalItems: libraries.reduce((total, library) => total + library.items, 0),
       totalBytes: libraries.reduce((total, library) => total + library.bytes, 0),
       libraries,
+      ...(hinted.unverifiedLibraries === undefined ? {} : { unverifiedLibraries: hinted.unverifiedLibraries }),
     };
   }
 }
 
 export interface CustodyHintCoordinatorDependencies {
-  readonly authorities: Pick<CustodyAuthorityRepository, 'soleCustodyCounts'>;
+  readonly authorities: Pick<CustodyAuthorityRepository, 'soleCustodyCounts' | 'legacyUnboundCount'>;
   readonly write: (hints: NonNullable<LibraryEntry['custodyHints']>) => void;
 }
 
 function exactHints(
   counts: ReturnType<CustodyHintCoordinatorDependencies['authorities']['soleCustodyCounts']>,
+  legacy: ReturnType<CustodyHintCoordinatorDependencies['authorities']['legacyUnboundCount']>,
 ): NonNullable<LibraryEntry['custodyHints']> {
-  const hints = new Map<string, NonNullable<LibraryEntry['custodyHints']>[number]>();
+  const hints = new Map<string, { providerId: string; accountId: string; soleCustodyItems: number; soleCustodyBytes: number }>();
   for (const count of counts) {
     const key = `${count.authority.providerId}\0${count.authority.accountId}`;
     const current = hints.get(key);
@@ -88,7 +108,10 @@ function exactHints(
       soleCustodyBytes: (current?.soleCustodyBytes ?? 0) + count.bytes,
     });
   }
-  return [...hints.values()];
+  return [
+    ...hints.values(),
+    ...(legacy.items === 0 ? [] : [{ legacyUnbound: true as const, soleCustodyItems: legacy.items, soleCustodyBytes: legacy.bytes }]),
+  ];
 }
 
 /** Writes a conservative sealed-library summary before binding and clears
@@ -97,8 +120,10 @@ export class CustodyHintCoordinator {
   constructor(private readonly deps: CustodyHintCoordinatorDependencies) {}
 
   beforeBinding(credential: CustodyCredential, bytes: number): void {
-    const hints = [...exactHints(this.deps.authorities.soleCustodyCounts())];
-    const index = hints.findIndex((hint) => hint.providerId === credential.providerId && hint.accountId === credential.accountId);
+    const hints = [...exactHints(this.deps.authorities.soleCustodyCounts(), this.deps.authorities.legacyUnboundCount())];
+    const index = hints.findIndex(
+      (hint) => 'providerId' in hint && hint.providerId === credential.providerId && hint.accountId === credential.accountId,
+    );
     const current = hints[index];
     const prospective = {
       providerId: credential.providerId,
@@ -112,6 +137,6 @@ export class CustodyHintCoordinator {
   }
 
   refresh(): void {
-    this.deps.write(exactHints(this.deps.authorities.soleCustodyCounts()));
+    this.deps.write(exactHints(this.deps.authorities.soleCustodyCounts(), this.deps.authorities.legacyUnboundCount()));
   }
 }

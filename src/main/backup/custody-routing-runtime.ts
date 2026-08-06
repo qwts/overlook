@@ -6,6 +6,7 @@ import { CustodyHintCoordinator } from './custody-gate.js';
 import { CustodyHandleResolver, custodyRemoteRoot } from './custody-handle.js';
 import type { StorageProvider } from './provider.js';
 import type { LibraryEntry } from '../../shared/library/registry.js';
+import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
 
 export interface CustodyRoutingRuntimeDeps {
   readonly db: BetterSqlite3.Database;
@@ -17,6 +18,19 @@ export interface CustodyRoutingRuntimeDeps {
   readonly now: () => string;
   readonly writeCustodyHints?: ((hints: NonNullable<LibraryEntry['custodyHints']>) => void) | undefined;
   readonly audit?: ((line: string) => void) | undefined;
+}
+
+/** Open-time migration/recount: legacy rows must reach the registry even if
+ * no backup service is otherwise constructed before the library is sealed. */
+export function refreshCustodyHints(
+  db: BetterSqlite3.Database,
+  registry: Pick<LibraryRegistryRuntime, 'resolveActive' | 'getRegistry'>,
+): void {
+  const authorities = new CustodyAuthorityRepository(db);
+  new CustodyHintCoordinator({
+    authorities,
+    write: (hints) => registry.getRegistry().updateCustodyHints(registry.resolveActive().id, hints),
+  }).refresh();
 }
 
 /** Splits selection-addressed backup work from binding-addressed custody at

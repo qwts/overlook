@@ -485,7 +485,8 @@ export class ProviderRuntime {
     if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
     if (credential !== null) {
       const custody = this.options.custodyPreflight?.(credential);
-      if (custody !== undefined && custody.totalItems !== 0) return restoreRequired(custody);
+      const blocked = custody === undefined ? null : custodyBlocked(custody);
+      if (blocked !== null) return blocked;
     }
     if (this.options.isWorkActive?.() === true) {
       return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
@@ -539,7 +540,7 @@ export class ProviderRuntime {
     const credential = await this.custodyCredential(providerId);
     if (credential === null) return custodyUnavailable();
     const custody = this.options.custodyPreflight(credential);
-    return custody.totalItems === 0 ? null : restoreRequired(custody);
+    return custodyBlocked(custody);
   }
 
   private async custodyCredential(providerId: string): Promise<CustodyCredential | null> {
@@ -786,6 +787,19 @@ function restoreRequired(custody: CustodyPreflight): PCloudConnectResult {
     code: 'custody-restore-required',
     custody,
   };
+}
+
+function custodyBlocked(custody: CustodyPreflight): PCloudConnectResult | null {
+  if (custody.unverifiedLibraries !== undefined && custody.unverifiedLibraries.length > 0) {
+    return {
+      ok: false,
+      reason: 'Open each unverified library before changing this provider account.',
+      code: 'custody-unavailable',
+      retryable: true,
+      custody,
+    };
+  }
+  return custody.totalItems === 0 ? null : restoreRequired(custody);
 }
 
 function iCloudAuthoritySaveFailure(): PCloudConnectResult {

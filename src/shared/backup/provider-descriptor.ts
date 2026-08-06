@@ -82,6 +82,10 @@ export const custodyPreflightSchema = z.object({
   totalItems: z.number().int().nonnegative(),
   totalBytes: z.number().nonnegative(),
   libraries: z.array(custodyRiskLibrarySchema).readonly(),
+  unverifiedLibraries: z
+    .array(z.object({ libraryId: z.string().min(1), name: z.string().min(1) }))
+    .readonly()
+    .optional(),
 });
 
 export type CustodyCredential = z.output<typeof custodyCredentialSchema>;

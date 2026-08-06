@@ -139,4 +139,30 @@ describe('emergency provider custody rollback (#732)', () => {
     assert.equal(rolledBack, 1);
     assert.equal(r.tokenStore().load()?.accountId, '1001');
   });
+
+  test('ordinary removal fails closed when a sealed library has no verified hint', async () => {
+    const r = runtime({
+      providerId: () => 'pcloud',
+      custodyPreflight: (credential) => ({
+        credential,
+        totalItems: 0,
+        totalBytes: 0,
+        libraries: [],
+        unverifiedLibraries: [{ libraryId: 'library-b', name: 'Archive' }],
+      }),
+    });
+    r.tokenStore().save({
+      accessToken: 'retained-unverified-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-unverified-hint'), fault: undefined });
+
+    const result = await r.disconnect('pcloud');
+    assert.equal(result.code, 'custody-unavailable');
+    assert.equal(result.custody?.unverifiedLibraries?.[0]?.libraryId, 'library-b');
+    assert.equal(r.tokenStore().load()?.accountId, '1001');
+  });
 });
