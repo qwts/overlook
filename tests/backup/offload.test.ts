@@ -149,6 +149,11 @@ describe('offload + rehydrate (#107)', () => {
     await w.engine.run();
     const photo = w.repo.get('P0');
     assert.notEqual(photo, undefined);
+    const deleteOriginal = w.store.deleteOriginal.bind(w.store);
+    w.store.deleteOriginal = async (hash) => {
+      assert.notEqual(w.authorities.forPhoto('P0'), undefined, 'the binding is durable before local deletion starts');
+      await deleteOriginal(hash);
+    };
 
     const summary = await w.service.offload(['P0']);
     assert.deepEqual({ offloaded: summary.offloaded, skipped: summary.skipped }, { offloaded: 1, skipped: 0 });
@@ -274,6 +279,7 @@ describe('offload + rehydrate (#107)', () => {
     ]);
     assert.equal(w.store.hasOriginal(failedHash ?? ''), true);
     assert.equal(w.ledger.status('P0'), 'synced');
+    assert.equal(w.authorities.forPhoto('P0'), undefined, 'a failed eviction rolls back its pending custody binding');
     assert.equal(w.ledger.status('P1'), 'offloaded');
   });
 

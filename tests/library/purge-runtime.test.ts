@@ -10,15 +10,19 @@ test('manual purge close aborts active work, rejects queued work, and drains bef
   });
   let activeSignal: AbortSignal | undefined;
   let calls = 0;
-  const runtime = createPurgeRuntime({
-    purge: async (_photoIds, signal) => {
-      calls += 1;
-      activeSignal = signal;
-      await gate;
-      return { purged: 1, skipped: 0, protected: 0, remoteFailures: 0 };
+  const work: number[] = [];
+  const runtime = createPurgeRuntime(
+    {
+      purge: async (_photoIds, signal) => {
+        calls += 1;
+        activeSignal = signal;
+        await gate;
+        return { purged: 1, skipped: 0, protected: 0, remoteFailures: 0 };
+      },
+      deletePermanently: () => Promise.resolve({ purged: 0, skipped: 0, protected: 0, remoteFailures: 0 }),
     },
-    deletePermanently: () => Promise.resolve({ purged: 0, skipped: 0, protected: 0, remoteFailures: 0 }),
-  });
+    (delta) => work.push(delta),
+  );
 
   const active = runtime.purge(['active']);
   const queued = runtime.purge(['queued']);
@@ -37,5 +41,6 @@ test('manual purge close aborts active work, rejects queued work, and drains bef
   await assert.rejects(queued, /purge service is closed/);
   await drain;
   assert.equal(calls, 1, 'queued work never entered the purge service');
+  assert.deepEqual(work, [1, -1], 'provider work stays locked for the full destructive operation');
   await assert.rejects(runtime.purge(['later']), /purge service is closed/);
 });

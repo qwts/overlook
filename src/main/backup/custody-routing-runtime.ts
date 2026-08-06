@@ -43,7 +43,9 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       if (authority !== undefined) return (await resolver.resolveAuthority(authority)).provider;
       if (deps.status(photoId) === 'offloaded') return (await resolver.resolve(photoId)).provider;
       if (!deps.backupTargetConnected()) throw new Error('backup target is disconnected');
-      return deps.backupTarget;
+      const provider = deps.provider(deps.backupTarget.id);
+      if (provider === undefined) throw new Error('backup target is unavailable');
+      return provider;
     },
   };
 }

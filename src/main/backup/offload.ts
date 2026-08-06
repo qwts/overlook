@@ -171,15 +171,25 @@ export class OffloadService {
         this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=authority reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
+      // Persist the sole-remote state and exact authority before removing
+      // local bytes. A crash can leave a harmless extra local copy, never an
+      // unbound cloud-only row that startup repair cannot recover.
+      this.deps.ledger.markOffloaded(photoId, authorityId);
       try {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
       } catch (error) {
+        try {
+          this.deps.ledger.setStatus(photoId, 'synced');
+        } catch (rollbackError) {
+          this.deps.audit(
+            `OFFLOAD-FAIL photo=${photoId} stage=rollback reason=${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
         failed += 1;
         results.push({ photoId, outcome: 'failed', reason: 'delete-failed' });
         this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=delete reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
-      this.deps.ledger.markOffloaded(photoId, authorityId);
       this.deps.audit(`OFFLOAD photo=${photoId} bytes=${String(photo.bytes)}`);
       offloaded += 1;
       freedBytes += photo.bytes;

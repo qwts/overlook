@@ -558,7 +558,7 @@ function getBackupEngine(): BackupEngine {
       audit,
       retention: () => getSettingsStore().get().trashRetention,
     });
-    purgeRuntime = createPurgeRuntime(purgeService);
+    purgeRuntime = createPurgeRuntime(purgeService, changeProviderWork);
     consistencyChecker = createConsistencyChecker({
       db: parts.db,
       repo,
