@@ -93,6 +93,30 @@ export class CustodyAuthorityRepository {
     return row === undefined ? undefined : fromRow(row);
   }
 
+  /** Resolves sole-remote work through the row's durable provenance, never
+   * through the provider currently selected for new backups. */
+  forPhoto(photoId: string): CustodyAuthority | undefined {
+    const row = queryGet<{
+      id: number;
+      providerId: string;
+      accountId: string;
+      accountLabel: string;
+      remoteRoot: string;
+      state: CustodyAuthorityState;
+      createdAt: string;
+      lastVerifiedAt: string | null;
+    }>(
+      this.db,
+      `SELECT a.id, a.provider_id AS providerId, a.account_id AS accountId, a.account_label AS accountLabel,
+              a.remote_root AS remoteRoot, a.state, a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
+         FROM sync_ledger l
+         JOIN custody_authorities a ON a.id = l.custody_authority_id
+        WHERE l.photo_id = ?`,
+      photoId,
+    );
+    return row === undefined ? undefined : fromRow(row);
+  }
+
   find(providerId: string, accountId: string, remoteRoot: string): CustodyAuthority | undefined {
     const row = queryGet<{
       id: number;
