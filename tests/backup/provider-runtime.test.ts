@@ -21,6 +21,17 @@ const fakeSafeStorage: SafeStorageLike = {
   decryptString: (encrypted) => encrypted.toString('utf8'),
 };
 
+function providerIdentityFetch(input: string | URL | Request): Promise<Response> {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (url.startsWith('https://oauth2.googleapis.com/token')) {
+    return Promise.resolve(Response.json({ access_token: 'test-google-access', expires_in: 3600 }));
+  }
+  if (url.startsWith('https://www.googleapis.com/drive/v3/about')) {
+    return Promise.resolve(Response.json({ user: { permissionId: 'permission-1', emailAddress: 'owner@google.test' } }));
+  }
+  return Promise.resolve(Response.json({ result: 0, userid: 1001, email: 'owner@pcloud.test' }));
+}
+
 function runtime(overrides: Partial<ProviderRuntimeOptions> = {}) {
   const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-runtime-')), 'library');
   return {
@@ -35,6 +46,7 @@ function runtime(overrides: Partial<ProviderRuntimeOptions> = {}) {
       harnessEnv: (name) => (name === 'OVERLOOK_E2E' ? '1' : undefined),
       pcloudEnabled: true,
       pcloudClientId: () => 'public-test-client',
+      fetchImpl: providerIdentityFetch,
       iCloudDriveBridge: new DeterministicICloudDriveBridge(),
       ...overrides,
     }),
@@ -91,13 +103,28 @@ describe('provider runtime policy (#256)', () => {
     assert.equal(runtime({ providerId: () => 'mock', isPackaged: true }).runtime.activeId(), null);
     assert.equal(runtime({ providerId: () => 'mock' }).runtime.activeId(), 'mock');
     assert.equal(runtime({ providerId: () => 'mock', harnessEnv: () => undefined }).runtime.activeId(), null);
-    assert.equal(runtime({ providerId: () => 'pcloud', isPackaged: true }).runtime.activeId(), 'pcloud');
+    const pcloud = runtime({ providerId: () => 'pcloud', isPackaged: true });
+    assert.equal(pcloud.runtime.activeId(), null, 'a token without a named account is not active');
+    pcloud.runtime.tokenStore().save({
+      accessToken: 'sealed-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    assert.equal(pcloud.runtime.activeId(), 'pcloud');
     assert.equal(runtime({ providerId: () => 'icloud-drive', isPackaged: true }).runtime.activeId(), null);
     assert.equal(runtime({ providerId: () => 'google-drive' }).runtime.activeId(), null, 'an unconfigured Drive build is disconnected');
-    assert.equal(
-      runtime({ providerId: () => 'google-drive', googleDriveClientId: () => 'desktop.apps.googleusercontent.com' }).runtime.activeId(),
-      'google-drive',
-    );
+    const google = runtime({ providerId: () => 'google-drive', googleDriveClientId: () => 'desktop.apps.googleusercontent.com' });
+    assert.equal(google.runtime.activeId(), null, 'a refresh token without a named account is not active');
+    google.runtime.googleTokenStore().save({
+      clientId: 'desktop.apps.googleusercontent.com',
+      refreshToken: 'refresh-token',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
+    });
+    assert.equal(google.runtime.activeId(), 'google-drive');
     assert.equal(runtime({ providerId: () => null }).runtime.activeId(), null);
     const { runtime: unavailable } = runtime({ providerId: () => 'missing-provider' });
     unavailable.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-mock'), fault: undefined });
@@ -122,7 +149,13 @@ describe('provider runtime policy (#256)', () => {
       providerId: () => 'pcloud',
       harnessEnv: () => undefined,
     });
-    r.tokenStore().save({ accessToken: 'sealed-token', apiHost: 'api.pcloud.com', connectedAt: '2026-07-23T00:00:00.000Z' });
+    r.tokenStore().save({
+      accessToken: 'sealed-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-07-23T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-unused-mock'), fault: undefined });
 
     assert.equal(r.activeId(), null);
@@ -150,6 +183,107 @@ describe('provider runtime policy (#256)', () => {
     assert.equal(flipped, 'mock');
   });
 
+  test('identity-unavailable is a typed retryable failure and never activates anonymous authority', async () => {
+    let providerId: string | null = null;
+    const { runtime: r } = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-anonymous'), fault: 'identity-unavailable' });
+    assert.deepEqual(await r.connect('mock'), {
+      ok: false,
+      reason: 'Local mock could not verify the account identity. Check the connection and try again.',
+      code: 'identity-unavailable',
+      retryable: true,
+    });
+    assert.equal(providerId, null);
+  });
+
+  test('connect captures pCloud identity, persists it across restart, and fails closed when unavailable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'overlook-runtime-pcloud-identity-'));
+    let providerId: string | null = null;
+    let identityAvailable = true;
+    let accountId = 9001;
+    let accountLabel = 'owner@pcloud.test';
+    const options = {
+      dataDir: () => join(root, 'library'),
+      providerCredentialDir: (id: string) => join(root, 'provider-auth', id),
+      providerId: () => providerId,
+      setProviderId: (id: string | null) => {
+        providerId = id;
+      },
+      fetchImpl: (() =>
+        Promise.resolve(
+          Response.json({ result: 0, userid: accountId, ...(identityAvailable ? { email: accountLabel } : {}) }),
+        )) as typeof fetch,
+    };
+    const first = runtime(options).runtime;
+    first.tokenStore().save({ accessToken: 'provisional-token', apiHost: 'api.pcloud.com', connectedAt: '2026-08-06T00:00:00.000Z' });
+    first.buildProvider({ mockRootDir: join(root, 'mock'), fault: undefined });
+    assert.deepEqual(await first.connect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(await first.status('pcloud'), {
+      provider: (await first.descriptors()).find(({ id }) => id === 'pcloud'),
+      connected: true,
+      accountLabel: 'owner@pcloud.test',
+    });
+
+    const restarted = runtime(options).runtime;
+    restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
+    assert.equal(restarted.activeId(), 'pcloud');
+    assert.equal((await restarted.status('pcloud')).accountLabel, 'owner@pcloud.test');
+
+    accountId = 9002;
+    accountLabel = 'replacement@pcloud.test';
+    assert.deepEqual(await restarted.connect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(restarted.tokenStore().load(), {
+      accessToken: 'provisional-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '9002',
+      accountLabel: 'replacement@pcloud.test',
+    });
+
+    providerId = null;
+    identityAvailable = false;
+    restarted.tokenStore().save({ accessToken: 'replacement-token', apiHost: 'api.pcloud.com', connectedAt: '2026-08-06T01:00:00.000Z' });
+    assert.deepEqual(await restarted.connect('pcloud'), {
+      ok: false,
+      reason: 'pCloud could not verify the account identity. Check the connection and try again.',
+      code: 'identity-unavailable',
+      retryable: true,
+    });
+    assert.notEqual(restarted.tokenStore().load(), null, 'transient identity failure retains credential custody');
+    assert.equal(providerId, null);
+    assert.equal(restarted.activeId(), null);
+  });
+
+  test('Google Drive account label survives a runtime restart', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'overlook-runtime-google-identity-'));
+    const options = {
+      dataDir: () => join(root, 'library'),
+      providerCredentialDir: (id: string) => join(root, 'provider-auth', id),
+      providerId: () => 'google-drive',
+      googleDriveClientId: () => 'desktop.apps.googleusercontent.com',
+    };
+    const first = runtime(options).runtime;
+    first.googleTokenStore().save({
+      clientId: 'desktop.apps.googleusercontent.com',
+      refreshToken: 'refresh-token',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
+    });
+    first.buildProvider({ mockRootDir: join(root, 'mock'), fault: undefined });
+    assert.equal((await first.status('google-drive')).accountLabel, 'owner@google.test');
+
+    const restarted = runtime(options).runtime;
+    restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
+    assert.equal(restarted.activeId(), 'google-drive');
+    assert.equal((await restarted.status('google-drive')).accountLabel, 'owner@google.test');
+  });
+
   test('a refused switch guard keeps the previous selection and the fresh credential (#741)', async () => {
     let providerId: string | null = 'mock';
     const guarded: string[] = [];
@@ -163,7 +297,13 @@ describe('provider runtime policy (#256)', () => {
         return Promise.resolve({ ok: false, reason: '2 cloud-only originals are not in this provider.' });
       },
     });
-    r.tokenStore().save({ accessToken: 'sealed-pcloud-token', apiHost: 'api.pcloud.com', connectedAt: '2026-07-22T00:00:00.000Z' });
+    r.tokenStore().save({
+      accessToken: 'sealed-pcloud-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-07-22T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-guard-refuse'), fault: undefined });
 
     const result = await r.connect('pcloud');
@@ -182,7 +322,13 @@ describe('provider runtime policy (#256)', () => {
       },
       switchGuard: () => Promise.resolve({ ok: true, reason: null }),
     });
-    r.tokenStore().save({ accessToken: 'sealed-pcloud-token', apiHost: 'api.pcloud.com', connectedAt: '2026-07-22T00:00:00.000Z' });
+    r.tokenStore().save({
+      accessToken: 'sealed-pcloud-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-07-22T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-guard-approve'), fault: undefined });
 
     assert.deepEqual(await r.connect('pcloud'), { ok: true, reason: null });
@@ -228,7 +374,7 @@ describe('provider runtime policy (#256)', () => {
     assert.deepEqual(status, {
       provider: (await r.descriptors()).find(({ id }) => id === 'mock'),
       connected: true,
-      account: null,
+      accountLabel: 'Mock account',
     });
     assert.equal(inventoryCalls, 0);
     assert.equal(quotaCalls, 0);
@@ -265,7 +411,13 @@ describe('provider runtime policy (#256)', () => {
         providerId = id;
       },
     });
-    r.tokenStore().save({ accessToken: 'existing-pcloud-token', apiHost: 'api.pcloud.com', connectedAt: '2026-07-22T00:00:00.000Z' });
+    r.tokenStore().save({
+      accessToken: 'existing-pcloud-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-07-22T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reactivate'), fault: undefined });
 
     assert.deepEqual(await r.connect('pcloud'), { ok: true, reason: null });
@@ -290,6 +442,8 @@ describe('provider runtime policy (#256)', () => {
       clientId: 'desktop.apps.googleusercontent.com',
       refreshToken: 'existing-google-refresh-token',
       connectedAt: '2026-07-22T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
     });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-google-reactivate'), fault: undefined });
 
@@ -462,7 +616,11 @@ describe('provider runtime policy (#256)', () => {
     const restarted = runtime(options).runtime;
     restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
     assert.equal(restarted.activeId(), 'icloud-drive', 'restart restores the sealed account authority');
-    assert.equal((await restarted.status('icloud-drive')).connected, true);
+    assert.deepEqual(await restarted.status('icloud-drive'), {
+      provider: (await restarted.descriptors()).find(({ id }) => id === 'icloud-drive'),
+      connected: true,
+      accountLabel: 'Deterministic iCloud account',
+    });
 
     bridge.changeAccount();
     const afterAccountSwitch = runtime(options).runtime;
@@ -538,8 +696,9 @@ describe('provider runtime policy (#256)', () => {
       decryptString: (value) => value.toString('utf8').replace(/^sealed:/u, ''),
     };
     const store = new ICloudDriveAuthorityStore(sealedSafeStorage, credentialDir);
-    store.save('0123456789abcdef');
+    store.save({ accountId: '0123456789abcdef', accountLabel: 'Test iCloud account' });
     assert.equal(store.load(), '0123456789abcdef');
+    assert.deepEqual(store.loadRecord(), { accountId: '0123456789abcdef', accountLabel: 'Test iCloud account' });
     assert.notEqual(readFileSync(join(credentialDir, 'icloud-drive-authority.bin'), 'utf8'), '0123456789abcdef');
 
     writeFileSync(join(credentialDir, 'icloud-drive-authority.bin'), Buffer.from('malformed'));
@@ -590,7 +749,7 @@ describe('provider runtime policy (#256)', () => {
     const status = bridge.status.bind(bridge);
     bridge.status = () => {
       probes += 1;
-      return probes === 1 ? status() : Promise.resolve({ available: false, reason: 'unentitled', accountToken: null });
+      return probes === 1 ? status() : Promise.resolve({ available: false, reason: 'unentitled', accountToken: null, accountLabel: null });
     };
     const { runtime: r } = runtime({ iCloudDriveBridge: bridge });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-icloud-status-race'), fault: undefined });

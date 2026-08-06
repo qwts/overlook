@@ -256,7 +256,7 @@ export function StoragePane({
       <ProviderCard
         name={name}
         connection={connection}
-        account={status?.account ?? null}
+        account={status?.accountLabel ?? null}
         capacity={capacity}
         capabilitiesLine={capabilitiesLine}
         message={connectError}

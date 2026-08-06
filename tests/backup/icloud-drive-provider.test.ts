@@ -13,6 +13,7 @@ import { ProviderError } from '../../src/main/backup/provider.js';
 import { ulid } from '../../src/main/import/ulid.js';
 import { exerciseDisasterRecoveryContract } from './disaster-recovery-contract.js';
 import { exerciseObjectProviderContract } from './object-provider-contract.js';
+import { exerciseProviderAccountContract } from './provider-account-contract.js';
 import { exerciseRestoreProviderContract } from './restore-provider-contract.js';
 
 const LIBRARY_ID = '01KXICLOUDDRIVELIBRARY001';
@@ -33,6 +34,25 @@ function providerError(kind: ProviderError['kind']): (error: unknown) => boolean
 }
 
 describe('iCloud Drive StorageProvider adapter (#657)', () => {
+  test('captures the pinned account subject, detects replacement, and rejects unavailable identity', async () => {
+    const state = world();
+    try {
+      await exerciseProviderAccountContract(state.provider, {
+        accountId: '0123456789abcdef',
+        accountLabel: 'Deterministic iCloud account',
+      });
+      state.bridge.changeAccount();
+      assert.deepEqual(await state.provider.accountIdentity(), {
+        accountId: 'fedcba9876543210',
+        accountLabel: 'Deterministic iCloud account',
+      });
+      state.bridge.setAvailable(false);
+      await assert.rejects(state.provider.accountIdentity(), providerError('transient'));
+    } finally {
+      rmSync(state.temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
   test('satisfies shared object, restore, and complete disaster-recovery contracts', async () => {
     const state = world();
     try {
@@ -43,6 +63,7 @@ describe('iCloud Drive StorageProvider adapter (#657)', () => {
         platforms: ['darwin'],
         interactiveAuth: false,
         reconnectRequired: false,
+        accountIdentity: 'stable-subject',
       });
       await exerciseObjectProviderContract(state.provider, LIBRARY_ID);
       await exerciseRestoreProviderContract(state.provider, LIBRARY_ID);

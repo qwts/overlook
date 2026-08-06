@@ -5,6 +5,7 @@ import { buffer } from 'node:stream/consumers';
 import {
   assertSafeRemotePath,
   ProviderError,
+  type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
   type RemoteEntry,
@@ -70,6 +71,7 @@ export class PCloudProvider implements StorageProvider {
     platforms: ['darwin', 'win32', 'linux'],
     interactiveAuth: true,
     reconnectRequired: true,
+    accountIdentity: 'stable-subject',
   } as const;
   private readonly auth: () => PCloudAuthRecord | null;
   private readonly root: string;
@@ -129,6 +131,22 @@ export class PCloudProvider implements StorageProvider {
     // Cheap truth: custody present. Expiry/revocation surfaces as kind=auth
     // errors on data calls (#256 wires that to the settings card).
     return Promise.resolve(this.auth() === null ? 'not-connected' : 'connected');
+  }
+
+  async accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity> {
+    const data = await this.api('userinfo', {}, undefined, signal);
+    const rawId = data['userid'];
+    const accountId =
+      typeof rawId === 'number' && Number.isSafeInteger(rawId) && rawId >= 0
+        ? String(rawId)
+        : typeof rawId === 'string' && /^\d+$/u.test(rawId)
+          ? rawId
+          : null;
+    const accountLabel = typeof data['email'] === 'string' ? data['email'].trim() : '';
+    if (accountId === null || accountLabel === '') {
+      throw new ProviderError('pCloud account identity is unavailable', 'transient');
+    }
+    return { accountId, accountLabel };
   }
 
   private record(): PCloudAuthRecord {

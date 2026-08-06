@@ -33,6 +33,7 @@ function installStub(options?: {
   readonly iCloudAvailable?: boolean;
 }): void {
   let current: AppSettings = { ...defaultSettings };
+  const nonInteractiveIdentity = { interactiveAuth: false, reconnectRequired: false, accountIdentity: 'stable-subject' } as const;
   const mockProvider = {
     id: 'mock',
     label: 'Local mock',
@@ -41,8 +42,7 @@ function installStub(options?: {
       verification: 'server-checksum' as const,
       resumableUpload: false,
       platforms: ['darwin' as const],
-      interactiveAuth: false,
-      reconnectRequired: false,
+      ...nonInteractiveIdentity,
     },
     available: true,
     unavailableReason: null,
@@ -55,8 +55,7 @@ function installStub(options?: {
       verification: 'download-hash' as const,
       resumableUpload: false,
       platforms: ['darwin' as const],
-      interactiveAuth: false,
-      reconnectRequired: false,
+      ...nonInteractiveIdentity,
     },
     available: options?.iCloudAvailable !== false,
     unavailableReason: options?.iCloudAvailable === false ? 'iCloud Drive requires a provisioned signed macOS build.' : null,
@@ -71,6 +70,7 @@ function installStub(options?: {
       platforms: ['darwin' as const, 'win32' as const, 'linux' as const],
       interactiveAuth: true,
       reconnectRequired: true,
+      accountIdentity: 'stable-subject' as const,
     },
     available: true,
     unavailableReason: null,
@@ -171,7 +171,7 @@ function installStub(options?: {
       return {
         provider,
         connected: current.providerId === providerId,
-        account:
+        accountLabel:
           current.providerId !== providerId
             ? null
             : providerId === iCloudDriveProvider.id

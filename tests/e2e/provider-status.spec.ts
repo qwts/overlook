@@ -45,6 +45,8 @@ function seedCredential(userData: string, providerId: Exclude<ProviderId, 'iclou
         accessToken: 'e2e-local-only-token',
         apiHost: 'api.pcloud.com',
         connectedAt: '2026-07-22T00:00:00.000Z',
+        accountId: '73001',
+        accountLabel: 'owner@pcloud.e2e',
       }),
     );
     return;
@@ -55,6 +57,8 @@ function seedCredential(userData: string, providerId: Exclude<ProviderId, 'iclou
       clientId: GOOGLE_CLIENT_ID,
       refreshToken: 'e2e-local-only-refresh-token',
       connectedAt: '2026-07-22T00:00:00.000Z',
+      accountId: 'e2e-google-permission',
+      accountLabel: 'owner@google.e2e',
     }),
   );
 }

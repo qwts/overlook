@@ -10,6 +10,7 @@ import {
   assertSafeRemotePath,
   ProviderError,
   raceWithAbort,
+  type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
   type RemoteEntry,
@@ -76,6 +77,7 @@ export class ICloudDriveProvider implements StorageProvider {
     platforms: ['darwin'],
     interactiveAuth: false,
     reconnectRequired: false,
+    accountIdentity: 'stable-subject',
   } as const;
 
   private readonly temporaryRoot: string;
@@ -102,6 +104,19 @@ export class ICloudDriveProvider implements StorageProvider {
     } catch {
       return this.authority.accountToken === null ? 'not-connected' : 'expired';
     }
+  }
+
+  async accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity> {
+    let status: ICloudDriveNativeStatus;
+    try {
+      status = await raceWithAbort(this.options.bridge.status(), signal);
+    } catch (error) {
+      throw providerError(error);
+    }
+    if (!status.available || status.accountToken === null) {
+      throw new ProviderError('iCloud Drive account identity is unavailable', 'transient');
+    }
+    return { accountId: status.accountToken, accountLabel: status.accountLabel ?? 'iCloud account' };
   }
 
   /** Explicit reconnect/account-recovery boundary. Ordinary operations never

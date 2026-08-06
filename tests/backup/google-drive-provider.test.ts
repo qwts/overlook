@@ -13,6 +13,7 @@ import { GoogleDrivePathStore } from '../../src/main/backup/google-drive/path-st
 import { GoogleDriveTokenStore } from '../../src/main/backup/google-drive/token-store.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import type { SafeStorageLike } from '../../src/main/crypto/keystore.js';
+import { exerciseProviderAccountContract } from './provider-account-contract.js';
 
 const CLIENT_ID = 'desktop.apps.googleusercontent.com';
 const LIBRARY_ID = '01KXGOOGLEDRIVELIBRARY001';
@@ -62,6 +63,10 @@ class DriveWorld {
   readonly sessions = new Map<string, UploadSession>();
   includeSha = true;
   quotaLimit: string | undefined = '1000000';
+  account: { readonly permissionId: string; readonly emailAddress: string } | null = {
+    permissionId: 'permission-1',
+    emailAddress: 'owner@google.test',
+  };
   interruptAfterCommit = false;
   badUploadLocation = false;
   omitUploadSize = false;
@@ -96,6 +101,7 @@ class DriveWorld {
     if (url.pathname.startsWith('/upload/drive/v3/files')) return this.startUpload(url, init);
     if (url.pathname === '/drive/v3/about') {
       return Response.json({
+        ...(url.searchParams.get('fields')?.includes('user') === true ? { user: this.account ?? {} } : {}),
         storageQuota: { usage: String(this.usedBytes()), ...(this.quotaLimit === undefined ? {} : { limit: this.quotaLimit }) },
       });
     }
@@ -279,6 +285,24 @@ function setup(world = new DriveWorld(), pathsDir = mkdtempSync(join(tmpdir(), '
 const PAYLOAD = Buffer.from('OVLK-encrypted-envelope');
 
 describe('Google Drive provider adapter (#277)', () => {
+  test('captures account identity, detects replacement, and rejects an unavailable subject', async () => {
+    const state = setup();
+    await exerciseProviderAccountContract(state.provider, {
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
+    });
+    state.world.account = { permissionId: 'permission-2', emailAddress: 'replacement@google.test' };
+    assert.deepEqual(await state.provider.accountIdentity(), {
+      accountId: 'permission-2',
+      accountLabel: 'replacement@google.test',
+    });
+    state.world.account = null;
+    await assert.rejects(
+      state.provider.accountIdentity(),
+      (error: unknown) => error instanceof ProviderError && error.kind === 'transient',
+    );
+  });
+
   test('account replacement clears shared validation and path caches before rebuilding the remote tree', async () => {
     const first = new DriveWorld();
     const second = new DriveWorld();

@@ -23,6 +23,11 @@ function bodyText(body: RequestInit['body']): string {
   throw new Error('expected a string or URLSearchParams body');
 }
 
+function requiredSignal(signal: AbortSignal | null): AbortSignal {
+  assert.ok(signal);
+  return signal;
+}
+
 function world(fetchImpl: typeof fetch, clientId: string | null = CLIENT_ID, clientSecret: string | null = null) {
   const store = new GoogleDriveTokenStore({ safeStorage, dataDir: mkdtempSync(join(tmpdir(), 'overlook-google-client-')) });
   let now = 1_000_000;
@@ -107,5 +112,30 @@ describe('Google Drive access-token client (#277)', () => {
     );
     await check(() => Promise.resolve(new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 })), 'transient');
     await check(() => Promise.resolve(new Response('{}', { status: 200 })), 'transient');
+  });
+});
+
+describe('Google Drive refresh cancellation (#730)', () => {
+  test('one cancelled waiter does not abort a refresh still shared by another caller', async () => {
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    let refreshSignal: AbortSignal | null = null;
+    const { auth, store } = world(
+      (_input, init) =>
+        new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+          refreshSignal = init?.signal ?? null;
+        }),
+    );
+    store.save({ clientId: CLIENT_ID, refreshToken: 'refresh-1', connectedAt: 'now' });
+    const cancelled = new AbortController();
+    const first = auth.accessToken(false, cancelled.signal);
+    const second = auth.accessToken();
+
+    cancelled.abort(new Error('identity deadline'));
+    await assert.rejects(first, /identity deadline/u);
+    assert.equal(requiredSignal(refreshSignal).aborted, false, 'the live waiter retains the shared refresh');
+    assert.ok(resolveRefresh);
+    resolveRefresh(Response.json({ access_token: 'shared-access', expires_in: 120 }));
+    assert.equal(await second, 'shared-access');
   });
 });

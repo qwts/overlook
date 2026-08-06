@@ -32,7 +32,7 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): () => void 
     settings: { get: () => Promise.resolve({ settings: { providerId: 'prov-a' } }), onChanged: () => () => undefined },
     backup: {
       providers: () => Promise.resolve({ providers, defaultProviderId: 'prov-a' }),
-      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], account: null }),
+      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], accountLabel: null }),
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {

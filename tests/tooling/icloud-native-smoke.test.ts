@@ -15,7 +15,7 @@ function fakeBridge(): ICloudDriveNativeBridge & { readonly deleted: string[] } 
   return {
     deleted,
     drain: () => Promise.resolve(),
-    status: () => Promise.resolve({ available: true, reason: null, accountToken: '0123456789abcdef' }),
+    status: () => Promise.resolve({ available: true, reason: null, accountToken: '0123456789abcdef', accountLabel: 'Test account' }),
     replaceFile: async (path, source) => {
       objects.set(path, await import('node:fs/promises').then(({ readFile }) => readFile(source)));
     },
@@ -89,7 +89,7 @@ describe('packaged iCloud native smoke (#656)', () => {
     const exits: number[] = [];
     const output: string[] = [];
     const bridge = fakeBridge();
-    bridge.status = () => Promise.resolve({ available: false, reason: 'unentitled', accountToken: null });
+    bridge.status = () => Promise.resolve({ available: false, reason: 'unentitled', accountToken: null, accountLabel: null });
     await runICloudNativeSmokeIfRequested(
       { isPackaged: true, exit: (code) => exits.push(code) },
       { argv: ['Overlook', ICLOUD_NATIVE_SMOKE_ARGUMENT], bridge, write: (value) => output.push(value) },

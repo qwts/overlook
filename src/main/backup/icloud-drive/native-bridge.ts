@@ -29,6 +29,7 @@ export interface ICloudDriveNativeStatus {
   readonly available: boolean;
   readonly reason: ICloudDriveUnavailableReason | null;
   readonly accountToken: string | null;
+  readonly accountLabel: string | null;
 }
 
 export interface ICloudDriveNativeEntry {
@@ -109,7 +110,7 @@ function failClosed(reason: ICloudDriveUnavailableReason): ICloudDriveNativeBrid
   const reject = (): Promise<never> => Promise.reject(new ICloudDriveNativeError('unavailable'));
   return {
     drain: () => Promise.resolve(),
-    status: () => Promise.resolve({ available: false, reason, accountToken: null }),
+    status: () => Promise.resolve({ available: false, reason, accountToken: null, accountLabel: null }),
     replaceFile: reject,
     materializeFile: reject,
     list: reject,
@@ -118,7 +119,9 @@ function failClosed(reason: ICloudDriveUnavailableReason): ICloudDriveNativeBrid
 }
 
 function normalizeStatus(value: unknown): ICloudDriveNativeStatus {
-  if (typeof value !== 'object' || value === null) return { available: false, reason: 'native-unavailable', accountToken: null };
+  if (typeof value !== 'object' || value === null) {
+    return { available: false, reason: 'native-unavailable', accountToken: null, accountLabel: null };
+  }
   const result = value as Record<string, unknown>;
   if (
     result['available'] === true &&
@@ -126,7 +129,9 @@ function normalizeStatus(value: unknown): ICloudDriveNativeStatus {
     typeof result['accountToken'] === 'string' &&
     ACCOUNT_TOKEN.test(result['accountToken'])
   ) {
-    return { available: true, reason: null, accountToken: result['accountToken'] };
+    const accountLabel =
+      typeof result['accountLabel'] === 'string' && result['accountLabel'].trim() !== '' ? result['accountLabel'].trim() : null;
+    return { available: true, reason: null, accountToken: result['accountToken'], accountLabel };
   }
   if (
     result['available'] === false &&
@@ -134,9 +139,9 @@ function normalizeStatus(value: unknown): ICloudDriveNativeStatus {
     unavailableReasons.has(result['reason'] as ICloudDriveUnavailableReason) &&
     result['accountToken'] === null
   ) {
-    return { available: false, reason: result['reason'] as ICloudDriveUnavailableReason, accountToken: null };
+    return { available: false, reason: result['reason'] as ICloudDriveUnavailableReason, accountToken: null, accountLabel: null };
   }
-  return { available: false, reason: 'native-unavailable', accountToken: null };
+  return { available: false, reason: 'native-unavailable', accountToken: null, accountLabel: null };
 }
 
 function mappedError(error: unknown): ICloudDriveNativeError {
