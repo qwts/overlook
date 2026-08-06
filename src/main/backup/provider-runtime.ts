@@ -62,8 +62,6 @@ type AccountIdentityAttempt =
   | {
       readonly ok: true;
       readonly identity: ProviderAccountIdentity;
-      readonly previousIdentity: ProviderAccountIdentity | null;
-      readonly accountChanged: boolean;
       readonly requiresSwitchGuard: boolean;
     }
   | { readonly ok: false; readonly reauthenticate: boolean; readonly result: PCloudConnectResult };
@@ -256,8 +254,6 @@ export class ProviderRuntime {
       return {
         ok: true,
         identity,
-        previousIdentity,
-        accountChanged,
         requiresSwitchGuard: this.activeId() !== providerId || (providerId !== 'mock' && (previousIdentity === null || accountChanged)),
       };
     } catch (error) {
@@ -280,26 +276,20 @@ export class ProviderRuntime {
     attempt: Extract<AccountIdentityAttempt, { readonly ok: true }>,
   ): Promise<PCloudConnectResult> {
     const iCloudProvider = provider instanceof ICloudDriveProvider ? provider : null;
-    if (this.options.switchGuard !== undefined && attempt.requiresSwitchGuard) {
-      if (iCloudProvider !== null) iCloudProvider.resetAccountAuthority(attempt.identity.accountId);
-      let verdict: PCloudConnectResult;
-      try {
-        verdict = await this.options.switchGuard({ providerId, provider });
-      } catch (error) {
-        iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
-        throw error;
-      }
-      if (!verdict.ok) {
-        iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
-        if (attempt.accountChanged && this.options.providerId() === providerId) this.options.setProviderId(null);
-        return verdict;
+    if (attempt.requiresSwitchGuard && this.options.providerId() === providerId) {
+      this.options.setProviderId(null);
+      if (this.options.providerId() === providerId) {
+        return { ok: false, reason: 'Could not save the disconnected state. Try again.' };
       }
     }
     if (!this.persistAccountIdentity(providerId, attempt.identity)) {
-      iCloudProvider?.resetAccountAuthority(attempt.previousIdentity?.accountId ?? null);
       return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
     }
     iCloudProvider?.resetAccountAuthority(attempt.identity.accountId);
+    if (this.options.switchGuard !== undefined && attempt.requiresSwitchGuard) {
+      const verdict = await this.options.switchGuard({ providerId, provider });
+      if (!verdict.ok) return verdict;
+    }
     this.options.setProviderId(providerId);
     return { ok: true, reason: null };
   }

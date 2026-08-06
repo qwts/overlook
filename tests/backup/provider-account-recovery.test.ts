@@ -32,7 +32,7 @@ function runtime(overrides: Partial<ProviderRuntimeOptions>): ProviderRuntime {
   });
 }
 
-test('same-provider account changes run the switch guard before identity persistence (#730)', async () => {
+test('same-provider account changes commit identity before switch-guard mutations (#730)', async () => {
   let providerId: string | null = 'pcloud';
   let guardCalls = 0;
   const providerRuntime = runtime({
@@ -66,8 +66,8 @@ test('same-provider account changes run the switch guard before identity persist
     accessToken: 'account-changed-token',
     apiHost: 'api.pcloud.com',
     connectedAt: '2026-08-06T00:00:00.000Z',
-    accountId: '73001',
-    accountLabel: 'original@pcloud.test',
+    accountId: '73002',
+    accountLabel: 'replacement@pcloud.test',
   });
 });
 
