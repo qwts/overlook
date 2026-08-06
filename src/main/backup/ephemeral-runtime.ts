@@ -8,6 +8,7 @@ import type { SyncStatus } from '../../shared/library/types.js';
 
 export interface EphemeralRuntimeOptions {
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyChanged: () => void;
   readonly ledger: SyncLedger;
   readonly repo: PhotosRepository;
   readonly blobs: BlobStore;
@@ -25,6 +26,7 @@ export interface EphemeralRuntimeOptions {
 export function createEphemeralRuntime(options: EphemeralRuntimeOptions): EphemeralOriginalService {
   return new EphemeralOriginalService({
     custody: options.custody,
+    custodyChanged: options.custodyChanged,
     ledger: options.ledger,
     repo: { get: (id) => options.repo.get(id) },
     blobs: {

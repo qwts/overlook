@@ -14,7 +14,14 @@ import { createPCloudConnect, type PCloudConnectResult } from './pcloud/connect.
 import { PCloudProvider } from './pcloud/pcloud-provider.js';
 import { PCloudTokenStore } from './pcloud/token-store.js';
 import { ProviderError, raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
-import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../shared/backup/provider-descriptor.js';
+import type {
+  CustodyCredential,
+  CustodyPreflight,
+  CustodyRequirement,
+  ProviderCapacityStatus,
+  ProviderConnectionStatus,
+  ProviderDescriptor,
+} from '../../shared/backup/provider-descriptor.js';
 import { ICloudDriveProvider } from './icloud-drive/icloud-drive-provider.js';
 import { ICloudDriveAuthorityStore } from './icloud-drive/authority-store.js';
 import type { ICloudDriveNativeBridge, ICloudDriveUnavailableReason } from './icloud-drive/native-bridge.js';
@@ -50,6 +57,10 @@ export interface ProviderRuntimeOptions {
    * remote-only object the library claims (see provider-switch-guard.ts).
    * Absent in tests that exercise pure selection mechanics. */
   readonly switchGuard?: ((target: { providerId: string; provider: StorageProvider }) => Promise<PCloudConnectResult>) | undefined;
+  readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
+  readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
+  readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
+  readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
   /** Test seams; production probes connection for at most 5s and capacity for 30s. */
   readonly statusTimeoutMs?: number | undefined;
   readonly storageTimeoutMs?: number | undefined;
@@ -275,6 +286,9 @@ export class ProviderRuntime {
     provider: StorageProvider,
     attempt: Extract<AccountIdentityAttempt, { readonly ok: true }>,
   ): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before switching providers.' };
+    }
     const iCloudProvider = provider instanceof ICloudDriveProvider ? provider : null;
     if (attempt.requiresSwitchGuard && this.options.providerId() === providerId) {
       this.options.setProviderId(null);
@@ -342,7 +356,13 @@ export class ProviderRuntime {
       identity = await provider.accountIdentity().catch(() => null);
     }
     const connected = this.activeId() === providerId && authState === 'connected' && identity !== null;
-    return { provider: descriptor, connected, accountLabel: connected ? (identity?.accountLabel ?? null) : null };
+    const custodyRequirements = this.options.providerRequirements?.().filter((requirement) => requirement.providerId === providerId) ?? [];
+    return {
+      provider: descriptor,
+      connected,
+      accountLabel: connected ? (identity?.accountLabel ?? null) : null,
+      ...(custodyRequirements.length === 0 ? {} : { custodyRequirements }),
+    };
   }
 
   /** Bounded, informational provider capacity (#721). Calls are single-flight
@@ -408,9 +428,15 @@ export class ProviderRuntime {
     if (provider === undefined || descriptor?.available !== true) {
       return { ok: false, reason: descriptor?.unavailableReason ?? 'This provider is not available on this device.' };
     }
+    const providerState = await provider.authState();
+    const activeProviderId = this.activeId();
+    if (activeProviderId !== null && (activeProviderId !== providerId || providerState !== 'connected')) {
+      const blocked = await this.custodyChangeBlocked(activeProviderId);
+      if (blocked !== null) return blocked;
+    }
     // Selecting a provider with existing sealed authority is activation, not a
     // new OAuth grant.
-    if ((await provider.authState()) === 'connected') {
+    if (providerState === 'connected') {
       const identity = await this.establishAccountIdentity(providerId, provider);
       if (!identity.ok) {
         if (identity.reauthenticate && providerId === 'pcloud') return this.connectPCloud();
@@ -451,10 +477,26 @@ export class ProviderRuntime {
     return operation;
   }
 
-  private disconnectOnce(providerId: string): PCloudConnectResult {
+  private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
     if (this.options.isWorkActive?.() === true) {
       return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
     }
+    const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
+    if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
+    if (credential !== null) {
+      const custody = this.options.custodyPreflight?.(credential);
+      const blocked = custody === undefined ? null : custodyBlocked(custody);
+      if (blocked !== null) return blocked;
+    }
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
+    }
+    const result = this.disconnectAuthorization(providerId);
+    if (result.ok && credential !== null) this.options.deleteUnreferencedAuthorities?.(credential);
+    return result;
+  }
+
+  private disconnectAuthorization(providerId: string): PCloudConnectResult {
     this.abortStorage(providerId);
     if (providerId === 'pcloud') return this.disconnectPCloud();
     try {
@@ -474,6 +516,48 @@ export class ProviderRuntime {
     } catch {
       return { ok: false, reason: 'Could not remove this provider’s authorization from this device. Try again.' };
     }
+  }
+
+  async removeAuthorizationAnyway(providerId: string): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
+    }
+    const credential = await this.custodyCredential(providerId);
+    if (credential === null) {
+      return custodyUnavailable('Could not verify which provider account is being removed.');
+    }
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
+    }
+    const rollbackRequired = this.options.markProviderRequired?.(credential);
+    const result = this.disconnectAuthorization(providerId);
+    if (!result.ok && this.samePersistedCredential(credential)) rollbackRequired?.();
+    return result;
+  }
+
+  private async custodyChangeBlocked(providerId: string): Promise<PCloudConnectResult | null> {
+    if (this.options.custodyPreflight === undefined) return null;
+    const credential = await this.custodyCredential(providerId);
+    if (credential === null) return custodyUnavailable();
+    const custody = this.options.custodyPreflight(credential);
+    return custodyBlocked(custody);
+  }
+
+  private async custodyCredential(providerId: string): Promise<CustodyCredential | null> {
+    const persisted = this.persistedAccountIdentity(providerId);
+    if (persisted !== null) return { providerId, accountId: persisted.accountId };
+    const provider = this.provider(providerId);
+    if (provider === undefined) return null;
+    try {
+      const identity = await provider.accountIdentity();
+      return { providerId, accountId: identity.accountId };
+    } catch {
+      return null;
+    }
+  }
+
+  private samePersistedCredential(credential: CustodyCredential): boolean {
+    return this.persistedAccountIdentity(credential.providerId)?.accountId === credential.accountId;
   }
 
   private disconnectPCloud(): PCloudConnectResult {
@@ -690,6 +774,32 @@ function identityUnavailable(providerLabel: string): PCloudConnectResult {
     code: 'identity-unavailable',
     retryable: true,
   };
+}
+
+function custodyUnavailable(reason = 'Could not verify custody for this provider account.'): PCloudConnectResult {
+  return { ok: false, reason, code: 'custody-unavailable', retryable: true };
+}
+
+function restoreRequired(custody: CustodyPreflight): PCloudConnectResult {
+  return {
+    ok: false,
+    reason: 'Restore all originals first before changing this provider account.',
+    code: 'custody-restore-required',
+    custody,
+  };
+}
+
+function custodyBlocked(custody: CustodyPreflight): PCloudConnectResult | null {
+  if (custody.unverifiedLibraries !== undefined && custody.unverifiedLibraries.length > 0) {
+    return {
+      ok: false,
+      reason: 'Open each unverified library before changing this provider account.',
+      code: 'custody-unavailable',
+      retryable: true,
+      custody,
+    };
+  }
+  return custody.totalItems === 0 ? null : restoreRequired(custody);
 }
 
 function iCloudAuthoritySaveFailure(): PCloudConnectResult {

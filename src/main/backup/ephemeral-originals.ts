@@ -29,6 +29,7 @@ export class EphemeralOriginalError extends Error {
 
 export interface EphemeralOriginalDeps {
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyChanged: () => void;
   readonly ledger: {
     readonly status: (photoId: string) => SyncStatus | undefined;
     readonly setStatus: (photoId: string, status: SyncStatus) => void;
@@ -139,6 +140,7 @@ export class EphemeralOriginalService {
     await this.ensure(photoId, photo.contentHash);
     await this.deps.blobs.promoteEphemeral(photo.contentHash);
     this.deps.ledger.setStatus(photoId, 'synced');
+    this.deps.custodyChanged();
     this.deps.syncStateChanged([{ id: photoId, syncState: 'synced' }]);
     this.deps.storageChanged();
     this.deps.audit(`EPHEMERAL-PROMOTE photo=${photoId}`);

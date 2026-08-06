@@ -728,6 +728,7 @@ export interface BackupFacade {
   /** Runs the addressed provider's instant or interactive handshake. */
   connect(providerId: string): Promise<ProviderConnectResult>;
   disconnect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
+  removeAuthorizationAnyway(providerId: string): Promise<ProviderConnectResult>;
   openCapacitySettings(providerId: string): Promise<{ ok: boolean }>;
 }
 
@@ -784,6 +785,11 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
   );
   ipcMain.handle(channels.backupDisconnect.name, (_event, request: unknown) =>
     wrapHandler(channels.backupDisconnect, async ({ providerId }) => getFacade().disconnect(providerId))(request),
+  );
+  ipcMain.handle(channels.backupRemoveAuthorizationAnyway.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupRemoveAuthorizationAnyway, async ({ providerId }) => getFacade().removeAuthorizationAnyway(providerId))(
+      request,
+    ),
   );
   ipcMain.handle(channels.backupOpenCapacitySettings.name, (_event, request: unknown) =>
     wrapHandler(channels.backupOpenCapacitySettings, async ({ providerId }) => getFacade().openCapacitySettings(providerId))(request),

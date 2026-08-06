@@ -58,9 +58,13 @@ describe('library registry (#384)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'overlook-registry-'));
     const registry = registryIn(dir);
     registry.register(entry());
-    registry.updateCustodyHints(ULID_A, [{ providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 }]);
+    registry.updateCustodyHints(ULID_A, [
+      { providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 },
+      { legacyUnbound: true, soleCustodyItems: 1, soleCustodyBytes: 12 },
+    ]);
     assert.deepEqual(registryIn(dir).get(ULID_A)?.custodyHints, [
       { providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 },
+      { legacyUnbound: true, soleCustodyItems: 1, soleCustodyBytes: 12 },
     ]);
   });
 

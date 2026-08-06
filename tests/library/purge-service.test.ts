@@ -89,6 +89,7 @@ async function world(count: number, options: { contentHash?: string; retention?:
       if ((await provider.authState()) !== 'connected') throw new CustodyResolutionError('custody-disconnected');
       return provider;
     },
+    custodyChanged: () => undefined,
     oweManifest: () => owed.push(1),
     libraryChanged: (ids) => changed.push([...ids]),
     audit: (line) => audits.push(line),

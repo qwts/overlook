@@ -242,6 +242,7 @@ const overlook: OverlookApi = {
     providerStorage: backupProviderStorage,
     connect: backupConnect,
     disconnect: backupDisconnect,
+    removeAuthorizationAnyway: createInvoker(channels.backupRemoveAuthorizationAnyway, invokeTransport),
     openCapacitySettings: backupOpenCapacitySettings,
   }),
   export: Object.freeze({

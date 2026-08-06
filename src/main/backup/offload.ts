@@ -92,7 +92,8 @@ export interface OffloadDeps {
    * fallback target while disconnected, so authState alone is insufficient. */
   readonly providerConnected: () => boolean;
   /** Captures the verified backup target before local custody is removed. */
-  readonly offloadAuthority: () => Promise<number>;
+  readonly offloadAuthority: (bytes: number) => Promise<number>;
+  readonly custodyChanged: () => void;
   /** Sole-remote reads resolve from row provenance, never provider selection. */
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: SyncLedger;
@@ -164,22 +165,27 @@ export class OffloadService {
       }
       let authorityId: number;
       try {
-        authorityId = await this.deps.offloadAuthority();
+        authorityId = await this.deps.offloadAuthority(photo.bytes);
+        // The authority may have become provider-required after identity was
+        // captured. Keep the prospective hint conservative, then let the
+        // ledger's transactional state check refuse the binding.
+        this.deps.ledger.markOffloaded(photoId, authorityId);
       } catch (error) {
+        this.deps.custodyChanged();
         failed += 1;
         results.push({ photoId, outcome: 'failed', reason: 'remote-unverified' });
-        this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=authority reason=${error instanceof Error ? error.message : String(error)}`);
+        this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=binding reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       // Persist the sole-remote state and exact authority before removing
       // local bytes. A crash can leave a harmless extra local copy, never an
       // unbound cloud-only row that startup repair cannot recover.
-      this.deps.ledger.markOffloaded(photoId, authorityId);
       try {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
       } catch (error) {
         try {
           this.deps.ledger.setStatus(photoId, 'synced');
+          this.deps.custodyChanged();
         } catch (rollbackError) {
           this.deps.audit(
             `OFFLOAD-FAIL photo=${photoId} stage=rollback reason=${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
@@ -190,6 +196,7 @@ export class OffloadService {
         this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=delete reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
+      this.deps.custodyChanged();
       this.deps.audit(`OFFLOAD photo=${photoId} bytes=${String(photo.bytes)}`);
       offloaded += 1;
       freedBytes += photo.bytes;
@@ -325,6 +332,7 @@ export class OffloadService {
       });
     }
     this.deps.ledger.setStatus(photoId, 'synced');
+    this.deps.custodyChanged();
     this.deps.audit(`REHYDRATE-OK photo=${photoId}`);
   }
 

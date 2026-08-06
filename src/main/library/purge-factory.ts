@@ -14,6 +14,7 @@ export interface PurgeFactoryDeps {
   readonly repo: PhotosRepository;
   readonly blobStore: BlobStore;
   readonly remoteProvider: PurgeDeps['remoteProvider'];
+  readonly custodyChanged: PurgeDeps['custodyChanged'];
   readonly oweManifest: PurgeDeps['oweManifest'];
   readonly libraryChanged: PurgeDeps['libraryChanged'];
   readonly audit: PurgeDeps['audit'];
@@ -29,6 +30,7 @@ export function createPurgeService(deps: PurgeFactoryDeps): PurgeService {
       deleteSidecars: async (photoId) => deps.blobStore.deleteSidecars(photoId),
     },
     remoteProvider: deps.remoteProvider,
+    custodyChanged: deps.custodyChanged,
     oweManifest: deps.oweManifest,
     libraryChanged: deps.libraryChanged,
     audit: deps.audit,

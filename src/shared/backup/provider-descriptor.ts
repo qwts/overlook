@@ -40,6 +40,18 @@ export const providerConnectionStatusSchema = z.object({
   connected: z.boolean(),
   /** Non-secret account label captured with the stable provider subject. */
   accountLabel: z.string().min(1).nullable(),
+  custodyRequirements: z
+    .array(
+      z.object({
+        providerId: providerIdSchema,
+        accountId: z.string().min(1),
+        accountLabel: z.string().min(1),
+        items: z.number().int().positive(),
+        bytes: z.number().nonnegative(),
+      }),
+    )
+    .readonly()
+    .optional(),
 });
 
 /** Informational account capacity from the provider's native quota API.
@@ -57,11 +69,36 @@ export const providerCapacityStatusSchema = z.object({
 export type ProviderConnectionStatus = z.output<typeof providerConnectionStatusSchema>;
 export type ProviderCapacityStatus = z.output<typeof providerCapacityStatusSchema>;
 
+export const custodyCredentialSchema = z.object({ providerId: providerIdSchema, accountId: z.string().min(1) });
+export const custodyRiskLibrarySchema = z.object({
+  libraryId: z.string().min(1),
+  name: z.string().min(1),
+  items: z.number().int().positive(),
+  bytes: z.number().nonnegative(),
+  legacyUnbound: z.boolean(),
+});
+export const custodyPreflightSchema = z.object({
+  credential: custodyCredentialSchema,
+  totalItems: z.number().int().nonnegative(),
+  totalBytes: z.number().nonnegative(),
+  libraries: z.array(custodyRiskLibrarySchema).readonly(),
+  unverifiedLibraries: z
+    .array(z.object({ libraryId: z.string().min(1), name: z.string().min(1) }))
+    .readonly()
+    .optional(),
+});
+
+export type CustodyCredential = z.output<typeof custodyCredentialSchema>;
+export type CustodyRiskLibrary = z.output<typeof custodyRiskLibrarySchema>;
+export type CustodyPreflight = z.output<typeof custodyPreflightSchema>;
+export type CustodyRequirement = NonNullable<z.output<typeof providerConnectionStatusSchema>['custodyRequirements']>[number];
+
 export const providerConnectResultSchema = z.object({
   ok: z.boolean(),
   reason: z.string().nullable(),
-  code: z.literal('identity-unavailable').optional(),
+  code: z.enum(['identity-unavailable', 'custody-restore-required', 'custody-unavailable']).optional(),
   retryable: z.boolean().optional(),
+  custody: custodyPreflightSchema.optional(),
 });
 
 export type ProviderConnectResult = z.output<typeof providerConnectResultSchema>;
