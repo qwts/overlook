@@ -581,7 +581,13 @@ export class ProviderRuntime {
     const registry = new ProviderRegistry();
     const libraryId = build.libraryId ?? this.libraryId();
     if (this.pcloudAvailable()) {
-      registry.register(new PCloudProvider({ auth: () => this.tokenStore().load(), libraryId }));
+      registry.register(
+        new PCloudProvider({
+          auth: () => this.tokenStore().load(),
+          libraryId,
+          ...(this.options.fetchImpl === undefined ? {} : { fetchImpl: this.options.fetchImpl }),
+        }),
+      );
     }
     const googleProvider = new GoogleDriveProvider({
       auth: this.googleAuth(),
