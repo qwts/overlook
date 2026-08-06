@@ -13,8 +13,7 @@ import { FaultInjectingProvider, MockProvider, ProviderRegistry } from './mock-p
 import { createPCloudConnect, type PCloudConnectResult } from './pcloud/connect.js';
 import { PCloudProvider } from './pcloud/pcloud-provider.js';
 import { PCloudTokenStore } from './pcloud/token-store.js';
-import type { ProviderAccountIdentity, StorageProvider } from './provider.js';
-import { raceWithAbort } from './provider.js';
+import { ProviderError, raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
 import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../shared/backup/provider-descriptor.js';
 import { ICloudDriveProvider } from './icloud-drive/icloud-drive-provider.js';
 import { ICloudDriveAuthorityStore } from './icloud-drive/authority-store.js';
@@ -58,6 +57,9 @@ export interface ProviderRuntimeOptions {
 
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
 const DEFAULT_STORAGE_TIMEOUT_MS = 30_000;
+
+type AccountIdentityAttempt =
+  { readonly ok: true } | { readonly ok: false; readonly reauthenticate: boolean; readonly result: PCloudConnectResult };
 
 export class ProviderRuntime {
   private readonly options: ProviderRuntimeOptions;
@@ -163,7 +165,7 @@ export class ProviderRuntime {
     const provider = this.provider('pcloud');
     if (provider === undefined) return identityUnavailable('pCloud');
     const identity = await this.establishAccountIdentity('pcloud', provider);
-    if (!identity.ok) return identity;
+    if (!identity.ok) return identity.result;
     return this.activate('pcloud');
   }
 
@@ -184,7 +186,7 @@ export class ProviderRuntime {
     const provider = this.provider('google-drive');
     if (provider === undefined) return identityUnavailable('Google Drive');
     const identity = await this.establishAccountIdentity('google-drive', provider);
-    if (!identity.ok) return identity;
+    if (!identity.ok) return identity.result;
     return this.activate('google-drive');
   }
 
@@ -220,17 +222,40 @@ export class ProviderRuntime {
     return { accountId: record.accountId, accountLabel: record.accountLabel };
   }
 
-  private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<PCloudConnectResult> {
+  private clearFailedAuthentication(providerId: string): boolean {
+    try {
+      if (providerId === 'pcloud') {
+        this.tokenStore().clear();
+      } else if (providerId === 'google-drive') {
+        this.googleAuth().clear();
+        this.resetGoogleDriveAccountCache();
+      } else {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<AccountIdentityAttempt> {
     try {
       if ((providerId === 'pcloud' || providerId === 'google-drive') && this.persistedAccountIdentity(providerId) !== null) {
-        return { ok: true, reason: null };
+        return { ok: true };
       }
       const identity = await withDeadline(provider.accountIdentity(), this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS);
-      if (!this.persistAccountIdentity(providerId, identity)) return identityUnavailable(provider.label);
+      if (!this.persistAccountIdentity(providerId, identity)) {
+        return { ok: false, reauthenticate: false, result: identityUnavailable(provider.label) };
+      }
       if (provider instanceof ICloudDriveProvider) provider.resetAccountAuthority(identity.accountId);
-      return { ok: true, reason: null };
-    } catch {
-      return identityUnavailable(provider.label);
+      return { ok: true };
+    } catch (error) {
+      const authenticationFailed = error instanceof ProviderError && error.kind === 'auth';
+      return {
+        ok: false,
+        reauthenticate: authenticationFailed && this.clearFailedAuthentication(providerId),
+        result: identityUnavailable(provider.label),
+      };
     }
   }
 
@@ -369,7 +394,11 @@ export class ProviderRuntime {
     // new OAuth grant.
     if ((await provider.authState()) === 'connected') {
       const identity = await this.establishAccountIdentity(providerId, provider);
-      if (!identity.ok) return identity;
+      if (!identity.ok) {
+        if (identity.reauthenticate && providerId === 'pcloud') return this.connectPCloud();
+        if (identity.reauthenticate && providerId === 'google-drive') return this.connectGoogleDrive();
+        return identity.result;
+      }
       return this.activate(providerId);
     }
     if (providerId === 'pcloud') {
@@ -395,7 +424,7 @@ export class ProviderRuntime {
       provider.disarm('auth-expired');
     }
     const identity = await this.establishAccountIdentity(providerId, provider);
-    if (!identity.ok) return identity;
+    if (!identity.ok) return identity.result;
     return this.activate(providerId);
   }
 

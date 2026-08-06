@@ -229,6 +229,7 @@ describe('provider runtime policy (#256)', () => {
       code: 'identity-unavailable',
       retryable: true,
     });
+    assert.notEqual(restarted.tokenStore().load(), null, 'transient identity failure retains credential custody');
     assert.equal(providerId, null);
     assert.equal(restarted.activeId(), null);
   });
