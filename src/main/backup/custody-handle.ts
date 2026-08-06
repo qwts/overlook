@@ -35,6 +35,10 @@ export class CustodyHandleResolver {
   async resolve(photoId: string): Promise<CustodyHandle> {
     const authority = this.deps.authorityForPhoto(photoId);
     if (authority === undefined) throw new CustodyResolutionError('custody-unavailable');
+    return this.resolveAuthority(authority);
+  }
+
+  async resolveAuthority(authority: CustodyAuthority): Promise<CustodyHandle> {
     if (authority.state === 'provider-required') throw new CustodyResolutionError('custody-disconnected');
 
     const provider = this.deps.provider(authority.providerId);

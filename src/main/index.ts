@@ -36,6 +36,7 @@ import { createRecoveryHealthCheck } from './backup/recovery-health.js';
 import type { OffloadService } from './backup/offload.js';
 import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { createOriginalCustodyRuntime } from './backup/original-custody-runtime.js';
+import { createCustodyRoutingRuntime } from './backup/custody-routing-runtime.js';
 import type { ProviderRuntime } from './backup/provider-runtime.js';
 import { createProviderRuntime } from './backup/provider-runtime-factory.js';
 import type { RestoreRuntime } from './backup/restore-runtime.js';
@@ -456,12 +457,23 @@ function getBackupEngine(): BackupEngine {
       mockRootDir: path.join(app.getPath('userData'), 'mock-remote'),
       fault: harnessEnv('OVERLOOK_BACKUP_FAULT'),
     });
+    const custodyRouting = createCustodyRoutingRuntime({
+      db: parts.db,
+      backupTarget: provider,
+      libraryId: () => getProviderRuntime().libraryId(),
+      provider: (providerId) => getProviderRuntime().provider(providerId),
+      backupTargetConnected: () => getProviderRuntime().activeId() !== null,
+      status: (photoId) => ledger.status(photoId),
+      now: () => new Date().toISOString(),
+    });
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
+      authorities: custodyRouting.authorities,
+      custody: custodyRouting.resolver,
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
@@ -515,6 +527,8 @@ function getBackupEngine(): BackupEngine {
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
+      offloadAuthority: custodyRouting.offloadAuthority,
+      custody: custodyRouting.resolver,
       ledger,
       repo,
       blobs: parts.blobStore,
@@ -534,8 +548,7 @@ function getBackupEngine(): BackupEngine {
       db: parts.db,
       repo,
       blobStore: parts.blobStore,
-      provider,
-      connected: () => getProviderRuntime().activeId() !== null,
+      remoteProvider: custodyRouting.remoteProvider,
       // Purging changes manifestSnapshot() — same owed-generation rule (and
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),

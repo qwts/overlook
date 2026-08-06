@@ -167,6 +167,30 @@ export class CustodyAuthorityRepository {
     ).map((row) => ({ authority: fromRow(row), items: row.items, bytes: row.bytes }));
   }
 
+  /** Authorities with offloaded rows, used to partition integrity work and
+   * its resume cursor by durable source rather than current selection. */
+  offloadedAuthorities(): readonly CustodyAuthority[] {
+    return queryAll<{
+      id: number;
+      providerId: string;
+      accountId: string;
+      accountLabel: string;
+      remoteRoot: string;
+      state: CustodyAuthorityState;
+      createdAt: string;
+      lastVerifiedAt: string | null;
+    }>(
+      this.db,
+      `SELECT DISTINCT a.id, a.provider_id AS providerId, a.account_id AS accountId,
+              a.account_label AS accountLabel, a.remote_root AS remoteRoot, a.state,
+              a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
+         FROM custody_authorities a
+         JOIN sync_ledger l ON l.custody_authority_id = a.id
+        WHERE l.status = 'offloaded'
+        ORDER BY a.id`,
+    ).map(fromRow);
+  }
+
   /** Legacy rows are intentionally separate: no connected account earns them
    * a binding without ADR-0028 §7 verification. */
   legacyUnboundCount(): { readonly items: number; readonly bytes: number } {

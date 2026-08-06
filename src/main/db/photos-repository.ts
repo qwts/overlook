@@ -748,17 +748,27 @@ export class PhotosRepository {
   /** Stable keyset page over rows whose remote-copy claim must remain true.
    * Deleted-but-retained photos are included because recovery still promises
    * their original until permanent purge. */
-  integrityItems(page: { readonly afterId: string | null; readonly limit: number }): readonly BackupIntegrityItem[] {
+  integrityItems(
+    page: { readonly afterId: string | null; readonly limit: number },
+    scope?: { readonly syncState: 'synced' } | { readonly syncState: 'offloaded'; readonly custodyAuthorityId: number },
+  ): readonly BackupIntegrityItem[] {
     return queryAll<BackupIntegrityItem>(
       this.db,
       `SELECT p.id, p.content_hash AS contentHash, l.status AS syncState
          FROM ordinary_visible_photos p
          JOIN sync_ledger l ON l.photo_id = p.id
         WHERE l.status IN ('synced', 'offloaded')
+          AND (@syncState IS NULL OR l.status = @syncState)
+          AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
-      { afterId: page.afterId, limit: page.limit },
+      {
+        afterId: page.afterId,
+        limit: page.limit,
+        syncState: scope?.syncState ?? null,
+        custodyAuthorityId: scope !== undefined && 'custodyAuthorityId' in scope ? scope.custodyAuthorityId : null,
+      },
     );
   }
 

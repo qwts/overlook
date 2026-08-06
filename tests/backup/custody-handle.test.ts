@@ -25,7 +25,7 @@ function authority(overrides: Partial<CustodyAuthority> = {}): CustodyAuthority 
   };
 }
 
-function provider(accountId = 'bound-account'): StorageProvider {
+function provider(accountId = 'bound-account'): MockProvider {
   const mock = new MockProvider({
     rootDir: mkdtempSync(join(tmpdir(), 'overlook-custody-handle-')),
     libraryId: 'library-a',
@@ -61,7 +61,7 @@ describe('binding-addressed custody handle (#731)', () => {
 
   test('fails closed with distinct disconnected, wrong-account, and unavailable reasons', async () => {
     const disconnected = provider();
-    (disconnected as unknown as { setConnected(value: boolean): void }).setConnected(false);
+    disconnected.setConnected(false);
 
     const resolve = (recorded: CustodyAuthority, candidate: StorageProvider | undefined, liveRoot = root) =>
       new CustodyHandleResolver({

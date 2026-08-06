@@ -166,9 +166,9 @@ const offloadPreflightSchema = z.object({
 });
 const restoreOriginalFailureReasonSchema = z.enum([
   'not-offloaded',
-  'provider-disconnected',
-  'provider-expired',
-  'provider-offline',
+  'custody-disconnected',
+  'custody-wrong-account',
+  'custody-unavailable',
   'download-failed',
   'verify-failed',
 ]);

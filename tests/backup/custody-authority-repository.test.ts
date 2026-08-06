@@ -83,6 +83,7 @@ describe('custody authority provenance (#729)', () => {
     assert.equal(ledger.status('A'), 'offloaded');
     assert.deepEqual(authorities.forPhoto('A'), authority);
     assert.equal(authorities.forPhoto('missing'), undefined);
+    assert.deepEqual(authorities.offloadedAuthorities(), [authority]);
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }]);
 
     ledger.repairStatus('A', 'error');
@@ -91,6 +92,7 @@ describe('custody authority provenance (#729)', () => {
     run(db, `UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = 'A'`);
     ledger.setStatus('A', 'synced');
     assert.equal(authorities.forPhoto('A'), undefined);
+    assert.deepEqual(authorities.offloadedAuthorities(), []);
     assert.equal(authorities.soleCustodyCounts().length, 0, 'durable verified local bytes clear the binding atomically');
   });
 
