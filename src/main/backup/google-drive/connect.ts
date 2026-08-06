@@ -4,8 +4,9 @@ import { startGoogleDriveLoopbackCapture } from './loopback.js';
 import { buildGoogleDriveAuthorizeUrl, createPkce, exchangeGoogleDriveCode, redactGoogleCredentials } from './oauth.js';
 import type { GoogleDriveAuthClient } from './auth-client.js';
 import type { GoogleDriveTokenStore } from './token-store.js';
+import type { ProviderConnectResult } from '../../../shared/backup/provider-descriptor.js';
 
-export type GoogleDriveConnectResult = { ok: boolean; reason: string | null };
+export type GoogleDriveConnectResult = ProviderConnectResult;
 
 export function createGoogleDriveConnect(options: {
   readonly clientId: () => string | null;

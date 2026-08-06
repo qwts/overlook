@@ -171,6 +171,93 @@ describe('provider runtime policy (#256)', () => {
     assert.equal(flipped, 'mock');
   });
 
+  test('identity-unavailable is a typed retryable failure and never activates anonymous authority', async () => {
+    let providerId: string | null = null;
+    const { runtime: r } = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-anonymous'), fault: 'identity-unavailable' });
+    assert.deepEqual(await r.connect('mock'), {
+      ok: false,
+      reason: 'Local mock could not verify the account identity. Check the connection and try again.',
+      code: 'identity-unavailable',
+      retryable: true,
+    });
+    assert.equal(providerId, null);
+  });
+
+  test('connect captures pCloud identity, persists it across restart, and fails closed when unavailable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'overlook-runtime-pcloud-identity-'));
+    let providerId: string | null = null;
+    let identityAvailable = true;
+    const options = {
+      dataDir: () => join(root, 'library'),
+      providerCredentialDir: (id: string) => join(root, 'provider-auth', id),
+      providerId: () => providerId,
+      setProviderId: (id: string | null) => {
+        providerId = id;
+      },
+      fetchImpl: (() =>
+        Promise.resolve(
+          Response.json({ result: 0, userid: 9001, ...(identityAvailable ? { email: 'owner@pcloud.test' } : {}) }),
+        )) as typeof fetch,
+    };
+    const first = runtime(options).runtime;
+    first.tokenStore().save({ accessToken: 'provisional-token', apiHost: 'api.pcloud.com', connectedAt: '2026-08-06T00:00:00.000Z' });
+    first.buildProvider({ mockRootDir: join(root, 'mock'), fault: undefined });
+    assert.deepEqual(await first.connect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(await first.status('pcloud'), {
+      provider: (await first.descriptors()).find(({ id }) => id === 'pcloud'),
+      connected: true,
+      accountLabel: 'owner@pcloud.test',
+    });
+
+    const restarted = runtime(options).runtime;
+    restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
+    assert.equal(restarted.activeId(), 'pcloud');
+    assert.equal((await restarted.status('pcloud')).accountLabel, 'owner@pcloud.test');
+
+    providerId = null;
+    identityAvailable = false;
+    restarted.tokenStore().save({ accessToken: 'replacement-token', apiHost: 'api.pcloud.com', connectedAt: '2026-08-06T01:00:00.000Z' });
+    assert.deepEqual(await restarted.connect('pcloud'), {
+      ok: false,
+      reason: 'pCloud could not verify the account identity. Check the connection and try again.',
+      code: 'identity-unavailable',
+      retryable: true,
+    });
+    assert.equal(providerId, null);
+    assert.equal(restarted.activeId(), null);
+  });
+
+  test('Google Drive account label survives a runtime restart', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'overlook-runtime-google-identity-'));
+    const options = {
+      dataDir: () => join(root, 'library'),
+      providerCredentialDir: (id: string) => join(root, 'provider-auth', id),
+      providerId: () => 'google-drive',
+      googleDriveClientId: () => 'desktop.apps.googleusercontent.com',
+    };
+    const first = runtime(options).runtime;
+    first.googleTokenStore().save({
+      clientId: 'desktop.apps.googleusercontent.com',
+      refreshToken: 'refresh-token',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
+    });
+    first.buildProvider({ mockRootDir: join(root, 'mock'), fault: undefined });
+    assert.equal((await first.status('google-drive')).accountLabel, 'owner@google.test');
+
+    const restarted = runtime(options).runtime;
+    restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
+    assert.equal(restarted.activeId(), 'google-drive');
+    assert.equal((await restarted.status('google-drive')).accountLabel, 'owner@google.test');
+  });
+
   test('a refused switch guard keeps the previous selection and the fresh credential (#741)', async () => {
     let providerId: string | null = 'mock';
     const guarded: string[] = [];
@@ -503,7 +590,11 @@ describe('provider runtime policy (#256)', () => {
     const restarted = runtime(options).runtime;
     restarted.buildProvider({ mockRootDir: join(root, 'restart-mock'), fault: undefined });
     assert.equal(restarted.activeId(), 'icloud-drive', 'restart restores the sealed account authority');
-    assert.equal((await restarted.status('icloud-drive')).connected, true);
+    assert.deepEqual(await restarted.status('icloud-drive'), {
+      provider: (await restarted.descriptors()).find(({ id }) => id === 'icloud-drive'),
+      connected: true,
+      accountLabel: 'Deterministic iCloud account',
+    });
 
     bridge.changeAccount();
     const afterAccountSwitch = runtime(options).runtime;

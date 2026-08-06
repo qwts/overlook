@@ -56,3 +56,12 @@ export const providerCapacityStatusSchema = z.object({
 
 export type ProviderConnectionStatus = z.output<typeof providerConnectionStatusSchema>;
 export type ProviderCapacityStatus = z.output<typeof providerCapacityStatusSchema>;
+
+export const providerConnectResultSchema = z.object({
+  ok: z.boolean(),
+  reason: z.string().nullable(),
+  code: z.literal('identity-unavailable').optional(),
+  retryable: z.boolean().optional(),
+});
+
+export type ProviderConnectResult = z.output<typeof providerConnectResultSchema>;

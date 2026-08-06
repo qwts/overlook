@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { startLoopbackCapture } from './loopback.js';
 import { buildAuthorizeUrl, redactTokens } from './oauth.js';
 import type { PCloudTokenStore } from './token-store.js';
+import type { ProviderConnectResult } from '../../../shared/backup/provider-descriptor.js';
 
 // The pCloud handshake (#254), composed from the loopback + custody pieces.
 // The browser launcher and the connected-side-effect are injected so the
@@ -22,12 +23,7 @@ export interface PCloudConnectOptions {
   readonly timeoutMs?: number;
 }
 
-export type PCloudConnectResult = {
-  readonly ok: boolean;
-  readonly reason: string | null;
-  readonly code?: 'identity-unavailable' | undefined;
-  readonly retryable?: boolean | undefined;
-};
+export type PCloudConnectResult = ProviderConnectResult;
 
 export function createPCloudConnect(options: PCloudConnectOptions): () => Promise<PCloudConnectResult> {
   // One flow at a time — a second Connect while the browser tab is open

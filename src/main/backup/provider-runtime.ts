@@ -562,7 +562,13 @@ export class ProviderRuntime {
     if (this.mockEnabled()) {
       const faulty = new FaultInjectingProvider(new MockProvider({ rootDir: build.mockRootDir, libraryId }));
       const fault = build.fault;
-      if (fault === 'put' || fault === 'verify-mismatch' || fault === 'auth-expired' || fault === 'transient-get') {
+      if (
+        fault === 'put' ||
+        fault === 'verify-mismatch' ||
+        fault === 'auth-expired' ||
+        fault === 'identity-unavailable' ||
+        fault === 'transient-get'
+      ) {
         faulty.arm(fault);
       }
       registry.register(faulty);

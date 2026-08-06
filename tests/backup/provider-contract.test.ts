@@ -11,6 +11,7 @@ import { FaultInjectingProvider, MockProvider, ProviderRegistry } from '../../sr
 import { ProviderError } from '../../src/main/backup/provider.js';
 import { exerciseRestoreProviderContract } from './restore-provider-contract.js';
 import { exerciseObjectProviderContract } from './object-provider-contract.js';
+import { exerciseProviderAccountContract } from './provider-account-contract.js';
 
 // #103 exit criteria: the contract suite runs green against the mock, and
 // fault injection produces each error path the engine must handle. The same
@@ -24,6 +25,18 @@ function world(totalBytes?: number) {
 const PAYLOAD = Buffer.from('OVLK-envelope-bytes-already-encrypted');
 
 describe('storage provider contract (#103)', () => {
+  test('account identity is stable, replaceable, and never anonymous', async () => {
+    const { provider, faulty } = world();
+    await exerciseProviderAccountContract(provider, { accountId: 'mock-account', accountLabel: 'Mock account' });
+    provider.setAccountIdentity({ accountId: 'replacement-account', accountLabel: 'Replacement account' });
+    assert.deepEqual(await provider.accountIdentity(), {
+      accountId: 'replacement-account',
+      accountLabel: 'Replacement account',
+    });
+    faulty.arm('identity-unavailable');
+    await assert.rejects(faulty.accountIdentity(), (error: unknown) => error instanceof ProviderError && error.kind === 'transient');
+  });
+
   test('restore contract: discover → scope → read bootstrap, manifest, and blob → cleanup (#291)', async () => {
     const { provider } = world();
     await exerciseRestoreProviderContract(provider, 'mock-library');
