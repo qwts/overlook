@@ -335,12 +335,14 @@ export function Shell({
   // follow changed pushes — a sort change in the dialog re-orders the grid
   // live via the query hook's refetch.
   useEffect(() => {
+    const effectRequest = providerStatusRequestRef.current + 1;
+    providerStatusRequestRef.current = effectRequest;
     const syncProvider = (selectedId: string | null): void => {
       const request = providerStatusRequestRef.current + 1;
       providerStatusRequestRef.current = request;
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
         if (providerStatusRequestRef.current !== request) return;
-        const presentationId = selectedId ?? selectedProviderId;
+        const presentationId = selectedProviderId ?? selectedId;
         const providerId = providers.some((provider) => provider.id === presentationId)
           ? (presentationId ?? defaultProviderId)
           : defaultProviderId;
@@ -362,6 +364,7 @@ export function Shell({
       });
     };
     void window.overlook.settings.get().then(({ settings }) => {
+      if (providerStatusRequestRef.current !== effectRequest) return;
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });

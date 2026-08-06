@@ -86,7 +86,7 @@ export function StoragePane({
   const [statusLoad, setStatusLoad] = useState<ProviderStatusLoad | null>(null);
   const [storageLoad, setStorageLoad] = useState<ProviderStorageLoad | null>(null);
   const [providers, setProviders] = useState<readonly ProviderDescriptor[]>([]);
-  const [targetId, setTargetId] = useState<string | null>(settings.providerId ?? preferredProviderId);
+  const [targetId, setTargetId] = useState<string | null>(preferredProviderId ?? settings.providerId);
   const [connectionOperation, setConnectionOperation] = useState<ConnectionOperation | null>(null);
   const [disconnectConfirmation, setDisconnectConfirmation] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
