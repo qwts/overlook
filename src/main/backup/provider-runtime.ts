@@ -240,7 +240,10 @@ export class ProviderRuntime {
 
   private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<AccountIdentityAttempt> {
     try {
-      const identity = await withDeadline(provider.accountIdentity(), this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS);
+      const identity = await withAbortableDeadline(
+        (signal) => provider.accountIdentity(signal),
+        this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS,
+      );
       if (!this.persistAccountIdentity(providerId, identity)) {
         return { ok: false, reauthenticate: false, result: identityUnavailable(provider.label) };
       }
@@ -411,9 +414,9 @@ export class ProviderRuntime {
       }
       try {
         const identity = { accountId: status.accountToken, accountLabel: status.accountLabel ?? 'iCloud account' };
-        if (!this.persistAccountIdentity('icloud-drive', identity)) return identityUnavailable('iCloud Drive');
+        if (!this.persistAccountIdentity('icloud-drive', identity)) return iCloudAuthoritySaveFailure();
       } catch {
-        return { ok: false, reason: 'Could not securely save this iCloud account authority. Check Keychain access and try again.' };
+        return iCloudAuthoritySaveFailure();
       }
       provider.resetAccountAuthority(status.accountToken);
     }
@@ -672,6 +675,10 @@ function identityUnavailable(providerLabel: string): PCloudConnectResult {
   };
 }
 
+function iCloudAuthoritySaveFailure(): PCloudConnectResult {
+  return { ok: false, reason: 'Could not securely save this iCloud account authority. Check Keychain access and try again.' };
+}
+
 function unavailableCapacity(providerId: string): ProviderCapacityStatus {
   return {
     ...emptyCapacity(),
@@ -685,6 +692,14 @@ function withDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
     timeout.unref();
     void operation.then(resolve, reject).finally(() => clearTimeout(timeout));
   });
+}
+
+function withAbortableDeadline<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('provider identity timed out')), timeoutMs);
+  timeout.unref();
+  const pending = Promise.resolve().then(() => operation(controller.signal));
+  return raceWithAbort(pending, controller.signal).finally(() => clearTimeout(timeout));
 }
 
 function iCloudUnavailableCopy(reason: ICloudDriveUnavailableReason): string {

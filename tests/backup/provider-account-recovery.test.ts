@@ -84,3 +84,52 @@ describe('provider account authentication recovery (#730)', () => {
     assert.match(result.reason ?? '', /scripted browser stop/u);
   });
 });
+
+describe('provider account recovery failures (#730)', () => {
+  test('Google identity deadline aborts a stalled refresh so the next Connect starts a new request', async () => {
+    let refreshes = 0;
+    let aborts = 0;
+    const providerRuntime = runtime({
+      googleDriveClientId: () => 'desktop.apps.googleusercontent.com',
+      statusTimeoutMs: 15,
+      fetchImpl: (_input, init) => {
+        refreshes += 1;
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          const abort = (): void => {
+            aborts += 1;
+            reject(signal?.reason instanceof Error ? signal.reason : new Error('aborted'));
+          };
+          if (signal?.aborted === true) abort();
+          else signal?.addEventListener('abort', abort, { once: true });
+        });
+      },
+    });
+    providerRuntime.googleTokenStore().save({
+      clientId: 'desktop.apps.googleusercontent.com',
+      refreshToken: 'stalled-refresh-token',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: 'permission-1',
+      accountLabel: 'owner@google.test',
+    });
+    providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-google-timeout'), fault: undefined });
+
+    assert.equal((await providerRuntime.connect('google-drive')).code, 'identity-unavailable');
+    assert.equal((await providerRuntime.connect('google-drive')).code, 'identity-unavailable');
+    assert.equal(refreshes, 2, 'the aborted refresh is not reused');
+    assert.equal(aborts, 2);
+    assert.notEqual(providerRuntime.googleTokenStore().load(), null, 'timeouts retain credential custody');
+  });
+
+  test('iCloud authority persistence failure reports the Keychain recovery path', async () => {
+    const providerRuntime = runtime({
+      safeStorage: () => ({ ...fakeSafeStorage, isEncryptionAvailable: () => false }),
+    });
+    providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-icloud-keychain'), fault: undefined });
+
+    assert.deepEqual(await providerRuntime.connect('icloud-drive'), {
+      ok: false,
+      reason: 'Could not securely save this iCloud account authority. Check Keychain access and try again.',
+    });
+  });
+});

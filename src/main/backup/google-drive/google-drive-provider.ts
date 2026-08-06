@@ -566,7 +566,7 @@ export class GoogleDriveProvider implements StorageProvider {
     if (parsed.protocol !== 'https:' || (parsed.hostname !== 'www.googleapis.com' && parsed.hostname !== 'content.googleapis.com')) {
       throw new ProviderError('refusing to send Google credentials to an unexpected host', 'corrupt');
     }
-    const token = await this.options.auth.accessToken(retried);
+    const token = await this.options.auth.accessToken(retried, init.signal ?? undefined);
     const headers = new Headers(init.headers);
     headers.set('authorization', `Bearer ${token}`);
     let response: Response;
