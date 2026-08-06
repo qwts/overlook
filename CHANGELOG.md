@@ -1,5 +1,12 @@
 # photos
 
+## 0.65.6
+
+### Patch Changes
+
+- be2c750: Update backup status, sidebar, and Inspector provider names immediately when a
+  different disconnected backup provider is selected in Settings.
+
 ## 0.65.5
 
 ### Patch Changes
