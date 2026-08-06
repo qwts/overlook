@@ -114,7 +114,9 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(r.tokenStore().load(), null);
     assert.equal(providerId, null);
   });
+});
 
+describe('emergency provider custody rollback (#732)', () => {
   test('failed emergency removal rolls back only when the same credential demonstrably remains', async () => {
     let rolledBack = 0;
     const r = runtime({
