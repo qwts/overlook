@@ -17,6 +17,7 @@ export class GoogleDriveAuthClient {
   private cached: { token: string; expiresAt: number } | null = null;
   private refreshInFlight: Promise<string> | null = null;
   private refreshController: AbortController | null = null;
+  private refreshWaiters = 0;
 
   constructor(
     private readonly options: {
@@ -60,25 +61,37 @@ export class GoogleDriveAuthClient {
         if (this.refreshInFlight === refresh) {
           this.refreshInFlight = null;
           this.refreshController = null;
+          this.refreshWaiters = 0;
         }
       });
       pending = refresh;
       this.refreshInFlight = refresh;
       this.refreshController = controller;
     }
-    if (signal === undefined) return pending;
+    this.refreshWaiters += 1;
     const activeController = controller;
     const activePending = pending;
-    const cancelRefresh = (): void => {
-      activeController.abort(signal.reason);
+    let released = false;
+    const release = (cancel: boolean, reason?: unknown): void => {
+      if (released) return;
+      released = true;
       if (this.refreshInFlight === activePending) {
+        this.refreshWaiters -= 1;
+      }
+      if (cancel && this.refreshInFlight === activePending && this.refreshWaiters === 0) {
         this.refreshInFlight = null;
         this.refreshController = null;
+        activeController.abort(reason);
       }
     };
+    if (signal === undefined) return activePending.finally(() => release(false));
+    const cancelRefresh = (): void => release(true, signal.reason);
     if (signal.aborted) cancelRefresh();
     else signal.addEventListener('abort', cancelRefresh, { once: true });
-    return raceWithAbort(activePending, signal).finally(() => signal.removeEventListener('abort', cancelRefresh));
+    return raceWithAbort(activePending, signal).finally(() => {
+      signal.removeEventListener('abort', cancelRefresh);
+      release(false);
+    });
   }
 
   private now(): number {
