@@ -10,6 +10,7 @@ import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/Switch';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { CopyableValue } from '../components/CopyableValue';
 
 import './import.css';
 
@@ -36,6 +37,7 @@ const messages = defineMessages({
     id: 'import.move.complete',
     defaultMessage: '{moved} moved · {retained} retained after encrypted custody verification.',
   },
+  copySourcePath: { id: 'import.copy.sourcePath', defaultMessage: 'import source path' },
 });
 
 // ImportDialog (#88, sources reworked by #237): the design's 440px import
@@ -633,7 +635,12 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
             <div className="ovl-import__card" data-testid="import-source-card">
               <Icon name="folder" size={16} color="var(--accent-cyan)" />
               <div className="ovl-import__cardText">
-                <div className="ovl-import__cardPath mono-data">{folder.path}</div>
+                <CopyableValue
+                  value={folder.path}
+                  label={intl.formatMessage(messages.copySourcePath)}
+                  className="ovl-import__cardPathValue"
+                  textClassName="ovl-import__cardPath"
+                />
                 <div className="ovl-import__cardMeta mono-data">
                   {folder.status === 'ready' ? summaryDetail(folder.summary, formatCount, formatBytes) : 'Scanning…'}
                 </div>

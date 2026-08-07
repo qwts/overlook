@@ -31,6 +31,16 @@
   color: var(--text-body);
 }
 
+.ovl-export__destinationPath,
+.ovl-export__failureValue {
+  width: 100%;
+}
+
+.ovl-export__destinationPath {
+  color: var(--text-muted);
+  font: var(--type-meta);
+}
+
 .ovl-export__decrypt {
   display: flex;
   align-items: flex-start;

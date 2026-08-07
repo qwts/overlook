@@ -9,6 +9,7 @@ import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/Switch';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { CopyableValue } from '../components/CopyableValue';
 
 import './export.css';
 
@@ -21,6 +22,8 @@ const messages = defineMessages({
     defaultMessage: 'Every original will be written as a plain, openable file to the folder you choose.',
   },
   itemFailures: { id: 'export.itemFailures', defaultMessage: 'View item failures' },
+  copyDestination: { id: 'export.copy.destination', defaultMessage: 'export destination' },
+  copyFailure: { id: 'export.copy.failure', defaultMessage: 'export failure' },
 });
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
@@ -216,6 +219,13 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               {destination === null ? 'Choose folder…' : (destination.split('/').at(-1) ?? destination)}
             </Button>
           </div>
+          {destination === null ? null : (
+            <CopyableValue
+              value={destination}
+              label={intl.formatMessage(messages.copyDestination)}
+              className="ovl-export__destinationPath"
+            />
+          )}
         </div>
       ) : (
         <div className="ovl-export__running">
@@ -242,8 +252,12 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                     <summary>{intl.formatMessage(messages.itemFailures)}</summary>
                     <ul>
                       {failures.map(({ fileName, reason }) => (
-                        <li key={`${fileName}:${reason}`} className="mono-data">
-                          {fileName}: {reason}
+                        <li key={`${fileName}:${reason}`}>
+                          <CopyableValue
+                            value={`${fileName}: ${reason}`}
+                            label={intl.formatMessage(messages.copyFailure)}
+                            className="ovl-export__failureValue"
+                          />
                         </li>
                       ))}
                     </ul>

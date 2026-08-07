@@ -1462,7 +1462,27 @@
       "coverage": [
         {
           "type": "storybook",
-          "path": "src/renderer/src/components/CopyableValue.stories.tsx"
+          "paths": [
+            "src/renderer/src/components/CopyableValue.stories.tsx",
+            "src/renderer/src/activity/ActivityDialog.stories.tsx",
+            "src/renderer/src/export/ExportDialog.stories.tsx",
+            "src/renderer/src/import/ImportDialog.stories.tsx",
+            "src/renderer/src/inspector/Inspector.stories.tsx",
+            "src/renderer/src/settings/DiagnosticsControls.stories.tsx",
+            "src/renderer/src/settings/KeyDialog.stories.tsx",
+            "src/renderer/src/settings/SettingsDialog.stories.tsx"
+          ]
+        },
+        {
+          "type": "playwright-e2e",
+          "paths": [
+            "tests/e2e/activity.spec.ts",
+            "tests/e2e/export-flow.spec.ts",
+            "tests/e2e/import-flow.spec.ts",
+            "tests/e2e/inspector-window.spec.ts",
+            "tests/e2e/keys-recovery.spec.ts",
+            "tests/e2e/settings.spec.ts"
+          ]
         },
         {
           "type": "manual",

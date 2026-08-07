@@ -63,6 +63,8 @@ export const Options: Story = {
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeEnabled();
+    await expect(body.getByText('/Users/demo/Exports')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Copy export destination' })).toBeVisible();
     // Switch OFF: the button disables and the verbatim warning appears.
     await userEvent.click(body.getByRole('switch', { name: 'Decrypt originals' }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();

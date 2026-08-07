@@ -1,4 +1,10 @@
 {
+  "activity.copy.eventId": {
+    "defaultMessage": "activity event ID"
+  },
+  "activity.copy.timestamp": {
+    "defaultMessage": "activity timestamp"
+  },
   "activity.empty": {
     "defaultMessage": "Library activity will appear here."
   },
@@ -19,9 +25,6 @@
   },
   "activity.redo": {
     "defaultMessage": "Redo"
-  },
-  "activity.timestamp": {
-    "defaultMessage": "{date} · {time}"
   },
   "activity.title": {
     "defaultMessage": "Activity"
@@ -317,6 +320,12 @@
   "export.allPhotosHint": {
     "defaultMessage": "Every original will be written as a plain, openable file to the folder you choose."
   },
+  "export.copy.destination": {
+    "defaultMessage": "export destination"
+  },
+  "export.copy.failure": {
+    "defaultMessage": "export failure"
+  },
   "export.everyPhoto": {
     "defaultMessage": "Every photo in this library"
   },
@@ -335,6 +344,9 @@
   "grid.regionLabel": {
     "defaultMessage": "Photos"
   },
+  "import.copy.sourcePath": {
+    "defaultMessage": "import source path"
+  },
   "import.move.complete": {
     "defaultMessage": "{moved} moved · {retained} retained after encrypted custody verification."
   },
@@ -349,6 +361,12 @@
   },
   "import.move.warning.sd": {
     "defaultMessage": "Each imported original will be deleted from the card only after encrypted custody and decrypt/hash verification."
+  },
+  "inspector.copy.cipher": {
+    "defaultMessage": "cipher identity"
+  },
+  "inspector.copy.fileName": {
+    "defaultMessage": "filename"
   },
   "inspector.file.dimensionMismatch": {
     "defaultMessage": "DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA"
@@ -1106,6 +1124,12 @@
   "settings.diagnostics.clearedMany": {
     "defaultMessage": "{count, plural, one {# diagnostic report cleared.} other {# diagnostic reports cleared.}}"
   },
+  "settings.diagnostics.copyEventId": {
+    "defaultMessage": "diagnostic event ID"
+  },
+  "settings.diagnostics.copyPayload": {
+    "defaultMessage": "diagnostic payload"
+  },
   "settings.diagnostics.done": {
     "defaultMessage": "Done"
   },
@@ -1267,6 +1291,12 @@
   },
   "settings.general.trashRetention.off": {
     "defaultMessage": "Off"
+  },
+  "settings.keys.copyFileName": {
+    "defaultMessage": "recovery key filename"
+  },
+  "settings.keys.copyFingerprint": {
+    "defaultMessage": "library key fingerprint"
   },
   "settings.nav.general": {
     "defaultMessage": "General"

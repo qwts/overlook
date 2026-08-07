@@ -83,11 +83,17 @@
 }
 
 .ovl-import__cardPath {
+  display: block;
+  flex: 1;
   font-size: var(--text-sm);
   color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ovl-import__cardPathValue {
+  width: 100%;
 }
 
 .ovl-import__clear {

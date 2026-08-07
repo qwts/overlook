@@ -23,16 +23,18 @@ export interface CopyableValueProps {
   /** Localized semantic name used by the button and live feedback. */
   readonly label: string;
   readonly className?: string;
+  readonly textClassName?: string;
   /** Injectable for Storybook and for hosts that require a clipboard bridge. */
   readonly copy?: CopyValue;
 }
 
 /** Real selectable machine text with one keyboard-accessible copy action. */
-export function CopyableValue({ value, label, className, copy = writeToClipboard }: CopyableValueProps): ReactElement {
+export function CopyableValue({ value, label, className, textClassName, copy = writeToClipboard }: CopyableValueProps): ReactElement {
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const copyLabel = intl.formatMessage(messages.copy, { label });
   const classes = ['ovl-copyable-value', className].filter(Boolean).join(' ');
+  const textClasses = ['mono-data', 'ovl-copyable-value__text', textClassName].filter(Boolean).join(' ');
   const handleCopy = async (): Promise<void> => {
     try {
       await copy(value);
@@ -44,7 +46,7 @@ export function CopyableValue({ value, label, className, copy = writeToClipboard
 
   return (
     <span className={classes}>
-      <span className="mono-data ovl-copyable-value__text">{value}</span>
+      <span className={textClasses}>{value}</span>
       <Tooltip label={copyLabel}>
         <IconButton
           icon="copy"

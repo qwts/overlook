@@ -69,6 +69,8 @@ export const RafFavorite: Story = {
     // Real key metadata + the honest synced copy (no fabricated timestamp).
     await expect(canvas.getByText('AES-256-GCM · KEY #2')).toBeVisible();
     await expect(canvas.getByText('Encrypted · Local mock')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Copy filename' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Copy cipher identity' })).toBeVisible();
     await expect(canvas.queryByText('DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA')).toBeNull();
   },
 };

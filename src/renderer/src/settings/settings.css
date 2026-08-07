@@ -417,6 +417,10 @@
   color: var(--text-body);
 }
 
+.ovl-keyfp .ovl-copyable-value {
+  width: 100%;
+}
+
 .ovl-key__meter {
   display: flex;
   align-items: center;
@@ -468,11 +472,17 @@
 }
 
 .ovl-key__filename {
+  display: block;
+  flex: 1;
   font-size: var(--text-md);
   color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ovl-key__fileCopy {
+  width: 100%;
 }
 
 .ovl-key__filemeta {
@@ -614,10 +624,22 @@
   font: var(--type-meta);
 }
 
-.ovl-diagnostics__report pre {
+.ovl-diagnostics__eventId {
+  color: var(--text-faint);
+  font: var(--type-meta);
+}
+
+.ovl-diagnostics__payload {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  width: 100%;
+  margin: var(--space-3) 0 0;
+}
+
+.ovl-diagnostics__payload .ovl-copyable-value__text {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  margin: var(--space-3) 0 0;
   color: var(--text-muted);
   font: var(--type-mono);
 }
