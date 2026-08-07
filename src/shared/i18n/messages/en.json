@@ -332,6 +332,27 @@
   "export.itemFailures": {
     "defaultMessage": "View item failures"
   },
+  "export.metadata.edits": {
+    "defaultMessage": "Edits"
+  },
+  "export.metadata.editsHint": {
+    "defaultMessage": "Write title, description, and effective tags to a new XMP sidecar."
+  },
+  "export.metadata.label": {
+    "defaultMessage": "Metadata"
+  },
+  "export.metadata.none": {
+    "defaultMessage": "None"
+  },
+  "export.metadata.noneHint": {
+    "defaultMessage": "Write no metadata sidecars."
+  },
+  "export.metadata.source": {
+    "defaultMessage": "Source"
+  },
+  "export.metadata.sourceHint": {
+    "defaultMessage": "Copy retained source sidecars when originals are exported."
+  },
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
   },
@@ -373,6 +394,84 @@
   },
   "inspector.file.metadata": {
     "defaultMessage": "Metadata"
+  },
+  "inspector.metadata.addTag": {
+    "defaultMessage": "Add tag"
+  },
+  "inspector.metadata.common": {
+    "defaultMessage": "On every selected photo"
+  },
+  "inspector.metadata.description": {
+    "defaultMessage": "Description"
+  },
+  "inspector.metadata.failed": {
+    "defaultMessage": "Metadata could not be updated."
+  },
+  "inspector.metadata.heading": {
+    "defaultMessage": "Descriptive metadata"
+  },
+  "inspector.metadata.imported": {
+    "defaultMessage": "Imported keyword"
+  },
+  "inspector.metadata.importedTagChip": {
+    "defaultMessage": "{tag} · {imported} ×"
+  },
+  "inspector.metadata.invalidTag": {
+    "defaultMessage": "Enter a tag up to 64 characters without commas or semicolons."
+  },
+  "inspector.metadata.manage": {
+    "defaultMessage": "Manage a tag across this library"
+  },
+  "inspector.metadata.manageResult": {
+    "defaultMessage": "Updated {count} photos{merged, select, yes { and merged tags} other {}}."
+  },
+  "inspector.metadata.mixed": {
+    "defaultMessage": "Mixed values — unchanged until edited"
+  },
+  "inspector.metadata.removeEverywhere": {
+    "defaultMessage": "Remove from {count} photos"
+  },
+  "inspector.metadata.removeTag": {
+    "defaultMessage": "Remove {tag}"
+  },
+  "inspector.metadata.rename": {
+    "defaultMessage": "Rename or merge on {count} photos"
+  },
+  "inspector.metadata.result": {
+    "defaultMessage": "Updated {updated}; {unchanged} unchanged; {missing} unavailable."
+  },
+  "inspector.metadata.saveMany": {
+    "defaultMessage": "Apply to {count} photos"
+  },
+  "inspector.metadata.saveOne": {
+    "defaultMessage": "Save metadata"
+  },
+  "inspector.metadata.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "inspector.metadata.sourceTag": {
+    "defaultMessage": "Existing tag"
+  },
+  "inspector.metadata.tagChip": {
+    "defaultMessage": "{tag} ×"
+  },
+  "inspector.metadata.tagPlaceholder": {
+    "defaultMessage": "Type a tag and press Enter"
+  },
+  "inspector.metadata.tags": {
+    "defaultMessage": "Tags and keywords"
+  },
+  "inspector.metadata.targetTag": {
+    "defaultMessage": "New tag"
+  },
+  "inspector.metadata.title": {
+    "defaultMessage": "Title"
+  },
+  "inspector.metadata.tooMany": {
+    "defaultMessage": "Edit at most 10,000 selected photos at a time."
+  },
+  "inspector.metadata.varying": {
+    "defaultMessage": "On some selected photos"
   },
   "inspector.selection.next": {
     "defaultMessage": "Next selected photo"

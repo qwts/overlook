@@ -32,6 +32,9 @@ import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
+import { photoMetadataChannels } from './photo-metadata-channels.js';
+import { exportChannels } from './export-channels.js';
+import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -191,6 +194,13 @@ const photoRecordSchema = z.object({
   gpsLat: z.number().nullable(),
   gpsLon: z.number().nullable(),
   place: z.string().nullable(),
+  title: photoTitleSchema.nullable(),
+  description: photoDescriptionSchema.nullable(),
+  tags: photoTagsSchema.readonly(),
+  userTags: photoTagsSchema.readonly(),
+  importedKeywords: photoTagsSchema.readonly(),
+  suppressedKeywords: photoTagsSchema.readonly(),
+  metadataVersion: z.number().int().positive(),
   importedAt: z.string(),
   importSource: z.string(),
   favorite: z.boolean(),
@@ -287,6 +297,7 @@ export const channels = {
   ),
   ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
+  ...photoMetadataChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({
@@ -561,30 +572,7 @@ export const channels = {
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
   // Export engine (#97): decrypt-on-export to a chosen folder.
-  exportPickDestination: defineChannel('export:pick-destination', z.object({}), z.object({ path: z.string().nullable() })),
-  exportRun: defineChannel(
-    'export:run',
-    z.object({ photoIds: z.array(z.string()).min(1), destination: z.string(), format: z.enum(['original', 'jpeg']).optional() }),
-    z.object({
-      exported: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-      cancelled: z.number().int().nonnegative(),
-      previewTranscodes: z.number().int().nonnegative(),
-      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
-    }),
-  ),
-  exportRunAll: defineChannel(
-    'export:run-all',
-    z.object({ destination: z.string().min(1) }),
-    z.object({
-      exported: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-      cancelled: z.number().int().nonnegative(),
-      previewTranscodes: z.number().int().nonnegative(),
-      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
-    }),
-  ),
-  exportCancel: defineChannel('export:cancel', z.object({}), z.object({})),
+  ...exportChannels,
   // Backup engine (#105): the toolbar's manual trigger. 'disconnected'
   // (#114): providerId null blocks manual runs too, not just auto-backup.
   backupRun: defineChannel(

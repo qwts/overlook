@@ -6,6 +6,11 @@
   gap: var(--space-3);
 }
 
+.ovl-export__metadataHint {
+  color: var(--text-faint);
+  font: var(--type-meta);
+}
+
 .ovl-export__card {
   display: flex;
   align-items: center;

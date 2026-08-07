@@ -79,6 +79,12 @@ export interface OverlookApi {
     readonly selectAll: (request: Req<typeof channels.librarySelectAll>) => Promise<Res<typeof channels.librarySelectAll>>;
     readonly selectionRange: (request: Req<typeof channels.librarySelectionRange>) => Promise<Res<typeof channels.librarySelectionRange>>;
     readonly get: (request: Req<typeof channels.libraryGet>) => Promise<Res<typeof channels.libraryGet>>;
+    readonly updateMetadata: (request: Req<typeof channels.libraryMetadataUpdate>) => Promise<Res<typeof channels.libraryMetadataUpdate>>;
+    readonly metadataSummary: (
+      request: Req<typeof channels.libraryMetadataSummary>,
+    ) => Promise<Res<typeof channels.libraryMetadataSummary>>;
+    readonly manageTag: (request: Req<typeof channels.libraryTagManage>) => Promise<Res<typeof channels.libraryTagManage>>;
+    readonly tagSuggestions: (request: Req<typeof channels.libraryTagSuggestions>) => Promise<Res<typeof channels.libraryTagSuggestions>>;
     readonly repairDimensions: (
       request: Req<typeof channels.libraryRepairDimensions>,
     ) => Promise<Res<typeof channels.libraryRepairDimensions>>;

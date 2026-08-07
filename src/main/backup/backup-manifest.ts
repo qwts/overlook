@@ -4,6 +4,7 @@ import type { ActivityEvent } from '../../shared/activity/types.js';
 
 import { mediaInfoSchema } from '../../shared/library/media-info.js';
 import { boardSchema } from '../../shared/moodboard/board.js';
+import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../../shared/library/photo-metadata.js';
 
 export const BACKUP_MANIFEST_SCHEMA_VERSION = 6 as const;
 
@@ -52,6 +53,12 @@ export const backupManifestPhotoV2Schema = z.strictObject({
   gpsLat: z.number().min(-90).max(90).nullable(),
   gpsLon: z.number().min(-180).max(180).nullable(),
   place: z.string().nullable(),
+  title: photoTitleSchema.nullable().optional(),
+  description: photoDescriptionSchema.nullable().optional(),
+  userTags: photoTagsSchema.readonly().optional(),
+  importedKeywords: photoTagsSchema.readonly().optional(),
+  suppressedKeywords: photoTagsSchema.readonly().optional(),
+  metadataVersion: z.number().int().positive().optional(),
   importedAt: isoTimestampSchema,
   importSource: z.string().min(1),
   favorite: z.boolean(),

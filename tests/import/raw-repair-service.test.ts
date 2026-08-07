@@ -48,6 +48,13 @@ function raw(overrides: Partial<PhotoRecord> = {}): PhotoRecord {
     previewFailure: null,
     dimensionStatus: 'legacy',
     syncState: 'local',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
     ...overrides,
   };
 }

@@ -11,6 +11,7 @@ import { IconButton } from '../components/IconButton';
 import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { PhotoMetadataEditor } from './PhotoMetadataEditor.js';
 
 import './inspector.css';
 
@@ -53,13 +54,22 @@ function Section({ title, children }: { readonly title: string; readonly childre
 export interface InspectorProps {
   /** The focused photo — lightbox photo, else the single grid selection. */
   readonly photo: PhotoRecord | null;
+  /** Bulk-edit scope. Defaults to the focused photo in detached inspectors. */
+  readonly photoIds?: readonly string[] | undefined;
   readonly providerLabel?: string | undefined;
   readonly selectionPosition?: { readonly index: number; readonly count: number } | undefined;
   readonly onPrevious?: (() => void) | undefined;
   readonly onNext?: (() => void) | undefined;
 }
 
-export function Inspector({ photo, providerLabel = 'Cloud', selectionPosition, onPrevious, onNext }: InspectorProps): ReactElement {
+export function Inspector({
+  photo,
+  photoIds,
+  providerLabel = 'Cloud',
+  selectionPosition,
+  onPrevious,
+  onNext,
+}: InspectorProps): ReactElement {
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const { formatBytes, formatCalendarDate } = useFormats();
@@ -130,6 +140,7 @@ export function Inspector({ photo, providerLabel = 'Cloud', selectionPosition, o
         </div>
         <StatusGlyph state={photo.syncState} />
       </div>
+      <PhotoMetadataEditor photo={photo} photoIds={photoIds ?? [photo.id]} />
       <Section title="Badges">
         <div className="ovl-inspector__badges">
           <Badge tone="green" icon="lock">

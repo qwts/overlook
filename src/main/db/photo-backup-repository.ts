@@ -16,11 +16,31 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
     const recoverable = `(p.deleted_at IS NULL OR (p.deleted_at IS NOT NULL AND l.status IN ('synced', 'offloaded')))`;
     const photos = queryAll<PhotoRow>(db, `${select('date')} WHERE ${recoverable} ORDER BY p.imported_at, p.id`).map(
       (row): BackupManifestPhotoV2 => {
-        const { previewFailure: _previewFailure, dimensionStatus: _dimensionStatus, syncState: _syncState, ...photo } = toRecord(row);
+        const {
+          previewFailure: _previewFailure,
+          dimensionStatus: _dimensionStatus,
+          syncState: _syncState,
+          tags: _tags,
+          title,
+          description,
+          userTags,
+          importedKeywords,
+          suppressedKeywords,
+          metadataVersion,
+          ...photo
+        } = toRecord(row);
         const { isOriginal, ...base } = photo;
+        const hasMetadata =
+          title !== null ||
+          description !== null ||
+          userTags.length > 0 ||
+          importedKeywords.length > 0 ||
+          suppressedKeywords.length > 0 ||
+          metadataVersion !== 1;
         return {
           ...base,
           ...(isOriginal ? { isOriginal: true } : {}),
+          ...(hasMetadata ? { title, description, userTags, importedKeywords, suppressedKeywords, metadataVersion } : {}),
           blobPath: `blobs/${photo.contentHash.slice(0, 2)}/${photo.contentHash}`,
         };
       },
@@ -96,12 +116,14 @@ export function restoreManifest(
            id, file_name, file_kind, width, height, bytes, content_hash,
            camera, lens, iso, aperture, shutter, focal_length, taken_at,
            gps_lat, gps_lon, place, imported_at, import_source, favorite,
-           is_original, key_id, deleted_at, media_info
+           is_original, key_id, deleted_at, media_info, user_title, user_description,
+           imported_keywords, user_tags, suppressed_keywords, metadata_tags_search, metadata_version
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite,
-           @isOriginal, @keyId, @deletedAt, @mediaInfoJson
+           @isOriginal, @keyId, @deletedAt, @mediaInfoJson, @title, @description,
+           @importedKeywordsJson, @userTagsJson, @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion
          )`,
         {
           ...photo,
@@ -109,6 +131,15 @@ export function restoreManifest(
           isOriginal: photo.isOriginal === true ? 1 : 0,
           mediaInfo: null,
           mediaInfoJson: mediaInfoJson(photo.mediaInfo),
+          title: photo.title ?? null,
+          description: photo.description ?? null,
+          importedKeywordsJson: JSON.stringify(photo.importedKeywords ?? []),
+          userTagsJson: JSON.stringify(photo.userTags ?? []),
+          suppressedKeywordsJson: JSON.stringify(photo.suppressedKeywords ?? []),
+          metadataTagsSearch: [...(photo.importedKeywords ?? []), ...(photo.userTags ?? [])]
+            .filter((tag) => !(photo.suppressedKeywords ?? []).some((suppressed) => suppressed.toLowerCase() === tag.toLowerCase()))
+            .join(' '),
+          metadataVersion: photo.metadataVersion ?? 1,
         },
       );
       // A NOT FOUND original from a partial restore (#915) keeps its row but

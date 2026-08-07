@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { Inspector } from './Inspector';
+import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 
 // #94 exit criteria: §4 visual match — grouped truth rows, interpunct mono
@@ -35,17 +36,47 @@ const PHOTO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'verified',
   syncState: 'synced',
+  title: 'Lisbon morning',
+  description: 'Street scene near the waterfront.',
+  tags: ['Lisbon', 'Travel'],
+  userTags: ['Travel'],
+  importedKeywords: ['Lisbon'],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 };
 
 const meta: Meta<typeof Inspector> = {
   title: 'App/Inspector',
   component: Inspector,
   decorators: [
-    (Story) => (
-      <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
-        <Story />
-      </div>
-    ),
+    (Story) => {
+      const library = {
+        metadataSummary: () =>
+          Promise.resolve({
+            found: 1,
+            missing: 0,
+            title: { mixed: false, value: PHOTO.title },
+            description: { mixed: false, value: PHOTO.description },
+            commonTags: PHOTO.tags,
+            varyingTags: [],
+          }),
+        updateMetadata: () => Promise.resolve({ updated: 1, unchanged: 0, missing: 0, photoIds: [PHOTO.id] }),
+        tagSuggestions: () =>
+          Promise.resolve({
+            tags: [
+              { name: 'Lisbon', count: 1 },
+              { name: 'Travel', count: 1 },
+            ],
+          }),
+        manageTag: () => Promise.resolve({ updated: 1, unchanged: 0, missing: 0, photoIds: [PHOTO.id], merged: false }),
+      } as unknown as OverlookApi['library'];
+      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library };
+      return (
+        <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
+          <Story />
+        </div>
+      );
+    },
   ],
 };
 
@@ -151,5 +182,19 @@ export const MultipleSelected: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Next selected photo' }));
     await expect(args.onPrevious).toHaveBeenCalledTimes(1);
     await expect(args.onNext).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const EditableMetadata: Story = {
+  args: { photo: PHOTO },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByDisplayValue('Lisbon morning')).toBeVisible();
+    await userEvent.clear(canvas.getByLabelText('Title'));
+    await userEvent.type(canvas.getByLabelText('Title'), 'Lisbon dusk');
+    await userEvent.type(canvas.getByLabelText('Add tag'), 'Portfolio{enter}');
+    await expect(canvas.getByRole('button', { name: 'Remove Portfolio' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Save metadata' }));
+    await expect(await canvas.findByText('Updated 1; 0 unchanged; 0 unavailable.')).toBeVisible();
   },
 };

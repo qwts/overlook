@@ -4,6 +4,7 @@ import { embeddedJpegFromRaf } from './raf-preview.js';
 import { resolveRawPreview } from './raw-preview.js';
 import { displayDimensions } from './display-dimensions.js';
 import type { FileKind } from '../../shared/library/types.js';
+import { normalizePhotoTags } from '../../shared/library/photo-metadata.js';
 
 // EXIF extraction (#85) per ADR-0006's field set, robust to weird files:
 // missing or corrupt metadata degrades to an all-null record — the import
@@ -29,6 +30,8 @@ export interface ExtractedMetadata {
   readonly takenAt: string | null;
   readonly gpsLat: number | null;
   readonly gpsLon: number | null;
+  /** IPTC/XMP keyword provenance; authored tags remain separate (#508). */
+  readonly keywords?: readonly string[] | undefined;
 }
 
 const EMPTY: ExtractedMetadata = {
@@ -92,10 +95,19 @@ function asFloatingIsoDate(value: unknown): string | null {
  */
 async function parseMetadata(bytes: Buffer): Promise<Record<string, unknown> | undefined> {
   try {
-    return (await exifr.parse(bytes, { tiff: true, exif: true, gps: true })) as Record<string, unknown> | undefined;
+    return (await exifr.parse(bytes, { tiff: true, exif: true, gps: true, iptc: true, xmp: true })) as Record<string, unknown> | undefined;
   } catch {
     return undefined;
   }
+}
+
+function metadataKeywords(parsed: Readonly<Record<string, unknown>>): string[] {
+  const values = ['Keywords', 'Subject', 'HierarchicalSubject', 'XPKeywords'].flatMap((key) => {
+    const value = parsed[key];
+    if (typeof value === 'string') return value.split(/[;,]/u);
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  });
+  return normalizePhotoTags(values.filter((value) => value.trim() !== ''));
 }
 
 export async function extractMetadata(bytes: Buffer, kind?: FileKind): Promise<ExtractedMetadata> {
@@ -138,5 +150,6 @@ export async function extractMetadata(bytes: Buffer, kind?: FileKind): Promise<E
     takenAt: asFloatingIsoDate(parsed['DateTimeOriginal']) ?? asFloatingIsoDate(parsed['CreateDate']),
     gpsLat: asFiniteNumber(parsed['latitude']),
     gpsLon: asFiniteNumber(parsed['longitude']),
+    keywords: metadataKeywords(parsed),
   };
 }

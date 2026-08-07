@@ -31,6 +31,7 @@ import { moveCompensationCommand, trashCommand } from './history/command-drafts.
 import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
 import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './library/favorite-mutation-handler.js';
+import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -167,6 +168,7 @@ export function registerLibraryHandlers(
   ipcMain.handle(channels.libraryGet.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryGet, ({ id }) => ({ photo: getService().get(id) ?? null }))(request),
   );
+  registerPhotoMetadataHandlers(getService, contentAdmission);
   ipcMain.handle(channels.libraryRepairDimensions.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) => getService().repairDimensions(id, width, height))(request),
   );
@@ -663,8 +665,13 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
 }
 
 export interface ExportFacade {
-  run(photoIds: readonly string[], destination: string, format?: 'original' | 'jpeg'): Promise<ExportRunResult>;
-  runAll(destination: string): Promise<ExportRunResult>;
+  run(
+    photoIds: readonly string[],
+    destination: string,
+    format?: 'original' | 'jpeg',
+    metadata?: 'original' | 'overlook' | 'none',
+  ): Promise<ExportRunResult>;
+  runAll(destination: string, metadata?: 'original' | 'overlook' | 'none'): Promise<ExportRunResult>;
   cancel(): void;
   pickDestination(): Promise<string | null>;
 }
@@ -679,27 +686,27 @@ export interface ExportRunResult {
 
 export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
   ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, destination, format }) => {
-      const result = await getFacade().run(photoIds, destination, format);
+    wrapHandler(channels.exportRun, async ({ photoIds, destination, format, metadata }) => {
+      const result = await getFacade().run(photoIds, destination, format, metadata);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: format ?? 'original', ...summary },
+        payload: { format: format ?? 'original', metadata: metadata ?? 'original', ...summary },
       });
       return result;
     })(request),
   );
   ipcMain.handle(channels.exportRunAll.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRunAll, async ({ destination }) => {
-      const result = await getFacade().runAll(destination);
+    wrapHandler(channels.exportRunAll, async ({ destination, metadata }) => {
+      const result = await getFacade().runAll(destination, metadata);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: [],
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: 'original', scope: 'all', ...summary },
+        payload: { format: 'original', metadata: metadata ?? 'original', scope: 'all', ...summary },
       });
       return result;
     })(request),

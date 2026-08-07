@@ -51,6 +51,7 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
       hasContentHash: (hash) => options.repo.hasContentHash(hash),
       get: (id) => options.repo.get(id),
       insert: (photo) => options.repo.insert(photo),
+      addImportedKeywords: (photoId, keywords) => options.repo.addImportedKeywords(photoId, keywords),
       insertSidecar: (record) => options.sidecars.insert(record),
       repairGeneratedDimensions: (id, width, height) => options.repo.repairGeneratedDimensions(id, width, height),
       setDimensionStatus: (id, status) => options.repo.setDimensionStatus(id, status),

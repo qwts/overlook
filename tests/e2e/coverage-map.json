@@ -2033,6 +2033,28 @@
           "paths": ["tests/library/common-video.test.ts", "tests/library/media-signatures.test.ts", "tests/library/mpeg-ts.test.ts"]
         }
       ]
+    },
+    {
+      "id": "508-photo-metadata",
+      "wiki": "Acceptance-Test-Photo-Metadata",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photo-metadata.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/export/ExportDialog.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/db/photo-metadata-repository.test.ts", "tests/import/xmp-metadata.test.ts", "tests/export/export-engine.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The packaged-build check verifies real IPTC/XMP producer compatibility and authorized protected-domain presentation while byte identity and isolation are enforced by automated repository, import, export, and backup tests."
+        }
+      ]
     }
   ]
 }

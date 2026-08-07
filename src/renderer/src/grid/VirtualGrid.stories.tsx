@@ -48,6 +48,13 @@ function photo(index: number): PhotoRecord {
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState: 'synced',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 

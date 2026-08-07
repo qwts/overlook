@@ -9,6 +9,7 @@ import { probeMediaInfo, sniffImageKind, sniffVideoKind } from '../../shared/lib
 import type { MediaInfo } from '../../shared/library/media-info.js';
 import type { SidecarRole } from '../../shared/library/sidecar-files.js';
 import type { FileKind, PhotoInsert, PhotoRecord } from '../../shared/library/types.js';
+import { extractXmpKeywords } from './xmp-metadata.js';
 
 // Import engine (#87): source files → encrypted, verified library records —
 // interruptible at any point without loss. The journal (import-journal.ts)
@@ -116,6 +117,7 @@ export interface ImportEngineDeps {
     readonly insert: (photo: PhotoInsert) => void;
     /** Idempotent per (photo, content) — resume-safe (#484). */
     readonly insertSidecar: (record: SidecarRecord) => void;
+    readonly addImportedKeywords?: ((photoId: string, keywords: readonly string[]) => boolean) | undefined;
     readonly repairGeneratedDimensions: (id: string, width: number, height: number) => boolean;
     readonly setDimensionStatus: (id: string, status: PhotoRecord['dimensionStatus']) => boolean;
     readonly setPreviewFailure: (id: string, failure: PhotoRecord['previewFailure']) => boolean;
@@ -441,6 +443,10 @@ export class ImportEngine {
           keyId: ref.keyId,
           importedAt: this.deps.now(),
         });
+        if (sidecar.role === 'xmp') {
+          const keywords = extractXmpKeywords(bytes);
+          if (keywords.length > 0) this.deps.repo.addImportedKeywords?.(file.photoId, keywords);
+        }
         sidecar.contentHash = ref.contentHash;
         changed = true;
       } finally {
@@ -520,6 +526,7 @@ export class ImportEngine {
       gpsLat: meta.gpsLat,
       gpsLon: meta.gpsLon,
       place: null, // never fabricated — GPS is stored, not geocoded (ADR-0006)
+      importedKeywords: meta.keywords ?? [],
       importedAt: this.deps.now(),
       importSource: source,
       keyId,

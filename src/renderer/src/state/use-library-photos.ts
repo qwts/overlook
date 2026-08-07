@@ -122,9 +122,22 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // A derivative-only change must NOT refetch the page: replacing the
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
-      if (derivativeOnly !== true) fetchFirstPage(membershipChanged(membership, source, chips, album, albumIds));
+      if (derivativeOnly === true) return;
+      if (membership === 'none' && query === '') {
+        void Promise.all(photoIds.map((id) => window.overlook.library.get({ id }))).then((results) => {
+          dispatch({
+            type: 'photos/records-patched',
+            photos: results.flatMap(({ photo }) => (photo === null ? [] : [photo])),
+          });
+        });
+        return;
+      }
+      // Search membership can change when title/description/tags change, so
+      // the active logical result page is re-evaluated. The ordinary gallery
+      // path above patches only the named records and preserves scroll.
+      fetchFirstPage(membershipChanged(membership, source, chips, album, albumIds));
     });
-  }, [album, chips, dispatch, fetchFirstPage, source]);
+  }, [album, chips, dispatch, fetchFirstPage, query, source]);
 
   // Backup changes only syncState, so patch loaded records instead of
   // replacing the first page (which used to flicker, trim deep selection,

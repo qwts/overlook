@@ -34,6 +34,19 @@ describe('app state reducer', () => {
     assert.equal(apply(second, { type: 'thumbs/invalidated', photoIds: [] }), second);
   });
 
+  test('metadata responses patch only named records without resetting selection or scroll state (#508)', () => {
+    const photo = (id: string, title: string | null) => ({ id, title }) as AppState['photos'][number];
+    const loaded = apply(
+      initialAppState,
+      { type: 'photos/loaded', photos: [photo('a', null), photo('b', null)], append: false },
+      { type: 'selection/all', photoIds: ['a'] },
+    );
+    const patched = apply(loaded, { type: 'photos/records-patched', photos: [photo('a', 'Authored')] });
+    assert.equal(patched.photos[0]?.title, 'Authored');
+    assert.equal(patched.photos[1], loaded.photos[1]);
+    assert.deepEqual([...patched.selection], ['a']);
+  });
+
   test('view switches across grid, list, and moodboard (#515)', () => {
     assert.equal(initialAppState.view, 'grid');
     assert.equal(apply(initialAppState, { type: 'view/set', view: 'moodboard' }).view, 'moodboard');

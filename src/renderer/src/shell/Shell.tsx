@@ -797,6 +797,7 @@ export function Shell({
             <Inspector
               providerLabel={state.providerLabel}
               photo={state.photos.find((photo) => photo.id === state.inspectorPhotoId) ?? null}
+              photoIds={state.selection.size === 0 ? [] : [...state.selection]}
               selectionPosition={inspectorSelectionPosition}
               onPrevious={() => dispatch({ type: 'inspector/stepped', delta: -1 })}
               onNext={() => dispatch({ type: 'inspector/stepped', delta: 1 })}

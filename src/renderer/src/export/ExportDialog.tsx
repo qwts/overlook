@@ -24,6 +24,19 @@ const messages = defineMessages({
   itemFailures: { id: 'export.itemFailures', defaultMessage: 'View item failures' },
   copyDestination: { id: 'export.copy.destination', defaultMessage: 'export destination' },
   copyFailure: { id: 'export.copy.failure', defaultMessage: 'export failure' },
+  metadata: { id: 'export.metadata.label', defaultMessage: 'Metadata' },
+  metadataSource: { id: 'export.metadata.source', defaultMessage: 'Source' },
+  metadataEdits: { id: 'export.metadata.edits', defaultMessage: 'Edits' },
+  metadataNone: { id: 'export.metadata.none', defaultMessage: 'None' },
+  metadataSourceHint: {
+    id: 'export.metadata.sourceHint',
+    defaultMessage: 'Copy retained source sidecars when originals are exported.',
+  },
+  metadataEditsHint: {
+    id: 'export.metadata.editsHint',
+    defaultMessage: 'Write title, description, and effective tags to a new XMP sidecar.',
+  },
+  metadataNoneHint: { id: 'export.metadata.noneHint', defaultMessage: 'Write no metadata sidecars.' },
 });
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
@@ -54,8 +67,10 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const { announce } = useAnnouncer();
   const formatLabelId = useId();
   const destinationLabelId = useId();
+  const metadataLabelId = useId();
   const [phase, setPhase] = useState<Phase>('options');
   const [format, setFormat] = useState<'original' | 'jpeg'>('original');
+  const [metadata, setMetadata] = useState<'original' | 'overlook' | 'none'>('original');
   const [decrypt, setDecrypt] = useState(true);
   const [destination, setDestination] = useState<string | null>(null);
   const [bar, setBar] = useState<Bar>({ done: 0, total: allPhotos ? 0 : photoIds.length });
@@ -101,8 +116,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
     }
     setPhase('running');
     const run = allPhotos
-      ? window.overlook.export.runAll({ destination })
-      : window.overlook.export.run({ photoIds: [...photoIds], destination, format });
+      ? window.overlook.export.runAll({ destination, metadata })
+      : window.overlook.export.run({ photoIds: [...photoIds], destination, format, metadata });
     void run
       .then((summary) => {
         setExported(summary.exported);
@@ -183,6 +198,28 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               />
             </div>
           )}
+          <div className="ovl-export__row" role="group" aria-labelledby={metadataLabelId}>
+            <span id={metadataLabelId}>{intl.formatMessage(messages.metadata)}</span>
+            <Segmented
+              label={intl.formatMessage(messages.metadata)}
+              value={metadata}
+              onChange={setMetadata}
+              options={[
+                { value: 'original', label: intl.formatMessage(messages.metadataSource) },
+                { value: 'overlook', label: intl.formatMessage(messages.metadataEdits) },
+                { value: 'none', label: intl.formatMessage(messages.metadataNone) },
+              ]}
+            />
+          </div>
+          <div className="ovl-export__metadataHint">
+            {intl.formatMessage(
+              metadata === 'original'
+                ? messages.metadataSourceHint
+                : metadata === 'overlook'
+                  ? messages.metadataEditsHint
+                  : messages.metadataNoneHint,
+            )}
+          </div>
           <div className="ovl-export__decrypt">
             <div>
               <div className="ovl-export__decryptTitle">

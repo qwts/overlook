@@ -16,6 +16,31 @@ import type { PhotoRecord } from '../../shared/library/types.js';
 // encrypted-export format — the dialog's decrypt-off switch disables Export.
 
 export type ExportFormat = 'original' | 'jpeg';
+export type ExportMetadataMode = 'original' | 'overlook' | 'none';
+
+function xml(value: string): string {
+  return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/"/gu, '&quot;').replace(/'/gu, '&apos;');
+}
+
+/** Creates a portable XMP projection of Overlook-authored metadata. The
+ * original file and retained source sidecars are never modified. */
+export function authoredMetadataXmp(photo: PhotoRecord): Buffer | null {
+  if (photo.title === null && photo.description === null && photo.tags.length === 0) return null;
+  const title =
+    photo.title === null ? '' : `<dc:title><rdf:Alt><rdf:li xml:lang="x-default">${xml(photo.title)}</rdf:li></rdf:Alt></dc:title>`;
+  const description =
+    photo.description === null
+      ? ''
+      : `<dc:description><rdf:Alt><rdf:li xml:lang="x-default">${xml(photo.description)}</rdf:li></rdf:Alt></dc:description>`;
+  const tags =
+    photo.tags.length === 0
+      ? ''
+      : `<dc:subject><rdf:Bag>${photo.tags.map((tag) => `<rdf:li>${xml(tag)}</rdf:li>`).join('')}</rdf:Bag></dc:subject>`;
+  return Buffer.from(
+    `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">${title}${description}${tags}</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>`,
+    'utf8',
+  );
+}
 
 export interface ExportedFile {
   readonly photoId: string;
@@ -118,19 +143,23 @@ export class ExportEngine {
     destination: string,
     signal?: AbortSignal,
     format: ExportFormat = 'original',
+    metadata: ExportMetadataMode = 'original',
   ): Promise<ExportSummary> {
     const photos = photoIds.map((id) => this.deps.repo.get(id));
     // Free-space preflight: the sum of plaintext sizes must fit BEFORE any
     // bytes move — a mid-batch ENOSPC helps nobody. Sidecar bytes count too.
     const needed =
       photos.reduce((sum, photo) => sum + (photo?.bytes ?? 0), 0) +
-      (format === 'original'
+      (format === 'original' && metadata === 'original'
         ? photos.reduce(
             (sum, photo) =>
               sum +
               (photo === undefined ? 0 : (this.deps.sidecarsFor?.(photo.id) ?? []).reduce((inner, sidecar) => inner + sidecar.bytes, 0)),
             0,
           )
+        : 0) +
+      (metadata === 'overlook'
+        ? photos.reduce((sum, photo) => sum + (photo === undefined ? 0 : (authoredMetadataXmp(photo)?.length ?? 0)), 0)
         : 0);
     const free = await this.deps.freeBytes(destination);
     if (needed > free) {
@@ -170,7 +199,12 @@ export class ExportEngine {
         }
         const fileName = await this.resolveCollision(destination, targetName);
         await this.deps.writeFile(this.deps.joinPath(destination, fileName), plaintext);
-        const sidecarNames = format === 'original' ? await this.exportSidecars(photo, destination, fileName) : [];
+        const sidecarNames =
+          metadata === 'overlook'
+            ? await this.exportAuthoredMetadata(photo, destination, fileName)
+            : metadata === 'original' && format === 'original'
+              ? await this.exportSidecars(photo, destination, fileName)
+              : [];
         files.push({ photoId: photo.id, fileName, renamed: fileName !== targetName, fromPreview, sidecarNames });
       } catch (error) {
         failed += 1;
@@ -215,6 +249,16 @@ export class ExportEngine {
       written.push(target);
     }
     return written;
+  }
+
+  private async exportAuthoredMetadata(photo: PhotoRecord, destination: string, resolvedName: string): Promise<readonly string[]> {
+    const xmp = authoredMetadataXmp(photo);
+    if (xmp === null) return [];
+    const dot = resolvedName.lastIndexOf('.');
+    const stem = dot <= 0 ? resolvedName : resolvedName.slice(0, dot);
+    const target = await this.resolveCollision(destination, `${stem}.xmp`);
+    await this.deps.writeFile(this.deps.joinPath(destination, target), Readable.from([xmp]));
+    return [target];
   }
 
   private async resolveCollision(destination: string, fileName: string): Promise<string> {
