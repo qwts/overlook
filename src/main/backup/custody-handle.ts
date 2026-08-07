@@ -47,8 +47,6 @@ export class CustodyHandleResolver {
         throw new CustodyResolutionError('custody-unavailable');
       }
     }
-    if (authority.state === 'provider-required') throw new CustodyResolutionError('custody-disconnected');
-
     const provider = this.deps.provider(authority.providerId);
     if (provider === undefined) throw new CustodyResolutionError('custody-disconnected');
 
@@ -68,6 +66,7 @@ export class CustodyHandleResolver {
       throw new CustodyResolutionError('custody-unavailable');
     }
     if (accountId !== authority.accountId) throw new CustodyResolutionError('custody-wrong-account');
+    if (authority.state === 'provider-required') throw new CustodyResolutionError('custody-disconnected');
     if (this.deps.remoteRoot() !== authority.remoteRoot) throw new CustodyResolutionError('custody-unavailable');
 
     return { authority, provider };

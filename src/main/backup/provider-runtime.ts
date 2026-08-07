@@ -66,7 +66,11 @@ export interface ProviderRuntimeOptions {
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
   readonly verifyCustodyReconnect?:
-    | ((input: { readonly provider: StorageProvider; readonly identity: ProviderAccountIdentity }) => Promise<CustodyReconnectResult>)
+    | ((input: {
+        readonly provider: StorageProvider;
+        readonly identity: ProviderAccountIdentity;
+        readonly signal?: AbortSignal;
+      }) => Promise<CustodyReconnectResult>)
     | undefined;
   /** Test seams; production probes connection for at most 5s and capacity for 30s. */
   readonly statusTimeoutMs?: number | undefined;
@@ -101,6 +105,8 @@ export class ProviderRuntime {
     string,
     { readonly controller: AbortController; readonly promise: Promise<ProviderCapacityStatus> }
   >();
+  private reconnectAbortController = new AbortController();
+  private readonly reconnectInFlight = new Set<Promise<CustodyReconnectResult>>();
 
   constructor(options: ProviderRuntimeOptions) {
     this.options = options;
@@ -320,7 +326,7 @@ export class ProviderRuntime {
     this.options.setProviderId(providerId);
     let reconnect: CustodyReconnectResult | undefined;
     try {
-      reconnect = await this.options.verifyCustodyReconnect?.({ provider: scopedProvider, identity: attempt.identity });
+      reconnect = await this.verifyReconnect({ provider: scopedProvider, identity: attempt.identity });
     } catch {
       return custodyUnavailable();
     }
@@ -328,6 +334,23 @@ export class ProviderRuntime {
       return reconnect.reason === 'wrong-account' ? custodyWrongAccount() : custodyUnavailable();
     }
     return { ok: true, reason: null };
+  }
+
+  private async verifyReconnect(input: {
+    readonly provider: StorageProvider;
+    readonly identity: ProviderAccountIdentity;
+  }): Promise<CustodyReconnectResult | undefined> {
+    const verifier = this.options.verifyCustodyReconnect;
+    if (verifier === undefined) return undefined;
+    const signal = this.reconnectAbortController.signal;
+    signal.throwIfAborted();
+    const operation = verifier({ ...input, signal });
+    this.reconnectInFlight.add(operation);
+    try {
+      return await operation;
+    } finally {
+      this.reconnectInFlight.delete(operation);
+    }
   }
 
   async descriptors(): Promise<readonly ProviderDescriptor[]> {
@@ -359,6 +382,15 @@ export class ProviderRuntime {
 
   drainICloudDriveOperations(): Promise<void> {
     return this.options.iCloudDriveBridge.drain();
+  }
+
+  async drainReconnectVerifications(): Promise<void> {
+    this.reconnectAbortController.abort(new Error('library binding changed'));
+    await Promise.allSettled([...this.reconnectInFlight]);
+  }
+
+  renewReconnectVerificationLifecycle(): void {
+    this.reconnectAbortController = new AbortController();
   }
 
   /** Connection authority is intentionally cheap (#721): provider capacity

@@ -164,6 +164,29 @@ describe('provider reconnect custody result (#733)', () => {
     assert.equal(result.retryable, true);
     assert.equal(providerId, 'mock');
   });
+
+  test('library teardown aborts and drains an explicit reconnect proof', async () => {
+    let proofStarted: (() => void) | undefined;
+    let observedSignal: AbortSignal | undefined;
+    const started = new Promise<void>((resolve) => {
+      proofStarted = resolve;
+    });
+    const r = runtime({
+      verifyCustodyReconnect: (input) =>
+        new Promise((resolve) => {
+          observedSignal = input.signal;
+          proofStarted?.();
+          input.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'unavailable' }), { once: true });
+        }),
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-drain'), fault: undefined });
+
+    const connect = r.connect('mock');
+    await started;
+    await r.drainReconnectVerifications();
+    assert.equal(observedSignal?.aborted, true);
+    assert.equal((await connect).code, 'custody-unavailable');
+  });
 });
 
 describe('emergency provider custody rollback (#732)', () => {

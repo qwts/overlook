@@ -37,7 +37,11 @@ export interface ProviderRuntimeFactoryDeps {
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
   readonly verifyCustodyReconnect?:
-    | ((input: { readonly provider: StorageProvider; readonly identity: ProviderAccountIdentity }) => Promise<CustodyReconnectResult>)
+    | ((input: {
+        readonly provider: StorageProvider;
+        readonly identity: ProviderAccountIdentity;
+        readonly signal?: AbortSignal;
+      }) => Promise<CustodyReconnectResult>)
     | undefined;
 }
 

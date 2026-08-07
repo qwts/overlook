@@ -690,7 +690,11 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
     closeCustodyRouting?.() ?? Promise.resolve(),
-    Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
+    Promise.allSettled([
+      ...activeBackupRuns,
+      providerRuntime?.drainICloudDriveOperations(),
+      providerRuntime?.drainReconnectVerifications(),
+    ]),
     mode !== 'restore' ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
     mode !== 'restore' ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
@@ -711,19 +715,13 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     libraryParts.db.close();
     libraryParts.keyStore.close();
   }
-  libraryService = undefined;
-  libraryParts = undefined;
-  importRuntime = undefined;
-  rawRepairService = undefined;
-  posterCaptureService = undefined;
-  thumbService = undefined;
-  fullService = undefined;
+  providerRuntime?.renewReconnectVerificationLifecycle();
+  [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
+  [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
   [backupEngine, offloadService, closeCustodyRouting] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
-  consistencyChecker = undefined;
-  embeddingRuntime = undefined;
-  exportFacade = undefined;
+  [consistencyChecker, embeddingRuntime, exportFacade] = [undefined, undefined, undefined];
   if (mode !== 'restore') restoreRuntime = undefined;
   releaseLibraryLock?.();
   releaseLibraryLock = undefined;

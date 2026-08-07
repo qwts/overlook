@@ -25,6 +25,7 @@ export interface CustodyPolicyRuntime {
   readonly verifyReconnect: (input: {
     readonly provider: StorageProvider;
     readonly identity: ProviderAccountIdentity;
+    readonly signal?: AbortSignal;
   }) => Promise<CustodyReconnectResult>;
 }
 
