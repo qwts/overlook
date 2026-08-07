@@ -73,6 +73,14 @@
   font: var(--type-meta);
 }
 
+.ovl-export__photosNotice {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-1) * 1.5);
+  color: var(--text-muted);
+  font: var(--type-meta);
+}
+
 .ovl-export__running {
   display: flex;
   flex-direction: column;

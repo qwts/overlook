@@ -326,6 +326,18 @@
   "export.copy.failure": {
     "defaultMessage": "export failure"
   },
+  "export.destination.applePhotos": {
+    "defaultMessage": "Apple Photos"
+  },
+  "export.destination.folder": {
+    "defaultMessage": "Folder"
+  },
+  "export.destination.kind": {
+    "defaultMessage": "Export to"
+  },
+  "export.destination.label": {
+    "defaultMessage": "Export destination"
+  },
   "export.everyPhoto": {
     "defaultMessage": "Every photo in this library"
   },
@@ -352,6 +364,18 @@
   },
   "export.metadata.sourceHint": {
     "defaultMessage": "Copy retained source sidecars when originals are exported."
+  },
+  "export.photoKit.accessHint": {
+    "defaultMessage": "Export requests add-only Photos access. It cannot read or synchronize your Photos library."
+  },
+  "export.photoKit.decryptHint": {
+    "defaultMessage": "Apple Photos receives plain originals and may retain them after Overlook locks. Only this reviewed selection is sent."
+  },
+  "export.photoKit.done": {
+    "defaultMessage": "{count} {count, plural, one {photo} other {photos}} exported and decrypted to Apple Photos."
+  },
+  "export.photoKit.metadataHint": {
+    "defaultMessage": "The original bytes, embedded metadata, creation date, and location are preserved where PhotoKit supports them."
   },
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
@@ -382,6 +406,48 @@
   },
   "import.move.warning.sd": {
     "defaultMessage": "Each imported original will be deleted from the card only after encrypted custody and decrypt/hash verification."
+  },
+  "import.photoKit.asset": {
+    "defaultMessage": "{fileName} · {mediaType}{dimensions}"
+  },
+  "import.photoKit.availableItems": {
+    "defaultMessage": "Apple Photos items available to import"
+  },
+  "import.photoKit.cancelled": {
+    "defaultMessage": "Apple Photos selection was cancelled"
+  },
+  "import.photoKit.denied": {
+    "defaultMessage": "Apple Photos access was denied"
+  },
+  "import.photoKit.requestHint": {
+    "defaultMessage": "Requests read access in the foreground"
+  },
+  "import.photoKit.restricted": {
+    "defaultMessage": "Apple Photos access is restricted on this Mac"
+  },
+  "import.photoKit.reviewAction": {
+    "defaultMessage": "Review photos from Apple Photos"
+  },
+  "import.photoKit.reviewNote": {
+    "defaultMessage": "Only checked originals leave Apple Photos. Embedded metadata is preserved when supported."
+  },
+  "import.photoKit.reviewTitle": {
+    "defaultMessage": "Review Apple Photos items"
+  },
+  "import.photoKit.selected": {
+    "defaultMessage": "{selected} of {total} selected"
+  },
+  "import.photoKit.selectedLimited": {
+    "defaultMessage": "{selected} of {total} selected · Limited Photos access"
+  },
+  "import.photoKit.tryAgain": {
+    "defaultMessage": "Try again"
+  },
+  "import.photoKit.unavailable": {
+    "defaultMessage": "Apple Photos import requires a signed macOS build"
+  },
+  "import.photoKit.waiting": {
+    "defaultMessage": "Waiting for Apple Photos authorization…"
   },
   "inspector.copy.cipher": {
     "defaultMessage": "cipher identity"

@@ -37,6 +37,9 @@ const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
 const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTransport);
+const photoKitStatus = createInvoker(channels.photoKitStatus, invokeTransport);
+const photoKitImportReview = createInvoker(channels.photoKitImportReview, invokeTransport);
+const photoKitCancel = createInvoker(channels.photoKitCancel, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
@@ -192,6 +195,16 @@ const overlook: OverlookApi = {
   nativeDrag: Object.freeze({
     status: async () => nativeDragStatus({}),
     start: createInvoker(channels.nativeDragStart, invokeTransport),
+  }),
+  photoKit: Object.freeze({
+    status: async () => photoKitStatus({}),
+    reviewImport: async () => photoKitImportReview({}),
+    import: createInvoker(channels.photoKitImportRun, invokeTransport),
+    export: createInvoker(channels.photoKitExportRun, invokeTransport),
+    cancel: async () => {
+      await photoKitCancel({});
+    },
+    onProgress: createSubscriber(events.photoKitProgress, subscribeTransport),
   }),
   activity: Object.freeze({
     page: createInvoker(channels.activityPage, invokeTransport),

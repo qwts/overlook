@@ -2073,6 +2073,24 @@
           "reason": "The signed packaged check proves real AppKit file promises across Finder, browsers, and native apps; automated tests cover renderer selection, bounded materialization, lock cancellation, naming, custody release, and native-source policy."
         }
       ]
+    },
+    {
+      "id": "798-apple-photos-bridge",
+      "wiki": "Acceptance-Test-Apple-Photos-Bridge",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photokit.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/photo-kit/photo-kit-service.test.ts", "tests/photo-kit/photo-kit-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged pass exercises live PhotoKit permission states, limited and revoked access, iCloud-only assets, add-only export, supported metadata fidelity, and destination-owned retention; automated tests cover exact review scope, staging cleanup, lock refusal, native source policy, and the renderer/IPC flow."
+        }
+      ]
     }
   ]
 }

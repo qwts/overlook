@@ -79,6 +79,7 @@ import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
 import { EgressRuntime } from './egress-runtime.js';
+import { applicationEvents } from './application-events.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
@@ -114,10 +115,6 @@ configureSettingsLibrary(libraryDataDir);
 // Per-library advisory lock (ADR-0017 §5, #385): acquired at open, released last in teardown.
 const instanceId = ulid();
 let releaseLibraryLock: (() => void) | undefined;
-
-const emitExportProgress = createEmitter(events.exportProgress, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-const emitLibraryChanged = createEmitter(events.libraryChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-const emitBoardsReload = createEmitter(events.boardsReload, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
 
 let libraryParts: LibraryParts | undefined, releasedMaster: Buffer | undefined;
 
@@ -171,14 +168,14 @@ function getLibraryService(): LibraryService {
           fullService?.invalidate(photoId);
         }
       },
-      progress: (done, total) => emitExportProgress({ done, total }),
+      progress: (done, total) => applicationEvents.exportProgress({ done, total }),
       pickDestination: () => pickExportDestination(harnessEnv),
       failure: () => console.error('[overlook] protected export failed'),
       repairFailure: () => console.error('[overlook] protected migration repair failed'),
       workflowProgress: (progress) => broadcast((win) => win.webContents.send(events.protectedWorkflowProgress.name, progress)),
       workflowChanged: () => broadcast((win) => win.webContents.send(events.protectedAlbumsChanged.name, {})),
       ordinaryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds], membership: 'library' });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
     });
@@ -194,7 +191,11 @@ function getLibraryService(): LibraryService {
     });
     libraryService = new LibraryService(db, {
       libraryChanged: (photoIds, membership, albumIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds], membership, ...(albumIds === undefined ? {} : { albumIds: [...albumIds] }) });
+        applicationEvents.libraryChanged({
+          photoIds: [...photoIds],
+          membership,
+          ...(albumIds === undefined ? {} : { albumIds: [...albumIds] }),
+        });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {
@@ -265,8 +266,8 @@ function ensureMaintenanceServices(): void {
     runtime,
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
-    emitChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], membership: 'none' }),
-    emitThumbsChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
+    emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
     embeddingEligible: notifyEmbeddingEligibilityChanged,
@@ -563,7 +564,7 @@ function getBackupEngine(): BackupEngine {
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds], membership: 'library' });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
       },
       audit,
       retention: () => getSettingsStore().get().trashRetention,
@@ -578,7 +579,7 @@ function getBackupEngine(): BackupEngine {
         ledger.repairStatus(photoId, status);
       },
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds], membership: 'none' });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' });
       },
       audit,
     });
@@ -659,11 +660,9 @@ function getBackupEngine(): BackupEngine {
 const egressRuntime = new EgressRuntime({
   parts: () => requireParts('egress'),
   ephemeral: getEphemeralOriginalService,
-  platform: process.platform,
-  packaged: app.isPackaged,
-  testDragDestination: () => harnessEnv('OVERLOOK_NATIVE_DRAG_DESTINATION'),
-  pickExportDestination: () => pickExportDestination(harnessEnv),
-  exportProgress: (done, total) => emitExportProgress({ done, total }),
+  imports: getImportService,
+  dataDir: libraryDataDir,
+  harnessEnv,
   unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
 });
 
@@ -839,7 +838,9 @@ void externalOpen.whenReady().then(async () => {
     getLibrary: getLibraryService,
     getActivity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
     getHistory: () =>
-      createHistoryService(requireParts('history'), getLibraryService(), markManifestDebt, (boardId) => emitBoardsReload({ boardId })),
+      createHistoryService(requireParts('history'), getLibraryService(), markManifestDebt, (boardId) =>
+        applicationEvents.boardsReload({ boardId }),
+      ),
     libraries: {
       ...registryRuntime.facade({
         openLibraryId: () => (libraryService === undefined ? null : registryRuntime.resolveActive().id),
@@ -855,6 +856,7 @@ void externalOpen.whenReady().then(async () => {
     getEmbedding: getEmbeddingService,
     getExport: () => egressRuntime.exports(),
     getNativeDrag: () => egressRuntime.nativeDrag(),
+    getPhotoKit: () => egressRuntime.photoKit(),
     getKeyStore: () => {
       return requireParts('key store').keyStore;
     },

@@ -48,6 +48,13 @@ export interface ManifestFile {
   error?: string | undefined;
   moveLease?: MoveCompensationCandidate | undefined;
   sidecars?: ManifestSidecar[] | undefined;
+  sourceMetadata?:
+    | {
+        readonly takenAt?: string | undefined;
+        readonly gpsLat?: number | undefined;
+        readonly gpsLon?: number | undefined;
+      }
+    | undefined;
 }
 
 export interface MoveCompensationCandidate {
@@ -155,6 +162,7 @@ export interface ImportFileInput {
   /** Companions discovered beside the file (#484); absent for sources
    * without filesystem adjacency. */
   readonly sidecars?: readonly { readonly path: string; readonly fileName: string; readonly role: SidecarRole }[];
+  readonly sourceMetadata?: ManifestFile['sourceMetadata'];
 }
 
 export class ImportEngine {
@@ -192,6 +200,7 @@ export class ImportEngine {
         ...(file.sidecars === undefined || file.sidecars.length === 0
           ? {}
           : { sidecars: file.sidecars.map((sidecar) => ({ ...sidecar })) }),
+        ...(file.sourceMetadata === undefined ? {} : { sourceMetadata: { ...file.sourceMetadata } }),
       })),
     };
     await this.deps.journal.begin(manifest);
@@ -522,9 +531,9 @@ export class ImportEngine {
       aperture: meta.aperture,
       shutter: meta.shutter,
       focalLength: meta.focalLength,
-      takenAt: meta.takenAt,
-      gpsLat: meta.gpsLat,
-      gpsLon: meta.gpsLon,
+      takenAt: file.sourceMetadata?.takenAt ?? meta.takenAt,
+      gpsLat: file.sourceMetadata?.gpsLat ?? meta.gpsLat,
+      gpsLon: file.sourceMetadata?.gpsLon ?? meta.gpsLon,
       place: null, // never fabricated — GPS is stored, not geocoded (ADR-0006)
       importedKeywords: meta.keywords ?? [],
       importedAt: this.deps.now(),

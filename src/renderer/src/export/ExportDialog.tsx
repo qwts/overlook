@@ -37,6 +37,26 @@ const messages = defineMessages({
     defaultMessage: 'Write title, description, and effective tags to a new XMP sidecar.',
   },
   metadataNoneHint: { id: 'export.metadata.noneHint', defaultMessage: 'Write no metadata sidecars.' },
+  exportTo: { id: 'export.destination.kind', defaultMessage: 'Export to' },
+  exportDestination: { id: 'export.destination.label', defaultMessage: 'Export destination' },
+  folder: { id: 'export.destination.folder', defaultMessage: 'Folder' },
+  applePhotos: { id: 'export.destination.applePhotos', defaultMessage: 'Apple Photos' },
+  photoKitMetadataHint: {
+    id: 'export.photoKit.metadataHint',
+    defaultMessage: 'The original bytes, embedded metadata, creation date, and location are preserved where PhotoKit supports them.',
+  },
+  photoKitDecryptHint: {
+    id: 'export.photoKit.decryptHint',
+    defaultMessage: 'Apple Photos receives plain originals and may retain them after Overlook locks. Only this reviewed selection is sent.',
+  },
+  photoKitAccessHint: {
+    id: 'export.photoKit.accessHint',
+    defaultMessage: 'Export requests add-only Photos access. It cannot read or synchronize your Photos library.',
+  },
+  photoKitDone: {
+    id: 'export.photoKit.done',
+    defaultMessage: '{count} {count, plural, one {photo} other {photos}} exported and decrypted to Apple Photos.',
+  },
 });
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
@@ -71,6 +91,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const [phase, setPhase] = useState<Phase>('options');
   const [format, setFormat] = useState<'original' | 'jpeg'>('original');
   const [metadata, setMetadata] = useState<'original' | 'overlook' | 'none'>('original');
+  const [destinationKind, setDestinationKind] = useState<'folder' | 'apple-photos'>('folder');
   const [decrypt, setDecrypt] = useState(true);
   const [destination, setDestination] = useState<string | null>(null);
   const [bar, setBar] = useState<Bar>({ done: 0, total: allPhotos ? 0 : photoIds.length });
@@ -85,10 +106,14 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
     if (phase !== 'running') {
       return;
     }
-    return window.overlook.export.onProgress((payload) => {
-      setBar(payload);
-    });
-  }, [phase]);
+    return destinationKind === 'apple-photos'
+      ? window.overlook.photoKit.onProgress((payload) => {
+          if (payload.operation === 'export') setBar({ done: payload.done, total: payload.total });
+        })
+      : window.overlook.export.onProgress((payload) => {
+          setBar(payload);
+        });
+  }, [destinationKind, phase]);
 
   const progressQuarter = bar.total === 0 ? -1 : Math.floor((bar.done / bar.total) * 4);
   const announcedProgressQuarter = useRef(-2);
@@ -111,20 +136,25 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const exportLabel = allPhotos ? intl.formatMessage(messages.allPhotos) : `Export ${formatCount(count)} ${noun}`;
 
   const start = (): void => {
-    if (destination === null) {
+    if (destinationKind === 'folder' && destination === null) {
       return;
     }
     setPhase('running');
-    const run = allPhotos
-      ? window.overlook.export.runAll({ destination, metadata })
-      : window.overlook.export.run({ photoIds: [...photoIds], destination, format, metadata });
+    const run =
+      destinationKind === 'apple-photos'
+        ? window.overlook.photoKit.export({ photoIds: [...photoIds] })
+        : allPhotos
+          ? window.overlook.export.runAll({ destination: destination ?? '', metadata })
+          : window.overlook.export.run({ photoIds: [...photoIds], destination: destination ?? '', format, metadata });
     void run
       .then((summary) => {
         setExported(summary.exported);
         setFailed(summary.failed);
         setFailures(summary.failures);
         setCancelled(summary.cancelled);
-        setPreviewTranscodes(summary.previewTranscodes);
+        setPreviewTranscodes(
+          'previewTranscodes' in summary && typeof summary.previewTranscodes === 'number' ? summary.previewTranscodes : 0,
+        );
         setPhase('done');
         if (summary.failed > 0) {
           announce(`Export finished with ${formatCount(summary.failed)} ${summary.failed === 1 ? 'failure' : 'failures'}`, 'assertive');
@@ -156,7 +186,12 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" icon="share" disabled={!decrypt || destination === null} onClick={start}>
+            <Button
+              variant="primary"
+              icon="share"
+              disabled={!decrypt || (destinationKind === 'folder' && destination === null)}
+              onClick={start}
+            >
               {exportLabel}
             </Button>
           </>
@@ -164,7 +199,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
           <Button
             variant="ghost"
             onClick={() => {
-              void window.overlook.export.cancel({});
+              if (destinationKind === 'apple-photos') void window.overlook.photoKit.cancel();
+              else void window.overlook.export.cancel({});
             }}
           >
             Cancel
@@ -184,12 +220,25 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               {allPhotos ? intl.formatMessage(messages.everyPhoto) : `${formatCount(count)} ${noun} selected`}
             </div>
           </div>
+          <div className="ovl-export__row">
+            <span>{intl.formatMessage(messages.exportTo)}</span>
+            <Segmented
+              label={intl.formatMessage(messages.exportDestination)}
+              value={destinationKind}
+              onChange={setDestinationKind}
+              options={[
+                { value: 'folder', icon: 'folder', label: intl.formatMessage(messages.folder) },
+                { value: 'apple-photos', icon: 'image', label: intl.formatMessage(messages.applePhotos), disabled: allPhotos },
+              ]}
+            />
+          </div>
           {allPhotos ? null : (
             <div className="ovl-export__row" role="group" aria-labelledby={formatLabelId}>
               <span id={formatLabelId}>Format</span>
               <Segmented
                 label="Format"
-                value={format}
+                value={destinationKind === 'apple-photos' ? 'original' : format}
+                disabled={destinationKind === 'apple-photos'}
                 onChange={setFormat}
                 options={[
                   { value: 'original', label: 'Original' },
@@ -202,7 +251,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             <span id={metadataLabelId}>{intl.formatMessage(messages.metadata)}</span>
             <Segmented
               label={intl.formatMessage(messages.metadata)}
-              value={metadata}
+              value={destinationKind === 'apple-photos' ? 'original' : metadata}
+              disabled={destinationKind === 'apple-photos'}
               onChange={setMetadata}
               options={[
                 { value: 'original', label: intl.formatMessage(messages.metadataSource) },
@@ -212,13 +262,15 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             />
           </div>
           <div className="ovl-export__metadataHint">
-            {intl.formatMessage(
-              metadata === 'original'
-                ? messages.metadataSourceHint
-                : metadata === 'overlook'
-                  ? messages.metadataEditsHint
-                  : messages.metadataNoneHint,
-            )}
+            {destinationKind === 'apple-photos'
+              ? intl.formatMessage(messages.photoKitMetadataHint)
+              : intl.formatMessage(
+                  metadata === 'original'
+                    ? messages.metadataSourceHint
+                    : metadata === 'overlook'
+                      ? messages.metadataEditsHint
+                      : messages.metadataNoneHint,
+                )}
           </div>
           <div className="ovl-export__decrypt">
             <div>
@@ -226,9 +278,11 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                 {allPhotos ? intl.formatMessage(messages.unencryptedOriginals) : 'Decrypt originals'}
               </div>
               <div className="ovl-export__decryptHint">
-                {allPhotos
-                  ? intl.formatMessage(messages.allPhotosHint)
-                  : 'Files are stored encrypted. Turn this on to write plain, openable files to disk.'}
+                {destinationKind === 'apple-photos'
+                  ? intl.formatMessage(messages.photoKitDecryptHint)
+                  : allPhotos
+                    ? intl.formatMessage(messages.allPhotosHint)
+                    : 'Files are stored encrypted. Turn this on to write plain, openable files to disk.'}
               </div>
             </div>
             {allPhotos ? null : <Switch checked={decrypt} onChange={setDecrypt} label="Decrypt originals" />}
@@ -239,24 +293,31 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               Without decryption, exported files can&apos;t be opened outside Overlook.
             </div>
           ) : null}
-          <div className="ovl-export__row" role="group" aria-labelledby={destinationLabelId}>
-            <span id={destinationLabelId}>Destination</span>
-            <Button
-              variant="secondary"
-              icon="folder"
-              size="sm"
-              onClick={() => {
-                void window.overlook.export.pickDestination({}).then(({ path }) => {
-                  if (path !== null) {
-                    setDestination(path);
-                  }
-                });
-              }}
-            >
-              {destination === null ? 'Choose folder…' : (destination.split('/').at(-1) ?? destination)}
-            </Button>
-          </div>
-          {destination === null ? null : (
+          {destinationKind === 'folder' ? (
+            <div className="ovl-export__row" role="group" aria-labelledby={destinationLabelId}>
+              <span id={destinationLabelId}>Destination</span>
+              <Button
+                variant="secondary"
+                icon="folder"
+                size="sm"
+                onClick={() => {
+                  void window.overlook.export.pickDestination({}).then(({ path }) => {
+                    if (path !== null) {
+                      setDestination(path);
+                    }
+                  });
+                }}
+              >
+                {destination === null ? 'Choose folder…' : (destination.split('/').at(-1) ?? destination)}
+              </Button>
+            </div>
+          ) : (
+            <div className="ovl-export__photosNotice mono-data">
+              <Icon name="info" size={12} />
+              {intl.formatMessage(messages.photoKitAccessHint)}
+            </div>
+          )}
+          {destinationKind !== 'folder' || destination === null ? null : (
             <CopyableValue
               value={destination}
               label={intl.formatMessage(messages.copyDestination)}
@@ -304,7 +365,9 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             ) : (
               <div className="ovl-export__done">
                 <Icon name="circle-check" size={15} />
-                {formatCount(exported)} {exported === 1 ? 'photo' : 'photos'} exported and decrypted.
+                {destinationKind === 'apple-photos'
+                  ? intl.formatMessage(messages.photoKitDone, { count: exported })
+                  : `${formatCount(exported)} ${exported === 1 ? 'photo' : 'photos'} exported and decrypted.`}
                 {previewTranscodes > 0 ? ` ${formatCount(previewTranscodes)} from RAW previews (preview resolution).` : ''}
               </div>
             )

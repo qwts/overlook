@@ -35,6 +35,7 @@ import { favoriteChannels } from './favorite-channels.js';
 import { photoMetadataChannels } from './photo-metadata-channels.js';
 import { exportChannels } from './export-channels.js';
 import { nativeDragChannels } from './native-drag-channels.js';
+import { photoKitChannels, photoKitEvents } from './photo-kit-channels.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
@@ -300,6 +301,7 @@ export const channels = {
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   ...photoMetadataChannels,
   ...nativeDragChannels,
+  ...photoKitChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({
@@ -906,6 +908,7 @@ export const events = {
       total: z.number().int().nonnegative(),
     }),
   ),
+  ...photoKitEvents,
 } as const;
 
 export type PingRequest = z.output<typeof channels.ping.request>;

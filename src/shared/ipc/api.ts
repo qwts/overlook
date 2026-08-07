@@ -121,6 +121,14 @@ export interface OverlookApi {
     readonly status: () => Promise<Res<typeof channels.nativeDragStatus>>;
     readonly start: (request: Req<typeof channels.nativeDragStart>) => Promise<Res<typeof channels.nativeDragStart>>;
   };
+  readonly photoKit: {
+    readonly status: () => Promise<Res<typeof channels.photoKitStatus>>;
+    readonly reviewImport: () => Promise<Res<typeof channels.photoKitImportReview>>;
+    readonly import: (request: Req<typeof channels.photoKitImportRun>) => Promise<Res<typeof channels.photoKitImportRun>>;
+    readonly export: (request: Req<typeof channels.photoKitExportRun>) => Promise<Res<typeof channels.photoKitExportRun>>;
+    readonly cancel: () => Promise<void>;
+    readonly onProgress: (listener: (payload: z.output<typeof events.photoKitProgress.payload>) => void) => () => void;
+  };
   readonly activity: {
     readonly page: (request: Req<typeof channels.activityPage>) => Promise<Res<typeof channels.activityPage>>;
   };

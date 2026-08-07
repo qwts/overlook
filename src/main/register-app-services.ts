@@ -55,6 +55,8 @@ import { registerEmbeddingHandlers } from './embedding/embedding-ipc.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
 import type { NativeDragOutService } from './native-drag/native-drag-service.js';
 import { registerNativeDragHandlers } from './native-drag/native-drag-ipc.js';
+import type { PhotoKitService } from './photo-kit/photo-kit-service.js';
+import { registerPhotoKitHandlers } from './photo-kit/photo-kit-ipc.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -72,6 +74,7 @@ export interface AppServicesOptions {
   readonly getEmbedding: () => EmbeddingService;
   readonly getExport: () => DrainableExportFacade;
   readonly getNativeDrag: () => NativeDragOutService;
+  readonly getPhotoKit: () => PhotoKitService;
   readonly getKeyStore: () => KeyStore;
   readonly safeStorage: Parameters<typeof createRecoveryKeyFacade>[0]['safeStorage'];
   readonly getRestore: () => RestoreRuntime;
@@ -143,6 +146,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerEmbeddingHandlers(options.getEmbedding, options.requireContentAccess);
   registerExportHandlers(options.getExport, options.getActivity);
   registerNativeDragHandlers(options.getNativeDrag, options.requireContentAccess);
+  registerPhotoKitHandlers(options.getPhotoKit, options.requireContentAccess, options.onImported, options.getActivity);
   registerKeysHandlers(() =>
     createRecoveryKeyFacade({
       keyStore: options.getKeyStore,

@@ -45,6 +45,7 @@ existing links resolve — never add content there.
 - [iCloud Drive provider](./iCloud-Drive.md) — macOS container identity, native bridge, provisioned signing, and smoke contract
 - [iCloud Drive acceptance](./acceptance/Manual-Test-iCloud-Drive.md) — signed live contract, product checklist, evidence, and cleanup
 - [Native drag-out acceptance](./acceptance/Acceptance-Test-Native-Drag-Out.md) — signed AppKit file promises, lazy custody, cancellation, and browser/native receivers (#796)
+- [Apple Photos bridge acceptance](./acceptance/Acceptance-Test-Apple-Photos-Bridge.md) — explicit PhotoKit authorization, review, original/metadata preservation, and custody cleanup (#798)
 - [Manual Test — M18 Cloud Disaster Recovery](./acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md) — isolated owner-run provider procedures
 - [Accessibility Audit — WCAG 2.2 AA (July 2026)](./Accessibility-Audit-2026-07.md) — baseline, severity ranking, accepted exceptions (#398)
 - [Manual Test — VoiceOver](./acceptance/Manual-Test-A11y-VoiceOver.md) — the screen-reader half the axe gates cannot cover

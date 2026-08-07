@@ -168,3 +168,21 @@
 .ovl-import__options .ovl-segmented__option--on {
   color: var(--text-body);
 }
+
+.ovl-import__photosReview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ovl-import__photosList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: calc(var(--space-8) * 3);
+  overflow: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  background: var(--gray-1);
+}
