@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { createNativeDragBridge } from '../../src/main/native-drag/native-drag-bridge.js';
+import { TestNativeDragBridge } from '../../src/main/native-drag/test-native-drag-bridge.js';
 
 describe('native macOS file-promise bridge (#796)', () => {
   test('uses signed NSFilePromiseProvider custody and keeps internal drag data on the pasteboard', () => {
@@ -85,5 +87,68 @@ describe('native macOS file-promise bridge (#796)', () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(materialized, '/receiver/IMG.JPG');
     assert.deepEqual(completions, [['request', null]]);
+  });
+
+  test('test receiver resolves destination paths and closes fail-closed', async () => {
+    const destinations: string[] = [];
+    let ended = 0;
+    let resolveEnded: (() => void) | undefined;
+    const completed = new Promise<void>((resolve) => {
+      resolveEnded = resolve;
+    });
+    const bridge = new TestNativeDragBridge(tmpdir());
+    assert.deepEqual(bridge.status(), { available: true, reason: null });
+    assert.equal(
+      bridge.start({
+        windowHandle: Buffer.alloc(8),
+        items: [
+          { token: 'one', fileName: 'ONE.JPG', fileType: 'public.jpeg' },
+          { token: 'two', fileName: 'TWO.JPG', fileType: 'public.jpeg' },
+        ],
+        internalPayload: '{}',
+        materialize: ({ destinationPath }) => {
+          destinations.push(destinationPath);
+          return Promise.resolve();
+        },
+        ended: () => {
+          ended += 1;
+          resolveEnded?.();
+        },
+      }),
+      true,
+    );
+    await completed;
+    assert.deepEqual(destinations, [join(tmpdir(), 'ONE.JPG'), join(tmpdir(), 'TWO.JPG')]);
+    assert.equal(ended, 1);
+    bridge.cancelAll();
+    bridge.close();
+    assert.deepEqual(bridge.status(), { available: false, reason: 'native-unavailable' });
+    assert.equal(
+      bridge.start({
+        windowHandle: Buffer.alloc(8),
+        items: [],
+        internalPayload: '{}',
+        materialize: () => Promise.resolve(),
+        ended: () => undefined,
+      }),
+      false,
+    );
+    assert.throws(() => new TestNativeDragBridge('relative'), /must be absolute/u);
+  });
+
+  test('test receiver contains materialization failures and still ends the drag', async () => {
+    let resolveEnded: (() => void) | undefined;
+    const ended = new Promise<void>((resolve) => {
+      resolveEnded = resolve;
+    });
+    const bridge = new TestNativeDragBridge(tmpdir());
+    bridge.start({
+      windowHandle: Buffer.alloc(8),
+      items: [{ token: 'one', fileName: 'ONE.JPG', fileType: 'public.jpeg' }],
+      internalPayload: '{}',
+      materialize: () => Promise.reject(new Error('receiver rejected')),
+      ended: () => resolveEnded?.(),
+    });
+    await ended;
   });
 });

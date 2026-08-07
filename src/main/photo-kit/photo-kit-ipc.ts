@@ -1,26 +1,33 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
 import { wrapHandler } from '../../shared/ipc/registry.js';
 import type { ActivityFacade } from '../activity/activity-publication.js';
 import type { PhotoKitService } from './photo-kit-service.js';
 
-export function registerPhotoKitHandlers(
+type IpcHandler = (event: unknown, request: unknown) => unknown;
+
+export interface PhotoKitIpcHandlerRegistrar {
+  readonly handle: (channel: string, handler: IpcHandler) => void;
+}
+
+export function registerPhotoKitHandlersWith(
   getService: () => PhotoKitService,
   admit: () => void,
+  registrar: PhotoKitIpcHandlerRegistrar,
   onImported?: () => void,
   getActivity?: () => ActivityFacade,
 ): void {
-  ipcMain.handle(channels.photoKitStatus.name, (_event, request: unknown) =>
+  registrar.handle(channels.photoKitStatus.name, (_event, request: unknown) =>
     wrapHandler(channels.photoKitStatus, () => getService().status())(request),
   );
-  ipcMain.handle(channels.photoKitImportReview.name, (_event, request: unknown) =>
+  registrar.handle(channels.photoKitImportReview.name, (_event, request: unknown) =>
     wrapHandler(channels.photoKitImportReview, () => {
       admit();
       return getService().reviewImport();
     })(request),
   );
-  ipcMain.handle(channels.photoKitImportRun.name, (_event, request: unknown) =>
+  registrar.handle(channels.photoKitImportRun.name, (_event, request: unknown) =>
     wrapHandler(channels.photoKitImportRun, async ({ reviewId, assetIds }) => {
       admit();
       const summary = await getService().runImport(reviewId, assetIds);
@@ -41,7 +48,7 @@ export function registerPhotoKitHandlers(
       return result;
     })(request),
   );
-  ipcMain.handle(channels.photoKitExportRun.name, (_event, request: unknown) =>
+  registrar.handle(channels.photoKitExportRun.name, (_event, request: unknown) =>
     wrapHandler(channels.photoKitExportRun, async ({ photoIds }) => {
       admit();
       const result = await getService().runExport(photoIds);
@@ -61,10 +68,19 @@ export function registerPhotoKitHandlers(
       return { ...result, failures: [...result.failures] };
     })(request),
   );
-  ipcMain.handle(channels.photoKitCancel.name, (_event, request: unknown) =>
+  registrar.handle(channels.photoKitCancel.name, (_event, request: unknown) =>
     wrapHandler(channels.photoKitCancel, () => {
       getService().cancel();
       return {};
     })(request),
   );
+}
+
+export function registerPhotoKitHandlers(
+  getService: () => PhotoKitService,
+  admit: () => void,
+  onImported?: () => void,
+  getActivity?: () => ActivityFacade,
+): void {
+  registerPhotoKitHandlersWith(getService, admit, electron.ipcMain, onImported, getActivity);
 }
