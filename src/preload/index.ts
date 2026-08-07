@@ -22,6 +22,7 @@ const subscribeTransport: SubscribeTransport = (eventName, listener) => {
 
 const getPlatform = createInvoker(channels.getPlatform, invokeTransport);
 const getLocale = createInvoker(channels.getLocale, invokeTransport);
+const clipboardWrite = createInvoker(channels.clipboardWrite, invokeTransport);
 const minimizeWindow = createInvoker(channels.windowMinimize, invokeTransport);
 const toggleMaximizeWindow = createInvoker(channels.windowToggleMaximize, invokeTransport);
 const closeWindow = createInvoker(channels.windowClose, invokeTransport);
@@ -100,6 +101,11 @@ const overlook: OverlookApi = {
   help: Object.freeze({
     open: async () => {
       await helpOpen({});
+    },
+  }),
+  clipboard: Object.freeze({
+    writeText: async (text) => {
+      await clipboardWrite({ text });
     },
   }),
   inspectorWindow: Object.freeze({

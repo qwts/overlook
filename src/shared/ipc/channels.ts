@@ -217,6 +217,7 @@ export const channels = {
   ping: defineChannel('demo:ping', z.object({ message: z.string() }), z.object({ echoed: z.string() })),
   getPlatform: defineChannel('app:get-platform', z.object({}), z.object({ platform: z.string() })),
   getLocale: defineChannel('app:get-locale', z.object({}), z.object({ locale: z.string() })),
+  clipboardWrite: defineChannel('clipboard:write', z.object({ text: z.string().max(1_000_000) }), z.object({})),
   windowMinimize: defineChannel('window:minimize', z.object({}), z.object({})),
   windowToggleMaximize: defineChannel('window:toggle-maximize', z.object({}), z.object({ maximized: z.boolean() })),
   windowClose: defineChannel('window:close', z.object({}), z.object({})),

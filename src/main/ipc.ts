@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 
@@ -805,6 +805,12 @@ export function registerIpcHandlers(getLanguage: () => string | null): void {
 
   const getLocale = validateHandler(channels.getLocale, () => ({ locale: resolveActiveLocale(getLanguage()) }));
   ipcMain.handle(channels.getLocale.name, (_event, request: unknown) => getLocale(request));
+
+  const clipboardWrite = validateHandler(channels.clipboardWrite, ({ text }) => {
+    clipboard.writeText(text);
+    return {};
+  });
+  ipcMain.handle(channels.clipboardWrite.name, (_event, request: unknown) => clipboardWrite(request));
 
   // Window controls need the calling window, so validation wraps a handler
   // built per invocation.

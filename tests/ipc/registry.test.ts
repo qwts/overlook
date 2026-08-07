@@ -164,6 +164,12 @@ describe('channel registry', () => {
       { providerId: 'pcloud', authorization: PROVIDER_AUTHORIZATION_REMOVAL },
     );
   });
+
+  test('clipboard writes are bounded and registry-validated (#805)', () => {
+    assert.deepEqual(channels.clipboardWrite.request.parse({ text: 'copy me' }), { text: 'copy me' });
+    assert.throws(() => channels.clipboardWrite.request.parse({ text: 'x'.repeat(1_000_001) }));
+    assert.deepEqual(channels.clipboardWrite.response.parse({}), {});
+  });
 });
 
 describe('createInvoker', () => {

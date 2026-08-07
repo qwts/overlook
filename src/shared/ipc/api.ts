@@ -24,6 +24,9 @@ export interface OverlookApi {
   readonly getPlatform: () => Promise<string>;
   /** Active UI locale resolved in main (setting → OS → en; ADR-0020 §2). */
   readonly getLocale: () => Promise<string>;
+  readonly clipboard: {
+    readonly writeText: (text: string) => Promise<void>;
+  };
   readonly minimizeWindow: () => Promise<void>;
   readonly toggleMaximizeWindow: () => Promise<boolean>;
   readonly closeWindow: () => Promise<void>;

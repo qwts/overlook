@@ -15,7 +15,7 @@ const messages = defineMessages({
 
 export type CopyValue = (value: string) => Promise<void>;
 
-const writeToClipboard: CopyValue = (value) => navigator.clipboard.writeText(value);
+const writeToClipboard: CopyValue = (value) => window.overlook.clipboard.writeText(value);
 
 export interface CopyableValueProps {
   /** Exact text rendered and written to the clipboard. */
