@@ -189,6 +189,53 @@ describe('provider reconnect custody result (#733)', () => {
   });
 });
 
+test('emergency removal drains reconnect proof before changing custody authority', async () => {
+  let providerId: string | null = null;
+  let proofStarted: (() => void) | undefined;
+  let proofSettled = false;
+  let startupProofsPaused = false;
+  let startupProofsResumed = false;
+  const started = new Promise<void>((resolve) => {
+    proofStarted = resolve;
+  });
+  const r = runtime({
+    providerId: () => providerId,
+    setProviderId: (id) => {
+      providerId = id;
+    },
+    verifyCustodyReconnect: (input) =>
+      new Promise((resolve) => {
+        proofStarted?.();
+        input.signal?.addEventListener(
+          'abort',
+          () => {
+            proofSettled = true;
+            resolve({ ok: false, reason: 'unavailable' });
+          },
+          { once: true },
+        );
+      }),
+    markProviderRequired: () => {
+      assert.equal(proofSettled, true, 'custody mutation follows reconnect proof settlement');
+      assert.equal(startupProofsPaused, true, 'startup proofs pause before custody mutation');
+    },
+    pauseCustodyReconnectProofs: () => {
+      startupProofsPaused = true;
+      return Promise.resolve(() => {
+        startupProofsResumed = true;
+      });
+    },
+  });
+  r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-removal'), fault: undefined });
+
+  const connect = r.connect('mock');
+  await started;
+  assert.deepEqual(await r.removeAuthorizationAnyway('mock'), { ok: true, reason: null });
+  assert.equal((await connect).code, 'custody-unavailable');
+  assert.equal(providerId, null);
+  assert.equal(startupProofsResumed, true);
+});
+
 describe('emergency provider custody rollback (#732)', () => {
   test('failed emergency removal rolls back only when the same credential demonstrably remains', async () => {
     let rolledBack = 0;

@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import { describe, test } from 'node:test';
 
 import { CustodyAuthorityRepository } from '../../src/main/backup/custody-authority-repository.js';
+import { createActiveProvider } from '../../src/main/backup/active-provider.js';
 import { verifyCustodyReconnect } from '../../src/main/backup/custody-reconnect.js';
 import { createCustodyRoutingRuntime } from '../../src/main/backup/custody-routing-runtime.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
@@ -267,6 +268,59 @@ test('legacy reconciliation can prove a second account without restoring the fir
   const legacy = await routing.integrity.legacyAuthority();
   assert.equal(legacy?.authority.accountId, 'account-b');
   assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
+  await routing.close();
+  w.db.close();
+});
+
+test('a provider switch during proof cannot leave a stale result under the original provider id (#733)', async () => {
+  const w = world();
+  run(w.db, `UPDATE sync_ledger SET custody_authority_id = NULL WHERE photo_id = 'P1'`);
+  await putBootstrap(w.provider, w.masterKey);
+  const alternate = new MockProvider({
+    rootDir: mkdtempSync(join(tmpdir(), 'overlook-custody-reconnect-alternate-')),
+    libraryId: LIBRARY_ID,
+    accountIdentity: { accountId: 'account-a', accountLabel: 'Account A' },
+  });
+  await putBootstrap(alternate, w.masterKey);
+  let activeId = 'mock';
+  let releaseIdentity: (() => void) | undefined;
+  let identityStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    identityStarted = resolve;
+  });
+  const accountIdentity = w.provider.accountIdentity.bind(w.provider);
+  w.provider.accountIdentity = () =>
+    new Promise((resolve) => {
+      releaseIdentity = () => resolve({ accountId: 'account-a', accountLabel: 'Account A' });
+      identityStarted?.();
+    });
+  const providers = new Map([
+    ['mock', w.provider],
+    ['pcloud', alternate],
+  ]);
+  const activeProvider = createActiveProvider({
+    registry: { get: (id) => providers.get(id) },
+    activeId: () => activeId,
+    defaultId: () => 'mock',
+  });
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: activeProvider,
+    libraryId: () => LIBRARY_ID,
+    provider: (providerId) => providers.get(providerId),
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    masterKey: () => Buffer.from(w.masterKey),
+  });
+
+  await started;
+  activeId = 'pcloud';
+  releaseIdentity?.();
+  while (w.authorities.verified('pcloud', 'account-a', ROOT) === undefined) await new Promise((resolve) => setImmediate(resolve));
+  w.provider.accountIdentity = accountIdentity;
+  activeId = 'mock';
+  assert.equal((await routing.integrity.legacyAuthority())?.authority.id, w.authority.id, 'the original provider is re-proven');
   await routing.close();
   w.db.close();
 });

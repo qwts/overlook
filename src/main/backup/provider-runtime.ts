@@ -65,6 +65,7 @@ export interface ProviderRuntimeOptions {
   readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
+  readonly pauseCustodyReconnectProofs?: (() => Promise<() => void>) | undefined;
   readonly verifyCustodyReconnect?:
     | ((input: {
         readonly provider: StorageProvider;
@@ -576,17 +577,24 @@ export class ProviderRuntime {
     if (this.options.isWorkActive?.() === true) {
       return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
     }
-    const credential = await this.custodyCredential(providerId);
-    if (credential === null) {
-      return custodyUnavailable('Could not verify which provider account is being removed.');
+    const resumeCustodyProofs = (await this.options.pauseCustodyReconnectProofs?.()) ?? (() => undefined);
+    await this.drainReconnectVerifications();
+    try {
+      const credential = await this.custodyCredential(providerId);
+      if (credential === null) {
+        return custodyUnavailable('Could not verify which provider account is being removed.');
+      }
+      if (this.options.isWorkActive?.() === true) {
+        return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
+      }
+      const rollbackRequired = this.options.markProviderRequired?.(credential);
+      const result = this.disconnectAuthorization(providerId);
+      if (!result.ok && this.samePersistedCredential(credential)) rollbackRequired?.();
+      return result;
+    } finally {
+      this.renewReconnectVerificationLifecycle();
+      resumeCustodyProofs();
     }
-    if (this.options.isWorkActive?.() === true) {
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
-    }
-    const rollbackRequired = this.options.markProviderRequired?.(credential);
-    const result = this.disconnectAuthorization(providerId);
-    if (!result.ok && this.samePersistedCredential(credential)) rollbackRequired?.();
-    return result;
   }
 
   private async custodyChangeBlocked(providerId: string): Promise<PCloudConnectResult | null> {

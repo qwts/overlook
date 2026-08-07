@@ -36,6 +36,7 @@ export interface ProviderRuntimeFactoryDeps {
   readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
+  readonly pauseCustodyReconnectProofs?: (() => Promise<() => void>) | undefined;
   readonly verifyCustodyReconnect?:
     | ((input: {
         readonly provider: StorageProvider;
@@ -98,6 +99,7 @@ export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): Provide
     markProviderRequired: deps.markProviderRequired ?? ((credential) => custodyPolicy()?.markProviderRequired(credential)),
     deleteUnreferencedAuthorities: deps.deleteUnreferencedAuthorities ?? ((credential) => custodyPolicy()?.deleteUnreferenced(credential)),
     providerRequirements: deps.providerRequirements ?? (() => custodyPolicy()?.requirements() ?? []),
+    pauseCustodyReconnectProofs: deps.pauseCustodyReconnectProofs,
     verifyCustodyReconnect:
       deps.verifyCustodyReconnect ??
       (async (input) => {

@@ -36,7 +36,8 @@ async function accountIdentity(
 class ReconnectProofCoordinator {
   private readonly proofs = new Map<string, Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>>>();
   private readonly active = new Set<Promise<unknown>>();
-  private readonly abortController = new AbortController();
+  private abortController = new AbortController();
+  private pauseDepth = 0;
   private closed = false;
 
   constructor(
@@ -63,19 +64,34 @@ class ReconnectProofCoordinator {
     this.proofs.clear();
   }
 
+  async pause(): Promise<() => void> {
+    this.pauseDepth += 1;
+    if (this.pauseDepth === 1) this.abortController.abort(new Error('provider authorization changing'));
+    await Promise.allSettled([...this.active]);
+    this.proofs.clear();
+    let resumed = false;
+    return () => {
+      if (resumed) return;
+      resumed = true;
+      this.pauseDepth -= 1;
+      if (this.pauseDepth === 0 && !this.closed) this.abortController = new AbortController();
+    };
+  }
+
   private async verifyTracked(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
-    if (this.closed) return { ok: false, reason: 'unavailable' };
-    let proof = this.proofs.get(provider.id);
+    if (this.closed || this.pauseDepth > 0) return { ok: false, reason: 'unavailable' };
+    const providerId = provider.id;
+    let proof = this.proofs.get(providerId);
     if (proof === undefined) {
       proof = this.prove(provider);
-      this.proofs.set(provider.id, proof);
+      this.proofs.set(providerId, proof);
     }
     try {
       return await proof;
     } catch {
       return { ok: false, reason: 'unavailable' };
     } finally {
-      if (this.proofs.get(provider.id) === proof) this.proofs.delete(provider.id);
+      if (this.proofs.get(providerId) === proof) this.proofs.delete(providerId);
     }
   }
 
@@ -197,6 +213,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     },
     custodyChanged,
     close: () => reconnect.close(),
+    pauseReconnectProofs: () => reconnect.pause(),
     integrity: {
       authorities,
       custody: resolver,

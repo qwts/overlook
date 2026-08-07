@@ -363,7 +363,7 @@ test('legacy reconciliation binds only individually authenticated remote objects
       },
     },
     resolveKey: (keyId) => (keyId === key.id ? key.key : undefined),
-    markVerified: (photoId) => ledger.repairStatus(photoId, 'offloaded'),
+    markVerified: (photoId) => ledger.healIntegrityError(photoId),
     markUnrecoverable: (photoId) => ledger.repairStatus(photoId, 'error'),
     audit: () => undefined,
   });

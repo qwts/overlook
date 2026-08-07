@@ -325,9 +325,8 @@ function getProtectedRuntime(): ProtectedRuntime {
   return requireParts('protected runtime').protected;
 }
 
-let backupEngine: BackupEngine | undefined, closeCustodyRouting: (() => Promise<void>) | undefined;
-let offloadService: OffloadService | undefined;
-let ephemeralOriginalService: EphemeralOriginalService | undefined;
+let backupEngine: BackupEngine | undefined, custodyRoutingLifecycle: ReturnType<typeof createCustodyRoutingRuntime> | undefined;
+let offloadService: OffloadService | undefined, ephemeralOriginalService: EphemeralOriginalService | undefined;
 const activeBackupControllers = new Set<AbortController>();
 const activeBackupRuns = new Set<Promise<BackupRunResult>>();
 let providerRuntime: ProviderRuntime | undefined;
@@ -365,6 +364,7 @@ function getProviderRuntime(): ProviderRuntime {
     // bootstrap an empty library into a fresh onboarding-restore profile.
     guardParts: () => libraryParts ?? null,
     libraryRegistry: registryRuntime,
+    pauseCustodyReconnectProofs: () => custodyRoutingLifecycle?.pauseReconnectProofs() ?? Promise.resolve(() => undefined),
   });
   return providerRuntime;
 }
@@ -472,7 +472,7 @@ function getBackupEngine(): BackupEngine {
       },
       audit,
     });
-    closeCustodyRouting = custodyRouting.close;
+    custodyRoutingLifecycle = custodyRouting;
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
@@ -483,7 +483,8 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
-      markVerified: (photoId) => ledger.repairStatus(photoId, 'offloaded'),
+      markVerified: (photoId) =>
+        ledger.healIntegrityError(photoId) ? emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'offloaded' }] }) : undefined,
       markUnrecoverable: (photoId) => {
         ledger.repairStatus(photoId, 'error');
         emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });
@@ -673,8 +674,7 @@ function getExportFacade(): DrainableExportFacade {
 }
 
 async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
-  autoBackupTrigger = undefined;
-  manifestSyncTrigger = undefined;
+  [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
   exportFacade?.close();
   libraryParts?.protected.cancel();
@@ -690,7 +690,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
-    closeCustodyRouting?.() ?? Promise.resolve(),
+    custodyRoutingLifecycle?.close() ?? Promise.resolve(),
     Promise.allSettled([
       ...activeBackupRuns,
       providerRuntime?.drainICloudDriveOperations(),
@@ -719,7 +719,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   providerRuntime?.renewReconnectVerificationLifecycle();
   [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
   [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
-  [backupEngine, offloadService, closeCustodyRouting] = [undefined, undefined, undefined];
+  [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
   [consistencyChecker, embeddingRuntime, exportFacade] = [undefined, undefined, undefined];
