@@ -32,7 +32,11 @@ import { interopPairingPayloadSchema, type InteropPairingPayload } from '../../s
 import { type InteropAlbum, type InteropBlobReference, type InteropRecord } from '../../src/shared/interop/records.js';
 import { InteropReplayError, InteropReplayGuard, interopReplayIdentity } from '../../src/shared/interop/replay.js';
 import { compareInteropRevisions, incrementInteropRevision, mergeInteropRevisions } from '../../src/shared/interop/revisions.js';
-import { INTEROP_PROVIDER_LIBRARY_ID, INTEROP_PROVIDER_ROOT_NAME } from '../../src/main/interop/transport.js';
+import {
+  INTEROP_PROVIDER_LIBRARY_ID,
+  INTEROP_PROVIDER_LOGICAL_ROOT,
+  INTEROP_PROVIDER_ROOT_NAME,
+} from '../../src/main/interop/transport.js';
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(`design/handoff/contracts/v1/fixtures/${name}`, 'utf8')) as unknown;
@@ -275,7 +279,7 @@ describe('published interoperability artifacts', () => {
       pathSemantics: 'provider-relative',
       rootName: INTEROP_PROVIDER_ROOT_NAME,
       libraryId: INTEROP_PROVIDER_LIBRARY_ID,
-      logicalPath: `${INTEROP_PROVIDER_ROOT_NAME}/${INTEROP_PROVIDER_LIBRARY_ID}`,
+      logicalPath: INTEROP_PROVIDER_LOGICAL_ROOT,
     });
   });
 

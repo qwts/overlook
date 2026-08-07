@@ -11,6 +11,7 @@ export const INTEROP_CHUNK_BYTES = 4 * 1024 * 1024;
 export const INTEROP_CONTROL_FRAME_BYTES = 64 * 1024;
 export const INTEROP_PROVIDER_ROOT_NAME = 'Overlook Interop';
 export const INTEROP_PROVIDER_LIBRARY_ID = 'v1';
+export const INTEROP_PROVIDER_LOGICAL_ROOT = `${INTEROP_PROVIDER_ROOT_NAME}/${INTEROP_PROVIDER_LIBRARY_ID}`;
 const GOOGLE_INTEROP_OWNER = 'qwts-overlook-interop-v1';
 
 export type InteropTransportFailure =
