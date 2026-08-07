@@ -483,6 +483,7 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
+      markVerified: (photoId) => ledger.repairStatus(photoId, 'offloaded'),
       markUnrecoverable: (photoId) => {
         ledger.repairStatus(photoId, 'error');
         emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });

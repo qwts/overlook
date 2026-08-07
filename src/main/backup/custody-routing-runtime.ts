@@ -34,7 +34,7 @@ async function accountIdentity(
 }
 
 class ReconnectProofCoordinator {
-  private readonly proofs = new Map<string, Promise<boolean>>();
+  private readonly proofs = new Map<string, Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>>>();
   private readonly active = new Set<Promise<unknown>>();
   private readonly abortController = new AbortController();
   private closed = false;
@@ -45,11 +45,14 @@ class ReconnectProofCoordinator {
     private readonly custodyChanged: () => void,
   ) {}
 
-  async verify(provider: StorageProvider): Promise<boolean> {
+  async verify(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
     return this.track(this.verifyTracked(provider));
   }
 
-  async prepare(authority: CustodyAuthority): Promise<CustodyAuthority> {
+  async prepare(authority: CustodyAuthority): Promise<{
+    readonly authority: CustodyAuthority;
+    readonly reconnectFailure?: 'wrong-account' | 'unavailable';
+  }> {
     return this.track(this.prepareTracked(authority));
   }
 
@@ -60,8 +63,8 @@ class ReconnectProofCoordinator {
     this.proofs.clear();
   }
 
-  private async verifyTracked(provider: StorageProvider): Promise<boolean> {
-    if (this.closed) return false;
+  private async verifyTracked(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
+    if (this.closed) return { ok: false, reason: 'unavailable' };
     let proof = this.proofs.get(provider.id);
     if (proof === undefined) {
       proof = this.prove(provider);
@@ -70,17 +73,27 @@ class ReconnectProofCoordinator {
     try {
       return await proof;
     } catch {
-      return false;
+      return { ok: false, reason: 'unavailable' };
     } finally {
       if (this.proofs.get(provider.id) === proof) this.proofs.delete(provider.id);
     }
   }
 
-  private async prepareTracked(authority: CustodyAuthority): Promise<CustodyAuthority> {
+  private async prepareTracked(authority: CustodyAuthority): Promise<{
+    readonly authority: CustodyAuthority;
+    readonly reconnectFailure?: 'wrong-account' | 'unavailable';
+  }> {
     const provider = this.deps.provider(authority.providerId);
+    let reconnectFailure: 'wrong-account' | 'unavailable' | undefined;
     if (provider === undefined) this.authorities.stageReconnectVerification(authority.providerId);
-    else await this.verify(provider);
-    return this.authorities.get(authority.id) ?? authority;
+    else {
+      const result = await this.verify(provider);
+      if (!result.ok) reconnectFailure = result.reason;
+    }
+    return {
+      authority: this.authorities.get(authority.id) ?? authority,
+      ...(reconnectFailure === undefined ? {} : { reconnectFailure }),
+    };
   }
 
   private async track<T>(operation: Promise<T>): Promise<T> {
@@ -92,12 +105,12 @@ class ReconnectProofCoordinator {
     }
   }
 
-  private async prove(provider: StorageProvider): Promise<boolean> {
+  private async prove(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
     this.authorities.stageReconnectVerification(provider.id);
     const signal = this.abortController.signal;
     const identity = await accountIdentity(provider, signal);
-    if (identity === null) return false;
-    const result = await verifyCustodyReconnect(
+    if (identity === null) return { ok: false, reason: 'unavailable' };
+    return verifyCustodyReconnect(
       {
         authorities: this.authorities,
         libraryId: this.deps.libraryId,
@@ -107,7 +120,6 @@ class ReconnectProofCoordinator {
       },
       { provider, identity, signal },
     );
-    return result.ok;
   }
 }
 

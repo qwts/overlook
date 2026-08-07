@@ -286,9 +286,7 @@ test('runtime composition persists progress and marks missing remote-only rows (
     custody: { resolveAuthority: () => Promise.resolve({ authority, provider }) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope !== undefined && 'syncState' in scope && scope.syncState === 'offloaded'
-          ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }]
-          : [],
+        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
     },
     blobs: {
       hasOriginal: () => false,
@@ -335,6 +333,17 @@ test('legacy reconciliation binds only individually authenticated remote objects
     createdAt: '2026-08-06T00:02:00.000Z',
     lastVerifiedAt: '2026-08-06T00:02:00.000Z',
   });
+  await insertLegacyItem({
+    repo,
+    ledger,
+    provider,
+    key,
+    id: 'P4',
+    plaintext: Buffer.from('recoverable bound integrity error'),
+    remote: true,
+  });
+  ledger.markOffloaded('P4', authority.id);
+  ledger.repairStatus('P4', 'error');
   let hintsRefreshed = 0;
   const runtime = createBackupIntegrityRuntime({
     db,
@@ -354,17 +363,20 @@ test('legacy reconciliation binds only individually authenticated remote objects
       },
     },
     resolveKey: (keyId) => (keyId === key.id ? key.key : undefined),
+    markVerified: (photoId) => ledger.repairStatus(photoId, 'offloaded'),
     markUnrecoverable: (photoId) => ledger.repairStatus(photoId, 'error'),
     audit: () => undefined,
   });
 
-  assert.deepEqual(await runtime.scrub(), { checked: 3, repaired: 0, unrecoverable: 1, cycleComplete: true });
+  assert.deepEqual(await runtime.scrub(), { checked: 4, repaired: 0, unrecoverable: 1, cycleComplete: true });
   assert.equal(ledger.status('P1'), 'offloaded');
   assert.equal(authorities.forPhoto('P1')?.id, authority.id, 'verified row earns the proven authority');
   assert.equal(ledger.status('P2'), 'error');
   assert.equal(authorities.forPhoto('P2'), undefined, 'missing object stays unbound');
   assert.equal(ledger.status('P3'), 'offloaded', 'a valid legacy integrity error heals atomically with its binding');
   assert.equal(authorities.forPhoto('P3')?.id, authority.id);
+  assert.equal(ledger.status('P4'), 'offloaded', 'a valid bound integrity error heals through its custody authority');
+  assert.equal(authorities.forPhoto('P4')?.id, authority.id);
   assert.equal(authorities.legacyUnboundCount().items, 1, 'unbound integrity error remains custody risk');
   assert.equal(hintsRefreshed, 1);
   db.close();
@@ -400,9 +412,7 @@ test('a custody identity failure neither reads the backup target nor marks the b
     custody: { resolveAuthority: () => Promise.reject(new CustodyResolutionError('custody-wrong-account')) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope !== undefined && 'syncState' in scope && scope.syncState === 'offloaded'
-          ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }]
-          : [],
+        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
     },
     blobs: {
       hasOriginal: () => false,

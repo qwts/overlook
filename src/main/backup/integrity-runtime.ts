@@ -23,6 +23,7 @@ interface BackupIntegrityRuntimeDeps {
   readonly blobs: Pick<BlobStore, 'hasOriginal' | 'getEncryptedStream'>;
   readonly resolveKey: KeyResolver;
   readonly markUnrecoverable: (photoId: string) => void;
+  readonly markVerified?: ((photoId: string) => void) | undefined;
   readonly audit: (line: string) => void;
   readonly legacyAuthority?:
     (() => Promise<{ readonly authority: CustodyAuthority; readonly provider: StorageProvider } | null>) | undefined;
@@ -83,8 +84,12 @@ export function createBackupIntegrityRuntime(deps: BackupIntegrityRuntimeDeps): 
           continue;
         }
         summaries.push(
-          await scrubber(deps, provider, `custody-authority:${String(authority.id)}`, (page) =>
-            deps.repo.integrityItems(page, { syncState: 'offloaded', custodyAuthorityId: authority.id }),
+          await scrubber(
+            deps,
+            provider,
+            `custody-authority:${String(authority.id)}`,
+            (page) => deps.repo.integrityItems(page, { custodyAuthorityId: authority.id }),
+            deps.markVerified,
           ).scrub(),
         );
       }

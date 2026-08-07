@@ -167,8 +167,8 @@ export class CustodyAuthorityRepository {
     ).map((row) => ({ authority: fromRow(row), items: row.items, bytes: row.bytes }));
   }
 
-  /** Authorities with offloaded rows, used to partition integrity work and
-   * its resume cursor by durable source rather than current selection. */
+  /** Authorities with offloaded or clean-error rows, used to partition
+   * integrity recovery by durable source rather than current selection. */
   offloadedAuthorities(): readonly CustodyAuthority[] {
     return queryAll<{
       id: number;
@@ -186,7 +186,7 @@ export class CustodyAuthorityRepository {
               a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
          FROM custody_authorities a
          JOIN sync_ledger l ON l.custody_authority_id = a.id
-        WHERE l.status = 'offloaded'
+        WHERE l.status = 'offloaded' OR (l.status = 'error' AND l.dirty = 0)
         ORDER BY a.id`,
     ).map(fromRow);
   }

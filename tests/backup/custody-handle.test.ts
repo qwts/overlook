@@ -77,9 +77,19 @@ describe('binding-addressed custody handle (#731)', () => {
         authorityForPhoto: () => authority(),
         provider: () => provider('different-account'),
         remoteRoot: () => root,
-        prepareAuthority: () => Promise.resolve(authority({ state: 'provider-required' })),
+        prepareAuthority: () =>
+          Promise.resolve({ authority: authority({ state: 'provider-required' }), reconnectFailure: 'wrong-account' }),
       }).resolve('photo-a'),
       'custody-wrong-account',
+    );
+    await rejectsWithReason(
+      new CustodyHandleResolver({
+        authorityForPhoto: () => authority(),
+        provider: () => provider(),
+        remoteRoot: () => root,
+        prepareAuthority: () => Promise.resolve({ authority: authority({ state: 'provider-required' }), reconnectFailure: 'unavailable' }),
+      }).resolve('photo-a'),
+      'custody-unavailable',
     );
     await rejectsWithReason(resolve(authority(), disconnected), 'custody-disconnected');
     await rejectsWithReason(resolve(authority(), provider('different-account')), 'custody-wrong-account');

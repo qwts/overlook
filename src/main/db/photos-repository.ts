@@ -750,10 +750,7 @@ export class PhotosRepository {
    * their original until permanent purge. */
   integrityItems(
     page: { readonly afterId: string | null; readonly limit: number },
-    scope?:
-      | { readonly syncState: 'synced' }
-      | { readonly syncState: 'offloaded'; readonly custodyAuthorityId: number }
-      | { readonly legacyUnbound: true },
+    scope?: { readonly syncState: 'synced' } | { readonly custodyAuthorityId: number } | { readonly legacyUnbound: true },
   ): readonly BackupIntegrityItem[] {
     return queryAll<BackupIntegrityItem>(
       this.db,
@@ -762,6 +759,7 @@ export class PhotosRepository {
          JOIN sync_ledger l ON l.photo_id = p.id
         WHERE (
             (@legacyUnbound = 0 AND l.status IN ('synced', 'offloaded'))
+            OR (@custodyAuthorityId IS NOT NULL AND l.status = 'error' AND l.dirty = 0)
             OR (@legacyUnbound = 1 AND (l.status = 'offloaded' OR (l.status = 'error' AND l.dirty = 0)))
           )
           AND (@syncState IS NULL OR l.status = @syncState)
