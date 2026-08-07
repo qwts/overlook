@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   libraryRegistryFileSchema,
+  libraryDisplayNameSchema,
   selectStartupLibrary,
   type LibraryEntry,
   type LibraryRegistryFile,
@@ -105,7 +106,11 @@ export class LibraryRegistry {
   rename(id: string, name: string): LibraryEntry {
     const entry = this.get(id);
     if (entry === undefined) throw new LibraryRegistryError(`library ${id} is not registered`);
-    const renamed = { ...entry, name };
+    const parsed = libraryDisplayNameSchema.safeParse(name);
+    if (!parsed.success) {
+      throw new LibraryRegistryError(parsed.error.issues[0]?.message ?? 'invalid library display name');
+    }
+    const renamed = { ...entry, name: parsed.data };
     this.file = { ...this.file, entries: this.file.entries.map((e) => (e.id === id ? renamed : e)) };
     this.persist();
     return renamed;

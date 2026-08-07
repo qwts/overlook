@@ -19,6 +19,7 @@ import type {
   ProtectedPhotoRecord,
 } from '../../shared/library/protected-types.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
+import { effectivePhotoTags } from '../../shared/library/photo-metadata.js';
 
 export class ProtectedContentUnavailableError extends Error {
   override readonly name = 'ProtectedContentUnavailableError';
@@ -56,11 +57,32 @@ interface AuthorizedPhoto {
   readonly metadata: ProtectedPhotoMetadata;
 }
 
+function visibleMetadata(
+  photo: ProtectedPhotoMetadata['photo'],
+): Pick<PhotoRecord, 'title' | 'description' | 'tags' | 'userTags' | 'importedKeywords' | 'suppressedKeywords' | 'metadataVersion'> {
+  const userTags = photo.userTags ?? [];
+  const importedKeywords = photo.importedKeywords ?? [];
+  const suppressedKeywords = photo.suppressedKeywords ?? [];
+  return {
+    title: photo.title ?? null,
+    description: photo.description ?? null,
+    tags: effectivePhotoTags(importedKeywords, userTags, suppressedKeywords),
+    userTags,
+    importedKeywords,
+    suppressedKeywords,
+    metadataVersion: photo.metadataVersion ?? 1,
+  };
+}
+
 function visiblePhoto(metadata: ProtectedPhotoMetadata): ProtectedPhotoRecord {
   const { contentHash: _contentHash, ...photo } = metadata.photo;
   // mediaInfo is optional in sealed metadata (pre-0026 blobs verify by exact
   // re-stringification, so parsing may not insert keys); records are not.
-  return { ...photo, mediaInfo: photo.mediaInfo ?? null };
+  return {
+    ...photo,
+    mediaInfo: photo.mediaInfo ?? null,
+    ...visibleMetadata(metadata.photo),
+  };
 }
 
 function matchesSource(photo: ProtectedPhotoRecord, source: NonNullable<ProtectedPageRequest['source']>): boolean {
@@ -71,7 +93,9 @@ function matchesSource(photo: ProtectedPhotoRecord, source: NonNullable<Protecte
 
 function matchesQuery(photo: ProtectedPhotoRecord, query: string): boolean {
   if (query === '') return true;
-  return [photo.fileName, photo.place ?? '', photo.camera ?? ''].some((value) => value.toLowerCase().includes(query));
+  return [photo.fileName, photo.title ?? '', photo.description ?? '', photo.place ?? '', photo.camera ?? '', ...photo.tags].some((value) =>
+    value.toLowerCase().includes(query),
+  );
 }
 
 /** Main-process authorization boundary for one protected domain. Every
@@ -210,6 +234,7 @@ export class ProtectedLibraryService {
       return {
         ...metadata,
         mediaInfo: metadata.mediaInfo ?? null,
+        ...visibleMetadata(metadata),
         isOriginal: false,
         keyId: 1,
         previewFailure: null,
@@ -243,6 +268,7 @@ export class ProtectedLibraryService {
         photo: {
           ...authorized.metadata.photo,
           mediaInfo: authorized.metadata.photo.mediaInfo ?? null,
+          ...visibleMetadata(authorized.metadata.photo),
           isOriginal: false,
           keyId: 1,
           previewFailure: null,

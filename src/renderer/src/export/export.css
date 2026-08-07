@@ -6,6 +6,11 @@
   gap: var(--space-3);
 }
 
+.ovl-export__metadataHint {
+  color: var(--text-faint);
+  font: var(--type-meta);
+}
+
 .ovl-export__card {
   display: flex;
   align-items: center;
@@ -29,6 +34,16 @@
   justify-content: space-between;
   font-size: var(--text-md);
   color: var(--text-body);
+}
+
+.ovl-export__destinationPath,
+.ovl-export__failureValue {
+  width: 100%;
+}
+
+.ovl-export__destinationPath {
+  color: var(--text-muted);
+  font: var(--type-meta);
 }
 
 .ovl-export__decrypt {
@@ -55,6 +70,14 @@
   align-items: center;
   gap: calc(var(--space-1) * 1.5);
   color: var(--accent-amber);
+  font: var(--type-meta);
+}
+
+.ovl-export__photosNotice {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-1) * 1.5);
+  color: var(--text-muted);
   font: var(--type-meta);
 }
 

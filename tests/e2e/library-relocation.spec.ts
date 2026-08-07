@@ -135,7 +135,7 @@ test('ACCEPTANCE: the ACTIVE library moves (copy mode), reopens from the destina
   // cannot be missed, then requires the grid to come back.
   await expectRendererReload(launched, () => moveLibrary(page, activeId, dest));
   await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
-  expect(await libraryPath(page, activeId)).toMatchObject({ path: dest, open: true });
+  await expect.poll(() => libraryPath(page, activeId)).toMatchObject({ path: dest, open: true });
 });
 
 test('ACCEPTANCE: pre-commit crashes offer verified resume; post-commit recovery finishes automatically (#483/#559)', async ({

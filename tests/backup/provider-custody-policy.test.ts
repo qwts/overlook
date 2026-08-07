@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -33,6 +33,116 @@ function runtime(overrides: Partial<ProviderRuntimeOptions>): ProviderRuntime {
 }
 
 describe('provider custody-change policy (#732)', () => {
+  test('identity-less pCloud custody fails closed without clearing authorization or selection (#927)', async () => {
+    let providerId: string | null = 'pcloud';
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      custodyPreflight: (credential) => ({
+        credential,
+        totalItems: 0,
+        totalBytes: 0,
+        libraries: [],
+      }),
+      fetchImpl: () => Promise.reject(new Error('legacy fixture has no live identity')),
+    });
+    const record = {
+      accessToken: 'legacy-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+    } as const;
+    r.tokenStore().save(record);
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-identity-less-custody'), fault: undefined });
+
+    const result = await r.disconnect('pcloud');
+    assert.equal(result.code, 'custody-unavailable');
+    assert.deepEqual(r.tokenStore().load(), record);
+    assert.equal(providerId, 'pcloud');
+  });
+
+  test('a repeated pCloud disconnect stays idempotent after the first request clears custody (#927)', async () => {
+    let providerId: string | null = 'pcloud';
+    let preflights = 0;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      custodyPreflight: (credential) => {
+        preflights += 1;
+        return {
+          credential,
+          totalItems: 0,
+          totalBytes: 0,
+          libraries: [],
+        };
+      },
+    });
+    r.tokenStore().save({
+      accessToken: 'repeat-disconnect-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '927001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-repeat-disconnect'), fault: undefined });
+
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(preflights, 1);
+    assert.equal(r.tokenStore().load(), null);
+    assert.equal(providerId, null);
+  });
+
+  test('an idempotent pCloud disconnect clears an unreadable authorization record (#927)', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
+    const authorizationPath = join(dataDir, 'pcloud-auth', 'pcloud-auth.bin');
+    const r = runtime({ dataDir: () => dataDir });
+    r.tokenStore().save({
+      accessToken: 'unreadable-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '927002',
+      accountLabel: 'owner@pcloud.test',
+    });
+    writeFileSync(authorizationPath, 'not-json');
+
+    assert.equal(r.tokenStore().load(), null);
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(existsSync(authorizationPath), false);
+  });
+
+  test('an idempotent pCloud disconnect also clears unreadable legacy authorization bytes (#927 review)', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
+    const credentialDir = join(dataDir, 'provider-auth', 'pcloud');
+    const legacyAuthorizationPath = join(dataDir, 'pcloud-auth.bin');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(legacyAuthorizationPath, 'not-json');
+    const r = runtime({
+      dataDir: () => dataDir,
+      providerCredentialDir: () => credentialDir,
+    });
+
+    assert.equal(r.tokenStore().load(), null);
+    assert.equal(existsSync(legacyAuthorizationPath), true, 'unreadable legacy bytes remain available for explicit cleanup');
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(existsSync(legacyAuthorizationPath), false);
+  });
+
+  test('an idempotent pCloud disconnect reports an unreadable authorization cleanup failure (#927)', async () => {
+    const r = runtime({});
+    r.tokenStore().clear = () => {
+      throw new Error('read-only credential directory');
+    };
+
+    assert.deepEqual(await r.disconnect('pcloud'), {
+      ok: false,
+      reason: 'Could not remove the pCloud authorization from this device. Check file access and try again.',
+    });
+  });
+
   test('disconnect and switch fail before credential mutation when custody requires restore-first', async () => {
     let providerId: string | null = 'pcloud';
     const preflights: { providerId: string; accountId: string }[] = [];

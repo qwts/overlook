@@ -35,6 +35,21 @@ describe('channel registry', () => {
     assert.throws(() => channels.backupOffload.response.parse({ offloaded: 1, skipped: 0, freedBytes: 42 }));
   });
 
+  test('bulk metadata summaries allow aggregate tag unions beyond the per-photo cap (#508 review)', () => {
+    const varyingTags = Array.from({ length: 102 }, (_, index) => `tag-${String(index).padStart(3, '0')}`);
+    assert.deepEqual(
+      channels.libraryMetadataSummary.response.parse({
+        found: 2,
+        missing: 0,
+        title: { mixed: false, value: null },
+        description: { mixed: false, value: null },
+        commonTags: [],
+        varyingTags,
+      }).varyingTags,
+      varyingTags,
+    );
+  });
+
   test('Touch ID IPC exposes states but strips native and unlock secrets (#310)', () => {
     assert.deepEqual(
       channels.appLockTouchIdStatus.response.parse({
@@ -110,6 +125,13 @@ describe('channel registry', () => {
           gpsLat: null,
           gpsLon: null,
           place: null,
+          title: null,
+          description: null,
+          tags: [],
+          userTags: [],
+          importedKeywords: [],
+          suppressedKeywords: [],
+          metadataVersion: 1,
           importedAt: '2026-07-16T12:00:00.000Z',
           importSource: 'test',
           favorite: false,
@@ -163,6 +185,12 @@ describe('channel registry', () => {
       }),
       { providerId: 'pcloud', authorization: PROVIDER_AUTHORIZATION_REMOVAL },
     );
+  });
+
+  test('clipboard writes are bounded and registry-validated (#805)', () => {
+    assert.deepEqual(channels.clipboardWrite.request.parse({ text: 'copy me' }), { text: 'copy me' });
+    assert.throws(() => channels.clipboardWrite.request.parse({ text: 'x'.repeat(1_000_001) }));
+    assert.deepEqual(channels.clipboardWrite.response.parse({}), {});
   });
 });
 

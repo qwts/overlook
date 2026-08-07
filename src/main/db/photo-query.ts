@@ -83,7 +83,12 @@ export function buildQueryPlan(request: LibraryQuery | PageRequest | SelectionRa
   const ftsQuery = request.query !== undefined && request.query !== '' ? toFtsMatchQuery(request.query) : null;
   if (request.query !== undefined && request.query !== '' && ftsQuery === null) {
     filters.push(
-      `(instr(lower(p.file_name), @query) > 0 OR instr(lower(COALESCE(p.place, '')), @query) > 0 OR instr(lower(COALESCE(p.camera, '')), @query) > 0)`,
+      `(instr(lower(p.file_name), @query) > 0 OR
+        instr(lower(COALESCE(p.user_title, '')), @query) > 0 OR
+        instr(lower(COALESCE(p.user_description, '')), @query) > 0 OR
+        instr(lower(COALESCE(p.metadata_tags_search, '')), @query) > 0 OR
+        instr(lower(COALESCE(p.place, '')), @query) > 0 OR
+        instr(lower(COALESCE(p.camera, '')), @query) > 0)`,
     );
   }
   if (ftsQuery !== null) filters.push('photos_fts MATCH @ftsQuery');

@@ -22,6 +22,7 @@ const subscribeTransport: SubscribeTransport = (eventName, listener) => {
 
 const getPlatform = createInvoker(channels.getPlatform, invokeTransport);
 const getLocale = createInvoker(channels.getLocale, invokeTransport);
+const clipboardWrite = createInvoker(channels.clipboardWrite, invokeTransport);
 const minimizeWindow = createInvoker(channels.windowMinimize, invokeTransport);
 const toggleMaximizeWindow = createInvoker(channels.windowToggleMaximize, invokeTransport);
 const closeWindow = createInvoker(channels.windowClose, invokeTransport);
@@ -35,6 +36,10 @@ const commandContextUpdate = createInvoker(channels.commandContextUpdate, invoke
 const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
+const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTransport);
+const photoKitStatus = createInvoker(channels.photoKitStatus, invokeTransport);
+const photoKitImportReview = createInvoker(channels.photoKitImportReview, invokeTransport);
+const photoKitCancel = createInvoker(channels.photoKitCancel, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
@@ -102,6 +107,11 @@ const overlook: OverlookApi = {
       await helpOpen({});
     },
   }),
+  clipboard: Object.freeze({
+    writeText: async (text) => {
+      await clipboardWrite({ text });
+    },
+  }),
   inspectorWindow: Object.freeze({
     open: async (request) => {
       await inspectorWindowOpen(request);
@@ -156,6 +166,10 @@ const overlook: OverlookApi = {
     selectAll: createInvoker(channels.librarySelectAll, invokeTransport),
     selectionRange: createInvoker(channels.librarySelectionRange, invokeTransport),
     get: createInvoker(channels.libraryGet, invokeTransport),
+    updateMetadata: createInvoker(channels.libraryMetadataUpdate, invokeTransport),
+    metadataSummary: createInvoker(channels.libraryMetadataSummary, invokeTransport),
+    manageTag: createInvoker(channels.libraryTagManage, invokeTransport),
+    tagSuggestions: createInvoker(channels.libraryTagSuggestions, invokeTransport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, invokeTransport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, invokeTransport),
     toggleFavorites: createInvoker(channels.libraryToggleFavorites, invokeTransport),
@@ -177,6 +191,20 @@ const overlook: OverlookApi = {
     onSyncStateChanged: createSubscriber(events.photoSyncStateChanged, subscribeTransport),
     onStorageChanged: createSubscriber(events.storageChanged, subscribeTransport),
     onPendingCountChanged: createSubscriber(events.pendingCountChanged, subscribeTransport),
+  }),
+  nativeDrag: Object.freeze({
+    status: async () => nativeDragStatus({}),
+    start: createInvoker(channels.nativeDragStart, invokeTransport),
+  }),
+  photoKit: Object.freeze({
+    status: async () => photoKitStatus({}),
+    reviewImport: async () => photoKitImportReview({}),
+    import: createInvoker(channels.photoKitImportRun, invokeTransport),
+    export: createInvoker(channels.photoKitExportRun, invokeTransport),
+    cancel: async () => {
+      await photoKitCancel({});
+    },
+    onProgress: createSubscriber(events.photoKitProgress, subscribeTransport),
   }),
   activity: Object.freeze({
     page: createInvoker(channels.activityPage, invokeTransport),
@@ -298,6 +326,8 @@ const overlook: OverlookApi = {
     open: createInvoker(channels.libraryRegistryOpen, invokeTransport),
     remove: createInvoker(channels.libraryRegistryRemove, invokeTransport),
     current: async () => libraryRegistryCurrent({}),
+    setDisplayName: createInvoker(channels.libraryRegistrySetDisplayName, invokeTransport),
+    resetDisplayName: createInvoker(channels.libraryRegistryResetDisplayName, invokeTransport),
     add: createInvoker(channels.libraryRegistryAdd, invokeTransport),
     pickLocation: async () => libraryRegistryPickLocation({}),
     // Relocation (#483, ADR-0022): move/cancel/cleanup + journal-backed

@@ -100,6 +100,7 @@ export const initialAppState: AppState = {
 
 export type AppAction =
   | { type: 'photos/loaded'; photos: readonly PhotoRecord[]; append: boolean; invalidateCompleteSelection?: boolean }
+  | { type: 'photos/records-patched'; photos: readonly PhotoRecord[] }
   | {
       type: 'photos/sync-state-patched';
       updates: readonly { readonly id: string; readonly syncState: PhotoRecord['syncState'] }[];
@@ -170,6 +171,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectorSource: inspectorClosedWithLightbox ? null : detachedFallbackToSelection ? 'selection' : state.inspectorSource,
         inspectorPhotoId: inspectorClosedWithLightbox ? null : inspectorPhotoId,
       };
+    }
+    case 'photos/records-patched': {
+      const updates = new Map(action.photos.map((photo) => [photo.id, photo]));
+      if (updates.size === 0) return state;
+      return { ...state, photos: state.photos.map((photo) => updates.get(photo.id) ?? photo) };
     }
     case 'photos/sync-state-patched': {
       const updates = new Map(action.updates.map((update) => [update.id, update.syncState]));

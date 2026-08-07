@@ -9,6 +9,7 @@ import { probeMediaInfo, sniffImageKind, sniffVideoKind } from '../../shared/lib
 import type { MediaInfo } from '../../shared/library/media-info.js';
 import type { SidecarRole } from '../../shared/library/sidecar-files.js';
 import type { FileKind, PhotoInsert, PhotoRecord } from '../../shared/library/types.js';
+import { extractXmpKeywords } from './xmp-metadata.js';
 
 // Import engine (#87): source files → encrypted, verified library records —
 // interruptible at any point without loss. The journal (import-journal.ts)
@@ -47,6 +48,13 @@ export interface ManifestFile {
   error?: string | undefined;
   moveLease?: MoveCompensationCandidate | undefined;
   sidecars?: ManifestSidecar[] | undefined;
+  sourceMetadata?:
+    | {
+        readonly takenAt?: string | undefined;
+        readonly gpsLat?: number | undefined;
+        readonly gpsLon?: number | undefined;
+      }
+    | undefined;
 }
 
 export interface MoveCompensationCandidate {
@@ -116,6 +124,7 @@ export interface ImportEngineDeps {
     readonly insert: (photo: PhotoInsert) => void;
     /** Idempotent per (photo, content) — resume-safe (#484). */
     readonly insertSidecar: (record: SidecarRecord) => void;
+    readonly addImportedKeywords?: ((photoId: string, keywords: readonly string[]) => boolean) | undefined;
     readonly repairGeneratedDimensions: (id: string, width: number, height: number) => boolean;
     readonly setDimensionStatus: (id: string, status: PhotoRecord['dimensionStatus']) => boolean;
     readonly setPreviewFailure: (id: string, failure: PhotoRecord['previewFailure']) => boolean;
@@ -153,6 +162,7 @@ export interface ImportFileInput {
   /** Companions discovered beside the file (#484); absent for sources
    * without filesystem adjacency. */
   readonly sidecars?: readonly { readonly path: string; readonly fileName: string; readonly role: SidecarRole }[];
+  readonly sourceMetadata?: ManifestFile['sourceMetadata'];
 }
 
 export class ImportEngine {
@@ -176,6 +186,7 @@ export class ImportEngine {
     source: string,
     signal?: AbortSignal,
     cleanupPath?: string,
+    onJournaled?: () => void,
   ): Promise<ImportSummary> {
     const manifest: ImportManifest = {
       batchId: this.deps.newId(),
@@ -190,9 +201,11 @@ export class ImportEngine {
         ...(file.sidecars === undefined || file.sidecars.length === 0
           ? {}
           : { sidecars: file.sidecars.map((sidecar) => ({ ...sidecar })) }),
+        ...(file.sourceMetadata === undefined ? {} : { sourceMetadata: { ...file.sourceMetadata } }),
       })),
     };
     await this.deps.journal.begin(manifest);
+    onJournaled?.();
     return this.run(manifest, signal);
   }
 
@@ -441,6 +454,10 @@ export class ImportEngine {
           keyId: ref.keyId,
           importedAt: this.deps.now(),
         });
+        if (sidecar.role === 'xmp') {
+          const keywords = extractXmpKeywords(bytes);
+          if (keywords.length > 0) this.deps.repo.addImportedKeywords?.(file.photoId, keywords);
+        }
         sidecar.contentHash = ref.contentHash;
         changed = true;
       } finally {
@@ -516,10 +533,11 @@ export class ImportEngine {
       aperture: meta.aperture,
       shutter: meta.shutter,
       focalLength: meta.focalLength,
-      takenAt: meta.takenAt,
-      gpsLat: meta.gpsLat,
-      gpsLon: meta.gpsLon,
+      takenAt: file.sourceMetadata?.takenAt ?? meta.takenAt,
+      gpsLat: file.sourceMetadata?.gpsLat ?? meta.gpsLat,
+      gpsLon: file.sourceMetadata?.gpsLon ?? meta.gpsLon,
       place: null, // never fabricated — GPS is stored, not geocoded (ADR-0006)
+      importedKeywords: meta.keywords ?? [],
       importedAt: this.deps.now(),
       importSource: source,
       keyId,

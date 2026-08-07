@@ -605,6 +605,7 @@
           "paths": [
             "src/renderer/src/grid/VirtualGrid.stories.tsx",
             "src/renderer/src/commands/ShortcutHelp.stories.tsx",
+            "src/renderer/src/components/forms.stories.tsx",
             "src/renderer/src/components/Dialog.stories.tsx"
           ]
         },
@@ -1457,6 +1458,40 @@
       ]
     },
     {
+      "id": "selectable-machine-data-copy",
+      "wiki": "Accessibility-Audit-2026-07",
+      "coverage": [
+        {
+          "type": "storybook",
+          "paths": [
+            "src/renderer/src/components/CopyableValue.stories.tsx",
+            "src/renderer/src/activity/ActivityDialog.stories.tsx",
+            "src/renderer/src/export/ExportDialog.stories.tsx",
+            "src/renderer/src/import/ImportDialog.stories.tsx",
+            "src/renderer/src/inspector/Inspector.stories.tsx",
+            "src/renderer/src/settings/DiagnosticsControls.stories.tsx",
+            "src/renderer/src/settings/KeyDialog.stories.tsx",
+            "src/renderer/src/settings/SettingsDialog.stories.tsx"
+          ]
+        },
+        {
+          "type": "playwright-e2e",
+          "paths": [
+            "tests/e2e/activity.spec.ts",
+            "tests/e2e/export-flow.spec.ts",
+            "tests/e2e/import-flow.spec.ts",
+            "tests/e2e/inspector-window.spec.ts",
+            "tests/e2e/keys-recovery.spec.ts",
+            "tests/e2e/settings.spec.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Packaged macOS and Windows acceptance verifies native mouse selection, keyboard copy, clipboard integration, and titlebar drag behavior that browser interaction tests cannot fully reproduce."
+        }
+      ]
+    },
+    {
       "id": "a11y-audit-and-gates",
       "wiki": "Accessibility-Audit-2026-07",
       "coverage": [
@@ -1512,7 +1547,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/shell/LibrarySwitcher.stories.tsx"
+          "paths": ["src/renderer/src/shell/LibrarySwitcher.stories.tsx", "src/renderer/src/shell/EditLibraryDisplayNameDialog.tsx"]
         },
         {
           "type": "unit-dom",
@@ -1996,6 +2031,64 @@
         {
           "type": "unit-dom",
           "paths": ["tests/library/common-video.test.ts", "tests/library/media-signatures.test.ts", "tests/library/mpeg-ts.test.ts"]
+        }
+      ]
+    },
+    {
+      "id": "508-photo-metadata",
+      "wiki": "Acceptance-Test-Photo-Metadata",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photo-metadata.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/export/ExportDialog.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/db/photo-metadata-repository.test.ts", "tests/import/xmp-metadata.test.ts", "tests/export/export-engine.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The packaged-build check verifies real IPTC/XMP producer compatibility and authorized protected-domain presentation while byte identity and isolation are enforced by automated repository, import, export, and backup tests."
+        }
+      ]
+    },
+    {
+      "id": "796-native-drag-out",
+      "wiki": "Acceptance-Test-Native-Drag-Out",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/native-drag-out.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/native-drag/native-drag-service.test.ts", "tests/native-drag/native-drag-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged check proves real AppKit file promises across Finder, browsers, and native apps; automated tests cover renderer selection, bounded materialization, lock cancellation, naming, custody release, and native-source policy."
+        }
+      ]
+    },
+    {
+      "id": "798-apple-photos-bridge",
+      "wiki": "Acceptance-Test-Apple-Photos-Bridge",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photokit.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/photo-kit/photo-kit-service.test.ts", "tests/photo-kit/photo-kit-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged pass exercises live PhotoKit permission states, limited and revoked access, iCloud-only assets, add-only export, supported metadata fidelity, and destination-owned retention; automated tests cover exact review scope, staging cleanup, lock refusal, native source policy, and the renderer/IPC flow."
         }
       ]
     }

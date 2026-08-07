@@ -24,6 +24,9 @@ export interface OverlookApi {
   readonly getPlatform: () => Promise<string>;
   /** Active UI locale resolved in main (setting → OS → en; ADR-0020 §2). */
   readonly getLocale: () => Promise<string>;
+  readonly clipboard: {
+    readonly writeText: (text: string) => Promise<void>;
+  };
   readonly minimizeWindow: () => Promise<void>;
   readonly toggleMaximizeWindow: () => Promise<boolean>;
   readonly closeWindow: () => Promise<void>;
@@ -76,6 +79,12 @@ export interface OverlookApi {
     readonly selectAll: (request: Req<typeof channels.librarySelectAll>) => Promise<Res<typeof channels.librarySelectAll>>;
     readonly selectionRange: (request: Req<typeof channels.librarySelectionRange>) => Promise<Res<typeof channels.librarySelectionRange>>;
     readonly get: (request: Req<typeof channels.libraryGet>) => Promise<Res<typeof channels.libraryGet>>;
+    readonly updateMetadata: (request: Req<typeof channels.libraryMetadataUpdate>) => Promise<Res<typeof channels.libraryMetadataUpdate>>;
+    readonly metadataSummary: (
+      request: Req<typeof channels.libraryMetadataSummary>,
+    ) => Promise<Res<typeof channels.libraryMetadataSummary>>;
+    readonly manageTag: (request: Req<typeof channels.libraryTagManage>) => Promise<Res<typeof channels.libraryTagManage>>;
+    readonly tagSuggestions: (request: Req<typeof channels.libraryTagSuggestions>) => Promise<Res<typeof channels.libraryTagSuggestions>>;
     readonly repairDimensions: (
       request: Req<typeof channels.libraryRepairDimensions>,
     ) => Promise<Res<typeof channels.libraryRepairDimensions>>;
@@ -107,6 +116,18 @@ export interface OverlookApi {
     ) => () => void;
     readonly onStorageChanged: (listener: () => void) => () => void;
     readonly onPendingCountChanged: (listener: (payload: { count: number }) => void) => () => void;
+  };
+  readonly nativeDrag: {
+    readonly status: () => Promise<Res<typeof channels.nativeDragStatus>>;
+    readonly start: (request: Req<typeof channels.nativeDragStart>) => Promise<Res<typeof channels.nativeDragStart>>;
+  };
+  readonly photoKit: {
+    readonly status: () => Promise<Res<typeof channels.photoKitStatus>>;
+    readonly reviewImport: () => Promise<Res<typeof channels.photoKitImportReview>>;
+    readonly import: (request: Req<typeof channels.photoKitImportRun>) => Promise<Res<typeof channels.photoKitImportRun>>;
+    readonly export: (request: Req<typeof channels.photoKitExportRun>) => Promise<Res<typeof channels.photoKitExportRun>>;
+    readonly cancel: () => Promise<void>;
+    readonly onProgress: (listener: (payload: z.output<typeof events.photoKitProgress.payload>) => void) => () => void;
   };
   readonly activity: {
     readonly page: (request: Req<typeof channels.activityPage>) => Promise<Res<typeof channels.activityPage>>;
@@ -244,6 +265,12 @@ export interface OverlookApi {
     readonly open: (request: Req<typeof channels.libraryRegistryOpen>) => Promise<Res<typeof channels.libraryRegistryOpen>>;
     readonly remove: (request: Req<typeof channels.libraryRegistryRemove>) => Promise<Res<typeof channels.libraryRegistryRemove>>;
     readonly current: () => Promise<Res<typeof channels.libraryRegistryCurrent>>;
+    readonly setDisplayName: (
+      request: Req<typeof channels.libraryRegistrySetDisplayName>,
+    ) => Promise<Res<typeof channels.libraryRegistrySetDisplayName>>;
+    readonly resetDisplayName: (
+      request: Req<typeof channels.libraryRegistryResetDisplayName>,
+    ) => Promise<Res<typeof channels.libraryRegistryResetDisplayName>>;
     readonly add: (request: Req<typeof channels.libraryRegistryAdd>) => Promise<Res<typeof channels.libraryRegistryAdd>>;
     readonly pickLocation: () => Promise<Res<typeof channels.libraryRegistryPickLocation>>;
     // Relocation (#483, ADR-0022)

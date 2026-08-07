@@ -5,7 +5,7 @@ import { buffer } from 'node:stream/consumers';
 
 import type { KeyResolver } from '../crypto/envelope.js';
 import type { ExportFacade } from '../ipc.js';
-import { ExportEngine, writeFileCleanly } from './export-engine.js';
+import { ExportEngine, writeFileCleanly, type ExportMetadataMode } from './export-engine.js';
 import { transcodeToJpeg } from './transcode.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 
@@ -56,12 +56,17 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
   let controller: AbortController | null = null;
   let turn: Promise<unknown> = Promise.resolve();
   let closed = false;
-  const schedule = (photoIds: () => readonly string[], destination: string, format: 'original' | 'jpeg' = 'original') => {
+  const schedule = (
+    photoIds: () => readonly string[],
+    destination: string,
+    format: 'original' | 'jpeg' = 'original',
+    metadata: ExportMetadataMode = 'original',
+  ) => {
     const task = async () => {
       if (closed) throw new Error('export service is closed');
       controller = new AbortController();
       try {
-        const summary = await engine.exportPhotos(photoIds(), destination, controller.signal, format);
+        const summary = await engine.exportPhotos(photoIds(), destination, controller.signal, format, metadata);
         return {
           exported: summary.exported,
           failed: summary.failed,
@@ -81,8 +86,8 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     return next;
   };
   return {
-    run: (photoIds, destination, format) => schedule(() => photoIds, destination, format),
-    runAll: (destination) => schedule(options.repo.exportableIds, destination),
+    run: (photoIds, destination, format, metadata) => schedule(() => photoIds, destination, format, metadata),
+    runAll: (destination, metadata) => schedule(options.repo.exportableIds, destination, 'original', metadata),
     cancel: () => controller?.abort(),
     close: () => {
       closed = true;

@@ -80,6 +80,7 @@ export interface ProviderRuntimeOptions {
 
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
 const DEFAULT_STORAGE_TIMEOUT_MS = 30_000;
+const ACTIVE_WORK_DISCONNECT_REASON = 'Wait for the active backup or restore to finish before disconnecting.';
 
 type AccountIdentityAttempt =
   | {
@@ -117,15 +118,12 @@ export class ProviderRuntime {
     if (this.tokenStoreInstance === undefined) {
       const safeStorage = this.options.safeStorage();
       const credentialDir = this.credentialDirectory('pcloud');
-      this.tokenStoreInstance = new PCloudTokenStore({ safeStorage, dataDir: credentialDir });
-      if (credentialDir !== this.options.dataDir() && this.tokenStoreInstance.load() === null) {
-        const legacy = new PCloudTokenStore({ safeStorage, dataDir: this.options.dataDir() });
-        const record = legacy.load();
-        if (record !== null) {
-          this.tokenStoreInstance.save(record);
-          legacy.clear();
-        }
-      }
+      this.tokenStoreInstance = new PCloudTokenStore({
+        safeStorage,
+        dataDir: credentialDir,
+        ...(credentialDir === this.options.dataDir() ? {} : { legacyDataDir: this.options.dataDir() }),
+      });
+      this.tokenStoreInstance.migrateLegacy();
     }
     return this.tokenStoreInstance;
   }
@@ -541,9 +539,12 @@ export class ProviderRuntime {
   }
 
   private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
-    if (this.options.isWorkActive?.() === true) {
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
-    }
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
+    // Invokes can arrive after the first clears custody; only the fully disconnected state is idempotent.
+    // `load()` also returns null for unreadable records, so use the normal
+    // force-clear, verification, and structured-error path before succeeding.
+    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null)
+      return this.disconnectPCloud();
     const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
     if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
     if (credential !== null) {
@@ -551,9 +552,7 @@ export class ProviderRuntime {
       const blocked = custody === undefined ? null : custodyBlocked(custody);
       if (blocked !== null) return blocked;
     }
-    if (this.options.isWorkActive?.() === true) {
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
-    }
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
     const result = this.disconnectAuthorization(providerId);
     if (result.ok && credential !== null) this.options.deleteUnreferencedAuthorities?.(credential);
     return result;
@@ -638,7 +637,7 @@ export class ProviderRuntime {
     } catch {
       return { ok: false, reason: 'Could not remove the pCloud authorization from this device. Check file access and try again.' };
     }
-    if (store.load() !== null) {
+    if (store.hasStoredAuthorization()) {
       return { ok: false, reason: 'Could not verify that the pCloud authorization was removed. Check status and try again.' };
     }
 
@@ -649,7 +648,7 @@ export class ProviderRuntime {
       // exception. Never roll a completed disconnect back on an emit failure.
     }
     const selectionCleared = this.options.providerId() !== 'pcloud';
-    const custodyCleared = store.load() === null;
+    const custodyCleared = !store.hasStoredAuthorization();
     if (selectionCleared && custodyCleared) return { ok: true, reason: null };
     if (!selectionCleared) return this.rollbackPCloudCustody(previous);
     return {
