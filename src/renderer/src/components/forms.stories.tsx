@@ -17,7 +17,7 @@ function SearchDemo(): ReactElement {
   const [value, setValue] = useState('');
   return (
     <div style={{ padding: 'var(--space-7)' }}>
-      <SearchField value={value} onChange={setValue} width={300} />
+      <SearchField value={value} onChange={setValue} shortcut="⌘K" width={300} />
     </div>
   );
 }

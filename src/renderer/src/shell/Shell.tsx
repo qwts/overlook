@@ -543,6 +543,7 @@ export function Shell({
       />
       <MoveResumeBanner />
       <Toolbar
+        platform={commandPlatform(platform)}
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
         onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {

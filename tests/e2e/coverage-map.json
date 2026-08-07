@@ -605,6 +605,7 @@
           "paths": [
             "src/renderer/src/grid/VirtualGrid.stories.tsx",
             "src/renderer/src/commands/ShortcutHelp.stories.tsx",
+            "src/renderer/src/components/forms.stories.tsx",
             "src/renderer/src/components/Dialog.stories.tsx"
           ]
         },
