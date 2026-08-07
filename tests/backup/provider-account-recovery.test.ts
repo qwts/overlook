@@ -71,6 +71,47 @@ test('same-provider account changes commit identity before switch-guard mutation
   });
 });
 
+test('an account change during reconnect refreshes the later disconnect preflight subject (#733)', async () => {
+  let providerId: string | null = 'pcloud';
+  let preflightAccount: string | undefined;
+  const providerRuntime = runtime({
+    providerId: () => providerId,
+    setProviderId: (id) => {
+      providerId = id;
+    },
+    fetchImpl: () => Promise.resolve(Response.json({ result: 0, userid: 73001, email: 'original@pcloud.test' })),
+    verifyCustodyReconnect: () =>
+      Promise.resolve({
+        ok: false,
+        reason: 'wrong-account',
+        replacementIdentity: { accountId: '73002', accountLabel: 'replacement@pcloud.test' },
+      }),
+    custodyPreflight: (credential) => {
+      preflightAccount = credential.accountId;
+      return {
+        credential,
+        totalItems: 1,
+        totalBytes: 1,
+        libraries: [{ libraryId: 'library-a', name: 'Active', items: 1, bytes: 1, legacyUnbound: false }],
+      };
+    },
+  });
+  providerRuntime.tokenStore().save({
+    accessToken: 'mid-proof-change-token',
+    apiHost: 'api.pcloud.com',
+    connectedAt: '2026-08-06T00:00:00.000Z',
+    accountId: '73001',
+    accountLabel: 'original@pcloud.test',
+  });
+  providerRuntime.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-mid-proof-change'), fault: undefined });
+
+  assert.equal((await providerRuntime.connect('pcloud')).code, 'custody-wrong-account');
+  assert.equal(providerRuntime.tokenStore().load()?.accountId, '73002');
+  assert.equal((await providerRuntime.disconnect('pcloud')).code, 'custody-restore-required');
+  assert.equal(preflightAccount, '73002');
+  assert.equal(providerId, 'pcloud', 'the protected replacement credential remains selected');
+});
+
 describe('provider account authentication recovery (#730)', () => {
   test('revoked current pCloud authority is cleared and Connect falls back to OAuth', async () => {
     let browserOpens = 0;

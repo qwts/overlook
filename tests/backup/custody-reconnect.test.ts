@@ -191,7 +191,11 @@ test('an account change during namespace proof cannot bind the earlier subject (
       },
       { provider: w.provider, identity: { accountId: 'account-a', accountLabel: 'Account A' } },
     ),
-    { ok: false, reason: 'wrong-account' },
+    {
+      ok: false,
+      reason: 'wrong-account',
+      replacementIdentity: { accountId: 'account-b', accountLabel: 'Account B' },
+    },
   );
   assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
   assert.equal(w.authorities.get(w.authority.id)?.lastVerifiedAt, null);

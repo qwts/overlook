@@ -332,6 +332,13 @@ export class ProviderRuntime {
       return custodyUnavailable();
     }
     if (reconnect?.ok === false) {
+      if (reconnect.reason === 'wrong-account' && reconnect.replacementIdentity !== undefined) {
+        if (!this.persistAccountIdentity(providerId, reconnect.replacementIdentity)) {
+          if (this.options.providerId() === providerId) this.options.setProviderId(null);
+          return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
+        }
+        iCloudProvider?.resetAccountAuthority(reconnect.replacementIdentity.accountId);
+      }
       return reconnect.reason === 'wrong-account' ? custodyWrongAccount() : custodyUnavailable();
     }
     return { ok: true, reason: null };

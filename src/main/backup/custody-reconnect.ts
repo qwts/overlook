@@ -7,7 +7,10 @@ import { raceWithAbort, type ProviderAccountIdentity, type StorageProvider } fro
 
 const MAX_BOOTSTRAP_BYTES = 1024 * 1024;
 
-export type CustodyReconnectResult = { readonly ok: true } | { readonly ok: false; readonly reason: 'wrong-account' | 'unavailable' };
+export type CustodyReconnectResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'wrong-account'; readonly replacementIdentity?: ProviderAccountIdentity }
+  | { readonly ok: false; readonly reason: 'unavailable' };
 
 export interface CustodyReconnectDeps {
   readonly authorities: Pick<CustodyAuthorityRepository, 'create' | 'legacyUnboundCount' | 'markVerified' | 'stageReconnectVerification'>;
@@ -112,7 +115,7 @@ export async function verifyCustodyReconnect(
     const confirmedIdentity = await raceWithAbort(input.provider.accountIdentity(input.signal), input.signal);
     if (confirmedIdentity.accountId !== input.identity.accountId) {
       notifyCustodyChanged(deps);
-      return { ok: false, reason: 'wrong-account' };
+      return { ok: false, reason: 'wrong-account', replacementIdentity: confirmedIdentity };
     }
   } catch {
     notifyCustodyChanged(deps);
