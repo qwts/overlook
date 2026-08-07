@@ -199,7 +199,7 @@ export class NativeDragOutService {
   ): Promise<void> {
     const record = records.get(token);
     if (record === undefined || signal.aborted || !this.deps.admit()) throw new Error('drag content unavailable');
-    if (!path.isAbsolute(destinationPath) || path.basename(destinationPath) !== record.item.fileName) {
+    if (!path.isAbsolute(destinationPath)) {
       throw new Error('invalid drag destination');
     }
     const opened = await awaitOpenedOriginal(this.deps.openOriginal(record.photo, signal), signal);

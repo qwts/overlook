@@ -414,12 +414,13 @@ export function LibraryGridView({
               photoIds: state.selection.has(photo.id) ? [...state.selection] : [photo.id],
               sourceAlbumId: state.album,
             } as const;
+            beginPhotoDrag(event.dataTransfer, payload);
             if (nativeDragAvailable && payload.photoIds.length <= 100) {
-              event.preventDefault();
-              endPhotoDrag();
-              void window.overlook.nativeDrag.start({ photoIds: payload.photoIds, sourceAlbumId: payload.sourceAlbumId });
-            } else {
-              beginPhotoDrag(event.dataTransfer, payload);
+              void window.overlook.nativeDrag
+                .start({ photoIds: payload.photoIds, sourceAlbumId: payload.sourceAlbumId })
+                .then(({ started }) => {
+                  if (started) endPhotoDrag();
+                });
             }
           };
     const onDragEnd = onDragStart === undefined ? undefined : endPhotoDrag;

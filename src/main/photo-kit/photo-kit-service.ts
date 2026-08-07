@@ -21,7 +21,11 @@ export interface PhotoKitServiceDeps {
   readonly dataDir: string;
   readonly getPhoto: (photoId: string) => PhotoRecord | undefined;
   readonly openOriginal: (photo: PhotoRecord) => Promise<OpenedOriginal>;
-  readonly importFiles: (assets: readonly PhotoKitMaterializedAsset[], cleanupPath: string) => Promise<ImportSummary>;
+  readonly importFiles: (
+    assets: readonly PhotoKitMaterializedAsset[],
+    cleanupPath: string,
+    onJournaled: () => void,
+  ) => Promise<ImportSummary>;
   readonly cancelImport: () => void;
   readonly admit: () => boolean;
   readonly progress: (payload: {
@@ -156,17 +160,18 @@ export class PhotoKitService {
       if (review === undefined || assetIds.some((id) => !review.has(id))) throw new Error('Photos review is stale or invalid');
       if (!allowed(this.deps.bridge.authorization('read-write')) || !this.deps.admit()) throw new Error('Photos access is unavailable');
       const scratch = await createPhotoKitStage(this.deps.dataDir);
-      let handedToImport = false;
+      let journalOwnsStage = false;
       try {
         this.deps.progress({ operation: 'import', phase: 'preparing', done: 0, total: assetIds.length });
         const materialized = await this.deps.bridge.materialize(assetIds, scratch);
         if (signal.aborted || !this.deps.admit()) throw new Error('Photos import cancelled');
         await validateMaterialization(scratch, assetIds, materialized);
         this.deps.progress({ operation: 'import', phase: 'transferring', done: 0, total: materialized.length });
-        handedToImport = true;
-        return await this.deps.importFiles(materialized, scratch);
+        return await this.deps.importFiles(materialized, scratch, () => {
+          journalOwnsStage = true;
+        });
       } finally {
-        if (!handedToImport) await cleanupPhotoKitStage(this.deps.dataDir, scratch);
+        if (!journalOwnsStage) await cleanupPhotoKitStage(this.deps.dataDir, scratch);
       }
     });
   }

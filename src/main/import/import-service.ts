@@ -226,6 +226,7 @@ export class ImportService {
       readonly longitude: number | null;
     }[],
     cleanupPath: string,
+    onJournaled: () => void,
     cleanupPreflightFailure: () => Promise<void>,
   ): Promise<ImportSummary> {
     return this.serialize(async () => {
@@ -265,8 +266,15 @@ export class ImportService {
             };
           });
         const existing = files.length - fresh.length;
-        const result = await this.engine.importFiles(fresh, 'copy', 'Apple Photos', controller.signal, cleanupPath);
-        const summary = { ...result, duplicates: result.duplicates + existing, retained: result.retained + existing };
+        const scannedPaths = new Set(files.map((file) => file.path));
+        const unsupported = assets.filter((asset) => !scannedPaths.has(asset.path)).length;
+        const result = await this.engine.importFiles(fresh, 'copy', 'Apple Photos', controller.signal, cleanupPath, onJournaled);
+        const summary = {
+          ...result,
+          duplicates: result.duplicates + existing,
+          failed: result.failed + unsupported,
+          retained: result.retained + existing + unsupported,
+        };
         if (summary.photoIds.length > 0) this.events.imported(summary.photoIds);
         return summary;
       } finally {

@@ -75,7 +75,7 @@ export function PhotoKitImportSource({
           </div>
         </div>
         <div className="ovl-import__photosList" aria-label={intl.formatMessage(messages.availableItems)}>
-          {state.assets.slice(0, 1000).map((asset) => (
+          {state.assets.map((asset) => (
             <Checkbox
               key={asset.id}
               checked={selection.has(asset.id)}

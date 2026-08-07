@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -110,9 +110,10 @@ describe('PhotoKit explicit transfer service (#798)', () => {
       dataDir,
       getPhoto: () => undefined,
       openOriginal: () => Promise.reject(new Error('unused')),
-      importFiles: async (assets, cleanupPath) => {
+      importFiles: async (assets, cleanupPath, onJournaled) => {
         importedPath = assets[0]?.path ?? '';
         assert.equal((await readFile(importedPath)).toString(), 'photo');
+        onJournaled();
         await cleanupPhotoKitStage(dataDir, cleanupPath);
         return SUMMARY;
       },
@@ -125,6 +126,29 @@ describe('PhotoKit explicit transfer service (#798)', () => {
     assert.equal((await service.runImport(review.reviewId!, ['asset'])).imported, 1);
     assert.match(importedPath, /photokit-transfers\/transfer-/u);
     await assert.rejects(service.runImport(review.reviewId!, ['other']), /stale or invalid/u);
+  });
+
+  test('cleans plaintext staging when the import path rejects before journal custody (#798 review)', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'overlook-photokit-prejournal-'));
+    const bridge = new FakeBridge();
+    let cleanupPath = '';
+    const service = new PhotoKitService({
+      bridge,
+      dataDir,
+      getPhoto: () => undefined,
+      openOriginal: () => Promise.reject(new Error('unused')),
+      importFiles: (_assets, path) => {
+        cleanupPath = path;
+        return Promise.reject(new Error('import service is closed'));
+      },
+      cancelImport: () => undefined,
+      admit: () => true,
+      progress: () => undefined,
+    });
+    const review = await service.reviewImport();
+
+    await assert.rejects(service.runImport(review.reviewId!, ['asset']), /import service is closed/u);
+    assert.equal(existsSync(cleanupPath), false);
   });
 
   test('exports only ordinary selected originals and releases temporary custody', async () => {

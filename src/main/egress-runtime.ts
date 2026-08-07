@@ -84,8 +84,10 @@ export class EgressRuntime {
         const opened = await service.open(photo.id, 'export');
         return { stream: opened.stream, release: opened.custody === 'ephemeral' ? () => service.release(photo.id, 'export') : undefined };
       },
-      importFiles: (assets, cleanupPath) =>
-        this.options.imports().runPhotoKitFiles(assets, cleanupPath, () => cleanupPhotoKitStage(this.options.dataDir(), cleanupPath)),
+      importFiles: (assets, cleanupPath, onJournaled) =>
+        this.options
+          .imports()
+          .runPhotoKitFiles(assets, cleanupPath, onJournaled, () => cleanupPhotoKitStage(this.options.dataDir(), cleanupPath)),
       cancelImport: () => this.options.imports().cancel(),
       admit: () => this.options.unlocked() && this.options.parts() === parts,
       progress: applicationEvents.photoKitProgress,

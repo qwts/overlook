@@ -186,6 +186,7 @@ export class ImportEngine {
     source: string,
     signal?: AbortSignal,
     cleanupPath?: string,
+    onJournaled?: () => void,
   ): Promise<ImportSummary> {
     const manifest: ImportManifest = {
       batchId: this.deps.newId(),
@@ -204,6 +205,7 @@ export class ImportEngine {
       })),
     };
     await this.deps.journal.begin(manifest);
+    onJournaled?.();
     return this.run(manifest, signal);
   }
 

@@ -121,7 +121,7 @@ describe('native drag-out materialization (#796)', () => {
     const destination = mkdtempSync(join(tmpdir(), 'overlook-native-drag-'));
     const item = bridge.input?.items[1];
     assert.ok(item);
-    const output = join(destination, item.fileName);
+    const output = join(destination, 'receiver-resolved.jpg');
     await bridge.input?.materialize({ token: item.token, destinationPath: output });
     assert.equal(readFileSync(output, 'utf8'), 'bytes');
     assert.equal(opens, 1);
@@ -163,7 +163,7 @@ describe('native drag-out materialization (#796)', () => {
     assert.equal(service.start(Buffer.alloc(8), { photoIds: ['P1'], sourceAlbumId: null }).started, true);
     const item = bridge.input?.items[0];
     assert.ok(item);
-    await assert.rejects(bridge.input?.materialize({ token: item.token, destinationPath: '/tmp/forged.jpg' }) ?? Promise.resolve());
+    await assert.rejects(bridge.input?.materialize({ token: item.token, destinationPath: 'relative/forged.jpg' }) ?? Promise.resolve());
     assert.equal(opens, 0);
   });
 
