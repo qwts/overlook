@@ -4,5 +4,15 @@
   "rootName": "Overlook Interop",
   "libraryId": "v1",
   "logicalPath": "Overlook Interop/v1",
-  "googleDriveOwner": "qwts-overlook-interop-v1"
+  "googleDriveOwner": "qwts-overlook-interop-v1",
+  "googleDriveDiscovery": {
+    "ownerPropertyKey": "overlookOwner",
+    "pathHashPropertyKey": "overlookPathHash",
+    "hashAlgorithm": "sha256",
+    "hashEncoding": "lowercase-hex",
+    "rootIdentity": "overlook-root",
+    "libraryIdentityTemplate": "library:{libraryId}",
+    "folderIdentityTemplate": "library:{libraryId}/folder:{path}",
+    "fileIdentityTemplate": "library:{libraryId}/file:{path}"
+  }
 }

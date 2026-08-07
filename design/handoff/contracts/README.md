@@ -15,8 +15,10 @@ Contract v1 also defines the provider object paths used by Move:
 `provider-root.json` pins the shared logical subtree as
 `Overlook Interop/v1`. It is provider-relative: adapters resolve it below the
 provider-owned app root and must not treat it as an account-root absolute path.
-The same artifact pins the Google Drive app-property owner used for discovery,
-so an identically named folder with different custody cannot appear conforming.
+The same artifact pins the complete Google Drive discovery protocol: the
+app-property owner, property keys, SHA-256 encoding, and root/library/folder/file
+identity templates. An identically named folder with different custody or path
+identity therefore cannot appear conforming.
 
 Messages use `sealed-message.schema.json`; original bytes use the nested binary
 format in `sealed-blob.md`. An accepted Move containing an original must

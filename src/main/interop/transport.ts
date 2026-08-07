@@ -4,6 +4,7 @@ import { buffer } from 'node:stream/consumers';
 import { z } from 'zod';
 
 import { GoogleDriveProvider, type GoogleDriveProviderOptions } from '../backup/google-drive/google-drive-provider.js';
+export { GOOGLE_DRIVE_DISCOVERY_PROTOCOL } from '../backup/google-drive/discovery-protocol.js';
 import { PCloudProvider, type PCloudProviderOptions } from '../backup/pcloud/pcloud-provider.js';
 import { ProviderError, type StorageProvider } from '../backup/provider.js';
 
