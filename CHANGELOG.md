@@ -1,5 +1,20 @@
 # photos
 
+## 0.66.0
+
+### Minor Changes
+
+- 86c6eeb: Bind every backup-provider connection to a stable, non-secret account identity
+  and show its persisted account label in provider status.
+- de32dcd: Route cloud-only original reads, restores, integrity checks, and remote deletion
+  through their recorded provider account and library namespace.
+- 6a48c14: Require account and authenticated library-namespace proof before cloud-only
+  custody resumes, and reconcile legacy offloaded rows one verified object at a
+  time through the bounded integrity scrub.
+- 37504c3: Block provider disconnects and account switches while cloud-only originals
+  still depend on that authorization, and preserve recoverable provider-required
+  state when authorization is removed through the emergency ceremony.
+
 ## 0.65.6
 
 ### Patch Changes
