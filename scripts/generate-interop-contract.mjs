@@ -12,7 +12,7 @@ for (const [fileName, schema] of Object.entries(createInteropJsonSchemas())) {
 }
 
 const schemaFiles = Object.keys(createInteropJsonSchemas()).sort();
-const evidenceFiles = ['acceptance-evidence.json', 'sealed-blob.md'];
+const evidenceFiles = ['acceptance-evidence.json', 'provider-root.json', 'sealed-blob.md'];
 const fixtureFiles = (await readdir(fixtureDirectory))
   .filter((fileName) => fileName.endsWith('.json'))
   .sort()
