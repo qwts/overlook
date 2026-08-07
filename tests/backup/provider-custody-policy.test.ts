@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -94,6 +94,24 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(preflights, 1);
     assert.equal(r.tokenStore().load(), null);
     assert.equal(providerId, null);
+  });
+
+  test('an idempotent pCloud disconnect clears an unreadable authorization record (#927)', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
+    const authorizationPath = join(dataDir, 'pcloud-auth.bin');
+    const r = runtime({ dataDir: () => dataDir });
+    r.tokenStore().save({
+      accessToken: 'unreadable-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '927002',
+      accountLabel: 'owner@pcloud.test',
+    });
+    writeFileSync(authorizationPath, 'not-json');
+
+    assert.equal(r.tokenStore().load(), null);
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(existsSync(authorizationPath), false);
   });
 
   test('disconnect and switch fail before credential mutation when custody requires restore-first', async () => {

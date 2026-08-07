@@ -80,6 +80,7 @@ export interface ProviderRuntimeOptions {
 
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
 const DEFAULT_STORAGE_TIMEOUT_MS = 30_000;
+const ACTIVE_WORK_DISCONNECT_REASON = 'Wait for the active backup or restore to finish before disconnecting.';
 
 type AccountIdentityAttempt =
   | {
@@ -541,11 +542,14 @@ export class ProviderRuntime {
   }
 
   private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
-    if (this.options.isWorkActive?.() === true)
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
     // Invokes can arrive after the first clears custody; only the fully disconnected state is idempotent.
-    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null)
+    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null) {
+      // `load()` also returns null for unreadable records. Remove any corrupt
+      // authorization artifact before reporting the disconnected state.
+      this.tokenStore().clear();
       return { ok: true, reason: null };
+    }
     const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
     if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
     if (credential !== null) {
@@ -553,9 +557,7 @@ export class ProviderRuntime {
       const blocked = custody === undefined ? null : custodyBlocked(custody);
       if (blocked !== null) return blocked;
     }
-    if (this.options.isWorkActive?.() === true) {
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
-    }
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
     const result = this.disconnectAuthorization(providerId);
     if (result.ok && credential !== null) this.options.deleteUnreferencedAuthorities?.(credential);
     return result;
