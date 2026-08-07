@@ -1,5 +1,24 @@
 # photos
 
+## 0.67.0
+
+### Minor Changes
+
+- 6105304: Add accessible copy actions to load-bearing Inspector, Activity, import,
+  export, recovery-key, and diagnostics values.
+- 29fa96e: Add registry-only library display-name editing, reset-to-folder-name, duplicate disambiguation, and live titlebar updates.
+- 330fa1d: Add signed macOS file-promise drag-out for selected ordinary photos.
+- 4a9a79a: Add encrypted, searchable photo titles, descriptions, imported keywords, authored tags, bulk tag management, and metadata-aware export choices.
+- 4c8249d: Add explicit, signed Apple Photos import and add-only export with reviewed selection, lock-aware custody, and plaintext staging cleanup.
+- 47b87b2: Make rendered machine data selectable by default and add an accessible,
+  announced copy primitive for load-bearing values.
+
+### Patch Changes
+
+- 648009a: Keep repeated pCloud disconnect requests idempotent after the first request
+  clears custody, repair the restart fixture, and cover legacy custody failures.
+- a5c0d81: Show Windows shortcut labels in the Windows toolbar and shortcut reference.
+
 ## 0.66.0
 
 ### Minor Changes
