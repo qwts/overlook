@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -118,6 +118,7 @@ describe('provider custody-change policy (#732)', () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
     const credentialDir = join(dataDir, 'provider-auth', 'pcloud');
     const legacyAuthorizationPath = join(dataDir, 'pcloud-auth.bin');
+    mkdirSync(dataDir, { recursive: true });
     writeFileSync(legacyAuthorizationPath, 'not-json');
     const r = runtime({
       dataDir: () => dataDir,
