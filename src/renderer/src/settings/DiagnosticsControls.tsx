@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 import { CopyableValue } from '../components/CopyableValue';
+import './settings.css';
 
 type DiagnosticReport = Awaited<ReturnType<typeof window.overlook.diagnostics.list>>['reports'][number];
 
