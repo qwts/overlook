@@ -97,6 +97,14 @@ async function putBootstrap(provider: MockProvider, masterKey: Buffer, libraryId
   await provider.put('recovery/bootstrap.ovrb', Readable.from([sealed]));
 }
 
+async function waitFor(predicate: () => boolean, failure: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(failure);
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe('custody reconnect verification (#733)', () => {
   test('same account plus authenticated namespace restores binding without a ledger transition and survives restart', async () => {
     const w = world();
@@ -320,6 +328,7 @@ test('a provider switch during proof cannot leave a stale result under the origi
     libraryId: LIBRARY_ID,
     accountIdentity: { accountId: 'account-a', accountLabel: 'Account A' },
   });
+  Object.defineProperty(alternate, 'id', { value: 'pcloud' });
   await putBootstrap(alternate, w.masterKey);
   let activeId = 'mock';
   let releaseIdentity: (() => void) | undefined;
@@ -356,7 +365,10 @@ test('a provider switch during proof cannot leave a stale result under the origi
   await started;
   activeId = 'pcloud';
   releaseIdentity?.();
-  while (w.authorities.verified('pcloud', 'account-a', ROOT) === undefined) await new Promise((resolve) => setImmediate(resolve));
+  await waitFor(
+    () => w.authorities.verified('pcloud', 'account-a', ROOT) !== undefined,
+    'the switched provider never published its verified authority',
+  );
   w.provider.accountIdentity = accountIdentity;
   activeId = 'mock';
   assert.equal((await routing.integrity.legacyAuthority())?.authority.id, w.authority.id, 'the original provider is re-proven');
