@@ -541,9 +541,11 @@ export class ProviderRuntime {
   }
 
   private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
-    if (this.options.isWorkActive?.() === true) {
+    if (this.options.isWorkActive?.() === true)
       return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
-    }
+    // Invokes can arrive after the first clears custody; only the fully disconnected state is idempotent.
+    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null)
+      return { ok: true, reason: null };
     const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
     if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
     if (credential !== null) {

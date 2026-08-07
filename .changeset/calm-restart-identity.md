@@ -1,5 +1,6 @@
 ---
+'overlook': patch
 ---
 
-Repair the pCloud disconnect restart fixture and add legacy custody regression
-coverage. Test-only change with no shipped behavior impact.
+Keep repeated pCloud disconnect requests idempotent after the first request
+clears custody, repair the restart fixture, and cover legacy custody failures.

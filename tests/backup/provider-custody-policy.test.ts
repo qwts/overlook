@@ -62,6 +62,40 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(providerId, 'pcloud');
   });
 
+  test('a repeated pCloud disconnect stays idempotent after the first request clears custody (#927)', async () => {
+    let providerId: string | null = 'pcloud';
+    let preflights = 0;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      custodyPreflight: (credential) => {
+        preflights += 1;
+        return {
+          credential,
+          totalItems: 0,
+          totalBytes: 0,
+          libraries: [],
+        };
+      },
+    });
+    r.tokenStore().save({
+      accessToken: 'repeat-disconnect-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '927001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-repeat-disconnect'), fault: undefined });
+
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(preflights, 1);
+    assert.equal(r.tokenStore().load(), null);
+    assert.equal(providerId, null);
+  });
+
   test('disconnect and switch fail before credential mutation when custody requires restore-first', async () => {
     let providerId: string | null = 'pcloud';
     const preflights: { providerId: string; accountId: string }[] = [];
