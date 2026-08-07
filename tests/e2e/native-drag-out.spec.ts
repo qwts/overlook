@@ -21,7 +21,16 @@ test('selected photos enter the bounded native drag materializer (#796)', async 
     () => new (globalThis as unknown as { DataTransfer: new () => object }).DataTransfer(),
   );
   await running.page.getByRole('button', { name: /Open IMG_4021\.RAF/u }).dispatchEvent('dragstart', { dataTransfer: transfer });
-  await expect.poll(() => readdirSync(destination).sort()).toEqual(['IMG_4021.RAF', 'IMG_4028.JPG']);
+  await expect
+    .poll(() =>
+      readdirSync(destination)
+        .sort()
+        .map((name) => [name, readFileSync(join(destination, name)).length > 0]),
+    )
+    .toEqual([
+      ['IMG_4021.RAF', true],
+      ['IMG_4028.JPG', true],
+    ]);
   expect(readFileSync(join(destination, 'IMG_4021.RAF')).length).toBeGreaterThan(0);
   expect(readFileSync(join(destination, 'IMG_4028.JPG')).length).toBeGreaterThan(0);
   await transfer.dispose();
