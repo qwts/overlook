@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { DeterministicICloudDriveBridge } from '../../src/main/backup/icloud-drive/deterministic-bridge.js';
+import type { StorageProvider } from '../../src/main/backup/provider.js';
 import { ProviderRuntime, type ProviderRuntimeOptions } from '../../src/main/backup/provider-runtime.js';
 import type { SafeStorageLike } from '../../src/main/crypto/keystore.js';
 
@@ -119,12 +120,21 @@ describe('provider custody-change policy (#732)', () => {
 describe('provider reconnect custody result (#733)', () => {
   test('a failed custody proof keeps the new credential selected as a backup target', async () => {
     let providerId: string | null = null;
+    let registryProvider: StorageProvider | undefined;
+    let proofProvider: StorageProvider | undefined;
     const r = runtime({
       providerId: () => providerId,
       setProviderId: (id) => {
         providerId = id;
       },
-      verifyCustodyReconnect: () => Promise.resolve({ ok: false, reason: 'wrong-account' }),
+      scopeProviderForOpenLibrary: (provider) => {
+        registryProvider = provider;
+        return new Proxy(provider, {});
+      },
+      verifyCustodyReconnect: (input) => {
+        proofProvider = input.provider;
+        return Promise.resolve({ ok: false, reason: 'wrong-account' });
+      },
     });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-target'), fault: undefined });
 
@@ -134,6 +144,7 @@ describe('provider reconnect custody result (#733)', () => {
       code: 'custody-wrong-account',
     });
     assert.equal(providerId, 'mock', 'the connection stands as the selected backup target');
+    assert.notEqual(proofProvider, registryProvider, 'the proof receives the active-library provider scope');
     assert.equal((await r.status('mock')).connected, true);
   });
 

@@ -58,6 +58,9 @@ export interface ProviderRuntimeOptions {
    * remote-only object the library claims (see provider-switch-guard.ts).
    * Absent in tests that exercise pure selection mechanics. */
   readonly switchGuard?: ((target: { providerId: string; provider: StorageProvider }) => Promise<PCloudConnectResult>) | undefined;
+  /** Re-scopes a restore-browser registry provider only when a library is
+   * already open. Fresh-profile onboarding must return the input unchanged. */
+  readonly scopeProviderForOpenLibrary?: ((provider: StorageProvider) => StorageProvider) | undefined;
   readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
   readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
@@ -304,14 +307,20 @@ export class ProviderRuntime {
       return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
     }
     iCloudProvider?.resetAccountAuthority(attempt.identity.accountId);
+    let scopedProvider: StorageProvider;
+    try {
+      scopedProvider = this.options.scopeProviderForOpenLibrary?.(provider) ?? provider;
+    } catch {
+      return custodyUnavailable();
+    }
     if (this.options.switchGuard !== undefined && attempt.requiresSwitchGuard) {
-      const verdict = await this.options.switchGuard({ providerId, provider });
+      const verdict = await this.options.switchGuard({ providerId, provider: scopedProvider });
       if (!verdict.ok) return verdict;
     }
     this.options.setProviderId(providerId);
     let reconnect: CustodyReconnectResult | undefined;
     try {
-      reconnect = await this.options.verifyCustodyReconnect?.({ provider, identity: attempt.identity });
+      reconnect = await this.options.verifyCustodyReconnect?.({ provider: scopedProvider, identity: attempt.identity });
     } catch {
       return custodyUnavailable();
     }

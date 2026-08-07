@@ -206,7 +206,9 @@ export class FaultInjectingProvider implements StorageProvider {
   }
 
   forLibrary(libraryId: string): StorageProvider {
-    return new FaultInjectingProvider(this.inner.forLibrary(libraryId));
+    const scoped = new FaultInjectingProvider(this.inner.forLibrary(libraryId));
+    for (const fault of this.faults) scoped.arm(fault);
+    return scoped;
   }
 
   arm(fault: FaultKind): void {

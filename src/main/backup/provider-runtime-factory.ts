@@ -42,6 +42,12 @@ export interface ProviderRuntimeFactoryDeps {
 }
 
 export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): ProviderRuntime {
+  const providerForOpenLibrary = (provider: StorageProvider): StorageProvider => {
+    const parts = deps.guardParts?.();
+    const registry = deps.libraryRegistry;
+    if (parts === null || parts === undefined || registry === undefined) return provider;
+    return provider.forLibrary(registry.resolveActive().id);
+  };
   const custodyPolicy = () => {
     const parts = deps.guardParts?.();
     const registry = deps.libraryRegistry;
@@ -81,6 +87,7 @@ export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): Provide
     pcloudClientId: () => pcloud.clientId,
     storageTimeoutMs: storageTimeout(deps.harnessEnv('OVERLOOK_PROVIDER_STORAGE_TIMEOUT_MS')),
     iCloudDriveBridge,
+    scopeProviderForOpenLibrary: providerForOpenLibrary,
     switchGuard:
       deps.guardParts === undefined ? undefined : createProviderSwitchGuard({ parts: deps.guardParts, libraryDataDir: deps.dataDir }),
     custodyPreflight: deps.custodyPreflight ?? custodyPreflight,
