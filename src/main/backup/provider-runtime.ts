@@ -544,12 +544,10 @@ export class ProviderRuntime {
   private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
     if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
     // Invokes can arrive after the first clears custody; only the fully disconnected state is idempotent.
-    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null) {
-      // `load()` also returns null for unreadable records. Remove any corrupt
-      // authorization artifact before reporting the disconnected state.
-      this.tokenStore().clear();
-      return { ok: true, reason: null };
-    }
+    // `load()` also returns null for unreadable records, so use the normal
+    // force-clear, verification, and structured-error path before succeeding.
+    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null)
+      return this.disconnectPCloud();
     const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
     if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
     if (credential !== null) {

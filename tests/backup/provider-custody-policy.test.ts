@@ -98,7 +98,7 @@ describe('provider custody-change policy (#732)', () => {
 
   test('an idempotent pCloud disconnect clears an unreadable authorization record (#927)', async () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
-    const authorizationPath = join(dataDir, 'pcloud-auth.bin');
+    const authorizationPath = join(dataDir, 'pcloud-auth', 'pcloud-auth.bin');
     const r = runtime({ dataDir: () => dataDir });
     r.tokenStore().save({
       accessToken: 'unreadable-token',
@@ -112,6 +112,18 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(r.tokenStore().load(), null);
     assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
     assert.equal(existsSync(authorizationPath), false);
+  });
+
+  test('an idempotent pCloud disconnect reports an unreadable authorization cleanup failure (#927)', async () => {
+    const r = runtime({});
+    r.tokenStore().clear = () => {
+      throw new Error('read-only credential directory');
+    };
+
+    assert.deepEqual(await r.disconnect('pcloud'), {
+      ok: false,
+      reason: 'Could not remove the pCloud authorization from this device. Check file access and try again.',
+    });
   });
 
   test('disconnect and switch fail before credential mutation when custody requires restore-first', async () => {
