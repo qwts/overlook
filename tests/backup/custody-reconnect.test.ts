@@ -21,15 +21,10 @@ const LIBRARY_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const ROOT = `/Overlook/${LIBRARY_ID}/`;
 const VERIFIED_AT = '2026-08-06T21:45:00.000Z';
 
-function world() {
-  const path = join(mkdtempSync(join(tmpdir(), 'overlook-custody-reconnect-')), 'library.db');
-  const dbKey = randomBytes(32);
-  const db = openLibraryDatabase({ path, dbKey });
-  run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-08-06T00:00:00.000Z')`);
-  const photos = new PhotosRepository(db);
-  photos.insert({
-    id: 'P1',
-    fileName: 'P1.jpg',
+function photo(id: string): PhotoInsert {
+  return {
+    id,
+    fileName: `${id}.jpg`,
     fileKind: 'jpeg',
     width: 1,
     height: 1,
@@ -48,7 +43,16 @@ function world() {
     importedAt: '2026-08-06T00:00:00.000Z',
     importSource: 'test',
     keyId: 1,
-  } satisfies PhotoInsert);
+  } satisfies PhotoInsert;
+}
+
+function world() {
+  const path = join(mkdtempSync(join(tmpdir(), 'overlook-custody-reconnect-')), 'library.db');
+  const dbKey = randomBytes(32);
+  const db = openLibraryDatabase({ path, dbKey });
+  run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-08-06T00:00:00.000Z')`);
+  const photos = new PhotosRepository(db);
+  photos.insert(photo('P1'));
   const ledger = new SyncLedger(db);
   ledger.setStatus('P1', 'syncing');
   ledger.markBackedUp('P1', '2026-08-06T00:01:00.000Z');
@@ -68,7 +72,7 @@ function world() {
     libraryId: LIBRARY_ID,
     accountIdentity: { accountId: 'account-a', accountLabel: 'Account A' },
   });
-  return { path, dbKey, db, ledger, authorities, authority, masterKey, provider };
+  return { path, dbKey, db, photos, ledger, authorities, authority, masterKey, provider };
 }
 
 async function putBootstrap(provider: MockProvider, masterKey: Buffer, libraryId = LIBRARY_ID): Promise<void> {
@@ -214,6 +218,96 @@ test('the first post-upgrade scrub proves the namespace before offering a legacy
   assert.equal(handle?.authority.lastVerifiedAt, VERIFIED_AT);
   assert.equal(handle?.authority.state, 'bound');
   assert.deepEqual(w.authorities.legacyUnboundCount(), { items: 1, bytes: 10 });
+  w.db.close();
+});
+
+test('legacy reconciliation can prove a second account without restoring the first account authority (#733)', async () => {
+  const w = world();
+  w.photos.insert(photo('P2'));
+  w.ledger.setStatus('P2', 'syncing');
+  w.ledger.markBackedUp('P2', '2026-08-06T00:03:00.000Z');
+  w.ledger.markOffloaded('P2', w.authority.id);
+  run(w.db, `UPDATE sync_ledger SET custody_authority_id = NULL WHERE photo_id = 'P2'`);
+  w.provider.setAccountIdentity({ accountId: 'account-b', accountLabel: 'Account B' });
+  await putBootstrap(w.provider, w.masterKey);
+
+  assert.deepEqual(
+    await verifyCustodyReconnect(
+      {
+        authorities: w.authorities,
+        libraryId: () => LIBRARY_ID,
+        masterKey: () => Buffer.from(w.masterKey),
+        now: () => VERIFIED_AT,
+      },
+      { provider: w.provider, identity: await w.provider.accountIdentity() },
+    ),
+    { ok: false, reason: 'wrong-account' },
+  );
+  assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
+  assert.deepEqual(w.authorities.verified('mock', 'account-b', ROOT), {
+    id: 2,
+    providerId: 'mock',
+    accountId: 'account-b',
+    accountLabel: 'Account B',
+    remoteRoot: ROOT,
+    state: 'bound',
+    createdAt: VERIFIED_AT,
+    lastVerifiedAt: VERIFIED_AT,
+  });
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: (providerId) => (providerId === w.provider.id ? w.provider : undefined),
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    masterKey: () => Buffer.from(w.masterKey),
+  });
+  const legacy = await routing.integrity.legacyAuthority();
+  assert.equal(legacy?.authority.accountId, 'account-b');
+  assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
+  await routing.close();
+  w.db.close();
+});
+
+test('closing custody routing aborts startup proof and zeros its copied master key before teardown (#733)', async () => {
+  const w = world();
+  let releaseStream: ((stream: Readable) => void) | undefined;
+  let issuedMasterKey: Buffer | undefined;
+  let streamRequestStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    streamRequestStarted = resolve;
+  });
+  w.provider.getStream = () =>
+    new Promise<Readable>((resolve) => {
+      releaseStream = resolve;
+      streamRequestStarted?.();
+    });
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: (providerId) => (providerId === w.provider.id ? w.provider : undefined),
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    masterKey: () => {
+      issuedMasterKey = Buffer.from(w.masterKey);
+      return issuedMasterKey;
+    },
+  });
+
+  await started;
+  await routing.close();
+  assert.ok(
+    issuedMasterKey?.every((byte) => byte === 0),
+    'the proof key copy is zeroed before close resolves',
+  );
+  const lateStream = Readable.from([Buffer.from('late')]);
+  releaseStream?.(lateStream);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(lateStream.destroyed, true, 'a provider stream arriving after cancellation is discarded');
   w.db.close();
 });
 

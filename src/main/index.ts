@@ -325,7 +325,7 @@ function getProtectedRuntime(): ProtectedRuntime {
   return requireParts('protected runtime').protected;
 }
 
-let backupEngine: BackupEngine | undefined;
+let backupEngine: BackupEngine | undefined, closeCustodyRouting: (() => Promise<void>) | undefined;
 let offloadService: OffloadService | undefined;
 let ephemeralOriginalService: EphemeralOriginalService | undefined;
 const activeBackupControllers = new Set<AbortController>();
@@ -472,6 +472,7 @@ function getBackupEngine(): BackupEngine {
       },
       audit,
     });
+    closeCustodyRouting = custodyRouting.close;
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
@@ -671,7 +672,6 @@ function getExportFacade(): DrainableExportFacade {
 }
 
 async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
-  const full = mode !== 'restore';
   autoBackupTrigger = undefined;
   manifestSyncTrigger = undefined;
   importRuntime?.service.close();
@@ -689,12 +689,13 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
+    closeCustodyRouting?.() ?? Promise.resolve(),
     Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
-    full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
-    full ? providerWork.idle() : Promise.resolve(),
+    mode !== 'restore' ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
+    mode !== 'restore' ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
     importRuntime?.pool.close() ?? Promise.resolve(),
-    ...(full ? [session.defaultSession.clearCache()] : []),
+    ...(mode !== 'restore' ? [session.defaultSession.clearCache()] : []),
     ...(mode === 'lock' ? [reloadContentWindowsForLock()] : []),
   ]);
   lockInteropRuntime();
@@ -717,14 +718,13 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   posterCaptureService = undefined;
   thumbService = undefined;
   fullService = undefined;
-  backupEngine = undefined;
-  offloadService = undefined;
+  [backupEngine, offloadService, closeCustodyRouting] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
   consistencyChecker = undefined;
   embeddingRuntime = undefined;
   exportFacade = undefined;
-  if (full) restoreRuntime = undefined;
+  if (mode !== 'restore') restoreRuntime = undefined;
   releaseLibraryLock?.();
   releaseLibraryLock = undefined;
 }

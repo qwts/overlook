@@ -3,7 +3,7 @@ import type { Readable } from 'node:stream';
 import { openRecoveryBootstrap } from './recovery-bootstrap.js';
 import { custodyRemoteRoot } from './custody-handle.js';
 import type { CustodyAuthorityRepository } from './custody-authority-repository.js';
-import type { ProviderAccountIdentity, StorageProvider } from './provider.js';
+import { raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
 
 const MAX_BOOTSTRAP_BYTES = 1024 * 1024;
 
@@ -17,19 +17,44 @@ export interface CustodyReconnectDeps {
   readonly custodyChanged?: (() => void) | undefined;
 }
 
-async function readBootstrap(stream: Readable): Promise<Buffer> {
+async function readBootstrap(stream: Readable, signal?: AbortSignal): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let length = 0;
-  for await (const value of stream) {
-    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
-    length += chunk.length;
-    if (length > MAX_BOOTSTRAP_BYTES) {
-      stream.destroy();
-      throw new Error('recovery bootstrap exceeds the size limit');
+  const abort = (): void => {
+    stream.destroy(signal?.reason instanceof Error ? signal.reason : new Error('reconnect proof aborted'));
+  };
+  signal?.addEventListener('abort', abort, { once: true });
+  try {
+    signal?.throwIfAborted();
+    for await (const value of stream) {
+      signal?.throwIfAborted();
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
+      length += chunk.length;
+      if (length > MAX_BOOTSTRAP_BYTES) {
+        stream.destroy();
+        throw new Error('recovery bootstrap exceeds the size limit');
+      }
+      chunks.push(chunk);
     }
-    chunks.push(chunk);
+    return Buffer.concat(chunks, length);
+  } finally {
+    signal?.removeEventListener('abort', abort);
   }
-  return Buffer.concat(chunks, length);
+}
+
+async function bootstrapStream(provider: StorageProvider, signal?: AbortSignal): Promise<Readable> {
+  const pending = provider.getStream('recovery/bootstrap.ovrb');
+  try {
+    return await raceWithAbort(pending, signal);
+  } catch (error) {
+    if (signal?.aborted === true) {
+      void pending.then(
+        (stream) => stream.destroy(),
+        () => undefined,
+      );
+    }
+    throw error;
+  }
 }
 
 function notifyCustodyChanged(deps: CustodyReconnectDeps): void {
@@ -46,8 +71,9 @@ function notifyCustodyChanged(deps: CustodyReconnectDeps): void {
  * usable backup target when this returns a custody failure. */
 export async function verifyCustodyReconnect(
   deps: CustodyReconnectDeps,
-  input: { readonly provider: StorageProvider; readonly identity: ProviderAccountIdentity },
+  input: { readonly provider: StorageProvider; readonly identity: ProviderAccountIdentity; readonly signal?: AbortSignal },
 ): Promise<CustodyReconnectResult> {
+  input.signal?.throwIfAborted();
   const candidates = deps.authorities.stageReconnectVerification(input.provider.id);
   const hasLegacy = deps.authorities.legacyUnboundCount().items > 0;
   if (candidates.length === 0 && !hasLegacy) return { ok: true };
@@ -55,12 +81,12 @@ export async function verifyCustodyReconnect(
   const libraryId = deps.libraryId();
   const remoteRoot = custodyRemoteRoot(libraryId);
   const accountMatches = candidates.filter((authority) => authority.accountId === input.identity.accountId);
-  if (candidates.length > 0 && accountMatches.length === 0) {
+  if (candidates.length > 0 && accountMatches.length === 0 && !hasLegacy) {
     notifyCustodyChanged(deps);
     return { ok: false, reason: 'wrong-account' };
   }
   const exactMatches = accountMatches.filter((authority) => authority.remoteRoot === remoteRoot);
-  if (accountMatches.length > 0 && exactMatches.length === 0) {
+  if (accountMatches.length > 0 && exactMatches.length === 0 && !hasLegacy) {
     notifyCustodyChanged(deps);
     return { ok: false, reason: 'unavailable' };
   }
@@ -68,7 +94,10 @@ export async function verifyCustodyReconnect(
   const masterKey = deps.masterKey();
   let namespaceProven: boolean;
   try {
-    const bootstrap = openRecoveryBootstrap(await readBootstrap(await input.provider.getStream('recovery/bootstrap.ovrb')), masterKey);
+    const bootstrap = openRecoveryBootstrap(
+      await readBootstrap(await bootstrapStream(input.provider, input.signal), input.signal),
+      masterKey,
+    );
     namespaceProven = bootstrap.libraryId === libraryId;
   } catch {
     namespaceProven = false;
@@ -80,7 +109,7 @@ export async function verifyCustodyReconnect(
     return { ok: false, reason: 'unavailable' };
   }
   try {
-    const confirmedIdentity = await input.provider.accountIdentity();
+    const confirmedIdentity = await raceWithAbort(input.provider.accountIdentity(input.signal), input.signal);
     if (confirmedIdentity.accountId !== input.identity.accountId) {
       notifyCustodyChanged(deps);
       return { ok: false, reason: 'wrong-account' };
@@ -105,7 +134,8 @@ export async function verifyCustodyReconnect(
   }
   deps.authorities.markVerified(authorityIds, verifiedAt);
   notifyCustodyChanged(deps);
-  return candidates.some((authority) => authority.accountId !== input.identity.accountId)
-    ? { ok: false, reason: 'wrong-account' }
-    : { ok: true };
+  if (candidates.some((authority) => authority.accountId !== input.identity.accountId)) {
+    return { ok: false, reason: 'wrong-account' };
+  }
+  return accountMatches.length > 0 && exactMatches.length === 0 ? { ok: false, reason: 'unavailable' } : { ok: true };
 }

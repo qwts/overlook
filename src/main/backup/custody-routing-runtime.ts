@@ -4,7 +4,7 @@ import type { SyncStatus } from '../../shared/library/types.js';
 import { CustodyAuthorityRepository, type CustodyAuthority } from './custody-authority-repository.js';
 import { CustodyHintCoordinator } from './custody-gate.js';
 import { CustodyHandleResolver, custodyRemoteRoot } from './custody-handle.js';
-import type { StorageProvider } from './provider.js';
+import { raceWithAbort, type StorageProvider } from './provider.js';
 import type { LibraryEntry } from '../../shared/library/registry.js';
 import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
 import { verifyCustodyReconnect } from './custody-reconnect.js';
@@ -22,9 +22,12 @@ export interface CustodyRoutingRuntimeDeps {
   readonly audit?: ((line: string) => void) | undefined;
 }
 
-async function accountIdentity(provider: StorageProvider): Promise<Awaited<ReturnType<StorageProvider['accountIdentity']>> | null> {
+async function accountIdentity(
+  provider: StorageProvider,
+  signal?: AbortSignal,
+): Promise<Awaited<ReturnType<StorageProvider['accountIdentity']>> | null> {
   try {
-    return await provider.accountIdentity();
+    return await raceWithAbort(provider.accountIdentity(signal), signal);
   } catch {
     return null;
   }
@@ -32,6 +35,9 @@ async function accountIdentity(provider: StorageProvider): Promise<Awaited<Retur
 
 class ReconnectProofCoordinator {
   private readonly proofs = new Map<string, Promise<boolean>>();
+  private readonly active = new Set<Promise<unknown>>();
+  private readonly abortController = new AbortController();
+  private closed = false;
 
   constructor(
     private readonly deps: CustodyRoutingRuntimeDeps,
@@ -40,6 +46,22 @@ class ReconnectProofCoordinator {
   ) {}
 
   async verify(provider: StorageProvider): Promise<boolean> {
+    return this.track(this.verifyTracked(provider));
+  }
+
+  async prepare(authority: CustodyAuthority): Promise<CustodyAuthority> {
+    return this.track(this.prepareTracked(authority));
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.abortController.abort(new Error('library closing'));
+    await Promise.allSettled([...this.active]);
+    this.proofs.clear();
+  }
+
+  private async verifyTracked(provider: StorageProvider): Promise<boolean> {
+    if (this.closed) return false;
     let proof = this.proofs.get(provider.id);
     if (proof === undefined) {
       proof = this.prove(provider);
@@ -54,16 +76,26 @@ class ReconnectProofCoordinator {
     }
   }
 
-  async prepare(authority: CustodyAuthority): Promise<CustodyAuthority> {
+  private async prepareTracked(authority: CustodyAuthority): Promise<CustodyAuthority> {
     const provider = this.deps.provider(authority.providerId);
     if (provider === undefined) this.authorities.stageReconnectVerification(authority.providerId);
     else await this.verify(provider);
     return this.authorities.get(authority.id) ?? authority;
   }
 
+  private async track<T>(operation: Promise<T>): Promise<T> {
+    this.active.add(operation);
+    try {
+      return await operation;
+    } finally {
+      this.active.delete(operation);
+    }
+  }
+
   private async prove(provider: StorageProvider): Promise<boolean> {
     this.authorities.stageReconnectVerification(provider.id);
-    const identity = await accountIdentity(provider);
+    const signal = this.abortController.signal;
+    const identity = await accountIdentity(provider, signal);
     if (identity === null) return false;
     const result = await verifyCustodyReconnect(
       {
@@ -73,7 +105,7 @@ class ReconnectProofCoordinator {
         now: this.deps.now,
         custodyChanged: this.custodyChanged,
       },
-      { provider, identity },
+      { provider, identity, signal },
     );
     return result.ok;
   }
@@ -126,7 +158,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     if (identity === null) return null;
     let authority = authorities.verified(deps.backupTarget.id, identity.accountId, remoteRoot());
     if (authority === undefined && authorities.legacyUnboundCount().items > 0) {
-      if (!(await reconnect.verify(deps.backupTarget))) return null;
+      await reconnect.verify(deps.backupTarget);
       authority = authorities.verified(deps.backupTarget.id, identity.accountId, remoteRoot());
     }
     if (authority === undefined) return null;
@@ -152,6 +184,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return authority.id;
     },
     custodyChanged,
+    close: () => reconnect.close(),
     integrity: {
       authorities,
       custody: resolver,
