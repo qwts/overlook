@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const MAX_PHOTO_TAGS = 100;
+
 const normalizedText = (maximum: number, label: string) =>
   z
     .string()
@@ -29,7 +31,7 @@ export const photoTagSchema = z
 
 export const photoTagsSchema = z
   .array(photoTagSchema)
-  .max(100)
+  .max(MAX_PHOTO_TAGS)
   .transform((tags) => normalizePhotoTags(tags));
 
 export function photoTagKey(tag: string): string {
@@ -44,6 +46,17 @@ export function normalizePhotoTags(tags: readonly string[]): string[] {
     if (!byKey.has(key)) byKey.set(key, tag);
   }
   return [...byKey.values()].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+}
+
+/** Imported metadata is untrusted and must never abort an otherwise valid
+ * photo import. Unsupported individual keywords are omitted deterministically. */
+export function normalizeImportedPhotoTags(tags: readonly string[]): string[] {
+  return normalizePhotoTags(
+    tags.flatMap((value) => {
+      const parsed = photoTagSchema.safeParse(value);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  ).slice(0, MAX_PHOTO_TAGS);
 }
 
 export function effectivePhotoTags(

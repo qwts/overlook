@@ -241,6 +241,7 @@ export function Shell({
   });
 
   const inspectorSelectionPosition = useDetachedInspector(state, dispatch);
+  const inspectorPhotoIds = useMemo(() => (state.selection.size === 0 ? [] : [...state.selection]), [state.selection]);
 
   useEffect(() => {
     const target = state.photos.find(({ id }) => id === state.lightboxId);
@@ -797,7 +798,7 @@ export function Shell({
             <Inspector
               providerLabel={state.providerLabel}
               photo={state.photos.find((photo) => photo.id === state.inspectorPhotoId) ?? null}
-              photoIds={state.selection.size === 0 ? [] : [...state.selection]}
+              photoIds={inspectorPhotoIds}
               selectionPosition={inspectorSelectionPosition}
               onPrevious={() => dispatch({ type: 'inspector/stepped', delta: -1 })}
               onNext={() => dispatch({ type: 'inspector/stepped', delta: 1 })}

@@ -113,6 +113,20 @@ describe('authored photo metadata (#508)', () => {
     db.close();
   });
 
+  test('enforces the effective tag cap while imported projection remains tolerant', () => {
+    const { db, photos, metadata } = openSeeded();
+    const tags = Array.from({ length: 100 }, (_, index) => `tag-${String(index).padStart(3, '0')}`);
+    photos.insert(photo('P1', { importedKeywords: tags }));
+    photos.insert(photo('P2'));
+
+    assert.throws(() => metadata.update({ photoIds: ['P1'], addTags: ['overflow'] }), /at most 100 effective tags/u);
+    assert.equal(photos.get('P1')?.tags.length, 100);
+    assert.equal(metadata.addImportedKeywords('P2', [...tags, 'overflow']), true);
+    assert.equal(photos.get('P2')?.importedKeywords.length, 100);
+    assert.equal(photos.get('P2')?.tags.length, 100);
+    db.close();
+  });
+
   test('excludes protected migration rows and preserves metadata through manifest restore', () => {
     const { db, photos, metadata } = openSeeded();
     photos.insert(

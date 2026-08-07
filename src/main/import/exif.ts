@@ -4,7 +4,7 @@ import { embeddedJpegFromRaf } from './raf-preview.js';
 import { resolveRawPreview } from './raw-preview.js';
 import { displayDimensions } from './display-dimensions.js';
 import type { FileKind } from '../../shared/library/types.js';
-import { normalizePhotoTags } from '../../shared/library/photo-metadata.js';
+import { normalizeImportedPhotoTags } from '../../shared/library/photo-metadata.js';
 
 // EXIF extraction (#85) per ADR-0006's field set, robust to weird files:
 // missing or corrupt metadata degrades to an all-null record — the import
@@ -107,7 +107,7 @@ function metadataKeywords(parsed: Readonly<Record<string, unknown>>): string[] {
     if (typeof value === 'string') return value.split(/[;,]/u);
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   });
-  return normalizePhotoTags(values.filter((value) => value.trim() !== ''));
+  return normalizeImportedPhotoTags(values.filter((value) => value.trim() !== ''));
 }
 
 export async function extractMetadata(bytes: Buffer, kind?: FileKind): Promise<ExtractedMetadata> {

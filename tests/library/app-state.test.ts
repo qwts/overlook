@@ -45,6 +45,7 @@ describe('app state reducer', () => {
     assert.equal(patched.photos[0]?.title, 'Authored');
     assert.equal(patched.photos[1], loaded.photos[1]);
     assert.deepEqual([...patched.selection], ['a']);
+    assert.equal(patched.selection, loaded.selection, 'unrelated record patches preserve the memoized Inspector selection scope');
   });
 
   test('view switches across grid, list, and moodboard (#515)', () => {

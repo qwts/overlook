@@ -20,4 +20,19 @@ describe('XMP keyword projection (#508)', () => {
     assert.deepEqual(extractXmpKeywords(Buffer.from('<subject><li>unfinished')), []);
     assert.deepEqual(extractXmpKeywords(Buffer.alloc(5 * 1024 * 1024 + 1)), []);
   });
+
+  test('drops unsupported imported values individually instead of aborting projection', () => {
+    const oversized = 'x'.repeat(65);
+    const source = Buffer.from(`
+      <dc:subject>
+        <rdf:Bag>
+          <rdf:li>Valid</rdf:li>
+          <rdf:li>Smith, John</rdf:li>
+          <rdf:li>${oversized}</rdf:li>
+          <rdf:li>bad${String.fromCharCode(1)}control</rdf:li>
+          <rdf:li><script>markup</script></rdf:li>
+        </rdf:Bag>
+      </dc:subject>`);
+    assert.deepEqual(extractXmpKeywords(source), ['Valid']);
+  });
 });

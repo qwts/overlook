@@ -3,6 +3,8 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import { markDirty } from '../backup/sync-ledger.js';
 import {
   effectivePhotoTags,
+  MAX_PHOTO_TAGS,
+  normalizeImportedPhotoTags,
   normalizePhotoTags,
   photoMetadataUpdateSchema,
   photoTagKey,
@@ -55,6 +57,14 @@ function sameTags(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => photoTagKey(value) === photoTagKey(right[index] ?? ''));
 }
 
+function fitImportedKeywords(keywords: readonly string[], userTags: readonly string[], suppressedKeywords: readonly string[]): string[] {
+  const fitted: string[] = [];
+  for (const keyword of normalizeImportedPhotoTags(keywords)) {
+    if (effectivePhotoTags([...fitted, keyword], userTags, suppressedKeywords).length <= MAX_PHOTO_TAGS) fitted.push(keyword);
+  }
+  return fitted;
+}
+
 export interface PhotoMetadataMutationResult {
   readonly updated: number;
   readonly unchanged: number;
@@ -102,6 +112,7 @@ export class PhotoMetadataRepository {
           continue;
         }
         const effective = effectivePhotoTags(current.imported, user, suppressed);
+        if (effective.length > MAX_PHOTO_TAGS) throw new Error(`a photo can have at most ${String(MAX_PHOTO_TAGS)} effective tags`);
         runNamed(
           this.db,
           `UPDATE photos
@@ -157,7 +168,7 @@ export class PhotoMetadataRepository {
     const row = this.row(photoId);
     if (row === undefined) return false;
     const current = rowState(row);
-    const imported = normalizePhotoTags([...current.imported, ...keywords]);
+    const imported = fitImportedKeywords([...current.imported, ...keywords], current.user, current.suppressed);
     if (sameTags(imported, current.imported)) return false;
     const effective = effectivePhotoTags(imported, current.user, current.suppressed);
     this.db.transaction(() => {

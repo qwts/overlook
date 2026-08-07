@@ -1,4 +1,4 @@
-import { normalizePhotoTags } from '../../shared/library/photo-metadata.js';
+import { normalizeImportedPhotoTags } from '../../shared/library/photo-metadata.js';
 
 const MAX_XMP_BYTES = 5 * 1024 * 1024;
 
@@ -11,6 +11,11 @@ function decodeXml(value: string): string {
     .replace(/&amp;/gu, '&');
 }
 
+function plainXmlText(value: string): string | null {
+  const trimmed = value.trim();
+  return /[<>]/u.test(trimmed) ? null : decodeXml(trimmed);
+}
+
 /** Bounded, non-validating XMP keyword projection. The original sidecar stays
  * authoritative and byte-identical in encrypted custody; malformed XML
  * simply contributes no searchable keywords. */
@@ -21,12 +26,13 @@ export function extractXmpKeywords(bytes: Buffer): string[] {
     (match) => match[1] ?? '',
   );
   const listItems = subjectBlocks.flatMap((block) =>
-    [...block.matchAll(/<(?:[\w.-]+:)?li\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?li>/giu)].map((match) =>
-      decodeXml((match[1] ?? '').replace(/<[^>]+>/gu, '').trim()),
-    ),
+    [...block.matchAll(/<(?:[\w.-]+:)?li\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?li>/giu)].flatMap((match) => {
+      const text = plainXmlText(match[1] ?? '');
+      return text === null ? [] : [text];
+    }),
   );
-  const flatKeywords = [...xml.matchAll(/<(?:[\w.-]+:)?Keywords\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?Keywords>/giu)].flatMap((match) =>
-    decodeXml((match[1] ?? '').replace(/<[^>]+>/gu, '')).split(/[;,]/u),
+  const flatKeywords = [...xml.matchAll(/<(?:[\w.-]+:)?Keywords\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?Keywords>/giu)].flatMap(
+    (match) => plainXmlText(match[1] ?? '')?.split(/[;,]/u) ?? [],
   );
-  return normalizePhotoTags([...listItems, ...flatKeywords].filter((value) => value.trim() !== ''));
+  return normalizeImportedPhotoTags([...listItems, ...flatKeywords].filter((value) => value.trim() !== ''));
 }
