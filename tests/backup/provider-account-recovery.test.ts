@@ -109,7 +109,7 @@ test('an account change during reconnect refreshes the later disconnect prefligh
   assert.equal(providerRuntime.tokenStore().load()?.accountId, '73002');
   assert.equal((await providerRuntime.disconnect('pcloud')).code, 'custody-restore-required');
   assert.equal(preflightAccount, '73002');
-  assert.equal(providerId, 'pcloud', 'the protected replacement credential remains selected');
+  assert.equal(providerId, null, 'the replacement account must pass the switch guard on retry');
 });
 
 describe('provider account authentication recovery (#730)', () => {

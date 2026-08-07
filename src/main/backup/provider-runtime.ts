@@ -221,6 +221,7 @@ export class ProviderRuntime {
   }
 
   refreshAccountIdentity(providerId: string, identity: ProviderAccountIdentity): boolean {
+    const accountChanged = this.persistedAccountIdentity(providerId)?.accountId !== identity.accountId;
     try {
       if (providerId === 'pcloud') {
         const record = this.tokenStore().load();
@@ -234,9 +235,9 @@ export class ProviderRuntime {
         this.iCloudAuthorityStore().save(identity);
         this.iCloudDriveProviderInstance?.resetAccountAuthority(identity.accountId);
       }
+      if (accountChanged && this.options.providerId() === providerId) this.options.setProviderId(null);
       return true;
     } catch {
-      if (this.options.providerId() === providerId) this.options.setProviderId(null);
       return false;
     }
   }
@@ -704,9 +705,7 @@ export class ProviderRuntime {
    * folder. */
   activeId(): string | null {
     const raw = this.options.providerId();
-    if (raw === null) {
-      return null;
-    }
+    if (raw === null) return null;
     if (raw === 'mock' && !this.mockEnabled()) {
       return null;
     }
