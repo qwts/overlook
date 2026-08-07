@@ -21,7 +21,7 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
-import type { CustodyAuthority } from '../../src/main/backup/custody-authority-repository.js';
+import { CustodyAuthorityRepository, type CustodyAuthority } from '../../src/main/backup/custody-authority-repository.js';
 import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
@@ -31,6 +31,49 @@ const HASH_C = 'cc'.repeat(32);
 
 function remotePath(hash: string): string {
   return `blobs/${hash.slice(0, 2)}/${hash}`;
+}
+
+async function insertLegacyItem(input: {
+  readonly repo: PhotosRepository;
+  readonly ledger: SyncLedger;
+  readonly provider: MockProvider;
+  readonly key: EnvelopeKey;
+  readonly id: string;
+  readonly plaintext: Buffer;
+  readonly remote: boolean;
+  readonly integrityError?: boolean;
+}): Promise<void> {
+  const contentHash = createHash('sha256').update(input.plaintext).digest('hex');
+  input.repo.insert({
+    id: input.id,
+    fileName: `${input.id}.jpg`,
+    fileKind: 'jpeg',
+    width: 1,
+    height: 1,
+    bytes: input.plaintext.length,
+    contentHash,
+    camera: null,
+    lens: null,
+    iso: null,
+    aperture: null,
+    shutter: null,
+    focalLength: null,
+    takenAt: null,
+    gpsLat: null,
+    gpsLon: null,
+    place: null,
+    importedAt: '2026-08-06T00:00:00.000Z',
+    importSource: 'test',
+    keyId: 1,
+  } satisfies PhotoInsert);
+  input.ledger.setStatus(input.id, 'syncing');
+  input.ledger.markBackedUp(input.id, '2026-08-06T00:01:00.000Z');
+  input.ledger.setStatus(input.id, 'offloaded');
+  if (input.integrityError === true) input.ledger.repairStatus(input.id, 'error');
+  if (input.remote) {
+    const ciphertext = await buffer(Readable.from([input.plaintext]).pipe(createEncryptStream(input.key, { photoId: input.id })));
+    await input.provider.put(remotePath(contentHash), Readable.from([ciphertext]));
+  }
 }
 
 test('bounded scrub repairs local-backed remote damage and resumes from its persisted cursor (#302)', async () => {
@@ -239,11 +282,11 @@ test('runtime composition persists progress and marks missing remote-only rows (
   const runtime = createBackupIntegrityRuntime({
     db,
     provider,
-    authorities: { offloadedAuthorities: () => [authority] },
+    authorities: { offloadedAuthorities: () => [authority], legacyUnboundCount: () => ({ items: 0, bytes: 0 }) },
     custody: { resolveAuthority: () => Promise.resolve({ authority, provider }) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope?.syncState === 'offloaded' ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
     },
     blobs: {
       hasOriginal: () => false,
@@ -260,6 +303,82 @@ test('runtime composition persists progress and marks missing remote-only rows (
   assert.deepEqual(marked, ['P1']);
   assert.notEqual((await new BackupIntegrityCursorStore(db, provider.id).load()).completedAt, null);
   assert.notEqual((await new BackupIntegrityCursorStore(db, 'custody-authority:7').load()).completedAt, null);
+  db.close();
+});
+
+test('legacy reconciliation binds only individually authenticated remote objects (#733)', async () => {
+  const db = openLibraryDatabase({
+    path: join(mkdtempSync(join(tmpdir(), 'overlook-integrity-legacy-')), 'library.db'),
+    dbKey: randomBytes(32),
+  });
+  run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-08-06T00:00:00.000Z')`);
+  const repo = new PhotosRepository(db);
+  const ledger = new SyncLedger(db);
+  const key: EnvelopeKey = { id: 1, key: randomBytes(32) };
+  const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-legacy-remote-')) });
+  const content = new Map([
+    ['P1', Buffer.from('verified legacy original')],
+    ['P2', Buffer.from('missing legacy original')],
+    ['P3', Buffer.from('recoverable legacy integrity error')],
+  ]);
+  for (const [id, plaintext] of content) {
+    await insertLegacyItem({ repo, ledger, provider, key, id, plaintext, remote: id !== 'P2', integrityError: id === 'P3' });
+  }
+  const authorities = new CustodyAuthorityRepository(db);
+  const authority = authorities.create({
+    providerId: provider.id,
+    accountId: 'mock-account',
+    accountLabel: 'Mock account',
+    remoteRoot: '/Overlook/mock-library/',
+    createdAt: '2026-08-06T00:02:00.000Z',
+    lastVerifiedAt: '2026-08-06T00:02:00.000Z',
+  });
+  await insertLegacyItem({
+    repo,
+    ledger,
+    provider,
+    key,
+    id: 'P4',
+    plaintext: Buffer.from('recoverable bound integrity error'),
+    remote: true,
+  });
+  ledger.markOffloaded('P4', authority.id);
+  ledger.repairStatus('P4', 'error');
+  let hintsRefreshed = 0;
+  const runtime = createBackupIntegrityRuntime({
+    db,
+    provider,
+    authorities,
+    custody: { resolveAuthority: (candidate) => Promise.resolve({ authority: candidate, provider }) },
+    legacyAuthority: () => Promise.resolve({ authority, provider }),
+    bindLegacyPhoto: (photoId, authorityId) => authorities.bindLegacyPhoto(photoId, authorityId),
+    custodyChanged: () => {
+      hintsRefreshed += 1;
+    },
+    repo,
+    blobs: {
+      hasOriginal: () => false,
+      getEncryptedStream: () => {
+        throw new Error('legacy offloaded rows have no local envelope');
+      },
+    },
+    resolveKey: (keyId) => (keyId === key.id ? key.key : undefined),
+    markVerified: (photoId) => ledger.healIntegrityError(photoId),
+    markUnrecoverable: (photoId) => ledger.repairStatus(photoId, 'error'),
+    audit: () => undefined,
+  });
+
+  assert.deepEqual(await runtime.scrub(), { checked: 4, repaired: 0, unrecoverable: 1, cycleComplete: true });
+  assert.equal(ledger.status('P1'), 'offloaded');
+  assert.equal(authorities.forPhoto('P1')?.id, authority.id, 'verified row earns the proven authority');
+  assert.equal(ledger.status('P2'), 'error');
+  assert.equal(authorities.forPhoto('P2'), undefined, 'missing object stays unbound');
+  assert.equal(ledger.status('P3'), 'offloaded', 'a valid legacy integrity error heals atomically with its binding');
+  assert.equal(authorities.forPhoto('P3')?.id, authority.id);
+  assert.equal(ledger.status('P4'), 'offloaded', 'a valid bound integrity error heals through its custody authority');
+  assert.equal(authorities.forPhoto('P4')?.id, authority.id);
+  assert.equal(authorities.legacyUnboundCount().items, 1, 'unbound integrity error remains custody risk');
+  assert.equal(hintsRefreshed, 1);
   db.close();
 });
 
@@ -289,11 +408,11 @@ test('a custody identity failure neither reads the backup target nor marks the b
   const runtime = createBackupIntegrityRuntime({
     db,
     provider,
-    authorities: { offloadedAuthorities: () => [authority] },
+    authorities: { offloadedAuthorities: () => [authority], legacyUnboundCount: () => ({ items: 0, bytes: 0 }) },
     custody: { resolveAuthority: () => Promise.reject(new CustodyResolutionError('custody-wrong-account')) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope?.syncState === 'offloaded' ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
     },
     blobs: {
       hasOriginal: () => false,

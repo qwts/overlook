@@ -1,12 +1,13 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import type { SyncStatus } from '../../shared/library/types.js';
-import { CustodyAuthorityRepository } from './custody-authority-repository.js';
+import { CustodyAuthorityRepository, type CustodyAuthority } from './custody-authority-repository.js';
 import { CustodyHintCoordinator } from './custody-gate.js';
 import { CustodyHandleResolver, custodyRemoteRoot } from './custody-handle.js';
-import type { StorageProvider } from './provider.js';
+import { raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
 import type { LibraryEntry } from '../../shared/library/registry.js';
 import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
+import { verifyCustodyReconnect } from './custody-reconnect.js';
 
 export interface CustodyRoutingRuntimeDeps {
   readonly db: BetterSqlite3.Database;
@@ -16,8 +17,136 @@ export interface CustodyRoutingRuntimeDeps {
   readonly backupTargetConnected: () => boolean;
   readonly status: (photoId: string) => SyncStatus | undefined;
   readonly now: () => string;
+  readonly masterKey: () => Buffer;
+  readonly persistAccountIdentity?: ((providerId: string, identity: ProviderAccountIdentity) => boolean) | undefined;
   readonly writeCustodyHints?: ((hints: NonNullable<LibraryEntry['custodyHints']>) => void) | undefined;
   readonly audit?: ((line: string) => void) | undefined;
+}
+
+async function accountIdentity(
+  provider: StorageProvider,
+  signal?: AbortSignal,
+): Promise<Awaited<ReturnType<StorageProvider['accountIdentity']>> | null> {
+  try {
+    return await raceWithAbort(provider.accountIdentity(signal), signal);
+  } catch {
+    return null;
+  }
+}
+
+class ReconnectProofCoordinator {
+  private readonly proofs = new Map<string, Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>>>();
+  private readonly active = new Set<Promise<unknown>>();
+  private abortController = new AbortController();
+  private pauseDepth = 0;
+  private closed = false;
+
+  constructor(
+    private readonly deps: CustodyRoutingRuntimeDeps,
+    private readonly authorities: CustodyAuthorityRepository,
+    private readonly custodyChanged: () => void,
+  ) {}
+
+  async verify(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
+    return this.track(this.verifyTracked(provider));
+  }
+
+  async prepare(authority: CustodyAuthority): Promise<{
+    readonly authority: CustodyAuthority;
+    readonly reconnectFailure?: 'wrong-account' | 'unavailable';
+  }> {
+    return this.track(this.prepareTracked(authority));
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.abortController.abort(new Error('library closing'));
+    await Promise.allSettled([...this.active]);
+    this.proofs.clear();
+  }
+
+  async pause(): Promise<() => void> {
+    this.pauseDepth += 1;
+    if (this.pauseDepth === 1) this.abortController.abort(new Error('provider authorization changing'));
+    await Promise.allSettled([...this.active]);
+    this.proofs.clear();
+    let resumed = false;
+    return () => {
+      if (resumed) return;
+      resumed = true;
+      this.pauseDepth -= 1;
+      if (this.pauseDepth === 0 && !this.closed) this.abortController = new AbortController();
+    };
+  }
+
+  private async verifyTracked(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
+    if (this.closed || this.pauseDepth > 0) return { ok: false, reason: 'unavailable' };
+    const providerId = provider.id;
+    let proof = this.proofs.get(providerId);
+    if (proof === undefined) {
+      proof = this.prove(provider);
+      this.proofs.set(providerId, proof);
+    }
+    try {
+      return await proof;
+    } catch {
+      return { ok: false, reason: 'unavailable' };
+    } finally {
+      if (this.proofs.get(providerId) === proof) this.proofs.delete(providerId);
+    }
+  }
+
+  private async prepareTracked(authority: CustodyAuthority): Promise<{
+    readonly authority: CustodyAuthority;
+    readonly reconnectFailure?: 'wrong-account' | 'unavailable';
+  }> {
+    const provider = this.deps.provider(authority.providerId);
+    let reconnectFailure: 'wrong-account' | 'unavailable' | undefined;
+    if (provider === undefined) this.authorities.stageReconnectVerification(authority.providerId);
+    else {
+      const result = await this.verify(provider);
+      if (!result.ok) reconnectFailure = result.reason;
+    }
+    return {
+      authority: this.authorities.get(authority.id) ?? authority,
+      ...(reconnectFailure === undefined ? {} : { reconnectFailure }),
+    };
+  }
+
+  private async track<T>(operation: Promise<T>): Promise<T> {
+    this.active.add(operation);
+    try {
+      return await operation;
+    } finally {
+      this.active.delete(operation);
+    }
+  }
+
+  private async prove(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
+    this.authorities.stageReconnectVerification(provider.id);
+    const signal = this.abortController.signal;
+    const identity = await accountIdentity(provider, signal);
+    if (identity === null) return { ok: false, reason: 'unavailable' };
+    const result = await verifyCustodyReconnect(
+      {
+        authorities: this.authorities,
+        libraryId: this.deps.libraryId,
+        masterKey: this.deps.masterKey,
+        now: this.deps.now,
+        custodyChanged: this.custodyChanged,
+      },
+      { provider, identity, signal },
+    );
+    if (
+      !result.ok &&
+      result.reason === 'wrong-account' &&
+      result.replacementIdentity !== undefined &&
+      this.deps.persistAccountIdentity?.(provider.id, result.replacementIdentity) !== true
+    ) {
+      return { ok: false, reason: 'unavailable' };
+    }
+    return result;
+  }
 }
 
 /** Open-time migration/recount: legacy rows must reach the registry even if
@@ -48,11 +177,35 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
   };
   custodyChanged();
   const remoteRoot = (): string => custodyRemoteRoot(deps.libraryId());
+  const reconnect = new ReconnectProofCoordinator(deps, authorities, custodyChanged);
+  for (const { authority } of authorities.soleCustodyCounts()) {
+    void reconnect.prepare(authority).catch(() => undefined);
+  }
+  if (authorities.legacyUnboundCount().items > 0 && deps.backupTargetConnected()) {
+    void reconnect.verify(deps.backupTarget).catch(() => false);
+  }
   const resolver = new CustodyHandleResolver({
     authorityForPhoto: (photoId) => authorities.forPhoto(photoId),
     provider: deps.provider,
     remoteRoot,
+    prepareAuthority: (authority) => reconnect.prepare(authority),
   });
+  const legacyAuthority = async () => {
+    if (!deps.backupTargetConnected()) return null;
+    const identity = await accountIdentity(deps.backupTarget);
+    if (identity === null) return null;
+    let authority = authorities.verified(deps.backupTarget.id, identity.accountId, remoteRoot());
+    if (authority === undefined && authorities.legacyUnboundCount().items > 0) {
+      await reconnect.verify(deps.backupTarget);
+      authority = authorities.verified(deps.backupTarget.id, identity.accountId, remoteRoot());
+    }
+    if (authority === undefined) return null;
+    try {
+      return await resolver.resolveAuthority(authority);
+    } catch {
+      return null;
+    }
+  };
   return {
     authorities,
     resolver,
@@ -69,6 +222,15 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return authority.id;
     },
     custodyChanged,
+    close: () => reconnect.close(),
+    pauseReconnectProofs: () => reconnect.pause(),
+    integrity: {
+      authorities,
+      custody: resolver,
+      legacyAuthority,
+      bindLegacyPhoto: (photoId: string, authorityId: number) => authorities.bindLegacyPhoto(photoId, authorityId),
+      custodyChanged,
+    },
     remoteProvider: async (photoId: string): Promise<StorageProvider> => {
       const authority = authorities.forPhoto(photoId);
       if (authority !== undefined) return (await resolver.resolveAuthority(authority)).provider;

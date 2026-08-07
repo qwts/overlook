@@ -20,6 +20,12 @@ export interface CustodyHandleDependencies {
   readonly authorityForPhoto: (photoId: string) => CustodyAuthority | undefined;
   readonly provider: (providerId: string) => StorageProvider | undefined;
   readonly remoteRoot: () => string;
+  readonly prepareAuthority?:
+    | ((authority: CustodyAuthority) => Promise<{
+        readonly authority: CustodyAuthority;
+        readonly reconnectFailure?: 'wrong-account' | 'unavailable';
+      }>)
+    | undefined;
 }
 
 /** The canonical namespace represented by a library-scoped provider instance. */
@@ -39,8 +45,17 @@ export class CustodyHandleResolver {
   }
 
   async resolveAuthority(authority: CustodyAuthority): Promise<CustodyHandle> {
-    if (authority.state === 'provider-required') throw new CustodyResolutionError('custody-disconnected');
-
+    let reconnectFailure: 'wrong-account' | 'unavailable' | undefined;
+    if (this.deps.prepareAuthority !== undefined) {
+      try {
+        const prepared = await this.deps.prepareAuthority(authority);
+        authority = prepared.authority;
+        reconnectFailure = prepared.reconnectFailure;
+      } catch (error) {
+        if (error instanceof CustodyResolutionError) throw error;
+        throw new CustodyResolutionError('custody-unavailable');
+      }
+    }
     const provider = this.deps.provider(authority.providerId);
     if (provider === undefined) throw new CustodyResolutionError('custody-disconnected');
 
@@ -60,6 +75,9 @@ export class CustodyHandleResolver {
       throw new CustodyResolutionError('custody-unavailable');
     }
     if (accountId !== authority.accountId) throw new CustodyResolutionError('custody-wrong-account');
+    if (authority.state === 'provider-required') {
+      throw new CustodyResolutionError(reconnectFailure === 'unavailable' ? 'custody-unavailable' : 'custody-disconnected');
+    }
     if (this.deps.remoteRoot() !== authority.remoteRoot) throw new CustodyResolutionError('custody-unavailable');
 
     return { authority, provider };

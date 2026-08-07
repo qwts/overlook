@@ -5,7 +5,7 @@ import { createManifestDebtStore } from './manifest-debt.js';
 import { guardProviderSwitch } from './provider-switch-guard.js';
 import type { ProviderRuntimeOptions } from './provider-runtime.js';
 import { SyncLedger } from './sync-ledger.js';
-import { remoteClaims } from '../db/backup-claims.js';
+import { providerSwitchClaims } from '../db/backup-claims.js';
 import type { ProtectedRuntime } from '../library/protected-runtime.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
@@ -42,7 +42,7 @@ export function createProviderSwitchGuard(deps: ProviderSwitchBindingDeps): NonN
     const audit = createBackupAuditLogger(path.join(deps.libraryDataDir(), 'backup-audit.log'));
     return guardProviderSwitch({
       target,
-      ordinaryClaims: () => remoteClaims(parts.db),
+      ordinaryClaims: () => providerSwitchClaims(parts.db),
       protectedClaims: protectedGuard.claims,
       hasLocalOriginal: (hash) => parts.blobStore.hasOriginal(hash),
       hasLocalProtected: protectedGuard.hasLocal,

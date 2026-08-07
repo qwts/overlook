@@ -14,6 +14,9 @@ import type { CustodyCredential, CustodyPreflight, CustodyRequirement } from '..
 import { createCustodyPolicyRuntime } from './custody-policy-runtime.js';
 import { custodyHintPreflight } from './custody-gate.js';
 import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
+import type { CustodyReconnectResult } from './custody-reconnect.js';
+import type { ProviderAccountIdentity, StorageProvider } from './provider.js';
+import { refreshCustodyHints } from './custody-routing-runtime.js';
 
 // ProviderRuntime wiring (#256), extracted from the composition root.
 // Provider credentials are profile-level (they survive library replacement
@@ -33,9 +36,23 @@ export interface ProviderRuntimeFactoryDeps {
   readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
+  readonly pauseCustodyReconnectProofs?: (() => Promise<() => void>) | undefined;
+  readonly verifyCustodyReconnect?:
+    | ((input: {
+        readonly provider: StorageProvider;
+        readonly identity: ProviderAccountIdentity;
+        readonly signal?: AbortSignal;
+      }) => Promise<CustodyReconnectResult>)
+    | undefined;
 }
 
 export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): ProviderRuntime {
+  const providerForOpenLibrary = (provider: StorageProvider): StorageProvider => {
+    const parts = deps.guardParts?.();
+    const registry = deps.libraryRegistry;
+    if (parts === null || parts === undefined || registry === undefined) return provider;
+    return provider.forLibrary(registry.resolveActive().id);
+  };
   const custodyPolicy = () => {
     const parts = deps.guardParts?.();
     const registry = deps.libraryRegistry;
@@ -44,6 +61,9 @@ export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): Provide
       db: parts.db,
       activeLibrary: () => registry.resolveActive(),
       libraries: () => registry.getRegistry().list(),
+      libraryId: () => registry.resolveActive().id,
+      masterKey: () => parts.keyStore.masterKeyBytes(),
+      custodyChanged: () => refreshCustodyHints(parts.db, registry),
     });
   };
   const custodyPreflight = (credential: CustodyCredential): CustodyPreflight => {
@@ -72,12 +92,20 @@ export function createProviderRuntime(deps: ProviderRuntimeFactoryDeps): Provide
     pcloudClientId: () => pcloud.clientId,
     storageTimeoutMs: storageTimeout(deps.harnessEnv('OVERLOOK_PROVIDER_STORAGE_TIMEOUT_MS')),
     iCloudDriveBridge,
+    scopeProviderForOpenLibrary: providerForOpenLibrary,
     switchGuard:
       deps.guardParts === undefined ? undefined : createProviderSwitchGuard({ parts: deps.guardParts, libraryDataDir: deps.dataDir }),
     custodyPreflight: deps.custodyPreflight ?? custodyPreflight,
     markProviderRequired: deps.markProviderRequired ?? ((credential) => custodyPolicy()?.markProviderRequired(credential)),
     deleteUnreferencedAuthorities: deps.deleteUnreferencedAuthorities ?? ((credential) => custodyPolicy()?.deleteUnreferenced(credential)),
     providerRequirements: deps.providerRequirements ?? (() => custodyPolicy()?.requirements() ?? []),
+    pauseCustodyReconnectProofs: deps.pauseCustodyReconnectProofs,
+    verifyCustodyReconnect:
+      deps.verifyCustodyReconnect ??
+      (async (input) => {
+        const policy = custodyPolicy();
+        return policy === null ? { ok: true } : policy.verifyReconnect(input);
+      }),
   });
 }
 

@@ -87,6 +87,7 @@ describe('custody authority provenance (#729)', () => {
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }]);
 
     ledger.repairStatus('A', 'error');
+    assert.deepEqual(authorities.offloadedAuthorities(), [authority], 'clean bound errors remain in custody integrity recovery');
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }], 'remote-loss truth keeps the source binding');
     assert.deepEqual(authorities.markProviderRequired('pcloud', 'other'), []);
     assert.deepEqual(authorities.markProviderRequired('pcloud', '42'), [authority.id]);

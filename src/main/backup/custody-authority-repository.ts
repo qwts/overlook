@@ -167,8 +167,8 @@ export class CustodyAuthorityRepository {
     ).map((row) => ({ authority: fromRow(row), items: row.items, bytes: row.bytes }));
   }
 
-  /** Authorities with offloaded rows, used to partition integrity work and
-   * its resume cursor by durable source rather than current selection. */
+  /** Authorities with offloaded or clean-error rows, used to partition
+   * integrity recovery by durable source rather than current selection. */
   offloadedAuthorities(): readonly CustodyAuthority[] {
     return queryAll<{
       id: number;
@@ -186,7 +186,7 @@ export class CustodyAuthorityRepository {
               a.created_at AS createdAt, a.last_verified_at AS lastVerifiedAt
          FROM custody_authorities a
          JOIN sync_ledger l ON l.custody_authority_id = a.id
-        WHERE l.status = 'offloaded'
+        WHERE l.status = 'offloaded' OR (l.status = 'error' AND l.dirty = 0)
         ORDER BY a.id`,
     ).map(fromRow);
   }
@@ -199,9 +199,76 @@ export class CustodyAuthorityRepository {
         this.db,
         `SELECT count(*) AS items, coalesce(sum(p.bytes), 0) AS bytes
            FROM sync_ledger l JOIN photos p ON p.id = l.photo_id
-          WHERE l.status = 'offloaded' AND l.custody_authority_id IS NULL`,
+          WHERE l.custody_authority_id IS NULL
+            AND (l.status = 'offloaded' OR (l.status = 'error' AND l.dirty = 0))`,
       ) ?? { items: 0, bytes: 0 }
     );
+  }
+
+  /** Reconnect starts by closing the bound-but-disconnected race: every
+   * dependent authority for this provider becomes unavailable until the
+   * exact account and namespace have been proven again. */
+  stageReconnectVerification(providerId: string): readonly CustodyAuthority[] {
+    const candidates = this.soleCustodyCounts()
+      .map(({ authority }) => authority)
+      .filter((authority) => authority.providerId === providerId);
+    if (candidates.length === 0) return [];
+    run(
+      this.db,
+      `UPDATE custody_authorities
+          SET state = 'provider-required'
+        WHERE provider_id = ?
+          AND id IN (
+            SELECT custody_authority_id FROM sync_ledger
+             WHERE custody_authority_id IS NOT NULL AND status IN ('offloaded', 'error')
+          )`,
+      providerId,
+    );
+    return candidates.map((authority) => ({ ...authority, state: 'provider-required' }));
+  }
+
+  /** Completes only the authorities proven by this verification attempt.
+   * Ledger rows never change state during reconnect. */
+  markVerified(authorityIds: readonly number[], verifiedAt: string): void {
+    this.db.transaction(() => {
+      for (const id of authorityIds) {
+        run(
+          this.db,
+          `UPDATE custody_authorities
+              SET state = 'bound', last_verified_at = ?
+            WHERE id = ?`,
+          verifiedAt,
+          id,
+        );
+      }
+    })();
+  }
+
+  verified(providerId: string, accountId: string, remoteRoot: string): CustodyAuthority | undefined {
+    const authority = this.find(providerId, accountId, remoteRoot);
+    return authority?.state === 'bound' && authority.lastVerifiedAt !== null ? authority : undefined;
+  }
+
+  /** A legacy row earns provenance only after its own remote object proves
+   * out. The status predicate prevents a stale scrub item from rebinding a
+   * row that another operation already restored or changed. */
+  bindLegacyPhoto(photoId: string, custodyAuthorityId: number): boolean {
+    if (this.forPhoto(photoId) !== undefined) return false;
+    run(
+      this.db,
+      `UPDATE sync_ledger
+          SET custody_authority_id = ?, status = 'offloaded'
+        WHERE photo_id = ? AND custody_authority_id IS NULL
+          AND (status = 'offloaded' OR (status = 'error' AND dirty = 0))
+          AND EXISTS (
+            SELECT 1 FROM custody_authorities
+             WHERE id = ? AND state = 'bound' AND last_verified_at IS NOT NULL
+          )`,
+      custodyAuthorityId,
+      photoId,
+      custodyAuthorityId,
+    );
+    return this.forPhoto(photoId)?.id === custodyAuthorityId;
   }
 
   /** Emergency authorization removal preserves every binding field and row;

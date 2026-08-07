@@ -4,11 +4,17 @@ import type { CustodyCredential, CustodyPreflight, CustodyRequirement } from '..
 import type { LibraryEntry } from '../../shared/library/registry.js';
 import { CustodyAuthorityRepository } from './custody-authority-repository.js';
 import { CustodyGate } from './custody-gate.js';
+import { verifyCustodyReconnect, type CustodyReconnectResult } from './custody-reconnect.js';
+import type { ProviderAccountIdentity, StorageProvider } from './provider.js';
 
 export interface CustodyPolicyRuntimeOptions {
   readonly db: BetterSqlite3.Database;
   readonly activeLibrary: () => Pick<LibraryEntry, 'id' | 'name'>;
   readonly libraries: () => readonly LibraryEntry[];
+  readonly libraryId: () => string;
+  readonly masterKey: () => Buffer;
+  readonly custodyChanged?: (() => void) | undefined;
+  readonly now?: (() => string) | undefined;
 }
 
 export interface CustodyPolicyRuntime {
@@ -16,6 +22,11 @@ export interface CustodyPolicyRuntime {
   readonly markProviderRequired: (credential: CustodyCredential) => () => void;
   readonly deleteUnreferenced: (credential: CustodyCredential) => void;
   readonly requirements: () => readonly CustodyRequirement[];
+  readonly verifyReconnect: (input: {
+    readonly provider: StorageProvider;
+    readonly identity: ProviderAccountIdentity;
+    readonly signal?: AbortSignal;
+  }) => Promise<CustodyReconnectResult>;
 }
 
 export function createCustodyPolicyRuntime(options: CustodyPolicyRuntimeOptions): CustodyPolicyRuntime {
@@ -38,5 +49,16 @@ export function createCustodyPolicyRuntime(options: CustodyPolicyRuntimeOptions)
         items,
         bytes,
       })),
+    verifyReconnect: (input) =>
+      verifyCustodyReconnect(
+        {
+          authorities,
+          libraryId: options.libraryId,
+          masterKey: options.masterKey,
+          now: options.now ?? (() => new Date().toISOString()),
+          custodyChanged: options.custodyChanged,
+        },
+        input,
+      ),
   };
 }

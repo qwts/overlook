@@ -325,9 +325,8 @@ function getProtectedRuntime(): ProtectedRuntime {
   return requireParts('protected runtime').protected;
 }
 
-let backupEngine: BackupEngine | undefined;
-let offloadService: OffloadService | undefined;
-let ephemeralOriginalService: EphemeralOriginalService | undefined;
+let backupEngine: BackupEngine | undefined, custodyRoutingLifecycle: ReturnType<typeof createCustodyRoutingRuntime> | undefined;
+let offloadService: OffloadService | undefined, ephemeralOriginalService: EphemeralOriginalService | undefined;
 const activeBackupControllers = new Set<AbortController>();
 const activeBackupRuns = new Set<Promise<BackupRunResult>>();
 let providerRuntime: ProviderRuntime | undefined;
@@ -365,6 +364,7 @@ function getProviderRuntime(): ProviderRuntime {
     // bootstrap an empty library into a fresh onboarding-restore profile.
     guardParts: () => libraryParts ?? null,
     libraryRegistry: registryRuntime,
+    pauseCustodyReconnectProofs: () => custodyRoutingLifecycle?.pauseReconnectProofs() ?? Promise.resolve(() => undefined),
   });
   return providerRuntime;
 }
@@ -466,22 +466,26 @@ function getBackupEngine(): BackupEngine {
       backupTargetConnected: () => getProviderRuntime().activeId() !== null,
       status: (photoId) => ledger.status(photoId),
       now: () => new Date().toISOString(),
+      masterKey: () => parts.keyStore.masterKeyBytes(),
+      persistAccountIdentity: (providerId, identity) => getProviderRuntime().refreshAccountIdentity(providerId, identity),
       writeCustodyHints: (hints) => {
         registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
       },
       audit,
     });
+    custodyRoutingLifecycle = custodyRouting;
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
-      authorities: custodyRouting.authorities,
-      custody: custodyRouting.resolver,
+      ...custodyRouting.integrity,
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
+      markVerified: (photoId) =>
+        ledger.healIntegrityError(photoId) ? emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'offloaded' }] }) : undefined,
       markUnrecoverable: (photoId) => {
         ledger.repairStatus(photoId, 'error');
         emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });
@@ -671,9 +675,7 @@ function getExportFacade(): DrainableExportFacade {
 }
 
 async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
-  const full = mode !== 'restore';
-  autoBackupTrigger = undefined;
-  manifestSyncTrigger = undefined;
+  [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
   exportFacade?.close();
   libraryParts?.protected.cancel();
@@ -689,12 +691,17 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
-    Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
-    full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
-    full ? providerWork.idle() : Promise.resolve(),
+    custodyRoutingLifecycle?.close() ?? Promise.resolve(),
+    Promise.allSettled([
+      ...activeBackupRuns,
+      providerRuntime?.drainICloudDriveOperations(),
+      providerRuntime?.drainReconnectVerifications(),
+    ]),
+    mode !== 'restore' ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
+    mode !== 'restore' ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
     importRuntime?.pool.close() ?? Promise.resolve(),
-    ...(full ? [session.defaultSession.clearCache()] : []),
+    ...(mode !== 'restore' ? [session.defaultSession.clearCache()] : []),
     ...(mode === 'lock' ? [reloadContentWindowsForLock()] : []),
   ]);
   lockInteropRuntime();
@@ -710,21 +717,14 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     libraryParts.db.close();
     libraryParts.keyStore.close();
   }
-  libraryService = undefined;
-  libraryParts = undefined;
-  importRuntime = undefined;
-  rawRepairService = undefined;
-  posterCaptureService = undefined;
-  thumbService = undefined;
-  fullService = undefined;
-  backupEngine = undefined;
-  offloadService = undefined;
+  providerRuntime?.renewReconnectVerificationLifecycle();
+  [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
+  [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
+  [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
-  consistencyChecker = undefined;
-  embeddingRuntime = undefined;
-  exportFacade = undefined;
-  if (full) restoreRuntime = undefined;
+  [consistencyChecker, embeddingRuntime, exportFacade] = [undefined, undefined, undefined];
+  if (mode !== 'restore') restoreRuntime = undefined;
   releaseLibraryLock?.();
   releaseLibraryLock = undefined;
 }

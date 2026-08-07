@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { DeterministicICloudDriveBridge } from '../../src/main/backup/icloud-drive/deterministic-bridge.js';
+import type { StorageProvider } from '../../src/main/backup/provider.js';
 import { ProviderRuntime, type ProviderRuntimeOptions } from '../../src/main/backup/provider-runtime.js';
 import type { SafeStorageLike } from '../../src/main/crypto/keystore.js';
 
@@ -114,6 +115,135 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(r.tokenStore().load(), null);
     assert.equal(providerId, null);
   });
+});
+
+describe('provider reconnect custody result (#733)', () => {
+  test('a failed custody proof keeps the new credential selected as a backup target', async () => {
+    let providerId: string | null = null;
+    let registryProvider: StorageProvider | undefined;
+    let proofProvider: StorageProvider | undefined;
+    let startupProofsPaused = false;
+    let startupProofsResumed = false;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      scopeProviderForOpenLibrary: (provider) => {
+        registryProvider = provider;
+        return new Proxy(provider, {});
+      },
+      verifyCustodyReconnect: (input) => {
+        assert.equal(startupProofsPaused, true, 'explicit proof holds the startup-proof pause');
+        proofProvider = input.provider;
+        return Promise.resolve({ ok: false, reason: 'wrong-account' });
+      },
+      pauseCustodyReconnectProofs: () => {
+        startupProofsPaused = true;
+        return Promise.resolve(() => {
+          startupProofsResumed = true;
+        });
+      },
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-target'), fault: undefined });
+
+    assert.deepEqual(await r.connect('mock'), {
+      ok: false,
+      reason: 'This provider account does not match the account holding this library’s cloud-only originals.',
+      code: 'custody-wrong-account',
+    });
+    assert.equal(providerId, 'mock', 'the connection stands as the selected backup target');
+    assert.notEqual(proofProvider, registryProvider, 'the proof receives the active-library provider scope');
+    assert.equal((await r.status('mock')).connected, true);
+    assert.equal(startupProofsResumed, true);
+  });
+
+  test('transient namespace proof failure is retryable without clearing selection', async () => {
+    let providerId: string | null = null;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      verifyCustodyReconnect: () => Promise.resolve({ ok: false, reason: 'unavailable' }),
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-unavailable'), fault: undefined });
+
+    const result = await r.connect('mock');
+    assert.equal(result.code, 'custody-unavailable');
+    assert.equal(result.retryable, true);
+    assert.equal(providerId, 'mock');
+  });
+
+  test('library teardown aborts and drains an explicit reconnect proof', async () => {
+    let proofStarted: (() => void) | undefined;
+    let observedSignal: AbortSignal | undefined;
+    const started = new Promise<void>((resolve) => {
+      proofStarted = resolve;
+    });
+    const r = runtime({
+      verifyCustodyReconnect: (input) =>
+        new Promise((resolve) => {
+          observedSignal = input.signal;
+          proofStarted?.();
+          input.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'unavailable' }), { once: true });
+        }),
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-drain'), fault: undefined });
+
+    const connect = r.connect('mock');
+    await started;
+    await r.drainReconnectVerifications();
+    assert.equal(observedSignal?.aborted, true);
+    assert.equal((await connect).code, 'custody-unavailable');
+  });
+});
+
+test('emergency removal drains reconnect proof before changing custody authority', async () => {
+  let providerId: string | null = null;
+  let proofStarted: (() => void) | undefined;
+  let proofSettled = false;
+  let startupProofsPaused = false;
+  let startupProofsResumed = false;
+  const started = new Promise<void>((resolve) => {
+    proofStarted = resolve;
+  });
+  const r = runtime({
+    providerId: () => providerId,
+    setProviderId: (id) => {
+      providerId = id;
+    },
+    verifyCustodyReconnect: (input) =>
+      new Promise((resolve) => {
+        proofStarted?.();
+        input.signal?.addEventListener(
+          'abort',
+          () => {
+            proofSettled = true;
+            resolve({ ok: false, reason: 'unavailable' });
+          },
+          { once: true },
+        );
+      }),
+    markProviderRequired: () => {
+      assert.equal(proofSettled, true, 'custody mutation follows reconnect proof settlement');
+      assert.equal(startupProofsPaused, true, 'startup proofs pause before custody mutation');
+    },
+    pauseCustodyReconnectProofs: () => {
+      startupProofsPaused = true;
+      return Promise.resolve(() => {
+        startupProofsResumed = true;
+      });
+    },
+  });
+  r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-removal'), fault: undefined });
+
+  const connect = r.connect('mock');
+  await started;
+  assert.deepEqual(await r.removeAuthorizationAnyway('mock'), { ok: true, reason: null });
+  assert.equal((await connect).code, 'custody-unavailable');
+  assert.equal(providerId, null);
+  assert.equal(startupProofsResumed, true);
 });
 
 describe('emergency provider custody rollback (#732)', () => {
