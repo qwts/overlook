@@ -31,7 +31,7 @@ function photo(id: string): PhotoInsert {
     width: 1,
     height: 1,
     bytes: 10,
-    contentHash: 'ab'.repeat(32),
+    contentHash: (id === 'P1' ? 'ab' : 'cd').repeat(32),
     camera: null,
     lens: null,
     iso: null,
@@ -274,8 +274,7 @@ test('legacy reconciliation can prove a second account without restoring the fir
   w.photos.insert(photo('P2'));
   w.ledger.setStatus('P2', 'syncing');
   w.ledger.markBackedUp('P2', '2026-08-06T00:03:00.000Z');
-  w.ledger.markOffloaded('P2', w.authority.id);
-  run(w.db, `UPDATE sync_ledger SET custody_authority_id = NULL WHERE photo_id = 'P2'`);
+  w.ledger.setStatus('P2', 'offloaded');
   w.provider.setAccountIdentity({ accountId: 'account-b', accountLabel: 'Account B' });
   await putBootstrap(w.provider, w.masterKey);
 

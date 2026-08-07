@@ -303,8 +303,15 @@ describe('offload + rehydrate (#107)', () => {
     assert.equal(w.store.hasOriginal(failedHash ?? ''), true);
     assert.equal(w.ledger.status('P0'), 'synced');
     assert.equal(w.authorities.forPhoto('P0'), undefined, 'a failed eviction rolls back its pending custody binding');
-    assert.deepEqual(w.custodyHints.at(-1), []);
     assert.equal(w.ledger.status('P1'), 'offloaded');
+    assert.deepEqual(w.custodyHints.at(-1), [
+      {
+        providerId: 'mock',
+        accountId: 'mock-account',
+        soleCustodyItems: 1,
+        soleCustodyBytes: w.repo.get('P1')?.bytes,
+      },
+    ]);
   });
 
   test('EXIT CRITERIA: rehydrate restores byte-identical, verifies, and flips synced', async () => {
