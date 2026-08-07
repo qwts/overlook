@@ -1,5 +1,4 @@
-import { createWriteStream } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { open as openFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
@@ -19,7 +18,8 @@ interface OpenedOriginal {
 export interface NativeDragOutDeps {
   readonly bridge: NativeDragBridge;
   readonly getPhoto: (photoId: string) => PhotoRecord | undefined;
-  readonly openOriginal: (photo: PhotoRecord) => Promise<OpenedOriginal>;
+  readonly openOriginal: (photo: PhotoRecord, signal: AbortSignal) => Promise<OpenedOriginal>;
+  readonly isMigrating?: ((photoId: string) => boolean) | undefined;
   readonly admit: () => boolean;
   readonly writeFile?: ((destinationPath: string, stream: Readable, signal: AbortSignal) => Promise<void>) | undefined;
 }
@@ -61,12 +61,45 @@ export function uniquePromiseNames(fileNames: readonly string[]): string[] {
 }
 
 async function writeReceiverFile(destinationPath: string, stream: Readable, signal: AbortSignal): Promise<void> {
+  let created = false;
   try {
-    await pipeline(stream, createWriteStream(destinationPath, { flags: 'wx' }), { signal });
+    const handle = await openFile(destinationPath, 'wx');
+    created = true;
+    await pipeline(stream, handle.createWriteStream(), { signal });
   } catch (error) {
     stream.destroy();
-    await rm(destinationPath, { force: true });
+    if (created) await rm(destinationPath, { force: true });
     throw error;
+  }
+}
+
+async function discardOpenedOriginal(opened: OpenedOriginal): Promise<void> {
+  opened.stream.destroy();
+  await opened.release?.();
+}
+
+async function awaitOpenedOriginal(opening: Promise<OpenedOriginal>, signal: AbortSignal): Promise<OpenedOriginal> {
+  if (signal.aborted) {
+    void opening.then(discardOpenedOriginal).catch(() => undefined);
+    throw new Error('drag cancelled');
+  }
+  let aborted = false;
+  let rejectAbort: ((error: Error) => void) | undefined;
+  const abort = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = (): void => {
+    aborted = true;
+    rejectAbort?.(new Error('drag cancelled'));
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await Promise.race([opening, abort]);
+  } catch (error) {
+    if (aborted) void opening.then(discardOpenedOriginal).catch(() => undefined);
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', onAbort);
   }
 }
 
@@ -107,7 +140,7 @@ export class NativeDragOutService {
     const ids = [...new Set(input.photoIds)];
     if (ids.length === 0 || ids.length > 100) return { started: false, reason: 'content-unavailable' };
     const photos = ids.map((id) => this.deps.getPhoto(id));
-    if (photos.some((photo) => photo === undefined || photo.deletedAt !== null)) {
+    if (photos.some((photo) => photo === undefined || photo.deletedAt !== null || this.deps.isMigrating?.(photo.id) === true)) {
       return { started: false, reason: 'content-unavailable' };
     }
     const available = photos.filter((photo): photo is PhotoRecord => photo !== undefined);
@@ -169,7 +202,7 @@ export class NativeDragOutService {
     if (!path.isAbsolute(destinationPath) || path.basename(destinationPath) !== record.item.fileName) {
       throw new Error('invalid drag destination');
     }
-    const opened = await this.deps.openOriginal(record.photo);
+    const opened = await awaitOpenedOriginal(this.deps.openOriginal(record.photo, signal), signal);
     try {
       if (signal.aborted || !this.deps.admit()) throw new Error('drag content unavailable');
       await (this.deps.writeFile ?? writeReceiverFile)(destinationPath, opened.stream, signal);
@@ -178,8 +211,7 @@ export class NativeDragOutService {
         throw new Error('drag content unavailable');
       }
     } finally {
-      opened.stream.destroy();
-      await opened.release?.();
+      await discardOpenedOriginal(opened);
     }
   }
 

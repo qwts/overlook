@@ -217,10 +217,13 @@ export class PhotoMetadataRepository {
         found.set(key, { name: current?.name ?? tag, count: (current?.count ?? 0) + 1 });
       }
     }
-    return [...found.values()]
+    const matches = [...found.values()]
       .filter(({ name }) => name.toLowerCase().includes(needle))
-      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
-      .slice(0, limit);
+      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
+    const limited = matches.slice(0, limit);
+    const exact = matches.find(({ name }) => name.toLowerCase() === needle);
+    if (exact === undefined || limited.some(({ name }) => name.toLowerCase() === needle)) return limited;
+    return [exact, ...limited.filter(({ name }) => name.toLowerCase() !== needle)].slice(0, limit);
   }
 
   private tagState(row: MetadataRow): [string[], string[], string[]] {

@@ -744,6 +744,18 @@ export class PhotosRepository {
     ).map((row) => row.contentHash);
   }
 
+  /** A migration journal temporarily owns both the ordinary and protected
+   * representations. Egress must stay closed until the journal is purged. */
+  isInProtectedMigration(photoId: string): boolean {
+    return (
+      queryGet<{ present: number }>(
+        this.db,
+        'SELECT 1 AS present FROM protected_photo_migration_items WHERE photo_id = ? LIMIT 1',
+        photoId,
+      ) !== undefined
+    );
+  }
+
   /** Shared-hash guard for offload (#107): live photos on this hash. */
   countByContentHash(contentHash: string): number {
     return (

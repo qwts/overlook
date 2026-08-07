@@ -182,7 +182,6 @@ export function ActivityDialog({ open, onClose }: { readonly open: boolean; read
         {events.length > 0 ? (
           <ol className="ovl-activity__list" aria-label={intl.formatMessage(messages.title)}>
             {events.map((event) => {
-              const timestamp = `${intl.formatDate(event.occurredAt)} · ${intl.formatTime(event.occurredAt)}`;
               return (
                 <li key={event.eventId} className="ovl-activity__item">
                   <span className="ovl-activity__marker" aria-hidden="true" />
@@ -193,7 +192,7 @@ export function ActivityDialog({ open, onClose }: { readonly open: boolean; read
                     <div className="ovl-activity__machineData">
                       <time className="ovl-activity__time" dateTime={event.occurredAt}>
                         <CopyableValue
-                          value={timestamp}
+                          value={event.occurredAt}
                           label={intl.formatMessage(messages.copyTimestamp)}
                           className="ovl-activity__copyValue"
                         />

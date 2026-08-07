@@ -35,6 +35,21 @@ describe('channel registry', () => {
     assert.throws(() => channels.backupOffload.response.parse({ offloaded: 1, skipped: 0, freedBytes: 42 }));
   });
 
+  test('bulk metadata summaries allow aggregate tag unions beyond the per-photo cap (#508 review)', () => {
+    const varyingTags = Array.from({ length: 102 }, (_, index) => `tag-${String(index).padStart(3, '0')}`);
+    assert.deepEqual(
+      channels.libraryMetadataSummary.response.parse({
+        found: 2,
+        missing: 0,
+        title: { mixed: false, value: null },
+        description: { mixed: false, value: null },
+        commonTags: [],
+        varyingTags,
+      }).varyingTags,
+      varyingTags,
+    );
+  });
+
   test('Touch ID IPC exposes states but strips native and unlock secrets (#310)', () => {
     assert.deepEqual(
       channels.appLockTouchIdStatus.response.parse({

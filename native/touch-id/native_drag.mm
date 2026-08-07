@@ -134,14 +134,13 @@ void CallEnded(const std::shared_ptr<Callbacks>& callbacks) {
 - (void)filePromiseProvider:(NSFilePromiseProvider*)filePromiseProvider
          writePromiseToURL:(NSURL*)url
          completionHandler:(void (^)(NSError* _Nullable))completionHandler {
-  NSURL* destination = [url URLByAppendingPathComponent:self.fileName isDirectory:NO];
-  if (destination == nil || !destination.isFileURL || !environmentAlive.load(std::memory_order_acquire)) {
+  if (url == nil || !url.isFileURL || !environmentAlive.load(std::memory_order_acquire)) {
     completionHandler(DragError());
     return;
   }
   NSString* requestId = NSUUID.UUID.UUIDString;
   pending.emplace(Utf8(requestId), PendingCompletion{[completionHandler copy], callbacks_});
-  CallRequest(callbacks_, requestId, self.token, destination.path);
+  CallRequest(callbacks_, requestId, self.token, url.path);
 }
 @end
 

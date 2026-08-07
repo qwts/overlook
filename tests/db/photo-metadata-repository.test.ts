@@ -127,6 +127,18 @@ describe('authored photo metadata (#508)', () => {
     db.close();
   });
 
+  test('keeps an exact tag match in bounded suggestions even behind higher-count substring matches (#508 review)', () => {
+    const { db, photos, metadata } = openSeeded();
+    const competitors = Array.from({ length: 20 }, (_, index) => `portfolio-${String(index).padStart(2, '0')}`);
+    photos.insert(photo('P1', { userTags: ['port', ...competitors] }));
+    photos.insert(photo('P2', { userTags: competitors }));
+
+    const suggestions = metadata.suggestions('port', 20);
+    assert.equal(suggestions.length, 20);
+    assert.deepEqual(suggestions[0], { name: 'port', count: 1 });
+    db.close();
+  });
+
   test('excludes protected migration rows and preserves metadata through manifest restore', () => {
     const { db, photos, metadata } = openSeeded();
     photos.insert(

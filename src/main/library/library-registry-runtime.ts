@@ -6,7 +6,12 @@ import { readOrMintLibraryId, writeLibraryId } from './library-id.js';
 import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
 import { openLibraryDatabase } from '../db/database.js';
 import { ulid } from '../import/ulid.js';
-import { libraryDisplayNameSchema, type LibraryDescriptor, type LibraryEntry } from '../../shared/library/registry.js';
+import {
+  libraryDisplayNameSchema,
+  truncateLibraryDisplayName,
+  type LibraryDescriptor,
+  type LibraryEntry,
+} from '../../shared/library/registry.js';
 
 // Active-library resolution (ADR-0017 §1/§7, #384), extracted from the
 // composition root: the registry replaces the hardcoded userData/library.
@@ -288,7 +293,7 @@ export class LibraryRegistryRuntime {
   resetDisplayName(id: string, openId: string | null): LibraryDescriptor {
     const entry = this.getRegistry().get(id);
     if (entry === undefined) throw new LibraryRegistryError(`library ${id} is not registered`);
-    return this.setDisplayName(id, path.basename(entry.path), openId);
+    return this.setDisplayName(id, truncateLibraryDisplayName(path.basename(entry.path)), openId);
   }
 
   /** The IPC facade (structurally matches ipc.ts LibraryRegistryFacade).

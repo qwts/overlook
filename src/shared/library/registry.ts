@@ -9,6 +9,18 @@ import { z } from 'zod';
 /** Crockford-base32 ULID — the library's stable identity (ADR-0007/0017 §2). */
 export const libraryIdSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'library id must be a ULID');
 
+export const LIBRARY_DISPLAY_NAME_MAX_CHARACTERS = 120;
+
+function unicodeCharacterCount(value: string): number {
+  return Array.from(value).length;
+}
+
+/** Produces a reset alias that satisfies the documented character limit even
+ * when the filesystem permits a longer basename. */
+export function truncateLibraryDisplayName(value: string): string {
+  return Array.from(value).slice(0, LIBRARY_DISPLAY_NAME_MAX_CHARACTERS).join('');
+}
+
 /** User-editable registry alias (#685). The transform is part of the shared
  * contract so renderer, IPC, and main all agree on the persisted value. */
 export const libraryDisplayNameSchema = z
@@ -18,7 +30,10 @@ export const libraryDisplayNameSchema = z
     z
       .string()
       .min(1, 'display name cannot be empty')
-      .max(120, 'display name must be 120 characters or fewer')
+      .refine(
+        (value) => unicodeCharacterCount(value) <= LIBRARY_DISPLAY_NAME_MAX_CHARACTERS,
+        `display name must be ${String(LIBRARY_DISPLAY_NAME_MAX_CHARACTERS)} characters or fewer`,
+      )
       .refine((value) => !/\p{Cc}/u.test(value), 'display name cannot contain control characters')
       .refine(
         (value) => value !== '.' && value !== '..' && !/[\\/]/u.test(value) && !/^[A-Za-z]:/u.test(value),
@@ -29,7 +44,10 @@ export const libraryDisplayNameSchema = z
 export const libraryEntrySchema = z
   .object({
     id: libraryIdSchema,
-    name: z.string().min(1).max(120),
+    name: z
+      .string()
+      .min(1)
+      .refine((value) => unicodeCharacterCount(value) <= LIBRARY_DISPLAY_NAME_MAX_CHARACTERS),
     /** Absolute library directory path (the ADR-0005 layout root). */
     path: z.string().min(1),
     createdAt: z.string().datetime(),

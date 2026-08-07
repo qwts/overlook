@@ -15,6 +15,13 @@ describe('XMP keyword projection (#508)', () => {
     assert.deepEqual(source, before, 'the original sidecar remains byte-identical');
   });
 
+  test('decodes bounded decimal and hexadecimal numeric entities before keyword validation (#508 review)', () => {
+    const source = Buffer.from(`
+      <dc:subject><rdf:Bag><rdf:li>Caf&#233;</rdf:li><rdf:li>Smile &#x1F600;</rdf:li></rdf:Bag></dc:subject>
+    `);
+    assert.deepEqual(extractXmpKeywords(source), ['Café', 'Smile 😀']);
+  });
+
   test('fails closed for empty, malformed, or oversized input', () => {
     assert.deepEqual(extractXmpKeywords(Buffer.alloc(0)), []);
     assert.deepEqual(extractXmpKeywords(Buffer.from('<subject><li>unfinished')), []);

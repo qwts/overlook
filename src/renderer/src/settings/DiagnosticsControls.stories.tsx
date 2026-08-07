@@ -43,7 +43,7 @@ export const CopyableReport: Story = {
     await waitFor(() => expect(body.getByText('1 pending local report')).toBeVisible());
     await userEvent.click(body.getByRole('button', { name: 'Review reports…' }));
     await expect(body.getByText('diagnostic-event-807')).toBeVisible();
-    await expect(body.getByText('{"kind":"renderer-process-gone"}')).toBeVisible();
+    await expect(body.getByText('{"kind":"renderer-process-gone"}')).toHaveStyle({ textTransform: 'none' });
     await expect(body.getByRole('button', { name: 'Copy diagnostic event ID' })).toBeVisible();
     await expect(body.getByRole('button', { name: 'Copy diagnostic payload' })).toBeVisible();
   },

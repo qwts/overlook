@@ -642,4 +642,5 @@
   white-space: pre-wrap;
   color: var(--text-muted);
   font: var(--type-mono);
+  text-transform: none;
 }

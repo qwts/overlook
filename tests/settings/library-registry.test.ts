@@ -100,6 +100,11 @@ describe('library registry (#384)', () => {
 
   test('display-name validation trims aliases and rejects empty, control, path-shaped, and excessive values (#685)', () => {
     assert.equal(libraryDisplayNameSchema.parse('  Family archive  '), 'Family archive');
+    assert.equal(
+      libraryDisplayNameSchema.parse('📷'.repeat(120)),
+      '📷'.repeat(120),
+      'the limit counts Unicode characters, not UTF-16 units',
+    );
     for (const invalid of ['', '   ', 'Archive/2026', String.raw`Archive\2026`, 'C:Archive', '.', '..', 'Bad\u0000Name', 'x'.repeat(121)]) {
       assert.equal(libraryDisplayNameSchema.safeParse(invalid).success, false, JSON.stringify(invalid));
     }
@@ -130,6 +135,19 @@ describe('library registry (#384)', () => {
     assert.equal(reset.name, 'first-folder');
     assert.equal(registryIn(userData).get(ULID_A)?.name, 'first-folder', 'reset persists across restart');
     assert.equal(registryIn(userData).get(ULID_B)?.name, 'Shared alias', 'inactive alias persists independently');
+  });
+
+  test('reset truncates a filesystem basename to the display-name character limit (#685 review)', () => {
+    const userData = mkdtempSync(join(tmpdir(), 'overlook-display-name-long-folder-'));
+    const basename = `archive-${'x'.repeat(130)}`;
+    const libraryDir = join(userData, basename);
+    mkdirSync(libraryDir, { recursive: true });
+    const runtime = new LibraryRegistryRuntime({ userDataDir: () => userData });
+    runtime.getRegistry().register(entry({ path: libraryDir }));
+
+    const reset = runtime.resetDisplayName(ULID_A, ULID_A);
+    assert.equal(Array.from(reset.name).length, 120);
+    assert.equal(reset.name, basename.slice(0, 120));
   });
 
   test('EXIT CRITERIA: remove forgets the entry and touches nothing on disk', () => {

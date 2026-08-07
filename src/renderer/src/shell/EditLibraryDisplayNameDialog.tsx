@@ -97,7 +97,6 @@ export function EditLibraryDisplayNameDialog({ library, onClose, onSaved }: Edit
           id="library-display-name-input"
           className="ovl-libswitch__input"
           value={draft}
-          maxLength={120}
           autoFocus
           aria-invalid={error !== null}
           aria-describedby="library-display-name-help library-display-name-error"

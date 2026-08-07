@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -165,6 +165,74 @@ describe('native drag-out materialization (#796)', () => {
     assert.ok(item);
     await assert.rejects(bridge.input?.materialize({ token: item.token, destinationPath: '/tmp/forged.jpg' }) ?? Promise.resolve());
     assert.equal(opens, 0);
+  });
+
+  test('rejects photos in protected migration before advertising native promises (#796 review)', () => {
+    const bridge = new FakeBridge();
+    const service = new NativeDragOutService({
+      bridge,
+      getPhoto: () => photo('P1'),
+      isMigrating: (photoId) => photoId === 'P1',
+      openOriginal: () => Promise.resolve({ stream: Readable.from(['bytes']) }),
+      admit: () => true,
+    });
+
+    assert.deepEqual(service.start(Buffer.alloc(8), { photoIds: ['P1'], sourceAlbumId: null }), {
+      started: false,
+      reason: 'content-unavailable',
+    });
+    assert.equal(bridge.input, null);
+  });
+
+  test('does not delete a receiver-owned destination when exclusive creation fails (#796 review)', async () => {
+    const bridge = new FakeBridge();
+    const service = new NativeDragOutService({
+      bridge,
+      getPhoto: () => photo('P1'),
+      openOriginal: () => Promise.resolve({ stream: Readable.from(['new bytes']) }),
+      admit: () => true,
+    });
+    service.start(Buffer.alloc(8), { photoIds: ['P1'], sourceAlbumId: null });
+    const item = bridge.input?.items[0];
+    assert.ok(item);
+    const destination = join(mkdtempSync(join(tmpdir(), 'overlook-native-drag-owned-')), item.fileName);
+    writeFileSync(destination, 'receiver bytes');
+
+    await assert.rejects(bridge.input?.materialize({ token: item.token, destinationPath: destination }) ?? Promise.resolve());
+    assert.equal(readFileSync(destination, 'utf8'), 'receiver bytes');
+  });
+
+  test('cancellation races a pending offloaded open and releases any late custody (#796 review)', async () => {
+    const bridge = new FakeBridge();
+    let resolveOpen: ((opened: { stream: Readable; release: () => Promise<void> }) => void) | undefined;
+    let releases = 0;
+    const service = new NativeDragOutService({
+      bridge,
+      getPhoto: () => ({ ...photo('P1'), syncState: 'offloaded' }),
+      openOriginal: () =>
+        new Promise((resolve) => {
+          resolveOpen = resolve;
+        }),
+      admit: () => true,
+    });
+    service.start(Buffer.alloc(8), { photoIds: ['P1'], sourceAlbumId: null });
+    const item = bridge.input?.items[0];
+    assert.ok(item);
+    const materializing = bridge.input?.materialize({ token: item.token, destinationPath: join(tmpdir(), item.fileName) });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    service.close();
+    await assert.rejects(materializing ?? Promise.resolve());
+    await service.drain();
+    resolveOpen?.({
+      stream: Readable.from(['late bytes']),
+      release: () => {
+        releases += 1;
+        return Promise.resolve();
+      },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(releases, 1);
   });
 
   test('lock/close aborts in-flight writes, releases offloaded custody, and cancels native promises', async () => {

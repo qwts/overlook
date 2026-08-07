@@ -118,15 +118,12 @@ export class ProviderRuntime {
     if (this.tokenStoreInstance === undefined) {
       const safeStorage = this.options.safeStorage();
       const credentialDir = this.credentialDirectory('pcloud');
-      this.tokenStoreInstance = new PCloudTokenStore({ safeStorage, dataDir: credentialDir });
-      if (credentialDir !== this.options.dataDir() && this.tokenStoreInstance.load() === null) {
-        const legacy = new PCloudTokenStore({ safeStorage, dataDir: this.options.dataDir() });
-        const record = legacy.load();
-        if (record !== null) {
-          this.tokenStoreInstance.save(record);
-          legacy.clear();
-        }
-      }
+      this.tokenStoreInstance = new PCloudTokenStore({
+        safeStorage,
+        dataDir: credentialDir,
+        ...(credentialDir === this.options.dataDir() ? {} : { legacyDataDir: this.options.dataDir() }),
+      });
+      this.tokenStoreInstance.migrateLegacy();
     }
     return this.tokenStoreInstance;
   }
@@ -640,7 +637,7 @@ export class ProviderRuntime {
     } catch {
       return { ok: false, reason: 'Could not remove the pCloud authorization from this device. Check file access and try again.' };
     }
-    if (store.load() !== null) {
+    if (store.hasStoredAuthorization()) {
       return { ok: false, reason: 'Could not verify that the pCloud authorization was removed. Check status and try again.' };
     }
 
@@ -651,7 +648,7 @@ export class ProviderRuntime {
       // exception. Never roll a completed disconnect back on an emit failure.
     }
     const selectionCleared = this.options.providerId() !== 'pcloud';
-    const custodyCleared = store.load() === null;
+    const custodyCleared = !store.hasStoredAuthorization();
     if (selectionCleared && custodyCleared) return { ok: true, reason: null };
     if (!selectionCleared) return this.rollbackPCloudCustody(previous);
     return {

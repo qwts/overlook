@@ -114,6 +114,22 @@ describe('provider custody-change policy (#732)', () => {
     assert.equal(existsSync(authorizationPath), false);
   });
 
+  test('an idempotent pCloud disconnect also clears unreadable legacy authorization bytes (#927 review)', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'overlook-provider-custody-')), 'library');
+    const credentialDir = join(dataDir, 'provider-auth', 'pcloud');
+    const legacyAuthorizationPath = join(dataDir, 'pcloud-auth.bin');
+    writeFileSync(legacyAuthorizationPath, 'not-json');
+    const r = runtime({
+      dataDir: () => dataDir,
+      providerCredentialDir: () => credentialDir,
+    });
+
+    assert.equal(r.tokenStore().load(), null);
+    assert.equal(existsSync(legacyAuthorizationPath), true, 'unreadable legacy bytes remain available for explicit cleanup');
+    assert.deepEqual(await r.disconnect('pcloud'), { ok: true, reason: null });
+    assert.equal(existsSync(legacyAuthorizationPath), false);
+  });
+
   test('an idempotent pCloud disconnect reports an unreadable authorization cleanup failure (#927)', async () => {
     const r = runtime({});
     r.tokenStore().clear = () => {

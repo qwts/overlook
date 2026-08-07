@@ -21,6 +21,8 @@ describe('native macOS file-promise bridge (#796)', () => {
       assert.ok(source.includes(contract), `native bridge must enforce ${contract}`);
     }
     assert.doesNotMatch(source, /NSTemporaryDirectory|mkdtemp|temporaryDirectory/u);
+    assert.doesNotMatch(source, /URLByAppendingPathComponent:self\.fileName/u, 'AppKit already supplies the complete destination URL');
+    assert.match(source, /CallRequest\(callbacks_, requestId, self\.token, url\.path\)/u);
     assert.match(readFileSync(join(process.cwd(), 'native/touch-id/drag.cjs'), 'utf8'), /drag\.node\.napi/u);
   });
 

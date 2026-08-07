@@ -55,7 +55,8 @@ export class EgressRuntime {
           ? createNativeDragBridge({ platform: process.platform, packaged: app.isPackaged })
           : new TestNativeDragBridge(testDestination),
       getPhoto: (photoId) => repo.get(photoId),
-      openOriginal: async (photo) => {
+      isMigrating: (photoId) => repo.isInProtectedMigration(photoId),
+      openOriginal: async (photo, _signal) => {
         const service = this.options.ephemeral();
         const opened = await service.open(photo.id, 'export');
         return { stream: opened.stream, release: opened.custody === 'ephemeral' ? () => service.release(photo.id, 'export') : undefined };

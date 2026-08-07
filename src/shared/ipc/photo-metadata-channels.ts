@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-import { photoMetadataUpdateSchema, photoTagManagementSchema, photoTagSchema, photoTagsSchema } from '../library/photo-metadata.js';
+import {
+  MAX_PHOTO_TAGS,
+  normalizePhotoTags,
+  photoMetadataUpdateSchema,
+  photoTagManagementSchema,
+  photoTagSchema,
+} from '../library/photo-metadata.js';
 import type { ChannelDefinition } from './channels.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
@@ -19,6 +25,12 @@ const mutationResult = {
   pendingCount: z.number().int().nonnegative(),
 };
 
+const aggregatePhotoTagsSchema = z
+  .array(photoTagSchema)
+  .max(MAX_PHOTO_TAGS * 10_000)
+  .transform((tags) => normalizePhotoTags(tags))
+  .readonly();
+
 export const photoMetadataChannels = {
   libraryMetadataUpdate: channel('library:metadata-update', photoMetadataUpdateSchema, z.object(mutationResult)),
   libraryMetadataSummary: channel(
@@ -29,8 +41,8 @@ export const photoMetadataChannels = {
       missing: z.number().int().nonnegative(),
       title: z.object({ mixed: z.boolean(), value: z.string().nullable() }),
       description: z.object({ mixed: z.boolean(), value: z.string().nullable() }),
-      commonTags: photoTagsSchema.readonly(),
-      varyingTags: photoTagsSchema.readonly(),
+      commonTags: aggregatePhotoTagsSchema,
+      varyingTags: aggregatePhotoTagsSchema,
     }),
   ),
   libraryTagManage: channel('library:tag-manage', photoTagManagementSchema, z.object({ ...mutationResult, merged: z.boolean() })),

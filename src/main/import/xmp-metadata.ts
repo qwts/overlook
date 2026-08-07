@@ -4,6 +4,10 @@ const MAX_XMP_BYTES = 5 * 1024 * 1024;
 
 function decodeXml(value: string): string {
   return value
+    .replace(/&#(?:x([0-9A-Fa-f]{1,6})|([0-9]{1,7}));/gu, (entity, hex: string | undefined, decimal: string | undefined) => {
+      const codePoint = Number.parseInt(hex ?? decimal ?? '', hex === undefined ? 10 : 16);
+      return codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff) ? String.fromCodePoint(codePoint) : entity;
+    })
     .replace(/&lt;/gu, '<')
     .replace(/&gt;/gu, '>')
     .replace(/&quot;/gu, '"')

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -65,12 +65,15 @@ export function PhotoMetadataEditor({ photo, photoIds }: PhotoMetadataEditorProp
   const [saving, setSaving] = useState(false);
   const [manageSource, setManageSource] = useState('');
   const [manageTarget, setManageTarget] = useState('');
+  const summaryRequestRef = useRef(0);
 
   const loadSummary = useCallback((): void => {
+    const requestId = (summaryRequestRef.current += 1);
     if (scope.length > 10_000) return;
     void window.overlook.library
       .metadataSummary({ photoIds: scope })
       .then((next) => {
+        if (summaryRequestRef.current !== requestId) return;
         setSummary(next);
         setTitle(next.title.value ?? '');
         setDescription(next.description.value ?? '');
@@ -79,10 +82,17 @@ export function PhotoMetadataEditor({ photo, photoIds }: PhotoMetadataEditorProp
         setAddTags([]);
         setRemoveTags([]);
       })
-      .catch(() => setStatus(intl.formatMessage(messages.failed)));
+      .catch(() => {
+        if (summaryRequestRef.current === requestId) setStatus(intl.formatMessage(messages.failed));
+      });
   }, [intl, scope]);
 
-  useEffect(loadSummary, [loadSummary]);
+  useEffect(() => {
+    loadSummary();
+    return () => {
+      summaryRequestRef.current += 1;
+    };
+  }, [loadSummary]);
   useEffect(() => {
     const query = manageSource.trim() === '' ? tagDraft : manageSource;
     void window.overlook.library
