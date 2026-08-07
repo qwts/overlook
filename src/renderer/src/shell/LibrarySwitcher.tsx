@@ -15,13 +15,14 @@ import { MoveLibraryDialog } from './MoveLibraryDialog';
 import { RenameLibraryDialog } from './RenameLibraryDialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { EditLibraryDisplayNameDialog } from './EditLibraryDisplayNameDialog';
 
 // Library Switcher (#386, ADR-0017): view, switch, create, and manage the
 // registered libraries. Switching hands off to the main process (#385) which
 // tears down, repoints, and reloads this window — the "switching" phase here
 // is honest about that: it survives only until the reload wipes the renderer.
 
-type Phase = 'list' | 'switching' | 'create' | 'confirm-remove' | 'move' | 'rename';
+type Phase = 'list' | 'switching' | 'create' | 'confirm-remove' | 'display-name' | 'move' | 'rename';
 
 interface Refusal {
   readonly kind:
@@ -50,17 +51,35 @@ const moveMessages = defineMessages({
   moveOne: { id: 'libswitch.move.one', defaultMessage: 'Move {name}…' },
   moveSelected: { id: 'libswitch.move.selected', defaultMessage: 'Move {count} selected…' },
   renameOne: { id: 'libswitch.rename.one', defaultMessage: 'Rename folder of {name}…' },
+  editDisplayName: { id: 'libswitch.displayName.one', defaultMessage: 'Edit display name of {name}…' },
+  duplicateHint: { id: 'libswitch.displayName.duplicateHint', defaultMessage: 'Location: {location} · ID ending {id}' },
+  folder: { id: 'libswitch.displayName.folder', defaultMessage: 'Library folder' },
+  changed: { id: 'libswitch.displayName.changed', defaultMessage: 'Display name changed to {name}' },
 });
+
+function privacySafeLocationHint(libraryPath: string): string | null {
+  const parts = libraryPath
+    .replace(/[\\/]+$/u, '')
+    .split(/[\\/]+/u)
+    .filter(Boolean);
+  return parts.at(-1) ?? null;
+}
 
 export interface LibrarySwitcherProps {
   readonly onClose: () => void;
+  readonly onCurrentNameChange?: ((name: string) => void) | undefined;
   /** Open straight into the "New library…" form (File → New Library…, #689). */
   readonly startInCreate?: boolean;
   /** Locked surfaces expose switching without library management (#847). */
   readonly switchOnly?: boolean;
 }
 
-export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = false }: LibrarySwitcherProps): ReactElement {
+export function LibrarySwitcher({
+  onClose,
+  onCurrentNameChange,
+  startInCreate = false,
+  switchOnly = false,
+}: LibrarySwitcherProps): ReactElement {
   const intl = useIntl();
   const { formatRelativeTime } = useFormats();
   const { announce } = useAnnouncer();
@@ -78,6 +97,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
   const [creating, setCreating] = useState(false);
   const [moveTargets, setMoveTargets] = useState<readonly LibraryDescriptor[] | null>(null);
   const [renameTarget, setRenameTarget] = useState<LibraryDescriptor | null>(null);
+  const [displayNameTarget, setDisplayNameTarget] = useState<LibraryDescriptor | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -212,9 +232,10 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
   // Esc backs out of layered phases before it closes the switcher.
   const close = (): void => {
     if (phase === 'switching') return;
-    if (phase === 'confirm-remove' || phase === 'create') {
+    if (phase === 'confirm-remove' || phase === 'create' || phase === 'display-name') {
       setPhase('list');
       setRemoveTarget(null);
+      setDisplayNameTarget(null);
       return;
     }
     onClose();
@@ -228,6 +249,25 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
           setPhase('list');
           setRenameTarget(null);
           refresh();
+        }}
+      />
+    );
+  }
+
+  if (phase === 'display-name' && displayNameTarget !== null) {
+    return (
+      <EditLibraryDisplayNameDialog
+        library={displayNameTarget}
+        onClose={() => {
+          setPhase('list');
+          setDisplayNameTarget(null);
+        }}
+        onSaved={(updated) => {
+          setLibs((previous) => previous?.map((library) => (library.id === updated.id ? updated : library)) ?? [updated]);
+          if (updated.open || updated.id === currentId) onCurrentNameChange?.(updated.name);
+          announce(intl.formatMessage(moveMessages.changed, { name: updated.name }), 'polite', 'library-display-name');
+          setPhase('list');
+          setDisplayNameTarget(null);
         }}
       />
     );
@@ -383,6 +423,9 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
         <ul className="ovl-libswitch__list" ref={listRef} data-testid="library-list">
           {(libs ?? []).map((lib) => {
             const blocked = lib.missing || lib.lockedBy !== null;
+            const duplicateName =
+              (libs ?? []).filter((candidate) => candidate.name.localeCompare(lib.name, undefined, { sensitivity: 'base' }) === 0).length >
+              1;
             return (
               <li
                 key={lib.id}
@@ -405,6 +448,14 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
                       {lib.lockedBy === null ? null : <Badge tone="amber" icon="lock">{`Open on ${lib.lockedBy}`}</Badge>}
                     </span>
                     <span className="mono-data ovl-libswitch__path">{lib.path}</span>
+                    {duplicateName ? (
+                      <span className="mono-data ovl-libswitch__duplicate-hint">
+                        {intl.formatMessage(moveMessages.duplicateHint, {
+                          location: privacySafeLocationHint(lib.path) ?? intl.formatMessage(moveMessages.folder),
+                          id: lib.id.slice(-4),
+                        })}
+                      </span>
+                    ) : null}
                     {lib.missing ? <span className="ovl-libswitch__hint">Reconnect the volume to open this library</span> : null}
                   </span>
                   <span className="mono-data ovl-libswitch__when">
@@ -427,7 +478,7 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
                 )}
                 {switchOnly || blocked ? null : (
                   <IconButton
-                    icon="pencil"
+                    icon="folder"
                     label={intl.formatMessage(moveMessages.renameOne, { name: lib.name })}
                     size="sm"
                     data-testid={`rename-library-${lib.name}`}
@@ -435,6 +486,19 @@ export function LibrarySwitcher({ onClose, startInCreate = false, switchOnly = f
                       setRefusal(null);
                       setRenameTarget(lib);
                       setPhase('rename');
+                    }}
+                  />
+                )}
+                {switchOnly ? null : (
+                  <IconButton
+                    icon="pencil"
+                    label={intl.formatMessage(moveMessages.editDisplayName, { name: lib.name })}
+                    size="sm"
+                    data-testid={`edit-display-name-${lib.id}`}
+                    onClick={() => {
+                      setRefusal(null);
+                      setDisplayNameTarget(lib);
+                      setPhase('display-name');
                     }}
                   />
                 )}

@@ -85,6 +85,10 @@ export const Populated: Story = {
     await expect(canvas.getByRole('button', { name: 'Undo' })).toBeEnabled();
     await expect(canvas.getByRole('button', { name: 'Redo' })).toBeDisabled();
     await expect(canvas.getByText('No action available')).toBeVisible();
+    await expect(canvas.getAllByRole('button', { name: 'Copy activity event ID' })).toHaveLength(2);
+    await expect(canvas.getAllByRole('button', { name: 'Copy activity timestamp' })).toHaveLength(2);
+    await expect(canvas.getByText('2026-07-20T18:30:00.000Z')).toBeVisible();
+    await expect(canvas.getByText('2026-07-20T17:00:00.000Z')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Undo' }));
   },
 };

@@ -36,6 +36,7 @@ function cloneFile(file: ManifestFile): ManifestFile {
     ...file,
     ...(file.moveLease === undefined ? {} : { moveLease: { ...file.moveLease } }),
     ...(file.sidecars === undefined ? {} : { sidecars: file.sidecars.map((sidecar) => ({ ...sidecar })) }),
+    ...(file.sourceMetadata === undefined ? {} : { sourceMetadata: { ...file.sourceMetadata } }),
   };
 }
 

@@ -14,6 +14,7 @@ import { ThumbnailPool } from './thumbnail-pool.js';
 import { ThumbnailService } from './thumbnail-service.js';
 import { ulid } from './ulid.js';
 import type { GoogleDriveImportSource } from './google-drive-source.js';
+import { cleanupPhotoKitOrphans, cleanupPhotoKitStage, isPhotoKitStage } from '../photo-kit/photo-kit-staging.js';
 
 export { createDriveImport } from './google-drive-source-runtime.js';
 export type { ImportService } from './import-service.js';
@@ -51,6 +52,7 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
       hasContentHash: (hash) => options.repo.hasContentHash(hash),
       get: (id) => options.repo.get(id),
       insert: (photo) => options.repo.insert(photo),
+      addImportedKeywords: (photoId, keywords) => options.repo.addImportedKeywords(photoId, keywords),
       insertSidecar: (record) => options.sidecars.insert(record),
       repairGeneratedDimensions: (id, width, height) => options.repo.repairGeneratedDimensions(id, width, height),
       setDimensionStatus: (id, status) => options.repo.setDimensionStatus(id, status),
@@ -78,7 +80,10 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
     newId: ulid,
     now: () => new Date().toISOString(),
     events: options.events,
-    cleanupSource: (path) => options.googleDrive.cleanupRoot(path),
+    cleanupSource: (cleanupPath) =>
+      isPhotoKitStage(options.dataDir, cleanupPath)
+        ? cleanupPhotoKitStage(options.dataDir, cleanupPath)
+        : options.googleDrive.cleanupRoot(cleanupPath),
     sourceExists: existsSync,
     parentIdentity: async (path) => {
       const info = await stat(dirname(path));
@@ -97,7 +102,10 @@ export function createImportRuntime(options: ImportRuntimeOptions): ImportRuntim
   void journal
     .read()
     .then(async (manifest) => {
-      await options.googleDrive.cleanupOrphans(manifest?.cleanupPath ?? null);
+      await Promise.all([
+        options.googleDrive.cleanupOrphans(manifest?.cleanupPath ?? null),
+        cleanupPhotoKitOrphans(options.dataDir, manifest?.cleanupPath ?? null),
+      ]);
       return service.resume();
     })
     .then((summary) => {

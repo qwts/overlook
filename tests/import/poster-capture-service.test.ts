@@ -33,6 +33,13 @@ function videoPhoto(id: string): PhotoRecord {
     dimensionStatus: 'unavailable',
     mediaInfo: null,
     syncState: 'local',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 

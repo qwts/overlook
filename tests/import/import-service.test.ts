@@ -260,6 +260,55 @@ describe('local folder and dropped Move policy (#489)', () => {
     );
   });
 
+  test('PhotoKit import reports selected assets omitted by the scanner as failed (#798 review)', async () => {
+    let journaled = false;
+    const engine = {
+      importFiles: (
+        _files: readonly unknown[],
+        _mode: string,
+        _source: string,
+        _signal: AbortSignal,
+        _cleanupPath: string,
+        onJournaled: () => void,
+      ) => {
+        onJournaled();
+        return Promise.resolve({
+          imported: 1,
+          moved: 0,
+          retained: 1,
+          duplicates: 0,
+          failed: 0,
+          cancelled: 0,
+          sidecars: 0,
+          photoIds: ['P1'],
+          moveCompensations: [],
+        });
+      },
+    } as unknown as ImportEngine;
+    const service = new ImportService(fakeRepo(), IDLE_EVENTS, engine, () => undefined, {
+      source: () => Promise.resolve({ summary: EMPTY_SCAN, files: [] }),
+      files: () => Promise.resolve({ summary: { ...EMPTY_SCAN, total: 1, newCount: 1 }, files: [fresh] }),
+    });
+
+    const summary = await service.runPhotoKitFiles(
+      [
+        { path: fresh.path, createdAt: null, latitude: null, longitude: null },
+        { path: '/source/unsupported.tiff', createdAt: null, latitude: null, longitude: null },
+      ],
+      '/private/stage',
+      () => {
+        journaled = true;
+      },
+      () => Promise.resolve(),
+    );
+
+    assert.equal(journaled, true);
+    assert.deepEqual(
+      { imported: summary.imported, failed: summary.failed, retained: summary.retained },
+      { imported: 1, failed: 1, retained: 2 },
+    );
+  });
+
   test('Move rejects admitted files inside the active library before the engine runs', async () => {
     let calls = 0;
     const engine = {

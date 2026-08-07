@@ -25,7 +25,10 @@ import type { PhotoInsert, PhotoRecord } from '../../src/shared/library/types.js
 // photo, and never persist as durable plaintext.
 
 const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0xff, 0xd9]);
-const XMP_BYTES = Buffer.from('<x:xmpmeta xmlns:x="adobe:ns:meta/">rating=5 keyword=aurora</x:xmpmeta>', 'utf8');
+const XMP_BYTES = Buffer.from(
+  '<x:xmpmeta xmlns:x="adobe:ns:meta/" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:subject><rdf:Bag><rdf:li>aurora</rdf:li></rdf:Bag></dc:subject></x:xmpmeta>',
+  'utf8',
+);
 const AAE_BYTES = Buffer.from('<?xml version="1.0"?><plist><dict><key>adjustmentData</key></dict></plist>', 'utf8');
 
 function sha256(bytes: Buffer): string {
@@ -136,6 +139,12 @@ function world(): World {
           sidecarRows.push(record);
         }
       },
+      addImportedKeywords: (photoId, keywords) => {
+        const current = rows.get(photoId);
+        if (current === undefined) return false;
+        rows.set(photoId, { ...current, importedKeywords: [...keywords] });
+        return true;
+      },
       repairGeneratedDimensions: () => false,
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
@@ -208,6 +217,7 @@ describe('sidecar import custody (#484)', () => {
     assert.equal(summary.imported, 1);
     assert.equal(summary.sidecars, 1);
     assert.equal(w.rows.size, 1, 'the companion is never a separate photo');
+    assert.deepEqual([...w.rows.values()][0]?.importedKeywords, ['aurora'], 'search projection retains XMP keyword provenance');
     assert.equal(w.sidecarRows.length, 1);
     const row = w.sidecarRows[0];
     assert.ok(row);

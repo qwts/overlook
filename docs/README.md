@@ -44,12 +44,15 @@ existing links resolve — never add content there.
 - [Cloud Provider Contract Matrix](./Provider-Contract-Matrix.md) — adapter backup/restore readiness and live evidence
 - [iCloud Drive provider](./iCloud-Drive.md) — macOS container identity, native bridge, provisioned signing, and smoke contract
 - [iCloud Drive acceptance](./acceptance/Manual-Test-iCloud-Drive.md) — signed live contract, product checklist, evidence, and cleanup
+- [Native drag-out acceptance](./acceptance/Acceptance-Test-Native-Drag-Out.md) — signed AppKit file promises, lazy custody, cancellation, and browser/native receivers (#796)
+- [Apple Photos bridge acceptance](./acceptance/Acceptance-Test-Apple-Photos-Bridge.md) — explicit PhotoKit authorization, review, original/metadata preservation, and custody cleanup (#798)
 - [Manual Test — M18 Cloud Disaster Recovery](./acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md) — isolated owner-run provider procedures
 - [Accessibility Audit — WCAG 2.2 AA (July 2026)](./Accessibility-Audit-2026-07.md) — baseline, severity ranking, accepted exceptions (#398)
 - [Manual Test — VoiceOver](./acceptance/Manual-Test-A11y-VoiceOver.md) — the screen-reader half the axe gates cannot cover
 - [Visual accessibility acceptance](./acceptance/Acceptance-Test-Visual-Accessibility.md) — reduced motion, semantic contrast, 200% zoom, and high-contrast scope (#401)
 - [Full-display image acceptance](./acceptance/acceptance-test-full-display-image.md) — image-first chrome, transform persistence, and reset boundaries
 - [Inspector follow and detached-window acceptance](./acceptance/acceptance-test-inspector-window.md) — #503 focus, paging, reattachment, and lock-boundary evidence
+- [Photo metadata acceptance](./acceptance/Acceptance-Test-Photo-Metadata.md) — title, description, tag provenance, bulk editing, search, backup, and XMP export (#508)
 - [GIF/WebP animated media acceptance](./acceptance/acceptance-test-gif-webp-animated-media.md) — #547 classification, poster/animation, reduced motion, and custody evidence
 - [MPEG-TS video media acceptance](./acceptance/acceptance-test-mpeg-ts-video-media.md) — #548 signature classification, deterministic poster/duration, playback, and byte-faithful custody evidence
 - [Context menu acceptance](./acceptance/Acceptance-Test-Context-Menus.md) — #504 selection, command parity, focus, viewport, and destructive-action evidence

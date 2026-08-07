@@ -4,6 +4,8 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
+import { CopyableValue } from '../components/CopyableValue';
+import './settings.css';
 
 type DiagnosticReport = Awaited<ReturnType<typeof window.overlook.diagnostics.list>>['reports'][number];
 
@@ -55,6 +57,8 @@ const messages = defineMessages({
   },
   cannotUndo: { id: 'settings.diagnostics.cannotUndo', defaultMessage: 'This cannot be undone.' },
   nothingSent: { id: 'settings.diagnostics.nothingSent', defaultMessage: 'Nothing was sent.' },
+  copyEventId: { id: 'settings.diagnostics.copyEventId', defaultMessage: 'diagnostic event ID' },
+  copyPayload: { id: 'settings.diagnostics.copyPayload', defaultMessage: 'diagnostic payload' },
 });
 
 export function DiagnosticsControls({ enabled }: { readonly enabled: boolean }): ReactElement {
@@ -209,12 +213,17 @@ function DiagnosticsReviewDialog({ open, reports, notice, onReports, onNotice, o
                 <div>
                   <strong>{report.kind}</strong>
                   <span>{intl.formatDate(report.capturedAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  <CopyableValue
+                    value={report.eventId}
+                    label={intl.formatMessage(messages.copyEventId)}
+                    className="ovl-diagnostics__eventId"
+                  />
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setConfirming(report)}>
                   {intl.formatMessage(messages.clearReportAction)}
                 </Button>
               </header>
-              <pre>{report.payload}</pre>
+              <CopyableValue value={report.payload} label={intl.formatMessage(messages.copyPayload)} className="ovl-diagnostics__payload" />
             </article>
           ))}
         </div>

@@ -34,6 +34,13 @@ function photo(id: string, isOriginal = true): PhotoRecord {
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState: 'local',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 

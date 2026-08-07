@@ -51,6 +51,7 @@ export const BackupGating: Story = {
     await waitFor(async () => {
       await expect(body.getByTestId('key-fingerprint')).toHaveTextContent(FINGERPRINT);
     });
+    await expect(body.getByRole('button', { name: 'Copy library key fingerprint' })).toBeVisible();
     const exportButton = body.getByRole('button', { name: 'Export key backup' });
     await expect(exportButton).toBeDisabled();
 
@@ -78,6 +79,7 @@ export const BackupGating: Story = {
       await expect(body.getByText('Key backup saved.')).toBeVisible();
     });
     await expect(body.getByText('overlook-recovery.key')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Copy recovery key filename' })).toBeVisible();
     await expect(body.getByText(/Keep this file and its password apart/u)).toBeVisible();
     await expect(body.getByRole('button', { name: 'Done' })).toBeVisible();
   },
@@ -96,6 +98,7 @@ export const ImportFlow: Story = {
     await waitFor(async () => {
       await expect(body.getByTestId('key-file-card')).toHaveTextContent('overlook-recovery.key');
     });
+    await expect(body.getByRole('button', { name: 'Copy recovery key filename' })).toBeVisible();
     await expect(importButton).toBeDisabled();
     await userEvent.type(body.getByLabelText('Password'), 'Correct Horse 9!');
     await expect(importButton).toBeEnabled();
@@ -104,6 +107,7 @@ export const ImportFlow: Story = {
       await expect(body.getByText('Key unlocked and installed.')).toBeVisible();
     });
     await expect(body.getByTestId('key-fingerprint')).toHaveTextContent(FINGERPRINT);
+    await expect(body.getByRole('button', { name: 'Copy library key fingerprint' })).toBeVisible();
   },
 };
 
