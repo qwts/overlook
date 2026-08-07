@@ -9,6 +9,11 @@ import { buffer } from 'node:stream/consumers';
 import { describe, test } from 'node:test';
 
 import { GoogleDriveAuthClient } from '../../src/main/backup/google-drive/auth-client.js';
+import {
+  googleDriveFileIdentity,
+  googleDriveFolderIdentity,
+  googleDriveLibraryIdentity,
+} from '../../src/main/backup/google-drive/discovery-protocol.js';
 import { GoogleDrivePathStore } from '../../src/main/backup/google-drive/path-store.js';
 import { GoogleDriveTokenStore } from '../../src/main/backup/google-drive/token-store.js';
 import { DeterministicICloudDriveBridge } from '../../src/main/backup/icloud-drive/deterministic-bridge.js';
@@ -124,6 +129,14 @@ describe('provider-neutral encrypted transport (#335)', () => {
 });
 
 describe('pCloud and Drive namespace isolation (#335)', () => {
+  test('substitutes Drive identity placeholders as literal values', () => {
+    const path = "albums/$&/$`/$'/$$/photo.jpg";
+
+    assert.equal(googleDriveLibraryIdentity('$&'), 'library:$&');
+    assert.equal(googleDriveFolderIdentity('v1', path), `library:v1/folder:${path}`);
+    assert.equal(googleDriveFileIdentity('v1', path), `library:v1/file:${path}`);
+  });
+
   test('pCloud writes below Overlook Interop and never the backup root', async () => {
     const paths: string[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {

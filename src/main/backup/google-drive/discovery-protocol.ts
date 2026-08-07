@@ -12,7 +12,7 @@ export const GOOGLE_DRIVE_DISCOVERY_PROTOCOL = {
 } as const;
 
 function fillIdentity(template: string, libraryId: string, path?: string): string {
-  return template.replace('{libraryId}', libraryId).replace('{path}', path ?? '');
+  return template.replace('{libraryId}', () => libraryId).replace('{path}', () => path ?? '');
 }
 
 export function googleDriveDiscoveryHash(identity: string): string {
