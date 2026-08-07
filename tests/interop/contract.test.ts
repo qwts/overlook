@@ -33,6 +33,7 @@ import { type InteropAlbum, type InteropBlobReference, type InteropRecord } from
 import { InteropReplayError, InteropReplayGuard, interopReplayIdentity } from '../../src/shared/interop/replay.js';
 import { compareInteropRevisions, incrementInteropRevision, mergeInteropRevisions } from '../../src/shared/interop/revisions.js';
 import {
+  INTEROP_GOOGLE_DRIVE_OWNER,
   INTEROP_PROVIDER_LIBRARY_ID,
   INTEROP_PROVIDER_LOGICAL_ROOT,
   INTEROP_PROVIDER_ROOT_NAME,
@@ -280,6 +281,7 @@ describe('published interoperability artifacts', () => {
       rootName: INTEROP_PROVIDER_ROOT_NAME,
       libraryId: INTEROP_PROVIDER_LIBRARY_ID,
       logicalPath: INTEROP_PROVIDER_LOGICAL_ROOT,
+      googleDriveOwner: INTEROP_GOOGLE_DRIVE_OWNER,
     });
   });
 

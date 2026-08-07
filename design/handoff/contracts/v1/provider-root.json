@@ -3,5 +3,6 @@
   "pathSemantics": "provider-relative",
   "rootName": "Overlook Interop",
   "libraryId": "v1",
-  "logicalPath": "Overlook Interop/v1"
+  "logicalPath": "Overlook Interop/v1",
+  "googleDriveOwner": "qwts-overlook-interop-v1"
 }
