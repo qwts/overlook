@@ -9,8 +9,8 @@ import { ProviderError, type StorageProvider } from '../backup/provider.js';
 
 export const INTEROP_CHUNK_BYTES = 4 * 1024 * 1024;
 export const INTEROP_CONTROL_FRAME_BYTES = 64 * 1024;
-const INTEROP_ROOT = 'Overlook Interop';
-const INTEROP_LIBRARY = 'v1';
+export const INTEROP_PROVIDER_ROOT_NAME = 'Overlook Interop';
+export const INTEROP_PROVIDER_LIBRARY_ID = 'v1';
 const GOOGLE_INTEROP_OWNER = 'qwts-overlook-interop-v1';
 
 export type InteropTransportFailure =
@@ -157,7 +157,9 @@ export class StorageProviderInteropObjectStore implements InteropObjectStore {
 }
 
 export function createPCloudInteropStore(options: Omit<PCloudProviderOptions, 'libraryId' | 'rootName'>): InteropObjectStore {
-  return new StorageProviderInteropObjectStore(new PCloudProvider({ ...options, libraryId: INTEROP_LIBRARY, rootName: INTEROP_ROOT }));
+  return new StorageProviderInteropObjectStore(
+    new PCloudProvider({ ...options, libraryId: INTEROP_PROVIDER_LIBRARY_ID, rootName: INTEROP_PROVIDER_ROOT_NAME }),
+  );
 }
 
 export function createGoogleDriveInteropStore(
@@ -166,8 +168,8 @@ export function createGoogleDriveInteropStore(
   return new StorageProviderInteropObjectStore(
     new GoogleDriveProvider({
       ...options,
-      libraryId: INTEROP_LIBRARY,
-      rootName: INTEROP_ROOT,
+      libraryId: INTEROP_PROVIDER_LIBRARY_ID,
+      rootName: INTEROP_PROVIDER_ROOT_NAME,
       owner: GOOGLE_INTEROP_OWNER,
     }),
   );

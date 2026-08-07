@@ -12,6 +12,10 @@ Contract v1 also defines the provider object paths used by Move:
 - `messages/acknowledgements/<12-digit-sequence>-<message-id>.json.aesgcm`
 - `blobs/<record-interop-id>/original.bin.aesgcm`
 
+`provider-root.json` pins the shared logical subtree as
+`Overlook Interop/v1`. It is provider-relative: adapters resolve it below the
+provider-owned app root and must not treat it as an account-root absolute path.
+
 Messages use `sealed-message.schema.json`; original bytes use the nested binary
 format in `sealed-blob.md`. An accepted Move containing an original must
 acknowledge both its record and blob protocol message IDs. The storage object
@@ -22,6 +26,7 @@ Commit the regenerated schemas and checksum with the runtime change. Consumers
 must reject unsupported versions and checksum mismatches; they must not silently
 fall back to a locally modified contract.
 
-Contract v1 is tracked by `qwts/photos#331` and `qwts/image-trail#584`.
+Contract v1 is tracked by `qwts/photos#331`, `qwts/overlook#929`, and
+`qwts/image-trail#584`.
 Its architecture decision is canonical in the Photos wiki:
 [ADR-0014](../../../docs/adr/ADR-0014-Image-Trail-Bidirectional-Interoperability.md).

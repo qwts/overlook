@@ -32,6 +32,7 @@ import { interopPairingPayloadSchema, type InteropPairingPayload } from '../../s
 import { type InteropAlbum, type InteropBlobReference, type InteropRecord } from '../../src/shared/interop/records.js';
 import { InteropReplayError, InteropReplayGuard, interopReplayIdentity } from '../../src/shared/interop/replay.js';
 import { compareInteropRevisions, incrementInteropRevision, mergeInteropRevisions } from '../../src/shared/interop/revisions.js';
+import { INTEROP_PROVIDER_LIBRARY_ID, INTEROP_PROVIDER_ROOT_NAME } from '../../src/main/interop/transport.js';
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(`design/handoff/contracts/v1/fixtures/${name}`, 'utf8')) as unknown;
@@ -251,6 +252,7 @@ describe('published interoperability artifacts', () => {
     }
     for (const schemaFile of Object.keys(createInteropJsonSchemas())) assert.ok(coveredPaths.has(schemaFile));
     assert.ok(coveredPaths.has('acceptance-evidence.json'));
+    assert.ok(coveredPaths.has('provider-root.json'));
     for (const fixtureName of [
       'corrupt-pairing-bundle.json',
       'invalid-record-message.json',
@@ -264,6 +266,17 @@ describe('published interoperability artifacts', () => {
       assert.ok(coveredPaths.has(path.join('fixtures', fixtureName)));
     }
     assert.ok(coveredPaths.has('sealed-blob.md'));
+  });
+
+  test('pins the provider-relative root consumed by every interop adapter', () => {
+    const providerRoot = JSON.parse(readFileSync(path.join(contractDirectory, 'provider-root.json'), 'utf8')) as unknown;
+    assert.deepEqual(providerRoot, {
+      schemaVersion: 1,
+      pathSemantics: 'provider-relative',
+      rootName: INTEROP_PROVIDER_ROOT_NAME,
+      libraryId: INTEROP_PROVIDER_LIBRARY_ID,
+      logicalPath: `${INTEROP_PROVIDER_ROOT_NAME}/${INTEROP_PROVIDER_LIBRARY_ID}`,
+    });
   });
 
   test('uses a password-derived wrapping key distinct from the random interoperability key', () => {
