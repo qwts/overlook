@@ -467,6 +467,7 @@ function getBackupEngine(): BackupEngine {
       status: (photoId) => ledger.status(photoId),
       now: () => new Date().toISOString(),
       masterKey: () => parts.keyStore.masterKeyBytes(),
+      persistAccountIdentity: (providerId, identity) => getProviderRuntime().refreshAccountIdentity(providerId, identity),
       writeCustodyHints: (hints) => {
         registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
       },

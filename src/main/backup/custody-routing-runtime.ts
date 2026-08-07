@@ -4,7 +4,7 @@ import type { SyncStatus } from '../../shared/library/types.js';
 import { CustodyAuthorityRepository, type CustodyAuthority } from './custody-authority-repository.js';
 import { CustodyHintCoordinator } from './custody-gate.js';
 import { CustodyHandleResolver, custodyRemoteRoot } from './custody-handle.js';
-import { raceWithAbort, type StorageProvider } from './provider.js';
+import { raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
 import type { LibraryEntry } from '../../shared/library/registry.js';
 import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
 import { verifyCustodyReconnect } from './custody-reconnect.js';
@@ -18,6 +18,7 @@ export interface CustodyRoutingRuntimeDeps {
   readonly status: (photoId: string) => SyncStatus | undefined;
   readonly now: () => string;
   readonly masterKey: () => Buffer;
+  readonly persistAccountIdentity?: ((providerId: string, identity: ProviderAccountIdentity) => boolean) | undefined;
   readonly writeCustodyHints?: ((hints: NonNullable<LibraryEntry['custodyHints']>) => void) | undefined;
   readonly audit?: ((line: string) => void) | undefined;
 }
@@ -126,7 +127,7 @@ class ReconnectProofCoordinator {
     const signal = this.abortController.signal;
     const identity = await accountIdentity(provider, signal);
     if (identity === null) return { ok: false, reason: 'unavailable' };
-    return verifyCustodyReconnect(
+    const result = await verifyCustodyReconnect(
       {
         authorities: this.authorities,
         libraryId: this.deps.libraryId,
@@ -136,6 +137,15 @@ class ReconnectProofCoordinator {
       },
       { provider, identity, signal },
     );
+    if (
+      !result.ok &&
+      result.reason === 'wrong-account' &&
+      result.replacementIdentity !== undefined &&
+      this.deps.persistAccountIdentity?.(provider.id, result.replacementIdentity) !== true
+    ) {
+      return { ok: false, reason: 'unavailable' };
+    }
+    return result;
   }
 }
 

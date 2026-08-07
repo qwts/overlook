@@ -220,7 +220,7 @@ export class ProviderRuntime {
     return this.activate('google-drive', provider, identity);
   }
 
-  private persistAccountIdentity(providerId: string, identity: ProviderAccountIdentity): boolean {
+  refreshAccountIdentity(providerId: string, identity: ProviderAccountIdentity): boolean {
     try {
       if (providerId === 'pcloud') {
         const record = this.tokenStore().load();
@@ -232,9 +232,11 @@ export class ProviderRuntime {
         this.googleTokenStore().save({ ...record, ...identity });
       } else if (providerId === 'icloud-drive') {
         this.iCloudAuthorityStore().save(identity);
+        this.iCloudDriveProviderInstance?.resetAccountAuthority(identity.accountId);
       }
       return true;
     } catch {
+      if (this.options.providerId() === providerId) this.options.setProviderId(null);
       return false;
     }
   }
@@ -303,17 +305,15 @@ export class ProviderRuntime {
     if (this.options.isWorkActive?.() === true) {
       return { ok: false, reason: 'Wait for the active backup or restore to finish before switching providers.' };
     }
-    const iCloudProvider = provider instanceof ICloudDriveProvider ? provider : null;
     if (attempt.requiresSwitchGuard && this.options.providerId() === providerId) {
       this.options.setProviderId(null);
       if (this.options.providerId() === providerId) {
         return { ok: false, reason: 'Could not save the disconnected state. Try again.' };
       }
     }
-    if (!this.persistAccountIdentity(providerId, attempt.identity)) {
+    if (!this.refreshAccountIdentity(providerId, attempt.identity)) {
       return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
     }
-    iCloudProvider?.resetAccountAuthority(attempt.identity.accountId);
     let scopedProvider: StorageProvider;
     try {
       scopedProvider = this.options.scopeProviderForOpenLibrary?.(provider) ?? provider;
@@ -333,11 +333,9 @@ export class ProviderRuntime {
     }
     if (reconnect?.ok === false) {
       if (reconnect.reason === 'wrong-account' && reconnect.replacementIdentity !== undefined) {
-        if (!this.persistAccountIdentity(providerId, reconnect.replacementIdentity)) {
-          if (this.options.providerId() === providerId) this.options.setProviderId(null);
+        if (!this.refreshAccountIdentity(providerId, reconnect.replacementIdentity)) {
           return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
         }
-        iCloudProvider?.resetAccountAuthority(reconnect.replacementIdentity.accountId);
       }
       return reconnect.reason === 'wrong-account' ? custodyWrongAccount() : custodyUnavailable();
     }

@@ -11,6 +11,7 @@ import { createActiveProvider } from '../../src/main/backup/active-provider.js';
 import { verifyCustodyReconnect } from '../../src/main/backup/custody-reconnect.js';
 import { createCustodyRoutingRuntime } from '../../src/main/backup/custody-routing-runtime.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
+import type { ProviderAccountIdentity } from '../../src/main/backup/provider.js';
 import { sealRecoveryBootstrap } from '../../src/main/backup/recovery-bootstrap.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -199,6 +200,40 @@ test('an account change during namespace proof cannot bind the earlier subject (
   );
   assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
   assert.equal(w.authorities.get(w.authority.id)?.lastVerifiedAt, null);
+  w.db.close();
+});
+
+test('startup reconnect persists a replacement subject before completing the proof (#733)', async () => {
+  const w = world();
+  await putBootstrap(w.provider, w.masterKey);
+  const getStream = w.provider.getStream.bind(w.provider);
+  w.provider.getStream = async (path) => {
+    const stream = await getStream(path);
+    w.provider.setAccountIdentity({ accountId: 'account-b', accountLabel: 'Account B' });
+    return stream;
+  };
+  let persistIdentity: ((identity: ProviderAccountIdentity) => void) | undefined;
+  const persisted = new Promise<ProviderAccountIdentity>((resolve) => {
+    persistIdentity = resolve;
+  });
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: (providerId) => (providerId === w.provider.id ? w.provider : undefined),
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    masterKey: () => Buffer.from(w.masterKey),
+    persistAccountIdentity: (_providerId, identity) => {
+      persistIdentity?.(identity);
+      return true;
+    },
+  });
+
+  assert.deepEqual(await persisted, { accountId: 'account-b', accountLabel: 'Account B' });
+  assert.equal(w.authorities.get(w.authority.id)?.state, 'provider-required');
+  await routing.close();
   w.db.close();
 });
 
