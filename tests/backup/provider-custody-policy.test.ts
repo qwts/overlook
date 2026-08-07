@@ -33,6 +33,35 @@ function runtime(overrides: Partial<ProviderRuntimeOptions>): ProviderRuntime {
 }
 
 describe('provider custody-change policy (#732)', () => {
+  test('identity-less pCloud custody fails closed without clearing authorization or selection (#927)', async () => {
+    let providerId: string | null = 'pcloud';
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      custodyPreflight: (credential) => ({
+        credential,
+        totalItems: 0,
+        totalBytes: 0,
+        libraries: [],
+      }),
+      fetchImpl: () => Promise.reject(new Error('legacy fixture has no live identity')),
+    });
+    const record = {
+      accessToken: 'legacy-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+    } as const;
+    r.tokenStore().save(record);
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-identity-less-custody'), fault: undefined });
+
+    const result = await r.disconnect('pcloud');
+    assert.equal(result.code, 'custody-unavailable');
+    assert.deepEqual(r.tokenStore().load(), record);
+    assert.equal(providerId, 'pcloud');
+  });
+
   test('disconnect and switch fail before credential mutation when custody requires restore-first', async () => {
     let providerId: string | null = 'pcloud';
     const preflights: { providerId: string; accountId: string }[] = [];
