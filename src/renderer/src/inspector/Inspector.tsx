@@ -8,8 +8,10 @@ import { Badge } from '../components/Badge';
 import { MetadataRow } from '../components/MetadataRow';
 import { StatusGlyph } from '../components/StatusGlyph';
 import { IconButton } from '../components/IconButton';
+import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { PhotoMetadataEditor } from './PhotoMetadataEditor.js';
 
 import './inspector.css';
 
@@ -36,6 +38,8 @@ const messages = defineMessages({
   selectionPosition: { id: 'inspector.selection.position', defaultMessage: '{current} of {count} selected' },
   previousSelected: { id: 'inspector.selection.previous', defaultMessage: 'Previous selected photo' },
   nextSelected: { id: 'inspector.selection.next', defaultMessage: 'Next selected photo' },
+  copyFileName: { id: 'inspector.copy.fileName', defaultMessage: 'filename' },
+  copyCipher: { id: 'inspector.copy.cipher', defaultMessage: 'cipher identity' },
 });
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactElement | (ReactElement | null)[] }): ReactElement {
@@ -50,13 +54,22 @@ function Section({ title, children }: { readonly title: string; readonly childre
 export interface InspectorProps {
   /** The focused photo — lightbox photo, else the single grid selection. */
   readonly photo: PhotoRecord | null;
+  /** Bulk-edit scope. Defaults to the focused photo in detached inspectors. */
+  readonly photoIds?: readonly string[] | undefined;
   readonly providerLabel?: string | undefined;
   readonly selectionPosition?: { readonly index: number; readonly count: number } | undefined;
   readonly onPrevious?: (() => void) | undefined;
   readonly onNext?: (() => void) | undefined;
 }
 
-export function Inspector({ photo, providerLabel = 'Cloud', selectionPosition, onPrevious, onNext }: InspectorProps): ReactElement {
+export function Inspector({
+  photo,
+  photoIds,
+  providerLabel = 'Cloud',
+  selectionPosition,
+  onPrevious,
+  onNext,
+}: InspectorProps): ReactElement {
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const { formatBytes, formatCalendarDate } = useFormats();
@@ -117,11 +130,17 @@ export function Inspector({ photo, providerLabel = 'Cloud', selectionPosition, o
       <div className="ovl-inspector__header">
         <img className="ovl-inspector__thumb" src={thumbUrl(photo.id)} alt="" />
         <div className="ovl-inspector__headText">
-          <div className="ovl-inspector__name">{photo.fileName}</div>
+          <CopyableValue
+            value={photo.fileName}
+            label={intl.formatMessage(messages.copyFileName)}
+            className="ovl-inspector__copyName"
+            textClassName="ovl-inspector__name"
+          />
           <div className="ovl-inspector__date mono-data">{dateLine}</div>
         </div>
         <StatusGlyph state={photo.syncState} />
       </div>
+      <PhotoMetadataEditor photo={photo} photoIds={photoIds ?? [photo.id]} />
       <Section title="Badges">
         <div className="ovl-inspector__badges">
           <Badge tone="green" icon="lock">
@@ -167,7 +186,11 @@ export function Inspector({ photo, providerLabel = 'Cloud', selectionPosition, o
       </Section>
       <Section title="Backup">
         <MetadataRow label="State" value={statusText[photo.syncState]} tone={STATUS_TONE[photo.syncState]} />
-        <MetadataRow label="Cipher" value={`AES-256-GCM · KEY #${String(photo.keyId)}`} />
+        <MetadataRow
+          label="Cipher"
+          value={`AES-256-GCM · KEY #${String(photo.keyId)}`}
+          copyLabel={intl.formatMessage(messages.copyCipher)}
+        />
       </Section>
     </div>
   );

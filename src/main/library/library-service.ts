@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { PhotosRepository } from '../db/photos-repository.js';
+import { PhotoMetadataRepository, type PhotoMetadataMutationResult } from '../db/photo-metadata-repository.js';
 import { HistoryLibraryRepository } from '../history/history-library-repository.js';
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
 import type {
@@ -16,6 +17,7 @@ import type {
   SourceCounts,
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
+import type { PhotoMetadataUpdate, PhotoTagManagement } from '../../shared/library/photo-metadata.js';
 
 // The renderer's typed window into the library (#71) — the contract M04
 // builds against. Owns pendingCount (design §backup dirtiness) and emits
@@ -30,6 +32,7 @@ export interface LibraryEvents {
 export class LibraryService {
   private readonly repo: PhotosRepository;
   private readonly historyRepo: HistoryLibraryRepository;
+  private readonly metadataRepo: PhotoMetadataRepository;
 
   private readonly db: BetterSqlite3.Database;
 
@@ -40,6 +43,7 @@ export class LibraryService {
     this.db = db;
     this.repo = new PhotosRepository(db);
     this.historyRepo = new HistoryLibraryRepository(db);
+    this.metadataRepo = new PhotoMetadataRepository(db);
   }
 
   // Moodboard persistence (#515 / #694). Boards are album-class organizational
@@ -74,6 +78,34 @@ export class LibraryService {
 
   get(photoId: string): PhotoRecord | undefined {
     return this.repo.get(photoId);
+  }
+
+  updateMetadata(request: PhotoMetadataUpdate): PhotoMetadataMutationResult & { readonly pendingCount: number } {
+    const result = this.metadataRepo.update(request);
+    const pendingCount = this.repo.pendingCount();
+    if (result.photoIds.length > 0) {
+      this.events.libraryChanged(result.photoIds, 'none');
+      this.events.pendingCountChanged(pendingCount);
+    }
+    return { ...result, pendingCount };
+  }
+
+  metadataSummary(photoIds: readonly string[]): ReturnType<PhotoMetadataRepository['summary']> {
+    return this.metadataRepo.summary(photoIds);
+  }
+
+  manageTag(request: PhotoTagManagement): PhotoMetadataMutationResult & { readonly pendingCount: number; readonly merged: boolean } {
+    const result = this.metadataRepo.manage(request);
+    const pendingCount = this.repo.pendingCount();
+    if (result.photoIds.length > 0) {
+      this.events.libraryChanged(result.photoIds, 'none');
+      this.events.pendingCountChanged(pendingCount);
+    }
+    return { ...result, pendingCount };
+  }
+
+  tagSuggestions(query: string, limit: number): ReturnType<PhotoMetadataRepository['suggestions']> {
+    return this.metadataRepo.suggestions(query, limit);
   }
 
   repairDimensions(photoId: string, width: number, height: number): { repaired: boolean; pendingCount: number } {

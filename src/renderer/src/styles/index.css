@@ -26,9 +26,12 @@ body {
 }
 
 /* Machine data (EXIF, counts, sync states, filenames-in-metadata): always
-   uppercase, tracked mono — the design's hard rule. */
+   uppercase, tracked mono and selectable. no-drag keeps selection gestures
+   from moving a frameless window when values appear in a drag region (#805). */
 .mono-data {
   font: var(--type-meta);
   text-transform: uppercase;
   letter-spacing: var(--tracking-mono);
+  user-select: text;
+  -webkit-app-region: no-drag;
 }

@@ -41,6 +41,13 @@ const PHOTO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'verified',
   syncState: 'local',
+  title: null,
+  description: null,
+  tags: [],
+  userTags: [],
+  importedKeywords: [],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 };
 
 type EphemeralStage = 'fetching' | 'verifying' | 'ready' | 'released' | 'error';

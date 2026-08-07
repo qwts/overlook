@@ -21,7 +21,7 @@ export function SearchField({
   value,
   onChange,
   placeholder = 'Search photos, places, cameras…',
-  shortcut = '⌘K',
+  shortcut = '',
   width = 280,
   label = 'Search',
 }: SearchFieldProps): ReactElement {

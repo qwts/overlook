@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
-import { libraryDescriptorSchema, libraryIdSchema } from '../library/registry.js';
+import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
 import { mediaInfoSchema } from '../library/media-info.js';
 import {
   relocationFailureReasonSchema,
@@ -32,6 +32,11 @@ import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
+import { photoMetadataChannels } from './photo-metadata-channels.js';
+import { exportChannels } from './export-channels.js';
+import { nativeDragChannels } from './native-drag-channels.js';
+import { photoKitChannels, photoKitEvents } from './photo-kit-channels.js';
+import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -191,6 +196,13 @@ const photoRecordSchema = z.object({
   gpsLat: z.number().nullable(),
   gpsLon: z.number().nullable(),
   place: z.string().nullable(),
+  title: photoTitleSchema.nullable(),
+  description: photoDescriptionSchema.nullable(),
+  tags: photoTagsSchema.readonly(),
+  userTags: photoTagsSchema.readonly(),
+  importedKeywords: photoTagsSchema.readonly(),
+  suppressedKeywords: photoTagsSchema.readonly(),
+  metadataVersion: z.number().int().positive(),
   importedAt: z.string(),
   importSource: z.string(),
   favorite: z.boolean(),
@@ -217,6 +229,7 @@ export const channels = {
   ping: defineChannel('demo:ping', z.object({ message: z.string() }), z.object({ echoed: z.string() })),
   getPlatform: defineChannel('app:get-platform', z.object({}), z.object({ platform: z.string() })),
   getLocale: defineChannel('app:get-locale', z.object({}), z.object({ locale: z.string() })),
+  clipboardWrite: defineChannel('clipboard:write', z.object({ text: z.string().max(1_000_000) }), z.object({})),
   windowMinimize: defineChannel('window:minimize', z.object({}), z.object({})),
   windowToggleMaximize: defineChannel('window:toggle-maximize', z.object({}), z.object({ maximized: z.boolean() })),
   windowClose: defineChannel('window:close', z.object({}), z.object({})),
@@ -286,6 +299,9 @@ export const channels = {
   ),
   ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
+  ...photoMetadataChannels,
+  ...nativeDragChannels,
+  ...photoKitChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({
@@ -560,30 +576,7 @@ export const channels = {
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
   // Export engine (#97): decrypt-on-export to a chosen folder.
-  exportPickDestination: defineChannel('export:pick-destination', z.object({}), z.object({ path: z.string().nullable() })),
-  exportRun: defineChannel(
-    'export:run',
-    z.object({ photoIds: z.array(z.string()).min(1), destination: z.string(), format: z.enum(['original', 'jpeg']).optional() }),
-    z.object({
-      exported: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-      cancelled: z.number().int().nonnegative(),
-      previewTranscodes: z.number().int().nonnegative(),
-      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
-    }),
-  ),
-  exportRunAll: defineChannel(
-    'export:run-all',
-    z.object({ destination: z.string().min(1) }),
-    z.object({
-      exported: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-      cancelled: z.number().int().nonnegative(),
-      previewTranscodes: z.number().int().nonnegative(),
-      failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
-    }),
-  ),
-  exportCancel: defineChannel('export:cancel', z.object({}), z.object({})),
+  ...exportChannels,
   // Backup engine (#105): the toolbar's manual trigger. 'disconnected'
   // (#114): providerId null blocks manual runs too, not just auto-backup.
   backupRun: defineChannel(
@@ -704,7 +697,7 @@ export const channels = {
   libraryRegistryList: defineChannel('library-registry:list', z.object({}), z.object({ libraries: z.array(libraryDescriptorSchema) })),
   libraryRegistryCreate: defineChannel(
     'library-registry:create',
-    z.object({ name: z.string().min(1).max(120), path: z.string().min(1).nullable() }),
+    z.object({ name: libraryDisplayNameSchema, path: z.string().min(1).nullable() }),
     z.object({ library: libraryDescriptorSchema }),
   ),
   // open = the live switch (#385/#386). Designed refusals (locked, backup
@@ -726,6 +719,16 @@ export const channels = {
   ),
   libraryRegistryRemove: defineChannel('library-registry:remove', z.object({ id: libraryIdSchema }), z.object({ removed: z.boolean() })),
   libraryRegistryCurrent: defineChannel('library-registry:current', z.object({}), z.object({ library: libraryDescriptorSchema })),
+  libraryRegistrySetDisplayName: defineChannel(
+    'library-registry:set-display-name',
+    z.object({ id: libraryIdSchema, name: libraryDisplayNameSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
+  libraryRegistryResetDisplayName: defineChannel(
+    'library-registry:reset-display-name',
+    z.object({ id: libraryIdSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
   // Register an EXISTING library directory (#386). path null = main opens the
   // native directory picker; cancellation is an outcome, not an error.
   libraryRegistryAdd: defineChannel(
@@ -905,6 +908,7 @@ export const events = {
       total: z.number().int().nonnegative(),
     }),
   ),
+  ...photoKitEvents,
 } as const;
 
 export type PingRequest = z.output<typeof channels.ping.request>;

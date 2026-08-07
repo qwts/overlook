@@ -43,6 +43,13 @@ function photo(index: number, syncState: SyncStatus, favorite = false): PhotoRec
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState,
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 

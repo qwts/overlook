@@ -342,7 +342,7 @@ test('legacy reconciliation binds only individually authenticated remote objects
     plaintext: Buffer.from('recoverable bound integrity error'),
     remote: true,
   });
-  ledger.markOffloaded('P4', authority.id);
+  assert.equal(authorities.bindLegacyPhoto('P4', authority.id), true);
   ledger.repairStatus('P4', 'error');
   let hintsRefreshed = 0;
   const runtime = createBackupIntegrityRuntime({

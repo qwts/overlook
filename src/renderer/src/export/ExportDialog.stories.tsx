@@ -63,6 +63,12 @@ export const Options: Story = {
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeEnabled();
+    await expect(body.getByText('/Users/demo/Exports')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Copy export destination' })).toBeVisible();
+    await userEvent.click(body.getByRole('radio', { name: 'Edits' }));
+    await expect(body.getByText('Write title, description, and effective tags to a new XMP sidecar.')).toBeVisible();
+    await userEvent.click(body.getByRole('radio', { name: 'None' }));
+    await expect(body.getByText('Write no metadata sidecars.')).toBeVisible();
     // Switch OFF: the button disables and the verbatim warning appears.
     await userEvent.click(body.getByRole('switch', { name: 'Decrypt originals' }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();

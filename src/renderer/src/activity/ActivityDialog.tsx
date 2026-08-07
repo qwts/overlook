@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { FormattedDate, FormattedMessage, FormattedTime, defineMessages, useIntl } from 'react-intl';
+import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import type { ActivityEvent, ActivityEventType } from '../../../shared/activity/types.js';
 import type { CapabilityReason, HistoryStatus } from '../../../shared/history/types.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
+import { CopyableValue } from '../components/CopyableValue';
 
 import './activity.css';
 
@@ -16,6 +17,8 @@ const messages = defineMessages({
   loadMore: { id: 'activity.loadMore', defaultMessage: 'Load more' },
   undo: { id: 'activity.undo', defaultMessage: 'Undo' },
   redo: { id: 'activity.redo', defaultMessage: 'Redo' },
+  copyEventId: { id: 'activity.copy.eventId', defaultMessage: 'activity event ID' },
+  copyTimestamp: { id: 'activity.copy.timestamp', defaultMessage: 'activity timestamp' },
 });
 
 const reasonMessages: Readonly<Record<CapabilityReason, { readonly id: string; readonly defaultMessage: string }>> = {
@@ -178,28 +181,37 @@ export function ActivityDialog({ open, onClose }: { readonly open: boolean; read
         {status === 'ready' && events.length === 0 ? <p className="ovl-activity__state">{intl.formatMessage(messages.empty)}</p> : null}
         {events.length > 0 ? (
           <ol className="ovl-activity__list" aria-label={intl.formatMessage(messages.title)}>
-            {events.map((event) => (
-              <li key={event.eventId} className="ovl-activity__item">
-                <span className="ovl-activity__marker" aria-hidden="true" />
-                <div className="ovl-activity__content">
-                  <span className="ovl-activity__summary">
-                    <FormattedMessage {...eventMessages[event.eventType]} values={{ count: countOf(event) }} />
-                  </span>
-                  <time className="ovl-activity__time mono-data" dateTime={event.occurredAt}>
-                    <FormattedMessage
-                      id="activity.timestamp"
-                      defaultMessage="{date} · {time}"
-                      values={{ date: <FormattedDate value={event.occurredAt} />, time: <FormattedTime value={event.occurredAt} /> }}
-                    />
-                  </time>
-                  {event.outcome === 'partial' ? (
-                    <span className="ovl-activity__partial">
-                      <FormattedMessage id="activity.partial" defaultMessage="Completed with some items unresolved" />
+            {events.map((event) => {
+              return (
+                <li key={event.eventId} className="ovl-activity__item">
+                  <span className="ovl-activity__marker" aria-hidden="true" />
+                  <div className="ovl-activity__content">
+                    <span className="ovl-activity__summary">
+                      <FormattedMessage {...eventMessages[event.eventType]} values={{ count: countOf(event) }} />
                     </span>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+                    <div className="ovl-activity__machineData">
+                      <time className="ovl-activity__time" dateTime={event.occurredAt}>
+                        <CopyableValue
+                          value={event.occurredAt}
+                          label={intl.formatMessage(messages.copyTimestamp)}
+                          className="ovl-activity__copyValue"
+                        />
+                      </time>
+                      <CopyableValue
+                        value={event.eventId}
+                        label={intl.formatMessage(messages.copyEventId)}
+                        className="ovl-activity__copyValue"
+                      />
+                    </div>
+                    {event.outcome === 'partial' ? (
+                      <span className="ovl-activity__partial">
+                        <FormattedMessage id="activity.partial" defaultMessage="Completed with some items unresolved" />
+                      </span>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         ) : null}
         {cursor === null ? null : (

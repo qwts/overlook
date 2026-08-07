@@ -26,6 +26,7 @@ const VOCABULARY = [
   'keyboard',
   'cloud',
   'cloud-upload',
+  'copy',
   'cloud-download',
   'cloud-check',
   'cloud-alert',

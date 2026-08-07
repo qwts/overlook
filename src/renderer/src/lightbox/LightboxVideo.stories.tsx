@@ -61,6 +61,13 @@ const VIDEO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'unavailable',
   syncState: 'local',
+  title: null,
+  description: null,
+  tags: [],
+  userTags: [],
+  importedKeywords: [],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 };
 
 const PLAYABLE: DeviceMediaCapabilities = { canDecodeCodec: () => true, transportStreamRemuxAvailable: true };

@@ -8,6 +8,7 @@ import type { ExtractedMetadata } from '../import/exif.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
 import { parseMediaInfo, type MediaInfo } from '../../shared/library/media-info.js';
 import type { DimensionStatus } from '../../shared/library/types.js';
+import { effectivePhotoTags, normalizePhotoTags } from '../../shared/library/photo-metadata.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
@@ -15,6 +16,7 @@ import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavorit
 import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
 import { buildQueryPlan, ORDERINGS, select, selectRankedWithProjection, selectWithProjection, sourceWhere } from './photo-query.js';
 import { manifestSnapshot as readManifestSnapshot, restoreManifest as restoreManifestFromBackup } from './photo-backup-repository.js';
+import { PhotoMetadataRepository } from './photo-metadata-repository.js';
 
 import type {
   AlbumSummary,
@@ -61,7 +63,18 @@ export interface PhotoRow {
   dimension_status: string;
   media_info: string | null;
   sync_state: string | null;
+  user_title: string | null;
+  user_description: string | null;
+  imported_keywords: string;
+  user_tags: string;
+  suppressed_keywords: string;
+  metadata_version: number;
   sort_key: string | number;
+}
+
+function tagsFromJson(value: string): string[] {
+  const parsed: unknown = JSON.parse(value);
+  return normalizePhotoTags(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
 }
 
 /** Serializes probed facts for the media_info JSON column. */
@@ -70,6 +83,9 @@ function mediaInfoJson(mediaInfo: MediaInfo | null | undefined): string | null {
 }
 
 export function toRecord(row: PhotoRow): PhotoRecord {
+  const importedKeywords = tagsFromJson(row.imported_keywords);
+  const userTags = tagsFromJson(row.user_tags);
+  const suppressedKeywords = tagsFromJson(row.suppressed_keywords);
   return {
     id: row.id,
     fileName: row.file_name,
@@ -88,6 +104,13 @@ export function toRecord(row: PhotoRow): PhotoRecord {
     gpsLat: row.gps_lat,
     gpsLon: row.gps_lon,
     place: row.place,
+    title: row.user_title,
+    description: row.user_description,
+    tags: effectivePhotoTags(importedKeywords, userTags, suppressedKeywords),
+    userTags,
+    importedKeywords,
+    suppressedKeywords,
+    metadataVersion: row.metadata_version,
     importedAt: row.imported_at,
     importSource: row.import_source,
     favorite: row.favorite === 1,
@@ -104,7 +127,11 @@ export function toRecord(row: PhotoRow): PhotoRecord {
 
 export const SELECT = select('date');
 export class PhotosRepository {
-  constructor(private readonly db: BetterSqlite3.Database) {}
+  private readonly metadata: PhotoMetadataRepository;
+
+  constructor(private readonly db: BetterSqlite3.Database) {
+    this.metadata = new PhotoMetadataRepository(db);
+  }
 
   /** Inserts the photo and its sync_ledger row (status local, dirty) atomically. */
   insert(photo: PhotoInsert): void {
@@ -115,14 +142,30 @@ export class PhotosRepository {
            id, file_name, file_kind, width, height, bytes, content_hash,
            camera, lens, iso, aperture, shutter, focal_length, taken_at,
            gps_lat, gps_lon, place, imported_at, import_source, favorite, key_id,
-           media_info
+           media_info, user_title, user_description, imported_keywords, user_tags,
+           suppressed_keywords, metadata_tags_search, metadata_version
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite, @keyId,
-           @mediaInfoJson
+           @mediaInfoJson, @title, @description, @importedKeywordsJson, @userTagsJson,
+           @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion
          )`,
-        { ...photo, favorite: photo.favorite === true ? 1 : 0, mediaInfo: null, mediaInfoJson: mediaInfoJson(photo.mediaInfo) },
+        {
+          ...photo,
+          favorite: photo.favorite === true ? 1 : 0,
+          mediaInfo: null,
+          mediaInfoJson: mediaInfoJson(photo.mediaInfo),
+          title: photo.title ?? null,
+          description: photo.description ?? null,
+          importedKeywordsJson: JSON.stringify(normalizePhotoTags(photo.importedKeywords ?? [])),
+          userTagsJson: JSON.stringify(normalizePhotoTags(photo.userTags ?? [])),
+          suppressedKeywordsJson: JSON.stringify(normalizePhotoTags(photo.suppressedKeywords ?? [])),
+          metadataTagsSearch: effectivePhotoTags(photo.importedKeywords ?? [], photo.userTags ?? [], photo.suppressedKeywords ?? []).join(
+            ' ',
+          ),
+          metadataVersion: photo.metadataVersion ?? 1,
+        },
       );
       run(this.db, `INSERT INTO sync_ledger (photo_id, status, dirty) VALUES (?, 'local', 1)`, photo.id);
     })();
@@ -222,6 +265,10 @@ export class PhotosRepository {
   get(photoId: string): PhotoRecord | undefined {
     const row = queryAll<PhotoRow>(this.db, `${SELECT} WHERE p.id = @id LIMIT 1`, { id: photoId })[0];
     return row === undefined ? undefined : toRecord(row);
+  }
+
+  addImportedKeywords(photoId: string, keywords: readonly string[]): boolean {
+    return this.metadata.addImportedKeywords(photoId, keywords);
   }
 
   exportableIds(): readonly string[] {
@@ -695,6 +742,18 @@ export class PhotosRepository {
        JOIN protected_photo_migrations journal ON journal.migration_id = item.migration_id
        WHERE journal.operation IN ('protect', 'unprotect')`,
     ).map((row) => row.contentHash);
+  }
+
+  /** A migration journal temporarily owns both the ordinary and protected
+   * representations. Egress must stay closed until the journal is purged. */
+  isInProtectedMigration(photoId: string): boolean {
+    return (
+      queryGet<{ present: number }>(
+        this.db,
+        'SELECT 1 AS present FROM protected_photo_migration_items WHERE photo_id = ? LIMIT 1',
+        photoId,
+      ) !== undefined
+    );
   }
 
   /** Shared-hash guard for offload (#107): live photos on this hash. */
