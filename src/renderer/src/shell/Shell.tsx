@@ -595,6 +595,7 @@ export function Shell({
       {state.librariesOpen ? (
         <LibrarySwitcher
           startInCreate={librariesCreating}
+          onCurrentNameChange={setLibraryName}
           onClose={() => {
             setLibrariesCreating(false);
             dispatch({ type: 'dialog/set', dialog: 'libraries', open: false });

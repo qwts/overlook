@@ -101,6 +101,11 @@
   color: var(--text-muted);
 }
 
+.ovl-libswitch__duplicate-hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 .ovl-libswitch__when {
   flex: none;
   color: var(--text-muted);
@@ -264,6 +269,12 @@
 .ovl-libswitch__error {
   margin-top: var(--space-3);
   color: var(--accent-red);
+  font-size: var(--text-sm);
+}
+
+.ovl-libswitch__display-help {
+  margin: var(--space-3) 0;
+  color: var(--text-muted);
   font-size: var(--text-sm);
 }
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
-import { libraryDescriptorSchema, libraryIdSchema } from '../library/registry.js';
+import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
 import { mediaInfoSchema } from '../library/media-info.js';
 import {
   relocationFailureReasonSchema,
@@ -705,7 +705,7 @@ export const channels = {
   libraryRegistryList: defineChannel('library-registry:list', z.object({}), z.object({ libraries: z.array(libraryDescriptorSchema) })),
   libraryRegistryCreate: defineChannel(
     'library-registry:create',
-    z.object({ name: z.string().min(1).max(120), path: z.string().min(1).nullable() }),
+    z.object({ name: libraryDisplayNameSchema, path: z.string().min(1).nullable() }),
     z.object({ library: libraryDescriptorSchema }),
   ),
   // open = the live switch (#385/#386). Designed refusals (locked, backup
@@ -727,6 +727,16 @@ export const channels = {
   ),
   libraryRegistryRemove: defineChannel('library-registry:remove', z.object({ id: libraryIdSchema }), z.object({ removed: z.boolean() })),
   libraryRegistryCurrent: defineChannel('library-registry:current', z.object({}), z.object({ library: libraryDescriptorSchema })),
+  libraryRegistrySetDisplayName: defineChannel(
+    'library-registry:set-display-name',
+    z.object({ id: libraryIdSchema, name: libraryDisplayNameSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
+  libraryRegistryResetDisplayName: defineChannel(
+    'library-registry:reset-display-name',
+    z.object({ id: libraryIdSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
   // Register an EXISTING library directory (#386). path null = main opens the
   // native directory picker; cancellation is an outcome, not an error.
   libraryRegistryAdd: defineChannel(

@@ -9,6 +9,23 @@ import { z } from 'zod';
 /** Crockford-base32 ULID — the library's stable identity (ADR-0007/0017 §2). */
 export const libraryIdSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'library id must be a ULID');
 
+/** User-editable registry alias (#685). The transform is part of the shared
+ * contract so renderer, IPC, and main all agree on the persisted value. */
+export const libraryDisplayNameSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .pipe(
+    z
+      .string()
+      .min(1, 'display name cannot be empty')
+      .max(120, 'display name must be 120 characters or fewer')
+      .refine((value) => !/\p{Cc}/u.test(value), 'display name cannot contain control characters')
+      .refine(
+        (value) => value !== '.' && value !== '..' && !/[\\/]/u.test(value) && !/^[A-Za-z]:/u.test(value),
+        'display name cannot look like a filesystem path',
+      ),
+  );
+
 export const libraryEntrySchema = z
   .object({
     id: libraryIdSchema,

@@ -372,6 +372,8 @@ export interface LibraryRegistryFacade {
   open(id: string): LibraryOpenOutcome | Promise<LibraryOpenOutcome>;
   remove(id: string): boolean;
   current(): LibraryDescriptor;
+  setDisplayName(id: string, name: string): LibraryDescriptor;
+  resetDisplayName(id: string): LibraryDescriptor;
   add(path: string | null): Promise<LibraryAddOutcome>;
   pickLocation(): Promise<{ path: string | null }>;
 }
@@ -394,6 +396,12 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
   );
   ipcMain.handle(channels.libraryRegistryCurrent.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRegistryCurrent, () => ({ library: getFacade().current() }))(request),
+  );
+  ipcMain.handle(channels.libraryRegistrySetDisplayName.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRegistrySetDisplayName, ({ id, name }) => ({ library: getFacade().setDisplayName(id, name) }))(request),
+  );
+  ipcMain.handle(channels.libraryRegistryResetDisplayName.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRegistryResetDisplayName, ({ id }) => ({ library: getFacade().resetDisplayName(id) }))(request),
   );
   ipcMain.handle(channels.libraryRegistryAdd.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRegistryAdd, ({ path }) => getFacade().add(path))(request),

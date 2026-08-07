@@ -1547,7 +1547,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/shell/LibrarySwitcher.stories.tsx"
+          "paths": ["src/renderer/src/shell/LibrarySwitcher.stories.tsx", "src/renderer/src/shell/EditLibraryDisplayNameDialog.tsx"]
         },
         {
           "type": "unit-dom",

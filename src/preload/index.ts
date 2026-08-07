@@ -304,6 +304,8 @@ const overlook: OverlookApi = {
     open: createInvoker(channels.libraryRegistryOpen, invokeTransport),
     remove: createInvoker(channels.libraryRegistryRemove, invokeTransport),
     current: async () => libraryRegistryCurrent({}),
+    setDisplayName: createInvoker(channels.libraryRegistrySetDisplayName, invokeTransport),
+    resetDisplayName: createInvoker(channels.libraryRegistryResetDisplayName, invokeTransport),
     add: createInvoker(channels.libraryRegistryAdd, invokeTransport),
     pickLocation: async () => libraryRegistryPickLocation({}),
     // Relocation (#483, ADR-0022): move/cancel/cleanup + journal-backed

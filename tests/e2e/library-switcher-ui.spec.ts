@@ -1,5 +1,5 @@
-import { copyFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import type { OverlookApi } from '../../src/shared/ipc/api.js';
@@ -65,6 +65,62 @@ test('ACCEPTANCE: create a library in the switcher and land in it; keyboard-only
     await page.getByTestId('virtual-grid').waitFor();
     await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
     await expect(page.getByTestId('library-trigger')).toContainText('My Library');
+  } finally {
+    await app.close();
+  }
+});
+
+test('ACCEPTANCE: active and inactive display aliases update live, permit duplicates, reset, and persist without renaming folders (#685)', async () => {
+  test.setTimeout(90_000);
+  const userData = mkE2eTmpDir('overlook-e2e-display-name-');
+  let app = await launch(userData, { OVERLOOK_SEED: '1' });
+  try {
+    let page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    const fixture = await page.evaluate(async () => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      const active = (await overlook.libraries.current()).library;
+      const inactive = (await overlook.libraries.create({ name: 'Inactive', path: null })).library;
+      return { active, inactive };
+    });
+    const activeIdBytes = readFileSync(join(fixture.active.path, 'library-id'), 'utf8');
+    const inactiveIdBytes = readFileSync(join(fixture.inactive.path, 'library-id'), 'utf8');
+
+    await page.getByTestId('library-trigger').click();
+    await page.getByTestId(`edit-display-name-${fixture.active.id}`).click();
+    await page.getByTestId('library-display-name-input').fill('Shared archive');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByTestId('library-trigger')).toContainText('Shared archive');
+
+    await page.getByTestId(`edit-display-name-${fixture.inactive.id}`).click();
+    await page.getByTestId('library-display-name-input').fill('Shared archive');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText(/Location: .* · ID ending/u)).toHaveCount(2);
+
+    const afterRename = await page.evaluate(async () => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      return overlook.libraries.list();
+    });
+    expect(afterRename.libraries.find((library) => library.id === fixture.active.id)?.path).toBe(fixture.active.path);
+    expect(afterRename.libraries.find((library) => library.id === fixture.inactive.id)?.path).toBe(fixture.inactive.path);
+    expect(readFileSync(join(fixture.active.path, 'library-id'), 'utf8')).toBe(activeIdBytes);
+    expect(readFileSync(join(fixture.inactive.path, 'library-id'), 'utf8')).toBe(inactiveIdBytes);
+
+    await page.getByTestId(`edit-display-name-${fixture.inactive.id}`).click();
+    await page.getByTestId('library-display-name-reset').click();
+    await expect(page.getByTestId(`library-row-${basename(fixture.inactive.path)}`)).toBeVisible();
+
+    await app.close();
+    app = await launch(userData);
+    page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    await expect(page.getByTestId('library-trigger')).toContainText('Shared archive');
+    const persisted = await page.evaluate(async () => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      return overlook.libraries.list();
+    });
+    expect(persisted.libraries.find((library) => library.id === fixture.active.id)?.name).toBe('Shared archive');
+    expect(persisted.libraries.find((library) => library.id === fixture.inactive.id)?.name).toBe(basename(fixture.inactive.path));
   } finally {
     await app.close();
   }

@@ -6,7 +6,7 @@ import { readOrMintLibraryId, writeLibraryId } from './library-id.js';
 import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
 import { openLibraryDatabase } from '../db/database.js';
 import { ulid } from '../import/ulid.js';
-import type { LibraryDescriptor, LibraryEntry } from '../../shared/library/registry.js';
+import { libraryDisplayNameSchema, type LibraryDescriptor, type LibraryEntry } from '../../shared/library/registry.js';
 
 // Active-library resolution (ADR-0017 §1/§7, #384), extracted from the
 // composition root: the registry replaces the hardcoded userData/library.
@@ -170,6 +170,10 @@ export class LibraryRegistryRuntime {
    * A create that fails midway deletes a directory it created — before the
    * first successful open the directory is disposable. */
   create(options: { name: string; path: string | null; safeStorage: SafeStorageLike }): LibraryEntry {
+    const parsedName = libraryDisplayNameSchema.safeParse(options.name);
+    if (!parsedName.success) {
+      throw new LibraryRegistryError(parsedName.error.issues[0]?.message ?? 'invalid library display name');
+    }
     const id = ulid();
     const dir = options.path === null ? path.join(this.options.userDataDir(), 'libraries', id) : options.path;
     if (existsSync(dir) && readdirSync(dir).length > 0) {
@@ -194,7 +198,7 @@ export class LibraryRegistryRuntime {
       }
       return this.getRegistry().register({
         id,
-        name: options.name,
+        name: parsedName.data,
         path: dir,
         createdAt: new Date().toISOString(),
         lastOpenedAt: null,
@@ -272,6 +276,21 @@ export class LibraryRegistryRuntime {
     return { library: this.describe(selected, openId), requiresRestart: false };
   }
 
+  /** Registry-only display-name mutation (#685). Refresh the active cache so
+   * current() and every subsequent descriptor serve the new alias without a
+   * restart; library contents and the directory path are never touched. */
+  setDisplayName(id: string, name: string, openId: string | null): LibraryDescriptor {
+    const renamed = this.getRegistry().rename(id, name);
+    if (this.active?.id === id) this.active = renamed;
+    return this.describe(renamed, openId);
+  }
+
+  resetDisplayName(id: string, openId: string | null): LibraryDescriptor {
+    const entry = this.getRegistry().get(id);
+    if (entry === undefined) throw new LibraryRegistryError(`library ${id} is not registered`);
+    return this.setDisplayName(id, path.basename(entry.path), openId);
+  }
+
   /** The IPC facade (structurally matches ipc.ts LibraryRegistryFacade).
    * openLibraryId reports what the process has open — null before bootstrap. */
   facade(deps: {
@@ -283,6 +302,8 @@ export class LibraryRegistryRuntime {
     list: () => LibraryDescriptor[];
     create: (name: string, dir: string | null) => LibraryDescriptor;
     open: (id: string) => { library: LibraryDescriptor; requiresRestart: boolean };
+    setDisplayName: (id: string, name: string) => LibraryDescriptor;
+    resetDisplayName: (id: string) => LibraryDescriptor;
     remove: (id: string) => boolean;
     current: () => LibraryDescriptor;
     add: (
@@ -294,6 +315,8 @@ export class LibraryRegistryRuntime {
       list: () => this.list(deps.openLibraryId()),
       create: (name, dir) => this.describe(this.create({ name, path: dir, safeStorage: deps.safeStorage() }), deps.openLibraryId()),
       open: (id) => this.select(id, deps.openLibraryId()),
+      setDisplayName: (id, name) => this.setDisplayName(id, name, deps.openLibraryId()),
+      resetDisplayName: (id) => this.resetDisplayName(id, deps.openLibraryId()),
       remove: (id) => this.removeEntry(id, deps.openLibraryId()),
       current: () => this.current(deps.openLibraryId()),
       add: async (dir) => {

@@ -752,6 +752,48 @@
   "librename.title": {
     "defaultMessage": "Rename library folder"
   },
+  "libswitch.displayName.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "libswitch.displayName.changed": {
+    "defaultMessage": "Display name changed to {name}"
+  },
+  "libswitch.displayName.duplicateHint": {
+    "defaultMessage": "Location: {location} · ID ending {id}"
+  },
+  "libswitch.displayName.failed": {
+    "defaultMessage": "The display name could not be updated. Try again."
+  },
+  "libswitch.displayName.folder": {
+    "defaultMessage": "Library folder"
+  },
+  "libswitch.displayName.help": {
+    "defaultMessage": "Only the name shown in Overlook changes. The folder, library ID, keys, and backups stay unchanged."
+  },
+  "libswitch.displayName.invalid": {
+    "defaultMessage": "Enter a name without path separators or control characters, up to 120 characters."
+  },
+  "libswitch.displayName.label": {
+    "defaultMessage": "Display name"
+  },
+  "libswitch.displayName.one": {
+    "defaultMessage": "Edit display name of {name}…"
+  },
+  "libswitch.displayName.reset": {
+    "defaultMessage": "Reset to folder name"
+  },
+  "libswitch.displayName.resetting": {
+    "defaultMessage": "Resetting…"
+  },
+  "libswitch.displayName.save": {
+    "defaultMessage": "Save"
+  },
+  "libswitch.displayName.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "libswitch.displayName.title": {
+    "defaultMessage": "Edit display name"
+  },
   "libswitch.move.one": {
     "defaultMessage": "Move {name}…"
   },
