@@ -302,6 +302,15 @@
   "common.cancel": {
     "defaultMessage": "Cancel"
   },
+  "copyableValue.copied": {
+    "defaultMessage": "Copied {label}."
+  },
+  "copyableValue.copy": {
+    "defaultMessage": "Copy {label}"
+  },
+  "copyableValue.failed": {
+    "defaultMessage": "Could not copy {label}."
+  },
   "export.allPhotos": {
     "defaultMessage": "Export all photos"
   },

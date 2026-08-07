@@ -1457,6 +1457,20 @@
       ]
     },
     {
+      "id": "selectable-machine-data-copy",
+      "wiki": "Accessibility-Audit-2026-07",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/components/CopyableValue.stories.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "Packaged macOS and Windows acceptance verifies native mouse selection, keyboard copy, clipboard integration, and titlebar drag behavior that browser interaction tests cannot fully reproduce."
+        }
+      ]
+    },
+    {
       "id": "a11y-audit-and-gates",
       "wiki": "Accessibility-Audit-2026-07",
       "coverage": [
