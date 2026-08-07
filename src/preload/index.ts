@@ -36,6 +36,7 @@ const commandContextUpdate = createInvoker(channels.commandContextUpdate, invoke
 const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
+const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
@@ -187,6 +188,10 @@ const overlook: OverlookApi = {
     onSyncStateChanged: createSubscriber(events.photoSyncStateChanged, subscribeTransport),
     onStorageChanged: createSubscriber(events.storageChanged, subscribeTransport),
     onPendingCountChanged: createSubscriber(events.pendingCountChanged, subscribeTransport),
+  }),
+  nativeDrag: Object.freeze({
+    status: async () => nativeDragStatus({}),
+    start: createInvoker(channels.nativeDragStart, invokeTransport),
   }),
   activity: Object.freeze({
     page: createInvoker(channels.activityPage, invokeTransport),

@@ -153,6 +153,23 @@ export function LibraryGridView({
   const [quickActionIds, setQuickActionIds] = useState<readonly QuickActionCommandId[]>(DEFAULT_QUICK_ACTIONS);
   const [quickActionVisibility, dispatchQuickActionVisibility] = useReducer(reduceQuickActionVisibility, initialQuickActionVisibility);
   const [quickAlbumIds, setQuickAlbumIds] = useState<readonly string[] | null>(null);
+  const [nativeDragAvailable, setNativeDragAvailable] = useState(false);
+
+  useEffect(() => {
+    if (platform !== 'darwin') return;
+    let active = true;
+    void window.overlook.nativeDrag
+      .status()
+      .then(({ available }) => {
+        if (active) setNativeDragAvailable(available);
+      })
+      .catch(() => {
+        if (active) setNativeDragAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [platform]);
 
   useEffect(() => {
     let active = true;
@@ -393,11 +410,18 @@ export function LibraryGridView({
       state.source === 'deleted'
         ? undefined
         : (event: DragEvent<HTMLButtonElement>): void => {
-            beginPhotoDrag(event.dataTransfer, {
+            const payload = {
               version: 1,
               photoIds: state.selection.has(photo.id) ? [...state.selection] : [photo.id],
               sourceAlbumId: state.album,
-            });
+            } as const;
+            if (nativeDragAvailable && payload.photoIds.length <= 100) {
+              event.preventDefault();
+              endPhotoDrag();
+              void window.overlook.nativeDrag.start({ photoIds: payload.photoIds, sourceAlbumId: payload.sourceAlbumId });
+            } else {
+              beginPhotoDrag(event.dataTransfer, payload);
+            }
           };
     const onDragEnd = onDragStart === undefined ? undefined : endPhotoDrag;
     const items = quickActionItems(photo);

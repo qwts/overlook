@@ -117,6 +117,10 @@ export interface OverlookApi {
     readonly onStorageChanged: (listener: () => void) => () => void;
     readonly onPendingCountChanged: (listener: (payload: { count: number }) => void) => () => void;
   };
+  readonly nativeDrag: {
+    readonly status: () => Promise<Res<typeof channels.nativeDragStatus>>;
+    readonly start: (request: Req<typeof channels.nativeDragStart>) => Promise<Res<typeof channels.nativeDragStart>>;
+  };
   readonly activity: {
     readonly page: (request: Req<typeof channels.activityPage>) => Promise<Res<typeof channels.activityPage>>;
   };

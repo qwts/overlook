@@ -12,6 +12,7 @@
     "index.cjs",
     "icloud.cjs",
     "raw.cjs",
+    "drag.cjs",
     "prebuilds/**/*.node"
   ],
   "binary": {

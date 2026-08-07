@@ -2055,6 +2055,24 @@
           "reason": "The packaged-build check verifies real IPTC/XMP producer compatibility and authorized protected-domain presentation while byte identity and isolation are enforced by automated repository, import, export, and backup tests."
         }
       ]
+    },
+    {
+      "id": "796-native-drag-out",
+      "wiki": "Acceptance-Test-Native-Drag-Out",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/native-drag-out.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/native-drag/native-drag-service.test.ts", "tests/native-drag/native-drag-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged check proves real AppKit file promises across Finder, browsers, and native apps; automated tests cover renderer selection, bounded materialization, lock cancellation, naming, custody release, and native-source policy."
+        }
+      ]
     }
   ]
 }

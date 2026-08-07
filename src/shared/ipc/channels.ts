@@ -34,6 +34,7 @@ import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
 import { photoMetadataChannels } from './photo-metadata-channels.js';
 import { exportChannels } from './export-channels.js';
+import { nativeDragChannels } from './native-drag-channels.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
@@ -298,6 +299,7 @@ export const channels = {
   ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   ...photoMetadataChannels,
+  ...nativeDragChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({

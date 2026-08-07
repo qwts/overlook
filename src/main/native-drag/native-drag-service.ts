@@ -1,0 +1,233 @@
+import { createWriteStream } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
+import type { Readable } from 'node:stream';
+
+import { encodePhotoDrag, type PhotoDragPayload } from '../../shared/library/photo-drag.js';
+import type { PhotoRecord } from '../../shared/library/types.js';
+import type { NativeDragBridge, NativeDragUnavailableReason, NativePromiseItem } from './native-drag-bridge.js';
+
+export type NativeDragStartReason = NativeDragUnavailableReason | 'content-unavailable';
+
+interface OpenedOriginal {
+  readonly stream: Readable;
+  readonly release?: (() => Promise<void>) | undefined;
+}
+
+export interface NativeDragOutDeps {
+  readonly bridge: NativeDragBridge;
+  readonly getPhoto: (photoId: string) => PhotoRecord | undefined;
+  readonly openOriginal: (photo: PhotoRecord) => Promise<OpenedOriginal>;
+  readonly admit: () => boolean;
+  readonly writeFile?: ((destinationPath: string, stream: Readable, signal: AbortSignal) => Promise<void>) | undefined;
+}
+
+interface PromiseRecord {
+  readonly item: NativePromiseItem;
+  readonly photo: PhotoRecord;
+}
+
+interface QueuedMaterialization {
+  readonly signal: AbortSignal;
+  readonly run: () => Promise<void>;
+  readonly resolve: () => void;
+  readonly reject: (error: unknown) => void;
+  settled: boolean;
+}
+
+function withSuffix(fileName: string, counter: number): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot <= 0 ? `${fileName} (${String(counter)})` : `${fileName.slice(0, dot)} (${String(counter)})${fileName.slice(dot)}`;
+}
+
+export function uniquePromiseNames(fileNames: readonly string[]): string[] {
+  const used = new Set<string>();
+  return fileNames.map((candidate) => {
+    const normalized = candidate.normalize('NFC');
+    const safe = path.basename(normalized);
+    if (safe !== normalized) throw new Error('invalid drag filename');
+    if (safe === '' || safe === '.' || safe === '..' || safe.includes('\0')) throw new Error('invalid drag filename');
+    let output = safe;
+    let counter = 2;
+    while (used.has(output.toLocaleLowerCase('en-US'))) {
+      output = withSuffix(safe, counter);
+      counter += 1;
+    }
+    used.add(output.toLocaleLowerCase('en-US'));
+    return output;
+  });
+}
+
+async function writeReceiverFile(destinationPath: string, stream: Readable, signal: AbortSignal): Promise<void> {
+  try {
+    await pipeline(stream, createWriteStream(destinationPath, { flags: 'wx' }), { signal });
+  } catch (error) {
+    stream.destroy();
+    await rm(destinationPath, { force: true });
+    throw error;
+  }
+}
+
+function fileType(photo: PhotoRecord): string {
+  return photo.fileKind === 'jpeg'
+    ? 'public.jpeg'
+    : photo.fileKind === 'png'
+      ? 'public.png'
+      : photo.fileKind === 'gif'
+        ? 'com.compuserve.gif'
+        : photo.fileKind === 'heic'
+          ? 'public.heic'
+          : photo.fileKind === 'video'
+            ? 'public.movie'
+            : 'public.data';
+}
+
+export class NativeDragOutService {
+  private controller: AbortController | null = null;
+  private closed = false;
+  private active = 0;
+  private readonly queue: QueuedMaterialization[] = [];
+  private readonly activeTasks = new Set<Promise<void>>();
+
+  constructor(private readonly deps: NativeDragOutDeps) {}
+
+  status(): { readonly available: boolean; readonly reason: NativeDragUnavailableReason | null } {
+    return this.deps.bridge.status();
+  }
+
+  start(
+    windowHandle: Buffer,
+    input: Omit<PhotoDragPayload, 'version'>,
+  ): { readonly started: boolean; readonly reason: NativeDragStartReason | null } {
+    const status = this.status();
+    if (!status.available) return { started: false, reason: status.reason };
+    if (this.closed || !this.deps.admit()) return { started: false, reason: 'content-unavailable' };
+    const ids = [...new Set(input.photoIds)];
+    if (ids.length === 0 || ids.length > 100) return { started: false, reason: 'content-unavailable' };
+    const photos = ids.map((id) => this.deps.getPhoto(id));
+    if (photos.some((photo) => photo === undefined || photo.deletedAt !== null)) {
+      return { started: false, reason: 'content-unavailable' };
+    }
+    const available = photos.filter((photo): photo is PhotoRecord => photo !== undefined);
+    const names = uniquePromiseNames(available.map((photo) => photo.fileName));
+    const records = new Map<string, PromiseRecord>();
+    for (const [index, photo] of available.entries()) {
+      const token = randomUUID();
+      const item = { token, fileName: names[index]!, fileType: fileType(photo) };
+      records.set(token, { item, photo });
+    }
+    this.cancel();
+    const controller = new AbortController();
+    this.controller = controller;
+    const started = this.deps.bridge.start({
+      windowHandle,
+      items: [...records.values()].map(({ item }) => item),
+      internalPayload: encodePhotoDrag({ version: 1, photoIds: ids, sourceAlbumId: input.sourceAlbumId }),
+      materialize: ({ token, destinationPath }) =>
+        this.schedule(() => this.materialize(records, token, destinationPath, controller.signal), controller.signal),
+      // A file-promise receiver may ask for bytes after AppKit reports that
+      // the pointer session ended. Keep the authority controller until the
+      // next drag or library close so Locking can still revoke that work.
+      ended: () => undefined,
+    });
+    if (!started) {
+      controller.abort();
+      this.controller = null;
+    }
+    return { started, reason: started ? null : 'native-unavailable' };
+  }
+
+  cancel(): void {
+    this.controller?.abort();
+    this.controller = null;
+    this.deps.bridge.cancelAll();
+    this.pump();
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.cancel();
+    this.deps.bridge.close();
+  }
+
+  async drain(): Promise<void> {
+    this.pump();
+    while (this.activeTasks.size > 0) await Promise.allSettled([...this.activeTasks]);
+  }
+
+  private async materialize(
+    records: ReadonlyMap<string, PromiseRecord>,
+    token: string,
+    destinationPath: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const record = records.get(token);
+    if (record === undefined || signal.aborted || !this.deps.admit()) throw new Error('drag content unavailable');
+    if (!path.isAbsolute(destinationPath) || path.basename(destinationPath) !== record.item.fileName) {
+      throw new Error('invalid drag destination');
+    }
+    const opened = await this.deps.openOriginal(record.photo);
+    try {
+      if (signal.aborted || !this.deps.admit()) throw new Error('drag content unavailable');
+      await (this.deps.writeFile ?? writeReceiverFile)(destinationPath, opened.stream, signal);
+      if (signal.aborted || !this.deps.admit()) {
+        await rm(destinationPath, { force: true });
+        throw new Error('drag content unavailable');
+      }
+    } finally {
+      opened.stream.destroy();
+      await opened.release?.();
+    }
+  }
+
+  private schedule(run: () => Promise<void>, signal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const queued: QueuedMaterialization = { signal, run, resolve, reject, settled: false };
+      signal.addEventListener(
+        'abort',
+        () => {
+          if (queued.settled) return;
+          queued.settled = true;
+          reject(new Error('drag cancelled'));
+        },
+        { once: true },
+      );
+      this.queue.push(queued);
+      this.pump();
+    });
+  }
+
+  private pump(): void {
+    while (this.active < 2) {
+      const queued = this.queue.shift();
+      if (queued === undefined) return;
+      if (queued.settled || queued.signal.aborted) continue;
+      this.active += 1;
+      const running = queued
+        .run()
+        .then(
+          () => {
+            if (!queued.settled) {
+              queued.settled = true;
+              queued.resolve();
+            }
+          },
+          (error: unknown) => {
+            if (!queued.settled) {
+              queued.settled = true;
+              queued.reject(error);
+            }
+          },
+        )
+        .finally(() => {
+          this.active -= 1;
+          this.activeTasks.delete(running);
+          this.pump();
+        });
+      this.activeTasks.add(running);
+    }
+  }
+}

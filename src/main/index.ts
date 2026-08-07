@@ -51,8 +51,6 @@ import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-r
 import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
 import { createBackupClaimDeps } from './db/backup-claims.js';
-import type { DrainableExportFacade } from './export/export-runtime.js';
-import { createExportFacade } from './export/export-facade-factory.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { registerIpcHandlers, registerRelocationHandlers } from './ipc.js';
@@ -80,6 +78,7 @@ import type { LibraryParts } from './library/library-parts.js';
 import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
+import { EgressRuntime } from './egress-runtime.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
@@ -657,27 +656,21 @@ function getBackupEngine(): BackupEngine {
   return backupEngine;
 }
 
-let exportFacade: DrainableExportFacade | undefined;
-
-function getExportFacade(): DrainableExportFacade {
-  if (exportFacade === undefined) {
-    const parts = requireParts('export');
-    exportFacade = createExportFacade({
-      db: parts.db,
-      blobStore: parts.blobStore,
-      resolveKey: parts.keyStore.resolver(),
-      ephemeral: getEphemeralOriginalService,
-      pickDestination: () => pickExportDestination(harnessEnv),
-      progress: (done, total) => emitExportProgress({ done, total }),
-    });
-  }
-  return exportFacade;
-}
+const egressRuntime = new EgressRuntime({
+  parts: () => requireParts('egress'),
+  ephemeral: getEphemeralOriginalService,
+  platform: process.platform,
+  packaged: app.isPackaged,
+  testDragDestination: () => harnessEnv('OVERLOOK_NATIVE_DRAG_DESTINATION'),
+  pickExportDestination: () => pickExportDestination(harnessEnv),
+  exportProgress: (done, total) => emitExportProgress({ done, total }),
+  unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
+});
 
 async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
   [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
-  exportFacade?.close();
+  egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
   rawRepairService?.close();
@@ -686,7 +679,7 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     closeProductionInboundMoveLibrary(),
     importRuntime?.service.drain() ?? Promise.resolve(),
-    exportFacade?.drain() ?? Promise.resolve(),
+    egressRuntime.drain(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
@@ -723,7 +716,8 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
-  [consistencyChecker, embeddingRuntime, exportFacade] = [undefined, undefined, undefined];
+  [consistencyChecker, embeddingRuntime] = [undefined, undefined];
+  egressRuntime.reset();
   if (mode !== 'restore') restoreRuntime = undefined;
   releaseLibraryLock?.();
   releaseLibraryLock = undefined;
@@ -859,7 +853,8 @@ void externalOpen.whenReady().then(async () => {
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
-    getExport: getExportFacade,
+    getExport: () => egressRuntime.exports(),
+    getNativeDrag: () => egressRuntime.nativeDrag(),
     getKeyStore: () => {
       return requireParts('key store').keyStore;
     },
