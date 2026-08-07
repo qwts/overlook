@@ -156,7 +156,6 @@ export function LibraryGridView({
   const [nativeDragAvailable, setNativeDragAvailable] = useState(false);
 
   useEffect(() => {
-    if (platform !== 'darwin') return;
     let active = true;
     void window.overlook.nativeDrag
       .status()
@@ -169,7 +168,7 @@ export function LibraryGridView({
     return () => {
       active = false;
     };
-  }, [platform]);
+  }, []);
 
   useEffect(() => {
     let active = true;
