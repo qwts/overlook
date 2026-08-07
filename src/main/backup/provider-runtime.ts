@@ -350,12 +350,14 @@ export class ProviderRuntime {
     if (verifier === undefined) return undefined;
     const signal = this.reconnectAbortController.signal;
     signal.throwIfAborted();
-    const operation = verifier({ ...input, signal });
+    const resumeCustodyProofs = (await this.options.pauseCustodyReconnectProofs?.()) ?? (() => undefined);
+    const operation = Promise.resolve().then(() => verifier({ ...input, signal }));
     this.reconnectInFlight.add(operation);
     try {
       return await operation;
     } finally {
       this.reconnectInFlight.delete(operation);
+      resumeCustodyProofs();
     }
   }
 

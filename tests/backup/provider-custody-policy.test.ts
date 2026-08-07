@@ -122,6 +122,8 @@ describe('provider reconnect custody result (#733)', () => {
     let providerId: string | null = null;
     let registryProvider: StorageProvider | undefined;
     let proofProvider: StorageProvider | undefined;
+    let startupProofsPaused = false;
+    let startupProofsResumed = false;
     const r = runtime({
       providerId: () => providerId,
       setProviderId: (id) => {
@@ -132,8 +134,15 @@ describe('provider reconnect custody result (#733)', () => {
         return new Proxy(provider, {});
       },
       verifyCustodyReconnect: (input) => {
+        assert.equal(startupProofsPaused, true, 'explicit proof holds the startup-proof pause');
         proofProvider = input.provider;
         return Promise.resolve({ ok: false, reason: 'wrong-account' });
+      },
+      pauseCustodyReconnectProofs: () => {
+        startupProofsPaused = true;
+        return Promise.resolve(() => {
+          startupProofsResumed = true;
+        });
       },
     });
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-target'), fault: undefined });
@@ -146,6 +155,7 @@ describe('provider reconnect custody result (#733)', () => {
     assert.equal(providerId, 'mock', 'the connection stands as the selected backup target');
     assert.notEqual(proofProvider, registryProvider, 'the proof receives the active-library provider scope');
     assert.equal((await r.status('mock')).connected, true);
+    assert.equal(startupProofsResumed, true);
   });
 
   test('transient namespace proof failure is retryable without clearing selection', async () => {
