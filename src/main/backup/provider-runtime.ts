@@ -25,6 +25,7 @@ import type {
 import { ICloudDriveProvider } from './icloud-drive/icloud-drive-provider.js';
 import { ICloudDriveAuthorityStore } from './icloud-drive/authority-store.js';
 import type { ICloudDriveNativeBridge, ICloudDriveUnavailableReason } from './icloud-drive/native-bridge.js';
+import type { CustodyReconnectResult } from './custody-reconnect.js';
 
 // Provider-selection + pCloud-custody runtime (#256), extracted from the
 // composition root: which provider is active, who Connect targets, the
@@ -61,6 +62,9 @@ export interface ProviderRuntimeOptions {
   readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
   readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
   readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
+  readonly verifyCustodyReconnect?:
+    | ((input: { readonly provider: StorageProvider; readonly identity: ProviderAccountIdentity }) => Promise<CustodyReconnectResult>)
+    | undefined;
   /** Test seams; production probes connection for at most 5s and capacity for 30s. */
   readonly statusTimeoutMs?: number | undefined;
   readonly storageTimeoutMs?: number | undefined;
@@ -305,6 +309,15 @@ export class ProviderRuntime {
       if (!verdict.ok) return verdict;
     }
     this.options.setProviderId(providerId);
+    let reconnect: CustodyReconnectResult | undefined;
+    try {
+      reconnect = await this.options.verifyCustodyReconnect?.({ provider, identity: attempt.identity });
+    } catch {
+      return custodyUnavailable();
+    }
+    if (reconnect?.ok === false) {
+      return reconnect.reason === 'wrong-account' ? custodyWrongAccount() : custodyUnavailable();
+    }
     return { ok: true, reason: null };
   }
 
@@ -778,6 +791,14 @@ function identityUnavailable(providerLabel: string): PCloudConnectResult {
 
 function custodyUnavailable(reason = 'Could not verify custody for this provider account.'): PCloudConnectResult {
   return { ok: false, reason, code: 'custody-unavailable', retryable: true };
+}
+
+function custodyWrongAccount(): PCloudConnectResult {
+  return {
+    ok: false,
+    reason: 'This provider account does not match the account holding this library’s cloud-only originals.',
+    code: 'custody-wrong-account',
+  };
 }
 
 function restoreRequired(custody: CustodyPreflight): PCloudConnectResult {

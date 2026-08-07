@@ -116,6 +116,45 @@ describe('provider custody-change policy (#732)', () => {
   });
 });
 
+describe('provider reconnect custody result (#733)', () => {
+  test('a failed custody proof keeps the new credential selected as a backup target', async () => {
+    let providerId: string | null = null;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      verifyCustodyReconnect: () => Promise.resolve({ ok: false, reason: 'wrong-account' }),
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-target'), fault: undefined });
+
+    assert.deepEqual(await r.connect('mock'), {
+      ok: false,
+      reason: 'This provider account does not match the account holding this library’s cloud-only originals.',
+      code: 'custody-wrong-account',
+    });
+    assert.equal(providerId, 'mock', 'the connection stands as the selected backup target');
+    assert.equal((await r.status('mock')).connected, true);
+  });
+
+  test('transient namespace proof failure is retryable without clearing selection', async () => {
+    let providerId: string | null = null;
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      verifyCustodyReconnect: () => Promise.resolve({ ok: false, reason: 'unavailable' }),
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-reconnect-unavailable'), fault: undefined });
+
+    const result = await r.connect('mock');
+    assert.equal(result.code, 'custody-unavailable');
+    assert.equal(result.retryable, true);
+    assert.equal(providerId, 'mock');
+  });
+});
+
 describe('emergency provider custody rollback (#732)', () => {
   test('failed emergency removal rolls back only when the same credential demonstrably remains', async () => {
     let rolledBack = 0;

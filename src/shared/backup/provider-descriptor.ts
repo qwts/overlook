@@ -96,7 +96,7 @@ export type CustodyRequirement = NonNullable<z.output<typeof providerConnectionS
 export const providerConnectResultSchema = z.object({
   ok: z.boolean(),
   reason: z.string().nullable(),
-  code: z.enum(['identity-unavailable', 'custody-restore-required', 'custody-unavailable']).optional(),
+  code: z.enum(['identity-unavailable', 'custody-restore-required', 'custody-wrong-account', 'custody-unavailable']).optional(),
   retryable: z.boolean().optional(),
   custody: custodyPreflightSchema.optional(),
 });

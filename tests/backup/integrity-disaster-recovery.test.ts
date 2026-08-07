@@ -74,7 +74,7 @@ test('repaired bootstrap and manifest restore the complete library into a fresh 
     const scrubber = createBackupIntegrityRuntime({
       db,
       provider,
-      authorities: { offloadedAuthorities: () => [] },
+      authorities: { offloadedAuthorities: () => [], legacyUnboundCount: () => ({ items: 0, bytes: 0 }) },
       custody: { resolveAuthority: () => Promise.reject(new Error('no offloaded authority')) },
       repo,
       blobs: store,

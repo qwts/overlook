@@ -750,24 +750,32 @@ export class PhotosRepository {
    * their original until permanent purge. */
   integrityItems(
     page: { readonly afterId: string | null; readonly limit: number },
-    scope?: { readonly syncState: 'synced' } | { readonly syncState: 'offloaded'; readonly custodyAuthorityId: number },
+    scope?:
+      | { readonly syncState: 'synced' }
+      | { readonly syncState: 'offloaded'; readonly custodyAuthorityId: number }
+      | { readonly legacyUnbound: true },
   ): readonly BackupIntegrityItem[] {
     return queryAll<BackupIntegrityItem>(
       this.db,
       `SELECT p.id, p.content_hash AS contentHash, l.status AS syncState
          FROM ordinary_visible_photos p
          JOIN sync_ledger l ON l.photo_id = p.id
-        WHERE l.status IN ('synced', 'offloaded')
+        WHERE (
+            (@legacyUnbound = 0 AND l.status IN ('synced', 'offloaded'))
+            OR (@legacyUnbound = 1 AND (l.status = 'offloaded' OR (l.status = 'error' AND l.dirty = 0)))
+          )
           AND (@syncState IS NULL OR l.status = @syncState)
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
+          AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
       {
         afterId: page.afterId,
         limit: page.limit,
-        syncState: scope?.syncState ?? null,
+        syncState: scope !== undefined && 'syncState' in scope ? scope.syncState : null,
         custodyAuthorityId: scope !== undefined && 'custodyAuthorityId' in scope ? scope.custodyAuthorityId : null,
+        legacyUnbound: scope !== undefined && 'legacyUnbound' in scope ? 1 : 0,
       },
     );
   }

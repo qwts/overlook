@@ -20,6 +20,7 @@ export interface CustodyHandleDependencies {
   readonly authorityForPhoto: (photoId: string) => CustodyAuthority | undefined;
   readonly provider: (providerId: string) => StorageProvider | undefined;
   readonly remoteRoot: () => string;
+  readonly prepareAuthority?: ((authority: CustodyAuthority) => Promise<CustodyAuthority>) | undefined;
 }
 
 /** The canonical namespace represented by a library-scoped provider instance. */
@@ -39,6 +40,13 @@ export class CustodyHandleResolver {
   }
 
   async resolveAuthority(authority: CustodyAuthority): Promise<CustodyHandle> {
+    if (this.deps.prepareAuthority !== undefined) {
+      try {
+        authority = await this.deps.prepareAuthority(authority);
+      } catch {
+        throw new CustodyResolutionError('custody-unavailable');
+      }
+    }
     if (authority.state === 'provider-required') throw new CustodyResolutionError('custody-disconnected');
 
     const provider = this.deps.provider(authority.providerId);

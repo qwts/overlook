@@ -466,6 +466,7 @@ function getBackupEngine(): BackupEngine {
       backupTargetConnected: () => getProviderRuntime().activeId() !== null,
       status: (photoId) => ledger.status(photoId),
       now: () => new Date().toISOString(),
+      masterKey: () => parts.keyStore.masterKeyBytes(),
       writeCustodyHints: (hints) => {
         registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
       },
@@ -477,8 +478,7 @@ function getBackupEngine(): BackupEngine {
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
-      authorities: custodyRouting.authorities,
-      custody: custodyRouting.resolver,
+      ...custodyRouting.integrity,
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
