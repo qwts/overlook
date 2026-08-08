@@ -1,5 +1,11 @@
 # photos
 
+## 0.67.1
+
+### Patch Changes
+
+- a6df036: Publish the provider-relative `Overlook Interop/v1` root and Drive owner in the shared v1 contract.
+
 ## 0.67.0
 
 ### Minor Changes
