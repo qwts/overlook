@@ -27,6 +27,9 @@ const MISSING = [
 function mockOverlook(missing: readonly (typeof MISSING)[number][]): () => void {
   const previous = (window as unknown as { overlook?: unknown }).overlook;
   const providers = [{ id: 'prov-a', label: 'Provider A', available: true, unavailableReason: null }];
+  const missingCount = missing.filter((o) => o.reason === 'not-found').length;
+  const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
+  const verifiedCount = 3 - missing.filter((o) => o.kind === 'original').length;
   (window as unknown as { overlook: unknown }).overlook = {
     getLocale: () => Promise.resolve('en-US'),
     settings: { get: () => Promise.resolve({ settings: { providerId: 'prov-a' } }), onChanged: () => () => undefined },
@@ -57,6 +60,22 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): () => void 
           ],
           error: null,
         }),
+      verify: () =>
+        Promise.resolve({
+          result: {
+            libraryId: '01KY000QE5PMZR2P66DX0CCR6D',
+            generation: 3,
+            photos: 3,
+            verifiedCount: Math.max(0, verifiedCount),
+            missingCount,
+            corruptCount,
+            missing,
+          },
+          error: null,
+        }),
+      exportCsv: () => Promise.resolve({ path: null, error: null }),
+      exportCorrupt: () => Promise.resolve({ exported: 0, error: null }),
+      trash: () => Promise.resolve({ trashed: false, error: null }),
       run: () =>
         Promise.resolve({
           result: {
@@ -114,12 +133,29 @@ async function runToComplete(): Promise<HTMLElement> {
   });
   await flush();
 
-  const review = [...(container.querySelectorAll('button') ?? [])].find((button) => (button.textContent ?? '').includes('Review restore'));
-  assert.ok(review, 'a valid library enables review');
+  const verifyBtn = [...(container.querySelectorAll('button') ?? [])].find((button) =>
+    (button.textContent ?? '').includes('Verify backup'),
+  );
+  assert.ok(verifyBtn, 'a valid library enables verify');
   act(() => {
-    review.click();
+    verifyBtn.click();
   });
   await flush();
+  await flush();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  await flush();
+
+  const continueBtn = [...(container.querySelectorAll('button') ?? [])].find((button) =>
+    (button.textContent ?? '').includes('Continue with verified only'),
+  );
+  if (continueBtn !== undefined) {
+    act(() => {
+      continueBtn.click();
+    });
+    await flush();
+  }
 
   const authorize = container.querySelector('input[type="checkbox"]');
   assert.ok(authorize instanceof HTMLInputElement, 'the settings context requires replacement authorization');

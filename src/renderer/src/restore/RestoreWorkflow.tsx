@@ -299,7 +299,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           return;
         }
         if (response.result !== null) {
-          const hasIssues = response.result.missingCount > 0 || response.result.corruptCount > 0;
           setVerifyResult({
             missing: response.result.missing,
             missingCount: response.result.missingCount,
@@ -307,10 +306,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             verifiedCount: response.result.verifiedCount,
             photos: response.result.photos,
           });
-          if (!hasIssues) {
-            // No gap — proceed directly to confirm with healed count
-            setStep('confirm');
-          }
         }
       })
       .catch(() => {
