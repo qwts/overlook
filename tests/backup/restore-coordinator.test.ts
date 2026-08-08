@@ -210,6 +210,22 @@ test('wrong recovery password fails before provider discovery', async () => {
   assert.equal(sourceCalls, 0);
 });
 
+test('discovery reports an authenticated provider scope with no cloud libraries', async () => {
+  const world = await remoteWorld();
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([]),
+    createRunner: () => ({ run: () => Promise.reject(new Error('unused')) }),
+    sessionId: () => 'unused',
+    progress: () => undefined,
+  });
+
+  const result = await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  assert.equal(result.sessionId, null);
+  assert.deepEqual(result.libraries, []);
+  assert.deepEqual(result.error, { reason: 'corrupt', message: 'No Overlook cloud libraries were found.' });
+});
+
 test('cancelled runs preserve discovery but require a fresh verification for resumable retry', async () => {
   const world = await remoteWorld();
   let attempt = 0;
@@ -494,6 +510,133 @@ test('corrupt-image export writes only decryptable image plaintext and reports a
     }
     await coordinator.close();
   }
+});
+
+test('restore actions stay serialized while corrupt-image export rechecks its verification plan', async () => {
+  const world = await remoteWorld();
+  const runner = engineRunner(world.provider);
+  const runVerify = runner.verify?.bind(runner);
+  assert.ok(runVerify);
+  let blockRecheck = false;
+  let entered: (() => void) | undefined;
+  const recheckStarted = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => ({
+      run: runner.run.bind(runner),
+      verify: async (request) => {
+        const result = await runVerify(request);
+        if (blockRecheck) {
+          entered?.();
+          await gate;
+        }
+        return result;
+      },
+    }),
+    sessionId: () => 'session-export-serialized',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-export-serialized');
+  blockRecheck = true;
+  const exporting = coordinator.exportCorrupt('session-export-serialized', LIBRARY_ID, plan, () => Promise.resolve());
+  await recheckStarted;
+
+  assert.match((await coordinator.discover('mock', '/recovery.key', PASSWORD)).error?.message ?? '', /already running/u);
+  assert.match((await coordinator.run('session-export-serialized', LIBRARY_ID, plan, false)).error?.message ?? '', /already running/u);
+  assert.match((await coordinator.verify('session-export-serialized', LIBRARY_ID)).error?.message ?? '', /already running/u);
+  assert.match(
+    (await coordinator.exportCorrupt('session-export-serialized', LIBRARY_ID, plan, () => Promise.resolve())).error ?? '',
+    /already running/u,
+  );
+
+  assert.ok(release);
+  release();
+  assert.deepEqual(await exporting, { exported: true, count: 0, unavailable: 0, error: null });
+  await coordinator.close();
+});
+
+test('corrupt-image export refuses stale, changed, and unavailable verification plans', async () => {
+  for (const mode of ['stale-manifest', 'changed-scan', 'unavailable-scan'] as const) {
+    const world = await remoteWorld();
+    const runner = engineRunner(world.provider);
+    const runVerify = runner.verify?.bind(runner);
+    assert.ok(runVerify);
+    let scans = 0;
+    const coordinator = new RestoreCoordinator({
+      readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+      sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+      createRunner: () => ({
+        run: runner.run.bind(runner),
+        verify: async (request) => {
+          const current = await runVerify(request);
+          scans += 1;
+          if (mode === 'stale-manifest') return { ...current, sealedManifestSha256: 'f'.repeat(64) };
+          if (scans > 1 && mode === 'changed-scan') return { ...current, objectSetSha256: 'f'.repeat(64) };
+          if (scans > 1 && mode === 'unavailable-scan') throw new ProviderError('verification recheck unavailable', 'transient');
+          return current;
+        },
+      }),
+      sessionId: () => `session-export-${mode}`,
+      progress: () => undefined,
+    });
+    const sessionId = `session-export-${mode}`;
+    await coordinator.discover('mock', '/recovery.key', PASSWORD);
+    const plan = await verificationId(coordinator, sessionId);
+    const result = await coordinator.exportCorrupt(sessionId, LIBRARY_ID, plan, () => Promise.resolve());
+    assert.equal(result.exported, false);
+    assert.equal(result.count, 0);
+    assert.equal(result.unavailable, 0);
+    assert.match(result.error ?? '', mode === 'changed-scan' ? /changed after verification/u : /expired|unavailable/u);
+    await coordinator.close();
+  }
+});
+
+test('failed sidecars are reported unavailable and never exported as images', async () => {
+  const world = await remoteWorld();
+  const runner = engineRunner(world.provider);
+  const runVerify = runner.verify?.bind(runner);
+  assert.ok(runVerify);
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => ({
+      run: runner.run.bind(runner),
+      verify: async (request) => {
+        const current = await runVerify(request);
+        return {
+          ...current,
+          missing: [{ path: 'sidecars/P1.xmp', kind: 'sidecar', photoId: 'P1', reason: 'failed-verification' }],
+          missingCount: 1,
+          corruptCount: 1,
+        };
+      },
+    }),
+    sessionId: () => 'session-export-sidecar',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-export-sidecar');
+  let writes = 0;
+  const result = await coordinator.exportCorrupt('session-export-sidecar', LIBRARY_ID, plan, () => {
+    writes += 1;
+    return Promise.resolve();
+  });
+  assert.equal(writes, 0);
+  assert.deepEqual(result, {
+    exported: false,
+    count: 0,
+    unavailable: 1,
+    error: '0 decryptable images exported; 1 corrupt objects were unavailable.',
+  });
+  await coordinator.close();
 });
 
 test('trash reports incomplete deletion honestly, retains the session, and invalidates the plan', async () => {
