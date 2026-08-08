@@ -137,7 +137,9 @@ test('fresh profile restores complete state; wrong password is isolated and canc
     await page.getByLabel('Recovery-key password').fill(PASSWORD);
     await page.getByRole('button', { name: 'Discover backups' }).click();
     await expect(page.getByTestId('restore-library-card')).toContainText(`${String(PHOTO_COUNT)} photos`);
-    await page.getByRole('button', { name: 'Review restore' }).click();
+    await page.getByRole('button', { name: 'Verify backup' }).click();
+    await expect(page.getByTestId('restore-verify')).toBeVisible();
+    await page.getByRole('button', { name: /Continue with verified only/ }).click();
     await page.getByRole('button', { name: `Restore ${String(PHOTO_COUNT)} photos` }).click();
     await expect(page.getByRole('button', { name: 'Cancel and keep staged progress' })).toBeVisible();
     await page.evaluate(() => (globalThis as unknown as { overlook: OverlookApi }).overlook.restore.cancel({}));
