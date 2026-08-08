@@ -68,9 +68,37 @@ export const restoreRunResponseSchema = z.object({
   error: restoreErrorSchema.nullable(),
 });
 
+export const restoreVerifyResponseSchema = z.object({
+  result: z
+    .object({
+      libraryId: z.string().min(1),
+      generation: z.number().int().positive(),
+      photos: z.number().int().nonnegative(),
+      verifiedCount: z.number().int().nonnegative(),
+      missingCount: z.number().int().nonnegative(),
+      corruptCount: z.number().int().nonnegative(),
+      missing: z.array(restoreMissingObjectSchema).readonly(),
+    })
+    .nullable(),
+  error: restoreErrorSchema.nullable(),
+});
+
+export const restoreTrashRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  libraryId: z.string().min(1),
+  confirmation: z.string().min(1),
+});
+
+export const restoreTrashResponseSchema = z.object({
+  trashed: z.boolean(),
+  error: restoreErrorSchema.nullable(),
+});
+
 export type RestoreFailure = z.output<typeof restoreFailureSchema>;
 export type RestoreMissingObject = z.output<typeof restoreMissingObjectSchema>;
 export type RestoreProgressContract = z.output<typeof restoreProgressSchema>;
 export type RestoreLibrarySummary = z.output<typeof restoreLibrarySummarySchema>;
 export type RestoreDiscoverResponse = z.output<typeof restoreDiscoverResponseSchema>;
 export type RestoreRunResponse = z.output<typeof restoreRunResponseSchema>;
+export type RestoreVerifyResponse = z.output<typeof restoreVerifyResponseSchema>;
+export type RestoreTrashResponse = z.output<typeof restoreTrashResponseSchema>;

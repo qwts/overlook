@@ -17,7 +17,7 @@ export interface RestoreWorkflowProps {
   readonly onStartNew?: (() => void) | undefined;
 }
 
-type Step = 'setup' | 'choose' | 'confirm' | 'running' | 'complete';
+type Step = 'setup' | 'choose' | 'verify' | 'confirm' | 'running' | 'complete';
 
 const ERROR_HELP: Record<string, string> = {
   auth: 'Reconnect the provider, then try discovery again.',
@@ -74,6 +74,24 @@ const messages = defineMessages({
     id: 'restore.localKey.passwordHelp',
     defaultMessage: "Your app lock protects this Mac's stored key. Enter the password you unlock Overlook with.",
   },
+  verifyHeading: { id: 'restore.verify.heading', defaultMessage: 'Verify backup before restore' },
+  verifyCounts: {
+    id: 'restore.verify.counts',
+    defaultMessage: '{missing} missing, {corrupt} corrupt (failed verification) — {verified} verified',
+  },
+  verifyHelp: {
+    id: 'restore.verify.help',
+    defaultMessage:
+      'A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage.',
+  },
+  exportCsv: { id: 'restore.verify.exportCsv', defaultMessage: 'Export CSV' },
+  exportCorrupt: { id: 'restore.verify.exportCorrupt', defaultMessage: 'Export corrupt images' },
+  continueVerified: { id: 'restore.verify.continue', defaultMessage: 'Continue with verified only' },
+  trashBackup: { id: 'restore.verify.trash', defaultMessage: 'Trash backup and quit' },
+  trashConfirmLabel: { id: 'restore.verify.trashConfirm', defaultMessage: 'Type Permanently Delete Backup to confirm' },
+  trashConfirmPlaceholder: { id: 'restore.verify.trashPlaceholder', defaultMessage: 'Permanently Delete Backup' },
+  details: { id: 'restore.error.details', defaultMessage: 'Details' },
+  copyError: { id: 'restore.error.copy', defaultMessage: 'Copy error' },
 });
 
 function fileName(path: string): string {
@@ -167,6 +185,16 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [error, setError] = useState<{ reason: string; message: string } | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [missing, setMissing] = useState<readonly RestoreMissingObject[]>([]);
+  const [verifyResult, setVerifyResult] = useState<{
+    missing: readonly RestoreMissingObject[];
+    missingCount: number;
+    corruptCount: number;
+    verifiedCount: number;
+    photos: number;
+  } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [trashConfirm, setTrashConfirm] = useState('');
+  const [showTrashConfirm, setShowTrashConfirm] = useState(false);
 
   const descriptor = providers.find((provider) => provider.id === providerId) ?? null;
   const selected = useMemo(() => libraries.find((library) => library.libraryId === selectedId) ?? null, [libraries, selectedId]);
@@ -209,6 +237,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setSelectedId(null);
     setFallbackNotice(null);
     setMissing([]);
+    setVerifyResult(null);
+    setShowTrashConfirm(false);
+    setTrashConfirm('');
   };
 
   const runDiscovery = (request: Parameters<typeof window.overlook.restore.discover>[0], noMatch: string): void => {
@@ -252,6 +283,50 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
       { providerId, localKey: true, ...(appPassword === '' ? {} : { password: appPassword }) },
       intl.formatMessage(messages.localKeyNoMatch),
     );
+  };
+
+  const verify = (): void => {
+    if (sessionId === null || selectedId === null) return;
+    setError(null);
+    setVerifying(true);
+    setStep('verify');
+    void (window.overlook.restore as unknown as { verify: (p: unknown) => Promise<{ result: unknown; error: unknown }> })
+      .verify({ sessionId, libraryId: selectedId })
+      .then((response: unknown) => {
+        setVerifying(false);
+        const r = response as {
+          result: {
+            missing: readonly RestoreMissingObject[];
+            missingCount: number;
+            corruptCount: number;
+            verifiedCount: number;
+            photos: number;
+          } | null;
+          error: { reason: string; message: string } | null;
+        };
+        if (r.error !== null) {
+          setError(r.error);
+          return;
+        }
+        if (r.result !== null) {
+          const hasIssues = r.result.missingCount > 0 || r.result.corruptCount > 0;
+          setVerifyResult({
+            missing: r.result.missing,
+            missingCount: r.result.missingCount,
+            corruptCount: r.result.corruptCount,
+            verifiedCount: r.result.verifiedCount,
+            photos: r.result.photos,
+          });
+          if (!hasIssues) {
+            // No gap — proceed directly to confirm with healed count
+            setStep('confirm');
+          }
+        }
+      })
+      .catch(() => {
+        setVerifying(false);
+        setError({ reason: 'io', message: 'Verification failed. Check your connection and try again.' });
+      });
   };
 
   const run = (): void => {
@@ -462,10 +537,114 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             >
               Back
             </Button>
-            <Button variant="primary" disabled={selectedId === null} onClick={() => setStep('confirm')}>
-              Review restore
+            <Button variant="primary" disabled={selectedId === null} onClick={verify}>
+              Verify backup
             </Button>
           </div>
+        </>
+      ) : step === 'verify' ? (
+        <>
+          <div className="ovl-restore__sectionTitle">{intl.formatMessage(messages.verifyHeading)}</div>
+          {verifying ? (
+            <div className="ovl-restore__empty">Scanning cloud backup — classifying verified vs missing vs corrupt…</div>
+          ) : verifyResult === null ? (
+            <div className="ovl-restore__empty">Preparing verification…</div>
+          ) : (
+            <>
+              <div className="ovl-restore__warnings" data-testid="restore-verify">
+                <strong>
+                  {intl.formatMessage(messages.verifyCounts, {
+                    missing: verifyResult.missingCount,
+                    corrupt: verifyResult.corruptCount,
+                    verified: verifyResult.verifiedCount,
+                  })}
+                </strong>
+                <span>{intl.formatMessage(messages.verifyHelp)}</span>
+                {verifyResult.missing.length === 0 ? null : (
+                  <ul className="mono-data" style={{ maxHeight: 160, overflow: 'auto', userSelect: 'text' }}>
+                    {verifyResult.missing.map((o) => (
+                      <li key={o.path}>
+                        {o.path} — {o.kind} — {o.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="ovl-restore__actions" style={{ flexWrap: 'wrap' }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void (window.overlook.restore as unknown as { exportCsv: (p: unknown) => Promise<unknown> })
+                      .exportCsv({ sessionId, libraryId: selectedId })
+                      .then(() => {});
+                  }}
+                >
+                  {intl.formatMessage(messages.exportCsv)}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void (window.overlook.restore as unknown as { exportCorrupt: (p: unknown) => Promise<unknown> })
+                      .exportCorrupt({ sessionId, libraryId: selectedId })
+                      .then(() => {});
+                  }}
+                >
+                  {intl.formatMessage(messages.exportCorrupt)}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    // Continue with verified only — heal and proceed to confirm with verified count
+                    setStep('confirm');
+                  }}
+                >
+                  {intl.formatMessage(messages.continueVerified)} ({formatCount(verifyResult.verifiedCount)} photos)
+                </Button>
+                <Button variant="danger" onClick={() => setShowTrashConfirm(true)}>
+                  {intl.formatMessage(messages.trashBackup)}
+                </Button>
+              </div>
+              {showTrashConfirm ? (
+                <div className="ovl-restore__warnings" style={{ borderColor: 'var(--accent-red)' }}>
+                  <strong>
+                    Trash backup and quit — this removes all staged files and all the broken backup files. It is non reversible.
+                  </strong>
+                  <label className="ovl-restore__field">
+                    <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
+                    <input
+                      value={trashConfirm}
+                      onChange={(e) => setTrashConfirm(e.target.value)}
+                      placeholder={intl.formatMessage(messages.trashConfirmPlaceholder)}
+                    />
+                  </label>
+                  <div className="ovl-restore__actions">
+                    <Button variant="ghost" onClick={() => setShowTrashConfirm(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      disabled={trashConfirm !== 'Permanently Delete Backup'}
+                      onClick={() => {
+                        if (sessionId === null || selectedId === null) return;
+                        void (window.overlook.restore as unknown as { trash: (p: unknown) => Promise<{ trashed: boolean }> })
+                          .trash({ sessionId, libraryId: selectedId, confirmation: trashConfirm })
+                          .then((res) => {
+                            if (res.trashed) window.close();
+                          });
+                      }}
+                    >
+                      Confirm trash
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="ovl-restore__actions">
+                <Button variant="ghost" onClick={() => setStep('choose')}>
+                  Back
+                </Button>
+              </div>
+            </>
+          )}
         </>
       ) : step === 'confirm' && selected !== null ? (
         <>
@@ -477,6 +656,12 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
               <li>The current library remains active unless the complete staged restore validates.</li>
               <li>Activation uses rollback-safe replacement, then Overlook relaunches.</li>
             </ul>
+            {verifyResult !== null ? (
+              <span>
+                Verified {formatCount(verifyResult.verifiedCount)} of {formatCount(verifyResult.photos)} photos will be restored;{' '}
+                {formatCount(verifyResult.missingCount + verifyResult.corruptCount)} objects will be marked NOT FOUND.
+              </span>
+            ) : null}
           </div>
           {context === 'settings' ? (
             <Checkbox
@@ -486,11 +671,11 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             />
           ) : null}
           <div className="ovl-restore__actions">
-            <Button variant="ghost" onClick={() => setStep('choose')}>
+            <Button variant="ghost" onClick={() => setStep(verifyResult !== null ? 'verify' : 'choose')}>
               Back
             </Button>
             <Button variant={context === 'settings' ? 'danger' : 'primary'} disabled={!authorized} onClick={run}>
-              Restore {formatCount(selected.photos ?? 0)} photos
+              Restore {formatCount(verifyResult?.verifiedCount ?? selected.photos ?? 0)} photos
             </Button>
           </div>
         </>
@@ -531,8 +716,8 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
       )}
 
       {error === null ? null : (
-        <div className="ovl-restore__error" role="alert">
-          <strong>{error.message}</strong>
+        <div className="ovl-restore__error" role="alert" style={{ userSelect: 'text' }}>
+          <strong style={{ userSelect: 'text' }}>{error.message}</strong>
           <span>
             {error.reason === 'not-a-library'
               ? intl.formatMessage(messages.notLibraryHelp)
@@ -544,6 +729,19 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     ? intl.formatMessage(messages.localKeyPasswordHelp)
                     : (ERROR_HELP[error.reason] ?? ERROR_HELP['io'])}
           </span>
+          <details style={{ marginTop: 8 }}>
+            <summary>{intl.formatMessage(messages.details)}</summary>
+            <pre className="mono-data" style={{ userSelect: 'text', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {`reason: ${error.reason}\nmessage: ${error.message}`}
+            </pre>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void navigator.clipboard.writeText(`reason: ${error.reason}\nmessage: ${error.message}`)}
+            >
+              {intl.formatMessage(messages.copyError)}
+            </Button>
+          </details>
         </div>
       )}
     </div>

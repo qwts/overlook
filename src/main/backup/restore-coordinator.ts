@@ -1,9 +1,15 @@
 import { openRecoveryKey, RecoveryError } from '../crypto/recovery.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
-import type { RestoreRequest, RestoreRunResult } from './restore-engine.js';
-import type { StorageProvider } from './provider.js';
+import type { RestoreRequest, RestoreRunResult, RestoreVerifyResult } from './restore-engine.js';
+import type { RemoteEntry, StorageProvider } from './provider.js';
 import { RestoreError, toRestoreError, type RestoreProgress } from './restore-types.js';
-import type { RestoreDiscoverResponse, RestoreLibrarySummary, RestoreRunResponse } from '../../shared/backup/restore-contract.js';
+import type {
+  RestoreDiscoverResponse,
+  RestoreLibrarySummary,
+  RestoreRunResponse,
+  RestoreTrashResponse,
+  RestoreVerifyResponse,
+} from '../../shared/backup/restore-contract.js';
 
 export interface RestoreSource {
   readonly libraryId: string;
@@ -24,6 +30,7 @@ interface RestoreSession {
 
 export interface RestoreRunner {
   run(request: RestoreRequest): Promise<RestoreRunResult>;
+  verify?(request: RestoreRequest): Promise<RestoreVerifyResult>;
 }
 
 /** How discovery obtains the master key (#741 follow-up): the separately
@@ -183,6 +190,14 @@ export class RestoreCoordinator {
     return this.track(() => this.runOperation(sessionId, libraryId, allowReplace));
   }
 
+  verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse> {
+    return this.track(() => this.verifyOperation(sessionId, libraryId));
+  }
+
+  trash(sessionId: string, libraryId: string, confirmation: string): Promise<RestoreTrashResponse> {
+    return this.track(() => this.trashOperation(sessionId, libraryId, confirmation));
+  }
+
   private async runOperation(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
     const session = this.session;
     const source = session?.sources.get(libraryId);
@@ -219,6 +234,83 @@ export class RestoreCoordinator {
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
+    }
+  }
+
+  private async verifyOperation(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse> {
+    const session = this.session;
+    const source = session?.sources.get(libraryId);
+    if (session === null || session.id !== sessionId || source === undefined) {
+      return { result: null, error: { reason: 'io', message: 'Restore discovery expired; discover the backup again.' } };
+    }
+    if (this.controller !== null) {
+      return { result: null, error: { reason: 'io', message: 'A restore is already running.' } };
+    }
+    const controller = new AbortController();
+    this.controller = controller;
+    this.deps.workStarted?.();
+    try {
+      const runner = this.deps.createRunner(source.provider, this.deps.progress);
+      if (runner.verify === undefined) {
+        return { result: null, error: { reason: 'io', message: 'Verify is not available in this runner.' } };
+      }
+      const result = await runner.verify({
+        masterKey: session.masterKey,
+        allowReplace: false,
+        signal: controller.signal,
+        ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
+      });
+      return {
+        result: {
+          libraryId: result.libraryId,
+          generation: result.generation,
+          photos: result.photos,
+          verifiedCount: result.verifiedCount,
+          missingCount: result.missingCount,
+          corruptCount: result.corruptCount,
+          missing: [...result.missing],
+        },
+        error: null,
+      };
+    } catch (error) {
+      return { result: null, error: errorResult(error) };
+    } finally {
+      this.controller = null;
+      this.deps.workFinished?.();
+    }
+  }
+
+  private async trashOperation(sessionId: string, libraryId: string, confirmation: string): Promise<RestoreTrashResponse> {
+    if (confirmation !== 'Permanently Delete Backup') {
+      return { trashed: false, error: { reason: 'io', message: 'Confirmation text does not match.' } };
+    }
+    const session = this.session;
+    const source = session?.sources.get(libraryId);
+    if (session === null || session.id !== sessionId || source === undefined) {
+      return { trashed: false, error: { reason: 'io', message: 'Restore discovery expired; discover the backup again.' } };
+    }
+    try {
+      const entries = await source.provider.list('', undefined);
+      for (const entry of entries) {
+        await source.provider.delete(entry.path).catch(() => {
+          // Deletion failures are non-fatal for trash — best-effort
+        });
+      }
+      try {
+        for (const prefix of ['blobs', 'sidecars', 'protected']) {
+          const list = await source.provider.list(prefix).catch(() => [] as readonly RemoteEntry[]);
+          for (const e of list)
+            await source.provider.delete(e.path).catch(() => {
+              // Best-effort per-object deletion
+            });
+        }
+      } catch {
+        // Best-effort cleanup — ignore
+      }
+      this.clearSession();
+      return { trashed: true, error: null };
+    } catch (error) {
+      return { trashed: false, error: errorResult(error) };
     }
   }
 
