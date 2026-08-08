@@ -1,7 +1,12 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { addAbortSignal, Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import { openRecoveryKey, RecoveryError } from '../crypto/recovery.js';
+import { createDecryptStream } from '../crypto/envelope.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import type { RestoreRequest, RestoreRunResult, RestoreVerifyResult } from './restore-engine.js';
-import type { RemoteEntry, StorageProvider } from './provider.js';
+import type { StorageProvider } from './provider.js';
 import { RestoreError, toRestoreError, type RestoreProgress } from './restore-types.js';
 import type {
   RestoreDiscoverResponse,
@@ -26,6 +31,7 @@ interface RestoreSession {
   readonly masterKey: Buffer;
   readonly custodyPassword: string | null;
   readonly sources: ReadonlyMap<string, DiscoveredSource>;
+  readonly verifications: Map<string, RestoreVerifyResult>;
 }
 
 export interface RestoreRunner {
@@ -60,15 +66,18 @@ export interface RestoreCoordinatorDeps {
   readonly activated?: ((result: RestoreRunResult) => void) | undefined;
 }
 
-function errorResult(error: unknown): { reason: RestoreError['reason']; message: string } {
+type FailurePhase = 'discovering' | 'downloading' | 'rebuilding' | 'activating' | 'verify-scan';
+
+function errorResult(error: unknown, phase?: FailurePhase): { reason: RestoreError['reason']; message: string; phase?: FailurePhase } {
   if (error instanceof RecoveryError) {
     return {
       reason: error.reason === 'wrong-password' ? 'wrong-key' : 'corrupt',
       message: error.reason === 'wrong-password' ? 'The recovery-key password is incorrect.' : 'This is not an Overlook recovery key.',
+      ...(phase === undefined ? {} : { phase }),
     };
   }
   const mapped = toRestoreError(error);
-  return { reason: mapped.reason, message: mapped.message };
+  return { reason: mapped.reason, message: mapped.message, ...(phase === undefined ? {} : { phase }) };
 }
 
 function invalidSummary(libraryId: string, error: RestoreError): RestoreLibrarySummary {
@@ -85,6 +94,17 @@ function invalidSummary(libraryId: string, error: RestoreError): RestoreLibraryS
     fallbackGenerations: 0,
     resumable: false,
   };
+}
+
+function verificationMatches(left: RestoreVerifyResult, right: RestoreVerifyResult): boolean {
+  return (
+    left.libraryId === right.libraryId &&
+    left.generation === right.generation &&
+    left.manifestPath === right.manifestPath &&
+    left.sealedManifestSha256 === right.sealedManifestSha256 &&
+    left.objectSetSha256 === right.objectSetSha256 &&
+    isDeepStrictEqual(left.missing, right.missing)
+  );
 }
 
 export class RestoreCoordinator {
@@ -178,7 +198,7 @@ export class RestoreCoordinator {
       }
       const id = this.deps.sessionId();
       const custodyPassword = source.kind === 'local-master' ? (source.custodyPassword ?? null) : null;
-      this.session = { id, providerId, masterKey, custodyPassword, sources: valid };
+      this.session = { id, providerId, masterKey, custodyPassword, sources: valid, verifications: new Map() };
       return { sessionId: id, libraries, error: null };
     } catch (error) {
       masterKey.fill(0);
@@ -186,19 +206,24 @@ export class RestoreCoordinator {
     }
   }
 
-  run(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
-    return this.track(() => this.runOperation(sessionId, libraryId, allowReplace));
+  run(sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
+    return this.track(() => this.runOperation(sessionId, libraryId, verificationId, allowReplace));
   }
 
   verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse> {
     return this.track(() => this.verifyOperation(sessionId, libraryId));
   }
 
-  trash(sessionId: string, libraryId: string, confirmation: string): Promise<RestoreTrashResponse> {
-    return this.track(() => this.trashOperation(sessionId, libraryId, confirmation));
+  trash(sessionId: string, libraryId: string, verificationId: string, confirmation: string): Promise<RestoreTrashResponse> {
+    return this.track(() => this.trashOperation(sessionId, libraryId, verificationId, confirmation));
   }
 
-  private async runOperation(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
+  private async runOperation(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    allowReplace: boolean,
+  ): Promise<RestoreRunResponse> {
     const session = this.session;
     const source = session?.sources.get(libraryId);
     if (session === null || session.id !== sessionId || source === undefined) {
@@ -207,16 +232,26 @@ export class RestoreCoordinator {
     if (this.controller !== null) {
       return { result: null, error: { reason: 'io', message: 'A restore is already running.' } };
     }
+    const verification = session.verifications.get(verificationId);
+    if (verification === undefined || verification.libraryId !== libraryId) {
+      return { result: null, error: { reason: 'io', message: 'Restore verification expired; verify the backup again.' } };
+    }
+    session.verifications.delete(verificationId);
     const controller = new AbortController();
     this.controller = controller;
     this.deps.workStarted?.();
+    let failurePhase: FailurePhase = 'discovering';
     try {
       const expectedGeneration = source.discovery.newestGeneration;
-      const runner = this.deps.createRunner(source.provider, this.deps.progress);
+      const runner = this.deps.createRunner(source.provider, (progress) => {
+        if (progress.stage !== 'complete') failurePhase = progress.stage;
+        this.deps.progress(progress);
+      });
       const result = await runner.run({
         masterKey: session.masterKey,
         allowReplace,
         signal: controller.signal,
+        verification,
         ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
       });
       this.deps.activated?.(result);
@@ -230,7 +265,7 @@ export class RestoreCoordinator {
         error: null,
       };
     } catch (error) {
-      return { result: null, error: errorResult(error) };
+      return { result: null, error: errorResult(error, failurePhase) };
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
@@ -260,8 +295,12 @@ export class RestoreCoordinator {
         signal: controller.signal,
         ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
       });
+      const verificationId = randomUUID();
+      session.verifications.clear();
+      session.verifications.set(verificationId, result);
       return {
         result: {
+          verificationId,
           libraryId: result.libraryId,
           generation: result.generation,
           photos: result.photos,
@@ -273,14 +312,19 @@ export class RestoreCoordinator {
         error: null,
       };
     } catch (error) {
-      return { result: null, error: errorResult(error) };
+      return { result: null, error: errorResult(error, 'verify-scan') };
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
     }
   }
 
-  private async trashOperation(sessionId: string, libraryId: string, confirmation: string): Promise<RestoreTrashResponse> {
+  private async trashOperation(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    confirmation: string,
+  ): Promise<RestoreTrashResponse> {
     if (confirmation !== 'Permanently Delete Backup') {
       return { trashed: false, error: { reason: 'io', message: 'Confirmation text does not match.' } };
     }
@@ -289,23 +333,22 @@ export class RestoreCoordinator {
     if (session === null || session.id !== sessionId || source === undefined) {
       return { trashed: false, error: { reason: 'io', message: 'Restore discovery expired; discover the backup again.' } };
     }
+    const verification = session.verifications.get(verificationId);
+    if (verification === undefined || verification.libraryId !== libraryId) {
+      return { trashed: false, error: { reason: 'io', message: 'Restore verification expired; verify the backup again.' } };
+    }
+    session.verifications.delete(verificationId);
     try {
-      const entries = await source.provider.list('', undefined);
+      const entries = await source.provider.list('.', undefined);
       for (const entry of entries) {
-        await source.provider.delete(entry.path).catch(() => {
-          // Deletion failures are non-fatal for trash — best-effort
-        });
+        await source.provider.delete(entry.path);
       }
-      try {
-        for (const prefix of ['blobs', 'sidecars', 'protected']) {
-          const list = await source.provider.list(prefix).catch(() => [] as readonly RemoteEntry[]);
-          for (const e of list)
-            await source.provider.delete(e.path).catch(() => {
-              // Best-effort per-object deletion
-            });
-        }
-      } catch {
-        // Best-effort cleanup — ignore
+      const remaining = await source.provider.list('.', undefined);
+      if (remaining.length > 0) {
+        return {
+          trashed: false,
+          error: { reason: 'io', message: `Backup trash is incomplete; ${String(remaining.length)} objects remain.` },
+        };
       }
       this.clearSession();
       return { trashed: true, error: null };
@@ -318,6 +361,105 @@ export class RestoreCoordinator {
     const session = this.session;
     if (session === null || session.id !== sessionId) return null;
     return session.sources.get(libraryId)?.provider ?? null;
+  }
+
+  verificationFor(sessionId: string, libraryId: string, verificationId: string): RestoreVerifyResult | null {
+    const session = this.session;
+    if (session === null || session.id !== sessionId) return null;
+    const verification = session.verifications.get(verificationId);
+    return verification?.libraryId === libraryId ? verification : null;
+  }
+
+  exportCorrupt(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    writeImage: (fileName: string, bytes: Buffer) => Promise<void>,
+  ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }> {
+    return this.track(async () => {
+      const session = this.session;
+      const source = session?.sources.get(libraryId);
+      const verification = this.verificationFor(sessionId, libraryId, verificationId);
+      if (session === null || source === undefined || verification === null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
+      }
+      if (this.controller !== null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'A restore is already running.' };
+      }
+      const candidate = source.discovery.candidates.find(
+        (item) =>
+          item.path === verification.manifestPath &&
+          item.generation === verification.generation &&
+          item.sealedSha256 === verification.sealedManifestSha256,
+      );
+      if (candidate === undefined) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
+      }
+      const corrupt = verification.missing.filter((item) => item.reason === 'failed-verification');
+      const controller = new AbortController();
+      this.controller = controller;
+      this.deps.workStarted?.();
+      let count = 0;
+      let unavailable = 0;
+      try {
+        const runner = this.deps.createRunner(source.provider, this.deps.progress);
+        if (runner.verify === undefined) {
+          return { exported: false, count: 0, unavailable: 0, error: 'Verify is not available in this runner.' };
+        }
+        const current = await runner.verify({
+          masterKey: session.masterKey,
+          allowReplace: false,
+          signal: controller.signal,
+          ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
+        });
+        if (!verificationMatches(current, verification)) {
+          session.verifications.delete(verificationId);
+          return { exported: false, count: 0, unavailable: 0, error: 'The backup changed after verification. Verify it again.' };
+        }
+        for (const item of corrupt) {
+          const photo = item.kind === 'original' ? candidate.manifest.photos.find((entry) => entry.id === item.photoId) : undefined;
+          if (photo === undefined) {
+            unavailable += 1;
+            continue;
+          }
+          try {
+            const remote = addAbortSignal(controller.signal, await source.provider.getStream(item.path));
+            const ciphertext = await buffer(remote);
+            const plaintext = await buffer(
+              Readable.from([ciphertext]).pipe(createDecryptStream(source.discovery.resolveKey, { photoId: photo.id })),
+            );
+            if (createHash('sha256').update(plaintext).digest('hex') === photo.contentHash) {
+              plaintext.fill(0);
+              unavailable += 1;
+              continue;
+            }
+            try {
+              await writeImage(`${photo.id}-${photo.fileName}`, plaintext);
+            } finally {
+              plaintext.fill(0);
+            }
+            count += 1;
+          } catch {
+            if (controller.signal.aborted) throw new RestoreError('cancelled', 'restore cancelled');
+            unavailable += 1;
+          }
+        }
+        return {
+          exported: unavailable === 0,
+          count,
+          unavailable,
+          error:
+            unavailable === 0
+              ? null
+              : `${String(count)} decryptable images exported; ${String(unavailable)} corrupt objects were unavailable.`,
+        };
+      } catch (error) {
+        return { exported: false, count, unavailable, error: errorResult(error).message };
+      } finally {
+        this.controller = null;
+        this.deps.workFinished?.();
+      }
+    });
   }
 
   cancel(): void {

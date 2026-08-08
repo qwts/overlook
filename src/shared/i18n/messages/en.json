@@ -1296,7 +1296,10 @@
     "defaultMessage": "Restore complete — some items were NOT FOUND"
   },
   "restore.missing.help": {
-    "defaultMessage": "Missing photos stay in the library marked as errored instead of being dropped; missing companion files are left out until recovered. If you find or recover the objects on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder."
+    "defaultMessage": "Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder."
+  },
+  "restore.restored.count": {
+    "defaultMessage": "{count, plural, one {# photo restored.} other {# photos restored.}}"
   },
   "restore.verify.continue": {
     "defaultMessage": "Continue with verified only"

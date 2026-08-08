@@ -35,6 +35,7 @@ import {
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
+import { projectVerifiedManifest } from './restore-projection.js';
 
 const SCRATCH_BYTES = 16 * 1024 * 1024;
 
@@ -66,6 +67,9 @@ export interface RestoreRequest {
    * activation re-establishes the password-derived app-lock record instead of
    * leaving the restored library on downgraded keychain-form custody. */
   readonly custodyPassword?: string | undefined;
+  /** Exact non-activating scan accepted by the user. The engine refuses to
+   * restore a different generation or a different set of gaps. */
+  readonly verification?: RestoreVerifyResult | undefined;
 }
 
 export interface RestoreRunResult {
@@ -81,6 +85,12 @@ export interface RestoreRunResult {
 export interface RestoreVerifyResult {
   readonly libraryId: string;
   readonly generation: number;
+  readonly manifestPath: string;
+  readonly sealedManifestSha256: string;
+  /** Digest of every object observed by the scan, including corrupt objects.
+   * This is internal plan state and is never exposed as a caller-selected
+   * restore parameter. */
+  readonly objectSetSha256: string;
   readonly photos: number;
   readonly missing: readonly RestoreMissingObject[];
   /** Counts split for the verify screen (X missing, Y corrupt) */
@@ -92,6 +102,35 @@ export interface RestoreVerifyResult {
 /** Partial-pass accumulator (#915). `null` means strict: any missing or
  * unverifiable object rejects the candidate (the #741 fallback contract). */
 type MissingObjects = RestoreMissingObject[] | null;
+
+function missingKey(object: RestoreMissingObject): string {
+  return `${object.kind}\u0000${object.photoId ?? ''}\u0000${object.path}\u0000${object.reason}`;
+}
+
+function sameMissing(left: readonly RestoreMissingObject[], right: readonly RestoreMissingObject[]): boolean {
+  return isDeepStrictEqual(left.map(missingKey).sort(), right.map(missingKey).sort());
+}
+
+function objectSetSha256(fingerprints: readonly string[]): string {
+  return createHash('sha256')
+    .update([...fingerprints].sort().join('\n'))
+    .digest('hex');
+}
+
+function addObjectFingerprint(fingerprints: string[], path: string, bytes: Buffer): void {
+  fingerprints.push(`${path}\u0000${String(bytes.length)}\u0000${createHash('sha256').update(bytes).digest('hex')}`);
+}
+
+function sameVerification(left: RestoreVerifyResult, right: RestoreVerifyResult): boolean {
+  return (
+    left.libraryId === right.libraryId &&
+    left.generation === right.generation &&
+    left.manifestPath === right.manifestPath &&
+    left.sealedManifestSha256 === right.sealedManifestSha256 &&
+    left.objectSetSha256 === right.objectSetSha256 &&
+    sameMissing(left.missing, right.missing)
+  );
+}
 
 function missingOriginalIds(missing: MissingObjects): ReadonlySet<string> {
   return new Set(
@@ -146,15 +185,19 @@ export class RestoreEngine {
     const candidate = discovery.candidates[0];
     if (candidate === undefined) throw new RestoreError('corrupt', 'no manifest generation could be restored');
     const missing: RestoreMissingObject[] = [];
-    await this.scanBlobs(discovery, candidate, missing, request.signal);
-    await this.scanSidecars(discovery, candidate, missing, request.signal);
-    await this.scanProtected(discovery, candidate, missing, request.signal);
+    const fingerprints: string[] = [];
+    await this.scanBlobs(discovery, candidate, missing, fingerprints, request.signal);
+    await this.scanSidecars(discovery, candidate, missing, fingerprints, request.signal);
+    await this.scanProtected(discovery, candidate, missing, fingerprints, request.signal);
     const missingCount = missing.filter((o) => o.reason === 'not-found').length;
     const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
     const verifiedCount = candidate.manifest.photos.length - missing.filter((o) => o.kind === 'original').length;
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
+      manifestPath: candidate.path,
+      sealedManifestSha256: candidate.sealedSha256,
+      objectSetSha256: objectSetSha256(fingerprints),
       photos: candidate.manifest.photos.length,
       missing,
       missingCount,
@@ -167,6 +210,7 @@ export class RestoreEngine {
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
+    fingerprints: string[],
     signal?: AbortSignal,
   ): Promise<void> {
     const remote = new Map((await this.deps.provider.list('blobs')).map((e) => [e.path, e]));
@@ -179,6 +223,7 @@ export class RestoreEngine {
       try {
         const stream = await this.deps.provider.getStream(photo.blobPath);
         const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
         const hasher = createHash('sha256');
         const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
         const readable = Readable.from([ciphertext]);
@@ -210,6 +255,7 @@ export class RestoreEngine {
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
+    fingerprints: string[],
     signal?: AbortSignal,
   ): Promise<void> {
     if (candidate.manifest.schema !== 6) return;
@@ -223,6 +269,7 @@ export class RestoreEngine {
       try {
         const stream = await this.deps.provider.getStream(sidecar.blobPath);
         const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
         const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
         const readable = Readable.from([buf]);
         try {
@@ -244,6 +291,7 @@ export class RestoreEngine {
     _discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
+    fingerprints: string[],
     signal?: AbortSignal,
   ): Promise<void> {
     if (candidate.manifest.schema === 2) return;
@@ -255,6 +303,7 @@ export class RestoreEngine {
       try {
         const stream = await this.deps.provider.getStream(entry.object.path);
         const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, entry.object.path, buf);
         const h = createHash('sha256').update(buf).digest('hex');
         if (h !== entry.object.sha256 || buf.length !== entry.object.bytes) {
           missing.push({ path: entry.object.path, kind: 'protected', photoId: entry.photo.id, reason: 'failed-verification' });
@@ -281,6 +330,22 @@ export class RestoreEngine {
       }
       this.emit('discovering', 0, 0, null);
       const discovery = await discoverRestore(this.deps.provider, request.masterKey, request.signal);
+      if (request.verification !== undefined) {
+        const currentVerification = await this.verify({ ...request, verification: undefined });
+        if (!sameVerification(currentVerification, request.verification)) {
+          throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
+        }
+        const candidate = discovery.candidates.find(
+          (item) =>
+            item.path === request.verification?.manifestPath &&
+            item.generation === request.verification.generation &&
+            item.sealedSha256 === request.verification.sealedManifestSha256,
+        );
+        if (candidate === undefined || candidate.manifest.libraryId !== request.verification.libraryId) {
+          throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
+        }
+        return await this.restoreCandidate(paths, discovery, candidate, request, [], request.verification.missing);
+      }
       let lastCandidateError: RestoreError | null = null;
       for (const candidate of discovery.candidates) {
         try {
@@ -317,6 +382,7 @@ export class RestoreEngine {
     candidate: RestoreCandidate,
     request: RestoreRequest,
     missing: MissingObjects,
+    expectedMissing?: readonly RestoreMissingObject[],
   ): Promise<RestoreRunResult> {
     const loaded = await loadCheckpoint(paths);
     let checkpoint: RestoreCheckpoint;
@@ -337,11 +403,33 @@ export class RestoreEngine {
     checkpoint = await this.restoreBlobs(paths, store, discovery, candidate, checkpoint, missing, request.signal);
     checkpoint = await this.restoreSidecars(paths, store, discovery, candidate, checkpoint, missing, request.signal);
     checkpoint = await this.restoreProtectedBlobs(paths, protectedStore, candidate, checkpoint, missing, request.signal);
+    if (missing !== null && expectedMissing !== undefined && !sameMissing(missing, expectedMissing)) {
+      throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
+    }
+    const restoreCandidate =
+      missing === null ? candidate : { ...candidate, manifest: projectVerifiedManifest(candidate.manifest, missing) };
+    if (missing !== null) {
+      const retainedPhotoIds = new Set(restoreCandidate.manifest.photos.map((photo) => photo.id));
+      for (const photo of candidate.manifest.photos) {
+        if (!retainedPhotoIds.has(photo.id)) await store.deleteSidecars(photo.id);
+      }
+      if (candidate.manifest.schema !== 2 && restoreCandidate.manifest.schema !== 2) {
+        const retainedProtectedIds = new Set(restoreCandidate.manifest.protectedPhotos.map((photo) => photo.id));
+        for (const photo of candidate.manifest.protectedPhotos) {
+          if (retainedProtectedIds.has(photo.id)) continue;
+          for (const object of photo.objects) {
+            if (object.status === 'synced' && protectedStore.has(photo.albumId, photo.blobRef, object.kind)) {
+              await protectedStore.deleteKind(photo.albumId, photo.blobRef, object.kind);
+            }
+          }
+        }
+      }
+    }
     const recoveredKeys = await this.prepareRecoveredCustody(paths, discovery, candidate, request.masterKey);
     try {
       await this.restoreThumbnails(paths, store, recoveredKeys, discovery, candidate, checkpoint, missing, request.signal);
-      this.emit('rebuilding', 0, candidate.manifest.photos.length, null);
-      await this.rebuildCatalog(paths, store, protectedStore, discovery, candidate, missing);
+      this.emit('rebuilding', 0, restoreCandidate.manifest.photos.length, null);
+      await this.rebuildCatalog(paths, store, protectedStore, discovery, restoreCandidate, missing);
     } finally {
       recoveredKeys.close();
     }
@@ -390,7 +478,7 @@ export class RestoreEngine {
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
-      photos: candidate.manifest.photos.length,
+      photos: restoreCandidate.manifest.photos.length,
       resumed,
       missing: missing ?? [],
     };
@@ -703,11 +791,7 @@ export class RestoreEngine {
     const db = openLibraryDatabase({ path: dbPath, dbKey });
     try {
       const repo = new PhotosRepository(db);
-      // NOT FOUND originals keep their catalog rows — metadata, album
-      // membership, and the record that the photo existed survive — but
-      // enter the ledger as 'error', the same vocabulary the integrity
-      // scrubber uses for confirmed remote loss (#915).
-      repo.restoreManifest(candidate.manifest, discovery.bootstrap.keys, skip);
+      repo.restoreManifest(candidate.manifest, discovery.bootstrap.keys);
       // The restored library starts owing a manifest generation (#741): the
       // provider selected after relaunch may not be the restore source, and
       // the first run's publication preflight reconciles the difference —
@@ -752,19 +836,7 @@ export class RestoreEngine {
         albums: rebuilt.albums,
         boards: boardsSnapshot(db),
       };
-      // Partitioned activation (#947): a partial restore keeps NOT FOUND
-      // originals as error-ledger rows, so the healed catalog must still
-      // equal the manifest. A strict mismatch while missing!==null indicates
-      // either a real rebuild bug or a derived mismatch (e.g. totals) that
-      // would have poisoned the previous loop — allow activation and surface
-      // diagnostics instead of re-throwing corrupt and leaving a viable
-      // staging behind (the 18k loop).
-      if (!isDeepStrictEqual(actual, expected)) {
-        if (missing === null) throw new RestoreError('corrupt', 'rebuilt catalog does not match the manifest');
-        console.warn(
-          `[overlook] partial restore catalog mismatch ignored for activation: missing=${missing.length} expected=${JSON.stringify(expected.totals)} actual=${JSON.stringify(actual.totals)}`,
-        );
-      }
+      if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the verified projection');
       for (const photo of candidate.manifest.photos) {
         if (skip.has(photo.id)) continue;
         if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, photo.id))) {
@@ -778,8 +850,7 @@ export class RestoreEngine {
           protectedPhotos: candidate.manifest.protectedPhotos,
         };
         if (!isDeepStrictEqual(protectedRepo.snapshot(), protectedExpected)) {
-          if (missing === null) throw new RestoreError('corrupt', 'rebuilt protected catalog does not match the manifest');
-          console.warn(`[overlook] partial restore protected catalog mismatch ignored for activation: missing=${missing.length}`);
+          throw new RestoreError('corrupt', 'rebuilt protected catalog does not match the verified projection');
         }
         for (const photo of candidate.manifest.protectedPhotos) {
           for (const object of photo.objects) {
@@ -791,11 +862,10 @@ export class RestoreEngine {
           }
         }
       }
-      if (candidate.manifest.schema === 4) {
+      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
         const activity = new ActivityRepository(db).backupSnapshot();
         if (!isDeepStrictEqual(activity, candidate.manifest.activity)) {
-          if (missing === null) throw new RestoreError('corrupt', 'rebuilt activity history does not match the manifest');
-          console.warn(`[overlook] partial restore activity mismatch ignored for activation`);
+          throw new RestoreError('corrupt', 'rebuilt activity history does not match the verified projection');
         }
       }
     } finally {

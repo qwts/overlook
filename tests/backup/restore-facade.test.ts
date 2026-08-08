@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRestoreFacade } from '../../src/main/backup/restore-facade.js';
+import { createRestoreFacade, formatRestoreCsv } from '../../src/main/backup/restore-facade.js';
 import type { RestoreCoordinator, RestoreKeySource } from '../../src/main/backup/restore-coordinator.js';
 import type { AppAuthorizationResult, AppLockState } from '../../src/main/crypto/app-lock-controller.js';
+import type { DiagnosticOccurrence } from '../../src/main/diagnostics/diagnostics-service.js';
 
 // #741: the facade maps the IPC key argument onto the coordinator's key
 // source — 'local-master' must never touch the recovery-key file path — and
@@ -16,11 +17,20 @@ function harness(options?: {
   busy?: boolean;
   lockState?: AppLockState | (() => AppLockState);
   authorize?: (password: string) => AppAuthorizationResult;
+  runError?: { reason: 'io' | 'corrupt'; message: string; phase?: 'discovering' | 'downloading' | 'rebuilding' | 'activating' };
+  verifyError?: { reason: 'io' | 'corrupt'; message: string; phase?: 'verify-scan' };
 }) {
-  const calls: { discovered: [string, RestoreKeySource][]; ran: string[]; authorized: string[]; expired: number } = {
+  const calls: {
+    discovered: [string, RestoreKeySource][];
+    ran: [string, string, string, boolean][];
+    authorized: string[];
+    diagnostics: DiagnosticOccurrence[];
+    expired: number;
+  } = {
     discovered: [],
     ran: [],
     authorized: [],
+    diagnostics: [],
     expired: 0,
   };
   const coordinator = {
@@ -28,10 +38,11 @@ function harness(options?: {
       calls.discovered.push([providerId, source]);
       return Promise.resolve({ sessionId: 's1', libraries: [], error: null });
     },
-    run: (sessionId: string) => {
-      calls.ran.push(sessionId);
-      return Promise.resolve({ result: null, error: null });
+    run: (sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean) => {
+      calls.ran.push([sessionId, libraryId, verificationId, allowReplace]);
+      return Promise.resolve({ result: null, error: options?.runError ?? null });
     },
+    verify: () => Promise.resolve({ result: null, error: options?.verifyError ?? null }),
     expireSession: () => {
       calls.expired += 1;
     },
@@ -49,6 +60,10 @@ function harness(options?: {
     authorizePassword: (password) => {
       calls.authorized.push(password);
       return Promise.resolve(options?.authorize?.(password) ?? { ok: true });
+    },
+    recordDiagnostic: (occurrence) => {
+      calls.diagnostics.push(occurrence);
+      return true;
     },
   });
   return { facade, calls };
@@ -141,13 +156,48 @@ test('a verified password survives a lock transition between authorization and f
 
 test('runs are refused while provider work is active; idle runs delegate', async () => {
   const blocked = harness({ busy: true });
-  const refused = await blocked.facade.run('s1', 'L1', false);
+  const refused = await blocked.facade.run('s1', 'L1', 'v1', false);
   assert.equal(refused.error?.reason, 'io');
   assert.deepEqual(blocked.calls.ran, []);
 
   const idle = harness();
-  await idle.facade.run('s1', 'L1', false);
-  assert.deepEqual(idle.calls.ran, ['s1']);
+  await idle.facade.run('s1', 'L1', 'v1', false);
+  assert.deepEqual(idle.calls.ran, [['s1', 'L1', 'v1', false]]);
   assert.deepEqual(idle.facade.profileStatus(), { fresh: true });
   assert.equal(await idle.facade.pickKey(), '/tmp/key.ovrk');
+});
+
+test('missing-object CSV quotes commas, quotes, and embedded newlines', () => {
+  assert.equal(
+    formatRestoreCsv([
+      { path: 'blobs/a,"b"\nnext', kind: 'original', photoId: 'photo,1', reason: 'failed-verification' },
+      { path: 'sidecars/lost', kind: 'sidecar', photoId: null, reason: 'not-found' },
+    ]),
+    'path,kind,photoId,reason\n"blobs/a,""b""\nnext","original","photo,1","failed-verification"\n"sidecars/lost","sidecar","","not-found"\n',
+  );
+});
+
+test('restore diagnostics use the injected recorder, actual stage, and bounded message fields', async () => {
+  const longMessage = 'x'.repeat(250);
+  const run = harness({ runError: { reason: 'io', message: longMessage, phase: 'activating' } });
+  await run.facade.run('s1', 'L1', 'v1', true);
+  assert.deepEqual(run.calls.diagnostics, [
+    {
+      kind: 'restore-failed',
+      failureReason: 'io',
+      messagePreview: `${'x'.repeat(197)}...`,
+      phase: 'activating',
+    },
+  ]);
+
+  const verify = harness({ verifyError: { reason: 'corrupt', message: 'authentication failed', phase: 'verify-scan' } });
+  await verify.facade.verify('s1', 'L1');
+  assert.deepEqual(verify.calls.diagnostics, [
+    {
+      kind: 'restore-verify-failed',
+      failureReason: 'corrupt',
+      messagePreview: 'authentication failed',
+      phase: 'verify-scan',
+    },
+  ]);
 });

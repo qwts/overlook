@@ -165,6 +165,7 @@ export function registerAppServices(options: AppServicesOptions): void {
       busy: options.providerBusy,
       lockState: options.lockState,
       authorizePassword: options.authorizePassword,
+      recordDiagnostic: (occurrence) => getDiagnosticsService().record(occurrence),
     }),
   );
   registerPurgeHandlers(() => ({ purge: (photoIds) => options.getPurge().purge(photoIds) }), options.getActivity);

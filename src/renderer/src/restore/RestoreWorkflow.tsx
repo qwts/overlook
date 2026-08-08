@@ -67,7 +67,11 @@ const messages = defineMessages({
   missingHelp: {
     id: 'restore.missing.help',
     defaultMessage:
-      'Missing photos stay in the library marked as errored instead of being dropped; missing companion files are left out until recovered. If you find or recover the objects on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder.',
+      'Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder.',
+  },
+  restoredCount: {
+    id: 'restore.restored.count',
+    defaultMessage: '{count, plural, one {# photo restored.} other {# photos restored.}}',
   },
   localKeyPasswordLabel: { id: 'restore.localKey.passwordLabel', defaultMessage: 'App password' },
   localKeyPasswordHelp: {
@@ -185,7 +189,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [error, setError] = useState<{ reason: string; message: string } | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [missing, setMissing] = useState<readonly RestoreMissingObject[]>([]);
+  const [restoredPhotoCount, setRestoredPhotoCount] = useState<number | null>(null);
   const [verifyResult, setVerifyResult] = useState<{
+    verificationId: string;
     missing: readonly RestoreMissingObject[];
     missingCount: number;
     corruptCount: number;
@@ -195,6 +201,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [verifying, setVerifying] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState('');
   const [showTrashConfirm, setShowTrashConfirm] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const descriptor = providers.find((provider) => provider.id === providerId) ?? null;
   const selected = useMemo(() => libraries.find((library) => library.libraryId === selectedId) ?? null, [libraries, selectedId]);
@@ -237,9 +244,11 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setSelectedId(null);
     setFallbackNotice(null);
     setMissing([]);
+    setRestoredPhotoCount(null);
     setVerifyResult(null);
     setShowTrashConfirm(false);
     setTrashConfirm('');
+    setActionNotice(null);
   };
 
   const runDiscovery = (request: Parameters<typeof window.overlook.restore.discover>[0], noMatch: string): void => {
@@ -289,6 +298,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     if (sessionId === null || selectedId === null) return;
     setError(null);
     setVerifying(true);
+    setActionNotice(null);
     setStep('verify');
     void window.overlook.restore
       .verify({ sessionId, libraryId: selectedId })
@@ -300,12 +310,14 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         }
         if (response.result !== null) {
           setVerifyResult({
+            verificationId: response.result.verificationId,
             missing: response.result.missing,
             missingCount: response.result.missingCount,
             corruptCount: response.result.corruptCount,
             verifiedCount: response.result.verifiedCount,
             photos: response.result.photos,
           });
+          if (response.result.missingCount === 0 && response.result.corruptCount === 0) setStep('confirm');
         }
       })
       .catch(() => {
@@ -314,23 +326,31 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
       });
   };
   const run = (): void => {
-    if (sessionId === null || selectedId === null || !authorized) return;
+    if (sessionId === null || selectedId === null || verifyResult === null || !authorized) return;
     setError(null);
     setStep('running');
-    void window.overlook.restore.run({ sessionId, libraryId: selectedId, allowReplace: context === 'settings' }).then((response) => {
-      if (response.error !== null) {
-        setError(response.error);
-        setStep('confirm');
-        return;
-      }
-      if (response.result?.fallbackFromGeneration !== null && response.result?.fallbackFromGeneration !== undefined) {
-        setFallbackNotice(
-          `Generation ${String(response.result.fallbackFromGeneration)} failed validation; restored generation ${String(response.result.generation)}.`,
-        );
-      }
-      setMissing(response.result?.missing ?? []);
-      setStep('complete');
-    });
+    void window.overlook.restore
+      .run({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId, allowReplace: context === 'settings' })
+      .then((response) => {
+        if (response.error !== null) {
+          setError(response.error);
+          if (response.error.reason === 'cancelled') {
+            setVerifyResult(null);
+            setStep('choose');
+          } else {
+            setStep('confirm');
+          }
+          return;
+        }
+        if (response.result?.fallbackFromGeneration !== null && response.result?.fallbackFromGeneration !== undefined) {
+          setFallbackNotice(
+            `Generation ${String(response.result.fallbackFromGeneration)} failed validation; restored generation ${String(response.result.generation)}.`,
+          );
+        }
+        setMissing(response.result?.missing ?? []);
+        setRestoredPhotoCount(response.result?.photos ?? null);
+        setStep('complete');
+      });
   };
 
   const openExisting = (): void => {
@@ -545,7 +565,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                 </strong>
                 <span>{intl.formatMessage(messages.verifyHelp)}</span>
                 {verifyResult.missing.length === 0 ? null : (
-                  <ul className="mono-data" style={{ maxHeight: 160, overflow: 'auto', userSelect: 'text' }}>
+                  <ul className="mono-data ovl-restore__verifyList">
                     {verifyResult.missing.map((o) => (
                       <li key={o.path}>
                         {o.path} — {o.kind} — {o.reason}
@@ -553,12 +573,20 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     ))}
                   </ul>
                 )}
-                <div className="ovl-restore__actions" style={{ flexWrap: 'wrap' }}>
+                <div className="ovl-restore__actions ovl-restore__verifyActions">
                   <Button
                     variant="secondary"
                     onClick={() => {
                       if (sessionId === null || selectedId === null) return;
-                      void window.overlook.restore.exportCsv({ sessionId, libraryId: selectedId }).then(() => {});
+                      setActionNotice(null);
+                      void window.overlook.restore
+                        .exportCsv({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId })
+                        .then((result) => {
+                          setActionNotice(
+                            result.error ??
+                              (result.exported ? `CSV exported to ${result.path ?? 'the selected file'}.` : 'CSV export cancelled.'),
+                          );
+                        });
                     }}
                   >
                     {intl.formatMessage(messages.exportCsv)}
@@ -567,7 +595,17 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     variant="secondary"
                     onClick={() => {
                       if (sessionId === null || selectedId === null) return;
-                      void window.overlook.restore.exportCorrupt({ sessionId, libraryId: selectedId }).then(() => {});
+                      setActionNotice(null);
+                      void window.overlook.restore
+                        .exportCorrupt({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId })
+                        .then((result) => {
+                          setActionNotice(
+                            result.error ??
+                              (result.exported
+                                ? `${formatCount(result.count)} corrupt images exported.`
+                                : 'Corrupt-image export cancelled.'),
+                          );
+                        });
                     }}
                   >
                     {intl.formatMessage(messages.exportCorrupt)}
@@ -585,10 +623,16 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     {intl.formatMessage(messages.trashBackup)}
                   </Button>
                 </div>
+                {actionNotice === null ? null : (
+                  <div className="ovl-restore__notice" role="status">
+                    {actionNotice}
+                  </div>
+                )}
                 {showTrashConfirm ? (
-                  <div className="ovl-restore__warnings" style={{ borderColor: 'var(--accent-red)' }}>
+                  <div className="ovl-restore__warnings ovl-restore__trashWarning">
                     <strong>
-                      Trash backup and quit — this removes all staged files and all the broken backup files. It is non reversible.
+                      Trash backup and quit — this moves the scoped cloud backup to the provider's Trash or Recently Deleted area. Recovery
+                      remains subject to the provider's retention window.
                     </strong>
                     <label className="ovl-restore__field">
                       <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
@@ -608,9 +652,18 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                         onClick={() => {
                           if (sessionId === null || selectedId === null) return;
                           void window.overlook.restore
-                            .trash({ sessionId, libraryId: selectedId, confirmation: trashConfirm })
+                            .trash({
+                              sessionId,
+                              libraryId: selectedId,
+                              verificationId: verifyResult.verificationId,
+                              confirmation: trashConfirm,
+                            })
                             .then((res) => {
-                              if (res.trashed) window.close();
+                              if (res.trashed) {
+                                window.close();
+                                return;
+                              }
+                              setError(res.error ?? { reason: 'io', message: 'The backup was not fully moved to Trash.' });
                             });
                         }}
                       >
@@ -639,7 +692,8 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             {verifyResult !== null ? (
               <span>
                 Verified {formatCount(verifyResult.verifiedCount)} of {formatCount(verifyResult.photos)} photos will be restored;{' '}
-                {formatCount(verifyResult.missingCount + verifyResult.corruptCount)} objects will be marked NOT FOUND.
+                {formatCount(verifyResult.missingCount + verifyResult.corruptCount)} unverified objects will be excluded and recorded in the
+                restore report.
               </span>
             ) : null}
           </div>
@@ -651,7 +705,12 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             />
           ) : null}
           <div className="ovl-restore__actions">
-            <Button variant="ghost" onClick={() => setStep(verifyResult !== null ? 'verify' : 'choose')}>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                setStep(verifyResult !== null && verifyResult.missingCount + verifyResult.corruptCount > 0 ? 'verify' : 'choose')
+              }
+            >
               Back
             </Button>
             <Button variant={context === 'settings' ? 'danger' : 'primary'} disabled={!authorized} onClick={run}>
@@ -680,7 +739,10 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         <div className="ovl-restore__complete" aria-live="polite">
           <Icon name="circle-check" size={28} color={missing.length === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'} />
           <strong>{missing.length === 0 ? 'Restore complete' : intl.formatMessage(messages.missingHeading)}</strong>
-          <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+          <span className="ovl-restore__completeSummary">
+            {restoredPhotoCount === null ? null : <span>{intl.formatMessage(messages.restoredCount, { count: restoredPhotoCount })}</span>}
+            <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+          </span>
           {missing.length === 0 ? null : (
             <div className="ovl-restore__warnings ovl-restore__missing" data-testid="restore-missing">
               <strong>{intl.formatMessage(messages.missingCount, { count: missing.length })}</strong>
@@ -696,8 +758,8 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
       )}
 
       {error === null ? null : (
-        <div className="ovl-restore__error" role="alert" style={{ userSelect: 'text' }}>
-          <strong style={{ userSelect: 'text' }}>{error.message}</strong>
+        <div className="ovl-restore__error" role="alert">
+          <strong>{error.message}</strong>
           <span>
             {error.reason === 'not-a-library'
               ? intl.formatMessage(messages.notLibraryHelp)
@@ -709,11 +771,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     ? intl.formatMessage(messages.localKeyPasswordHelp)
                     : (ERROR_HELP[error.reason] ?? ERROR_HELP['io'])}
           </span>
-          <details style={{ marginTop: 8 }}>
+          <details className="ovl-restore__errorDetails">
             <summary>{intl.formatMessage(messages.details)}</summary>
-            <pre className="mono-data" style={{ userSelect: 'text', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-              {`reason: ${error.reason}\nmessage: ${error.message}`}
-            </pre>
+            <pre className="mono-data ovl-restore__errorText">{`reason: ${error.reason}\nmessage: ${error.message}`}</pre>
             <Button
               size="sm"
               variant="ghost"

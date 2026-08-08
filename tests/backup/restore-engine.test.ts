@@ -553,7 +553,7 @@ function ledgerStatus(targetDir: string, photoId: string): { status: string; las
   }
 }
 
-test('restore engine: when every generation misses the same blobs, the newest partial-restores and reports every NOT FOUND object (#915)', async () => {
+test('restore engine: when every generation misses the same blobs, the newest restores only verified photos and reports every NOT FOUND object (#915/#947)', async () => {
   const world = await restoreWorld(3);
   const [kept, lostA, lostB] = world.photos;
   assert.ok(kept !== undefined && lostA !== undefined && lostB !== undefined);
@@ -562,7 +562,7 @@ test('restore engine: when every generation misses the same blobs, the newest pa
 
   const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
   assert.equal(result.generation, 1);
-  assert.equal(result.photos, 3, 'the catalog keeps every manifest row');
+  assert.equal(result.photos, 1, 'the healed catalog counts only the verified photo');
   assert.deepEqual(
     [...result.missing].sort((a, b) => a.path.localeCompare(b.path)),
     [
@@ -579,8 +579,8 @@ test('restore engine: when every generation misses the same blobs, the newest pa
   assert.equal(restoredStore.hasOriginal(lostA.contentHash), false, 'nothing fabricated for a NOT FOUND original');
 
   assert.deepEqual(ledgerStatus(world.targetDir, kept.id), { status: 'synced', lastBackupAt: GENERATED_AT });
-  assert.deepEqual(ledgerStatus(world.targetDir, lostA.id), { status: 'error', lastBackupAt: null });
-  assert.deepEqual(ledgerStatus(world.targetDir, lostB.id), { status: 'error', lastBackupAt: null });
+  assert.equal(ledgerStatus(world.targetDir, lostA.id), undefined, 'a missing original cannot leave an unrestorable photo row');
+  assert.equal(ledgerStatus(world.targetDir, lostB.id), undefined, 'every failed photo is absent from the healed catalog');
 
   const report = JSON.parse(await readFile(join(world.targetDir, 'restore-report.json'), 'utf8')) as {
     version: number;
@@ -593,7 +593,7 @@ test('restore engine: when every generation misses the same blobs, the newest pa
   assert.equal(world.progress.at(-1)?.stage, 'complete');
 });
 
-test('restore engine: a present-but-unverifiable blob in every generation partial-restores as failed-verification (#915)', async () => {
+test('restore engine: a present-but-unverifiable blob is reported and omitted from the healed catalog (#915/#947)', async () => {
   const world = await restoreWorld(2);
   const [kept, damaged] = world.photos;
   assert.ok(kept !== undefined && damaged !== undefined);
@@ -606,7 +606,8 @@ test('restore engine: a present-but-unverifiable blob in every generation partia
   await restoredStore.init();
   assert.equal(await restoredStore.verifyOriginal(kept.contentHash, restoredKeys.resolver(), kept.id), true);
   assert.equal(restoredStore.hasOriginal(damaged.contentHash), false, 'the unverifiable download never enters the store');
-  assert.deepEqual(ledgerStatus(world.targetDir, damaged.id), { status: 'error', lastBackupAt: null });
+  assert.equal(result.photos, 1, 'the restored count excludes the unverifiable photo');
+  assert.equal(ledgerStatus(world.targetDir, damaged.id), undefined, 'the unverifiable photo has no catalog or ledger row');
 });
 
 test('restore engine: re-running after the missing object is recovered fills the gap (#915)', async () => {

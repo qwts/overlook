@@ -1,5 +1,7 @@
-/* eslint-disable @typescript-eslint/unbound-method -- providerFor/getStream are called on their receiver; extraction is intentional and safe */
+import { join } from 'node:path';
+
 import type { AppAuthorizationResult, AppLockState } from '../crypto/app-lock-controller.js';
+import type { DiagnosticOccurrence } from '../diagnostics/diagnostics-service.js';
 import type { RestoreError } from './restore-types.js';
 import type { RestoreCoordinator } from './restore-coordinator.js';
 
@@ -10,6 +12,7 @@ export interface RestoreFacadeOptions {
   readonly busy: () => boolean;
   readonly lockState: () => AppLockState;
   readonly authorizePassword: (password: string) => Promise<AppAuthorizationResult>;
+  readonly recordDiagnostic?: ((occurrence: DiagnosticOccurrence) => boolean) | undefined;
 }
 
 type DiscoverKey = { keyPath: string; password: string } | { localKey: true; password?: string | undefined };
@@ -23,29 +26,29 @@ function truncate(message: string, max = 200): string {
 }
 
 function recordRestoreDiagnostic(
+  options: RestoreFacadeOptions,
   kind: 'restore-verify-failed' | 'restore-failed',
   reason: string,
   message: string,
   extra: { missingCount?: number; corruptCount?: number; phase?: string } = {},
 ): void {
-  try {
-    // Dynamic import via require to avoid circular startup ordering; tests stub this.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getDiagnosticsService } = require('../diagnostics/diagnostics-runtime.js') as {
-      getDiagnosticsService: () => { record: (o: unknown) => boolean };
-    };
-    const svc = getDiagnosticsService();
-    svc.record({
-      kind,
-      failureReason: reason as never,
-      messagePreview: truncate(message),
-      phase: (extra.phase as never) ?? 'verify-scan',
-      ...(extra.missingCount === undefined ? {} : { missingCount: extra.missingCount }),
-      ...(extra.corruptCount === undefined ? {} : { corruptCount: extra.corruptCount }),
-    });
-  } catch {
-    // Diagnostics unavailable (e.g. unit tests without Electron) — best-effort only.
-  }
+  options.recordDiagnostic?.({
+    kind,
+    failureReason: reason as DiagnosticOccurrence['failureReason'],
+    messagePreview: truncate(message),
+    phase: (extra.phase as DiagnosticOccurrence['phase']) ?? 'verify-scan',
+    ...(extra.missingCount === undefined ? {} : { missingCount: extra.missingCount }),
+    ...(extra.corruptCount === undefined ? {} : { corruptCount: extra.corruptCount }),
+  });
+}
+
+function csvCell(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function formatRestoreCsv(missing: readonly { path: string; kind: string; photoId: string | null; reason: string }[]): string {
+  const rows = missing.map((object) => [object.path, object.kind, object.photoId ?? '', object.reason].map(csvCell).join(','));
+  return ['path,kind,photoId,reason', ...rows].join('\n') + '\n';
 }
 
 /** #754: releasing the keystore-resident master key to restore discovery is
@@ -101,18 +104,20 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
         ...(gate.custodyPassword === undefined ? {} : { custodyPassword: gate.custodyPassword }),
       });
     },
-    run: async (sessionId: string, libraryId: string, allowReplace: boolean) => {
+    run: async (sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean) => {
       if (options.busy()) {
         return {
           result: null,
           error: { reason: 'io' as const, message: 'Wait for the active backup or restore to finish.' },
         };
       }
-      const response = await options.coordinator().run(sessionId, libraryId, allowReplace);
+      const response = await options.coordinator().run(sessionId, libraryId, verificationId, allowReplace);
       if (response.error !== null) {
         const r = response.error.reason;
         if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
-          recordRestoreDiagnostic('restore-failed', r, response.error.message, { phase: 'downloading' });
+          recordRestoreDiagnostic(options, 'restore-failed', r, response.error.message, {
+            phase: response.error.phase ?? 'discovering',
+          });
         }
       }
       return response;
@@ -128,7 +133,9 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       if (response.error !== null) {
         const r = response.error.reason;
         if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
-          recordRestoreDiagnostic('restore-verify-failed', r, response.error.message, { phase: 'verify-scan' });
+          recordRestoreDiagnostic(options, 'restore-verify-failed', r, response.error.message, {
+            phase: response.error.phase ?? 'verify-scan',
+          });
         }
       } else if (response.result !== null && (response.result.missingCount > 0 || response.result.corruptCount > 0)) {
         // Gap discovered — also record for discoverability even though not an error.
@@ -137,6 +144,7 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
         // For clean gaps (not-found), do not spam diagnostics — inline UI is enough.
         if (response.result.corruptCount > 0) {
           recordRestoreDiagnostic(
+            options,
             'restore-verify-failed',
             'corrupt',
             `${String(response.result.missingCount)} missing, ${String(response.result.corruptCount)} corrupt`,
@@ -150,16 +158,16 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       }
       return response;
     },
-    trash: (sessionId: string, libraryId: string, confirmation: string) => {
+    trash: (sessionId: string, libraryId: string, verificationId: string, confirmation: string) => {
       if (confirmation !== 'Permanently Delete Backup') {
         return Promise.resolve({ trashed: false, error: { reason: 'io' as const, message: 'Confirmation text does not match.' } });
       }
-      return options.coordinator().trash(sessionId, libraryId, confirmation);
+      return options.coordinator().trash(sessionId, libraryId, verificationId, confirmation);
     },
-    exportCsv: async (sessionId: string, libraryId: string) => {
-      const verify = await options.coordinator().verify(sessionId, libraryId);
-      if (verify.error !== null || verify.result === null) {
-        return { exported: false, path: null, error: verify.error?.message ?? 'Verify failed' };
+    exportCsv: async (sessionId: string, libraryId: string, verificationId: string) => {
+      const verification = options.coordinator().verificationFor(sessionId, libraryId, verificationId);
+      if (verification === null) {
+        return { exported: false, path: null, error: 'Restore verification expired; verify the backup again.' };
       }
       const { dialog } = await import('electron');
       const { canceled, filePath } = await dialog.showSaveDialog({
@@ -168,42 +176,25 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       });
       if (canceled || !filePath) return { exported: false, path: null, error: null };
       const { writeFile } = await import('node:fs/promises');
-      const header = 'path,kind,photoId,reason\n';
-      const rows = verify.result.missing.map((o) => `${JSON.stringify(o.path)},${o.kind},${o.photoId ?? ''},${o.reason}`).join('\n');
-      await writeFile(filePath, header + rows, 'utf8');
+      await writeFile(filePath, formatRestoreCsv(verification.missing), 'utf8');
       return { exported: true, path: filePath, error: null };
     },
-    exportCorrupt: async (sessionId: string, libraryId: string) => {
-      const verify = await options.coordinator().verify(sessionId, libraryId);
-      if (verify.error !== null || verify.result === null) {
-        return { exported: false, count: 0, error: verify.error?.message ?? 'Verify failed' };
+    exportCorrupt: async (sessionId: string, libraryId: string, verificationId: string) => {
+      const verification = options.coordinator().verificationFor(sessionId, libraryId, verificationId);
+      if (verification === null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
       }
-      const corrupt = verify.result.missing.filter((o) => o.reason === 'failed-verification');
-      if (corrupt.length === 0) return { exported: true, count: 0, error: null };
+      const corrupt = verification.missing.filter((object) => object.reason === 'failed-verification');
+      if (corrupt.length === 0) return { exported: true, count: 0, unavailable: 0, error: null };
       const { dialog } = await import('electron');
       const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
-      if (canceled || filePaths.length === 0 || !filePaths[0]) return { exported: false, count: 0, error: null };
+      if (canceled || filePaths.length === 0 || !filePaths[0]) return { exported: false, count: 0, unavailable: 0, error: null };
       const destDir = filePaths[0];
-      const provider = options.coordinator().providerFor(sessionId, libraryId);
-      if (provider === null) return { exported: false, count: 0, error: 'Restore discovery expired; discover the backup again.' };
-      const { writeFile, mkdir } = await import('node:fs/promises');
-      const { join } = await import('node:path');
-      const { buffer } = await import('node:stream/consumers');
-      await mkdir(destDir, { recursive: true });
-      let exported = 0;
-      for (const entry of corrupt) {
-        try {
-          const stream = await provider.getStream(entry.path);
-          const bytes = await buffer(stream);
-          const fileName = entry.path.split(/[\\/]/u).at(-1) ?? `${entry.photoId ?? 'blob'}-${String(exported)}`;
-          const safeName = fileName.replace(/[^a-zA-Z0-9._-]/gu, '_');
-          await writeFile(join(destDir, safeName), bytes);
-          exported += 1;
-        } catch {
-          // best-effort per blob
-        }
-      }
-      return { exported: true, count: exported, error: null };
+      const { writeFile } = await import('node:fs/promises');
+      return options.coordinator().exportCorrupt(sessionId, libraryId, verificationId, async (fileName, bytes) => {
+        const safeName = fileName.replace(/[^a-zA-Z0-9._-]/gu, '_');
+        await writeFile(join(destDir, safeName), bytes, { flag: 'wx' });
+      });
     },
     cancel: () => {
       options.coordinator().cancel();

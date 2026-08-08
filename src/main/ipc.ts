@@ -638,11 +638,19 @@ export interface RestoreFacade {
     providerId: string,
     key: { keyPath: string; password: string } | { localKey: true; password?: string | undefined },
   ): Promise<RestoreDiscoverResponse>;
-  run(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
+  run(sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
   verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse>;
-  trash(sessionId: string, libraryId: string, confirmation: string): Promise<RestoreTrashResponse>;
-  exportCsv(sessionId: string, libraryId: string): Promise<{ exported: boolean; path: string | null; error: string | null }>;
-  exportCorrupt(sessionId: string, libraryId: string): Promise<{ exported: boolean; count: number; error: string | null }>;
+  trash(sessionId: string, libraryId: string, verificationId: string, confirmation: string): Promise<RestoreTrashResponse>;
+  exportCsv(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; path: string | null; error: string | null }>;
+  exportCorrupt(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }>;
   cancel(): void;
 }
 
@@ -662,23 +670,27 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
     )(request),
   );
   ipcMain.handle(channels.restoreRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, allowReplace }) => getFacade().run(sessionId, libraryId, allowReplace))(
-      request,
-    ),
+    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, verificationId, allowReplace }) =>
+      getFacade().run(sessionId, libraryId, verificationId, allowReplace),
+    )(request),
   );
   ipcMain.handle(channels.restoreVerify.name, (_event, request: unknown) =>
     wrapHandler(channels.restoreVerify, ({ sessionId, libraryId }) => getFacade().verify(sessionId, libraryId))(request),
   );
   ipcMain.handle(channels.restoreTrash.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreTrash, ({ sessionId, libraryId, confirmation }) => getFacade().trash(sessionId, libraryId, confirmation))(
-      request,
-    ),
+    wrapHandler(channels.restoreTrash, ({ sessionId, libraryId, verificationId, confirmation }) =>
+      getFacade().trash(sessionId, libraryId, verificationId, confirmation),
+    )(request),
   );
   ipcMain.handle(channels.restoreExportCsv.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreExportCsv, ({ sessionId, libraryId }) => getFacade().exportCsv(sessionId, libraryId))(request),
+    wrapHandler(channels.restoreExportCsv, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCsv(sessionId, libraryId, verificationId),
+    )(request),
   );
   ipcMain.handle(channels.restoreExportCorrupt.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreExportCorrupt, ({ sessionId, libraryId }) => getFacade().exportCorrupt(sessionId, libraryId))(request),
+    wrapHandler(channels.restoreExportCorrupt, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCorrupt(sessionId, libraryId, verificationId),
+    )(request),
   );
   ipcMain.handle(channels.restoreCancel.name, (_event, request: unknown) =>
     wrapHandler(channels.restoreCancel, () => {

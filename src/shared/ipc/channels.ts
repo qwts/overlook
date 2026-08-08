@@ -579,7 +579,12 @@ export const channels = {
   ),
   restoreRun: defineChannel(
     'restore:run',
-    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), allowReplace: z.boolean() }),
+    z.object({
+      sessionId: z.string().min(1),
+      libraryId: z.string().min(1),
+      verificationId: z.string().min(1),
+      allowReplace: z.boolean(),
+    }),
     restoreRunResponseSchema,
   ),
   restoreVerify: defineChannel(
@@ -590,13 +595,18 @@ export const channels = {
   restoreTrash: defineChannel('restore:trash', restoreTrashRequestSchema, restoreTrashResponseSchema),
   restoreExportCsv: defineChannel(
     'restore:export-csv',
-    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1) }),
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
     z.object({ exported: z.boolean(), path: z.string().nullable(), error: z.string().nullable() }),
   ),
   restoreExportCorrupt: defineChannel(
     'restore:export-corrupt',
-    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1) }),
-    z.object({ exported: z.boolean(), count: z.number().int().nonnegative(), error: z.string().nullable() }),
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
+    z.object({
+      exported: z.boolean(),
+      count: z.number().int().nonnegative(),
+      unavailable: z.number().int().nonnegative(),
+      error: z.string().nullable(),
+    }),
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
   // Export engine (#97): decrypt-on-export to a chosen folder.

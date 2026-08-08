@@ -15,6 +15,7 @@ export const restoreFailureSchema = z.enum([
 export const restoreErrorSchema = z.object({
   reason: restoreFailureSchema,
   message: z.string().min(1),
+  phase: z.enum(['discovering', 'downloading', 'rebuilding', 'activating', 'verify-scan']).optional(),
 });
 
 export const restoreProgressSchema = z.object({
@@ -71,6 +72,7 @@ export const restoreRunResponseSchema = z.object({
 export const restoreVerifyResponseSchema = z.object({
   result: z
     .object({
+      verificationId: z.string().min(1),
       libraryId: z.string().min(1),
       generation: z.number().int().positive(),
       photos: z.number().int().nonnegative(),
@@ -86,6 +88,7 @@ export const restoreVerifyResponseSchema = z.object({
 export const restoreTrashRequestSchema = z.object({
   sessionId: z.string().min(1),
   libraryId: z.string().min(1),
+  verificationId: z.string().min(1),
   confirmation: z.string().min(1),
 });
 

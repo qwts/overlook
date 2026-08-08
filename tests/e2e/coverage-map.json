@@ -1967,7 +1967,7 @@
     {
       "id": "947-partitioned-restore-verify",
       "wiki": "User-Story-M18-Recovery-key",
-      "$note": "Verify-before-restore partitions missing/corrupt blobs (provider list+stream+envelope verify) and gates activation; UI shows X missing Y corrupt with Export CSV / Export corrupt images / Continue with verified only / Trash backup (Permanently Delete Backup). Fixes #947 loop where 1 missing blob blocked 18k-photo staging and surfaces phase/reason via Diagnostics.",
+      "$note": "Verify-before-restore binds activation and triage exports to an opaque scan, projects a reduced internally consistent catalog, and reports the actual restored count. The automated cases cover clean and gap paths, stale plans, retained-generation fallback, exports, trash failure, diagnostics, and the four visible triage actions.",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -1976,9 +1976,10 @@
         {
           "type": "unit-dom",
           "paths": [
-            "tests/backup/restore-engine.test.ts",
-            "tests/dom/restore-workflow-missing.test.tsx",
-            "tests/dom/restore-workflow-state.test.tsx"
+            "tests/backup/restore-verify.test.ts",
+            "tests/backup/restore-coordinator.test.ts",
+            "tests/backup/restore-facade.test.ts",
+            "tests/dom/restore-workflow-missing.test.tsx"
           ]
         }
       ]
