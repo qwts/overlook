@@ -20,7 +20,7 @@ test('context menus preserve selection, support keyboard focus, and empty Trash 
   await selectionMenu.getByRole('menuitem', { name: 'Move photo to Trash' }).click();
   await expect(page.locator('.ovl-toast-host')).toContainText('Moved 2 photos to Trash');
 
-  const trash = page.getByRole('button', { name: /Trash/u });
+  const trash = page.getByRole('button', { name: /^Trash \d+$/u });
   await trash.click();
   await expect(page.locator('.ovl-grid__cell')).toHaveCount(2);
   await trash.press('Shift+F10');

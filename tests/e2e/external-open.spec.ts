@@ -1,8 +1,9 @@
 import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 
+import { expect, test } from './support/app.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 const FIXTURE = join(import.meta.dirname, '../fixtures/exif/exif-stripped.jpg');
@@ -61,27 +62,24 @@ async function dispatchFinderEvent(page: Page, type: 'dragenter' | 'dragover' | 
   })()`);
 }
 
-test('P0 #486: Finder-shaped drops over a modal stay responsive and cannot open content windows', async () => {
+test('P0 #486: Finder-shaped drops over a modal stay responsive and cannot open content windows', async ({ launchOverlook }) => {
   const { folder } = makeFolder(1);
   const raw = join(folder, 'mixed.NEF');
   const heic = join(folder, 'mixed.HEIC');
   copyFileSync(FIXTURE, raw);
   copyFileSync(FIXTURE, heic);
   const jpeg = join(folder, 'photo-0000.jpg');
-  const userData = mkE2eTmpDir('overlook-e2e-window-drop-');
-  const app = await electron.launch({
-    args: ['.'],
-    env: { ...process.env, OVERLOOK_USER_DATA: userData, OVERLOOK_INSECURE_KEYSTORE: '1' },
+  const { app, page } = await launchOverlook({
+    prefix: 'overlook-e2e-window-drop-',
+    readyTestId: null,
   });
-  try {
-    const page = await app.firstWindow();
-    await page.getByRole('button', { name: 'Start a new library' }).click();
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await stageFinderFiles(page, [raw, jpeg, heic]);
+  await page.getByRole('button', { name: 'Start a new library' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await stageFinderFiles(page, [raw, jpeg, heic]);
 
-    expect(await dispatchFinderEvent(page, 'dragenter', '.ovl-dialog')).toBe(true);
-    await expect(page.getByText('Drop photos to import')).toBeVisible();
-    await page.evaluate(`(() => {
+  expect(await dispatchFinderEvent(page, 'dragenter', '.ovl-dialog')).toBe(true);
+  await expect(page.getByText('Drop photos to import')).toBeVisible();
+  await page.evaluate(`(() => {
       const target = document.querySelector('.ovl-dialog');
       const input = document.querySelector('[data-testid="finder-drop-files"]');
       if (!target || !input?.files) throw new Error('Finder-drop churn target is unavailable');
@@ -96,101 +94,82 @@ test('P0 #486: Finder-shaped drops over a modal stay responsive and cannot open 
         Object.defineProperty(event, 'dataTransfer', { value: transfer });
         target.dispatchEvent(event);
       }
-    })()`);
-    await expect(page.getByText('Drop photos to import')).toBeVisible();
+  })()`);
+  await expect(page.getByText('Drop photos to import')).toBeVisible();
 
-    expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
-    const importDialog = page.getByRole('dialog', { name: 'Import photos' });
-    await expect(importDialog).toBeVisible();
-    await expect(importDialog.getByText('3 photos ready to import')).toBeVisible();
-    expect(app.windows()).toHaveLength(1);
-    expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
-    await expect(importDialog).toHaveCount(1);
-    await expect(importDialog.getByText('3 photos ready to import')).toBeVisible();
-    await expect(page.getByText('Drop photos to import')).toBeHidden();
-    await importDialog.getByRole('button', { name: 'Close' }).click();
+  expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
+  const importDialog = page.getByRole('dialog', { name: 'Import photos' });
+  await expect(importDialog).toBeVisible();
+  await expect(importDialog.getByText('3 photos ready to import')).toBeVisible();
+  expect(app.windows()).toHaveLength(1);
+  expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
+  await expect(importDialog).toHaveCount(1);
+  await expect(importDialog.getByText('3 photos ready to import')).toBeVisible();
+  await expect(page.getByText('Drop photos to import')).toBeHidden();
+  await importDialog.getByRole('button', { name: 'Close' }).click();
 
-    await page.getByRole('button', { name: 'Settings' }).click();
-    const trustedUrl = page.url();
-    await page.evaluate(`window.open('file:///Users/ansel/Private/should-not-open.NEF')`);
-    await expect.poll(() => app.windows().length).toBe(1);
-    expect(page.url()).toBe(trustedUrl);
-    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const trustedUrl = page.url();
+  await page.evaluate(`window.open('file:///Users/ansel/Private/should-not-open.NEF')`);
+  await expect.poll(() => app.windows().length).toBe(1);
+  expect(page.url()).toBe(trustedUrl);
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await stageFinderFiles(page, [raw]);
-    await dispatchFinderEvent(page, 'dragenter', '.ovl-dialog');
-    await expect(page.getByText('Drop photos to import')).toBeVisible();
-    await page.evaluate(`window.dispatchEvent(new Event('blur'))`);
-    await expect(page.getByText('Drop photos to import')).toBeHidden();
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await stageFinderFiles(page, [raw]);
+  await dispatchFinderEvent(page, 'dragenter', '.ovl-dialog');
+  await expect(page.getByText('Drop photos to import')).toBeVisible();
+  await page.evaluate(`window.dispatchEvent(new Event('blur'))`);
+  await expect(page.getByText('Drop photos to import')).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
 
-    const unsupported = join(folder, 'notes.txt');
-    copyFileSync(FIXTURE, unsupported);
-    await stageFinderFiles(page, [unsupported]);
-    expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
-    await expect(page.getByLabel('Notification', { exact: true }).getByText('Nothing to import — drop photo files')).toBeVisible();
-    await expect(page.getByRole('dialog', { name: 'Import photos' })).toHaveCount(0);
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
-    expect(app.windows()).toHaveLength(1);
-  } finally {
-    await app.close();
-  }
+  const unsupported = join(folder, 'notes.txt');
+  copyFileSync(FIXTURE, unsupported);
+  await stageFinderFiles(page, [unsupported]);
+  expect(await dispatchFinderEvent(page, 'drop', '.ovl-dialog')).toBe(true);
+  await expect(page.getByLabel('Notification', { exact: true }).getByText('Nothing to import — drop photo files')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Import photos' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  expect(app.windows()).toHaveLength(1);
 });
 
-test('P0 #406: 800 Finder paths route into one running window and one import batch', async () => {
+test('P0 #406: 800 Finder paths route into one running window and one import batch', async ({ launchOverlook }) => {
   const { paths } = makeFolder(800);
-  const userData = mkE2eTmpDir('overlook-e2e-large-drop-');
-  const env = { ...process.env, OVERLOOK_USER_DATA: userData, OVERLOOK_INSECURE_KEYSTORE: '1' };
-  const app = await electron.launch({ args: ['.'], env });
-  try {
-    const page = await app.firstWindow();
-    await page.getByRole('button', { name: 'Start a new library' }).click();
-    await app.evaluate(({ app }, openedPaths) => {
-      app.emit('second-instance', {}, ['/Electron', '/app', ...openedPaths], process.cwd(), {});
-    }, paths);
+  const { app, page } = await launchOverlook({ prefix: 'overlook-e2e-large-drop-', readyTestId: null });
+  await page.getByRole('button', { name: 'Start a new library' }).click();
+  await app.evaluate(({ app }, openedPaths) => {
+    app.emit('second-instance', {}, ['/Electron', '/app', ...openedPaths], process.cwd(), {});
+  }, paths);
 
-    await expect(page.getByRole('dialog', { name: 'Import photos' })).toBeVisible();
-    await expect(page.getByText('800 photos ready to import')).toBeVisible({ timeout: 15_000 });
-    expect(app.windows()).toHaveLength(1);
-    await expectNativeAttentionMatchesHarness(app);
-  } finally {
-    await app.close();
-  }
+  await expect(page.getByRole('dialog', { name: 'Import photos' })).toBeVisible();
+  await expect(page.getByText('800 photos ready to import')).toBeVisible({ timeout: 15_000 });
+  expect(app.windows()).toHaveLength(1);
+  await expectNativeAttentionMatchesHarness(app);
 });
 
-test('P0 #406/#489: a dropped folder recursively moves only admitted files after consent', async () => {
+test('P0 #406/#489: a dropped folder recursively moves only admitted files after consent', async ({ launchOverlook }) => {
   const { folder, paths } = makeFolder(3, true);
   paths.forEach((path, index) => appendFileSync(path, Uint8Array.of(index + 1)));
   const unrelated = join(folder, 'nested', 'notes.txt');
   copyFileSync(FIXTURE, unrelated);
-  const userData = mkE2eTmpDir('overlook-e2e-folder-drop-');
-  const app = await electron.launch({
-    args: ['.'],
-    env: { ...process.env, OVERLOOK_USER_DATA: userData, OVERLOOK_INSECURE_KEYSTORE: '1' },
-  });
-  try {
-    const page = await app.firstWindow();
-    await page.getByRole('button', { name: 'Start a new library' }).click();
-    await app.evaluate(({ app }, openedFolder) => {
-      app.emit('open-file', { preventDefault: () => undefined }, openedFolder);
-    }, folder);
+  const { app, page } = await launchOverlook({ prefix: 'overlook-e2e-folder-drop-', readyTestId: null });
+  await page.getByRole('button', { name: 'Start a new library' }).click();
+  await app.evaluate(({ app }, openedFolder) => {
+    app.emit('open-file', { preventDefault: () => undefined }, openedFolder);
+  }, folder);
 
-    await expect(page.getByRole('dialog', { name: 'Import photos' })).toBeVisible();
-    await expect(page.getByText('3 photos ready to import')).toBeVisible();
-    await page.getByRole('radio', { name: 'Move' }).click();
-    await expect(page.getByRole('alert')).toContainText('Folders and unrelated files stay.');
-    await expect(page.getByRole('button', { name: 'Import 3 photos' })).toBeDisabled();
-    await page.getByRole('checkbox', { name: /I understand verified source files/u }).click();
-    await page.getByRole('button', { name: 'Import 3 photos' }).click();
-    await expect(page.getByText('3 moved · 0 retained after encrypted custody verification.')).toBeVisible({ timeout: 30_000 });
-    expect(paths.every((path) => !existsSync(path))).toBe(true);
-    expect(existsSync(join(folder, 'nested'))).toBe(true);
-    expect(existsSync(unrelated)).toBe(true);
-    expect(app.windows()).toHaveLength(1);
-    await expectNativeAttentionMatchesHarness(app);
-  } finally {
-    await app.close();
-  }
+  await expect(page.getByRole('dialog', { name: 'Import photos' })).toBeVisible();
+  await expect(page.getByText('3 photos ready to import')).toBeVisible();
+  await page.getByRole('radio', { name: 'Move' }).click();
+  await expect(page.getByRole('alert')).toContainText('Folders and unrelated files stay.');
+  await expect(page.getByRole('button', { name: 'Import 3 photos' })).toBeDisabled();
+  await page.getByRole('checkbox', { name: /I understand verified source files/u }).click();
+  await page.getByRole('button', { name: 'Import 3 photos' }).click();
+  await expect(page.getByText('3 moved · 0 retained after encrypted custody verification.')).toBeVisible({ timeout: 30_000 });
+  expect(paths.every((path) => !existsSync(path))).toBe(true);
+  expect(existsSync(join(folder, 'nested'))).toBe(true);
+  expect(existsSync(unrelated)).toBe(true);
+  expect(app.windows()).toHaveLength(1);
+  await expectNativeAttentionMatchesHarness(app);
 });
