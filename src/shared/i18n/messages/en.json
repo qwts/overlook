@@ -1241,6 +1241,12 @@
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
   },
+  "restore.error.copy": {
+    "defaultMessage": "Copy error"
+  },
+  "restore.error.details": {
+    "defaultMessage": "Details"
+  },
   "restore.local.error.alreadyRegistered": {
     "defaultMessage": "That library is already registered."
   },
@@ -1291,6 +1297,33 @@
   },
   "restore.missing.help": {
     "defaultMessage": "Missing photos stay in the library marked as errored instead of being dropped; missing companion files are left out until recovered. If you find or recover the objects on the provider, run the restore again to fill them in. Cloud backup publication stays paused until they are recovered or deleted. The full list is saved as restore-report.json in the library folder."
+  },
+  "restore.verify.continue": {
+    "defaultMessage": "Continue with verified only"
+  },
+  "restore.verify.counts": {
+    "defaultMessage": "{missing} missing, {corrupt} corrupt (failed verification) — {verified} verified"
+  },
+  "restore.verify.exportCorrupt": {
+    "defaultMessage": "Export corrupt images"
+  },
+  "restore.verify.exportCsv": {
+    "defaultMessage": "Export CSV"
+  },
+  "restore.verify.heading": {
+    "defaultMessage": "Verify backup before restore"
+  },
+  "restore.verify.help": {
+    "defaultMessage": "A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage."
+  },
+  "restore.verify.trash": {
+    "defaultMessage": "Trash backup and quit"
+  },
+  "restore.verify.trashConfirm": {
+    "defaultMessage": "Type Permanently Delete Backup to confirm"
+  },
+  "restore.verify.trashPlaceholder": {
+    "defaultMessage": "Permanently Delete Backup"
   },
   "settings.diagnostics.alreadyGone": {
     "defaultMessage": "That report was already gone."
