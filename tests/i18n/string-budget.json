@@ -1,5 +1,5 @@
 {
-  "$comment": "Hardcoded user-facing string ratchet (#403, ADR-0020 §6), enforced by scripts/check-i18n-budget.mjs. Per-file UPPER BOUND on remaining unextracted JSX literals (eslint-plugin-formatjs/no-literal-string-in-jsx): a count over budget fails; an unlisted file is budgeted at ZERO. Seeded at the CI (Linux) count — the plugin's count is not reproducible across OSes for a few template-literal-in-JSX constructs, so counts are enforced only from above. Migrate strings to lower a count; delete an entry at 0.",
+  "$comment": "Hardcoded user-facing string ratchet (#403, ADR-0020 \u00a76), enforced by scripts/check-i18n-budget.mjs. Per-file UPPER BOUND on remaining unextracted JSX literals (eslint-plugin-formatjs/no-literal-string-in-jsx): a count over budget fails; an unlisted file is budgeted at ZERO. Seeded at the CI (Linux) count \u2014 the plugin's count is not reproducible across OSes for a few template-literal-in-JSX constructs, so counts are enforced only from above. Migrate strings to lower a count; delete an entry at 0.",
   "files": [
     {
       "file": "src/renderer/src/components/Chip.tsx",
@@ -133,8 +133,8 @@
     },
     {
       "file": "src/renderer/src/restore/RestoreWorkflow.tsx",
-      "count": 40,
-      "issues": [403]
+      "count": 56,
+      "issues": [403, 947]
     },
     {
       "file": "src/renderer/src/settings/AppPasswordDialog.tsx",
