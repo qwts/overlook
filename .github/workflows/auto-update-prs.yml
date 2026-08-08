@@ -32,7 +32,7 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@4e70c773155c2c804e52a487352627010bea1897
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad
         with:
           authorization-only: 'true'
 

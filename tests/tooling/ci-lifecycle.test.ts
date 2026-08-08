@@ -27,7 +27,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@4e70c773155c2c804e52a487352627010bea1897/u);
+    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
   });
@@ -46,7 +46,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     for (const workflow of workflows) {
       assert.match(workflow, /^ {2}policy:$/mu);
       assert.match(workflow, /authorization-only: 'true'/u);
-      assert.match(workflow, /ci-policy@4e70c773155c2c804e52a487352627010bea1897/u);
+      assert.match(workflow, /ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad/u);
     }
     for (const [workflow, jobs] of [
       [autoUpdate, ['update']],
@@ -102,8 +102,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.doesNotMatch(codeql, /^ {2}(?:pull_request|push|workflow_dispatch|schedule):$/mu);
     assert.match(codeql, /language: \[actions, javascript-typescript\]/u);
     assert.match(codeql, /security-events: write/u);
-    assert.match(codeql, /github\/codeql-action\/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38/u);
-    assert.match(codeql, /github\/codeql-action\/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38/u);
+    assert.match(codeql, /github\/codeql-action\/init@5595ccaf912efad79be6eef63a5619ff05969be3/u);
+    assert.match(codeql, /github\/codeql-action\/analyze@5595ccaf912efad79be6eef63a5619ff05969be3/u);
   });
 
   test('keeps main on smoke-or-complete fallback while CodeQL owns default-branch alerts', () => {
