@@ -314,6 +314,12 @@ export class RestoreCoordinator {
     }
   }
 
+  providerFor(sessionId: string, libraryId: string): StorageProvider | null {
+    const session = this.session;
+    if (session === null || session.id !== sessionId) return null;
+    return session.sources.get(libraryId)?.provider ?? null;
+  }
+
   cancel(): void {
     this.controller?.abort();
   }

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+/* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { SettingsDialog } from './SettingsDialog';
@@ -257,6 +258,22 @@ function installStub(options?: {
         },
         error: null,
       }),
+    verify: () =>
+      Promise.resolve({
+        result: {
+          libraryId: '01JZZZZZZZZZZZZZZZZZZZZZZZ',
+          generation: 7,
+          photos: 1542,
+          verifiedCount: 1542,
+          missingCount: 0,
+          corruptCount: 0,
+          missing: [],
+        },
+        error: null,
+      }),
+    trash: () => Promise.resolve({ trashed: false, error: null }),
+    exportCsv: () => Promise.resolve({ exported: false, path: null, error: null }),
+    exportCorrupt: () => Promise.resolve({ exported: false, count: 0, error: null }),
     cancel: () => Promise.resolve({}),
     onProgress: () => () => undefined,
   };

@@ -290,32 +290,22 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setError(null);
     setVerifying(true);
     setStep('verify');
-    void (window.overlook.restore as unknown as { verify: (p: unknown) => Promise<{ result: unknown; error: unknown }> })
+    void window.overlook.restore
       .verify({ sessionId, libraryId: selectedId })
-      .then((response: unknown) => {
+      .then((response) => {
         setVerifying(false);
-        const r = response as {
-          result: {
-            missing: readonly RestoreMissingObject[];
-            missingCount: number;
-            corruptCount: number;
-            verifiedCount: number;
-            photos: number;
-          } | null;
-          error: { reason: string; message: string } | null;
-        };
-        if (r.error !== null) {
-          setError(r.error);
+        if (response.error !== null) {
+          setError(response.error);
           return;
         }
-        if (r.result !== null) {
-          const hasIssues = r.result.missingCount > 0 || r.result.corruptCount > 0;
+        if (response.result !== null) {
+          const hasIssues = response.result.missingCount > 0 || response.result.corruptCount > 0;
           setVerifyResult({
-            missing: r.result.missing,
-            missingCount: r.result.missingCount,
-            corruptCount: r.result.corruptCount,
-            verifiedCount: r.result.verifiedCount,
-            photos: r.result.photos,
+            missing: response.result.missing,
+            missingCount: response.result.missingCount,
+            corruptCount: response.result.corruptCount,
+            verifiedCount: response.result.verifiedCount,
+            photos: response.result.photos,
           });
           if (!hasIssues) {
             // No gap — proceed directly to confirm with healed count
@@ -328,7 +318,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         setError({ reason: 'io', message: 'Verification failed. Check your connection and try again.' });
       });
   };
-
   const run = (): void => {
     if (sessionId === null || selectedId === null || !authorized) return;
     setError(null);
@@ -569,76 +558,72 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     ))}
                   </ul>
                 )}
-              </div>
-              <div className="ovl-restore__actions" style={{ flexWrap: 'wrap' }}>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    void (window.overlook.restore as unknown as { exportCsv: (p: unknown) => Promise<unknown> })
-                      .exportCsv({ sessionId, libraryId: selectedId })
-                      .then(() => {});
-                  }}
-                >
-                  {intl.formatMessage(messages.exportCsv)}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    void (window.overlook.restore as unknown as { exportCorrupt: (p: unknown) => Promise<unknown> })
-                      .exportCorrupt({ sessionId, libraryId: selectedId })
-                      .then(() => {});
-                  }}
-                >
-                  {intl.formatMessage(messages.exportCorrupt)}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    // Continue with verified only — heal and proceed to confirm with verified count
-                    setStep('confirm');
-                  }}
-                >
-                  {intl.formatMessage(messages.continueVerified)} ({formatCount(verifyResult.verifiedCount)} photos)
-                </Button>
-                <Button variant="danger" onClick={() => setShowTrashConfirm(true)}>
-                  {intl.formatMessage(messages.trashBackup)}
-                </Button>
-              </div>
-              {showTrashConfirm ? (
-                <div className="ovl-restore__warnings" style={{ borderColor: 'var(--accent-red)' }}>
-                  <strong>
-                    Trash backup and quit — this removes all staged files and all the broken backup files. It is non reversible.
-                  </strong>
-                  <label className="ovl-restore__field">
-                    <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
-                    <input
-                      value={trashConfirm}
-                      onChange={(e) => setTrashConfirm(e.target.value)}
-                      placeholder={intl.formatMessage(messages.trashConfirmPlaceholder)}
-                    />
-                  </label>
-                  <div className="ovl-restore__actions">
-                    <Button variant="ghost" onClick={() => setShowTrashConfirm(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      disabled={trashConfirm !== 'Permanently Delete Backup'}
-                      onClick={() => {
-                        if (sessionId === null || selectedId === null) return;
-                        void (window.overlook.restore as unknown as { trash: (p: unknown) => Promise<{ trashed: boolean }> })
-                          .trash({ sessionId, libraryId: selectedId, confirmation: trashConfirm })
-                          .then((res) => {
-                            if (res.trashed) window.close();
-                          });
-                      }}
-                    >
-                      Confirm trash
-                    </Button>
-                  </div>
+                <div className="ovl-restore__actions" style={{ flexWrap: 'wrap' }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (sessionId === null || selectedId === null) return;
+                      void window.overlook.restore.exportCsv({ sessionId, libraryId: selectedId }).then(() => {});
+                    }}
+                  >
+                    {intl.formatMessage(messages.exportCsv)}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (sessionId === null || selectedId === null) return;
+                      void window.overlook.restore.exportCorrupt({ sessionId, libraryId: selectedId }).then(() => {});
+                    }}
+                  >
+                    {intl.formatMessage(messages.exportCorrupt)}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      // Continue with verified only — heal and proceed to confirm with verified count
+                      setStep('confirm');
+                    }}
+                  >
+                    {intl.formatMessage(messages.continueVerified)} ({formatCount(verifyResult.verifiedCount)} photos)
+                  </Button>
+                  <Button variant="danger" onClick={() => setShowTrashConfirm(true)}>
+                    {intl.formatMessage(messages.trashBackup)}
+                  </Button>
                 </div>
-              ) : null}
-              <div className="ovl-restore__actions">
+                {showTrashConfirm ? (
+                  <div className="ovl-restore__warnings" style={{ borderColor: 'var(--accent-red)' }}>
+                    <strong>
+                      Trash backup and quit — this removes all staged files and all the broken backup files. It is non reversible.
+                    </strong>
+                    <label className="ovl-restore__field">
+                      <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
+                      <input
+                        value={trashConfirm}
+                        onChange={(e) => setTrashConfirm(e.target.value)}
+                        placeholder={intl.formatMessage(messages.trashConfirmPlaceholder)}
+                      />
+                    </label>
+                    <div className="ovl-restore__actions">
+                      <Button variant="ghost" onClick={() => setShowTrashConfirm(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="danger"
+                        disabled={trashConfirm !== 'Permanently Delete Backup'}
+                        onClick={() => {
+                          if (sessionId === null || selectedId === null) return;
+                          void window.overlook.restore
+                            .trash({ sessionId, libraryId: selectedId, confirmation: trashConfirm })
+                            .then((res) => {
+                              if (res.trashed) window.close();
+                            });
+                        }}
+                      >
+                        Confirm trash
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <Button variant="ghost" onClick={() => setStep('choose')}>
                   Back
                 </Button>

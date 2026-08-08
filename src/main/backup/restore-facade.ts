@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method -- providerFor/getStream are called on their receiver; extraction is intentional and safe */
 import type { AppAuthorizationResult, AppLockState } from '../crypto/app-lock-controller.js';
 import type { RestoreError } from './restore-types.js';
 import type { RestoreCoordinator } from './restore-coordinator.js';
@@ -16,6 +17,36 @@ type DiscoverKey = { keyPath: string; password: string } | { localKey: true; pas
 type GateError = { reason: RestoreError['reason']; message: string };
 
 type LocalKeyGate = { readonly refused: GateError } | { readonly custodyPassword?: string };
+
+function truncate(message: string, max = 200): string {
+  return message.length > max ? `${message.slice(0, max - 3)}...` : message;
+}
+
+function recordRestoreDiagnostic(
+  kind: 'restore-verify-failed' | 'restore-failed',
+  reason: string,
+  message: string,
+  extra: { missingCount?: number; corruptCount?: number; phase?: string } = {},
+): void {
+  try {
+    // Dynamic import via require to avoid circular startup ordering; tests stub this.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getDiagnosticsService } = require('../diagnostics/diagnostics-runtime.js') as {
+      getDiagnosticsService: () => { record: (o: unknown) => boolean };
+    };
+    const svc = getDiagnosticsService();
+    svc.record({
+      kind,
+      failureReason: reason as never,
+      messagePreview: truncate(message),
+      phase: (extra.phase as never) ?? 'verify-scan',
+      ...(extra.missingCount === undefined ? {} : { missingCount: extra.missingCount }),
+      ...(extra.corruptCount === undefined ? {} : { corruptCount: extra.corruptCount }),
+    });
+  } catch {
+    // Diagnostics unavailable (e.g. unit tests without Electron) — best-effort only.
+  }
+}
 
 /** #754: releasing the keystore-resident master key to restore discovery is
  * destructive-class authority (it can replace the active library). When an
@@ -70,23 +101,54 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
         ...(gate.custodyPassword === undefined ? {} : { custodyPassword: gate.custodyPassword }),
       });
     },
-    run: (sessionId: string, libraryId: string, allowReplace: boolean) => {
+    run: async (sessionId: string, libraryId: string, allowReplace: boolean) => {
       if (options.busy()) {
-        return Promise.resolve({
+        return {
           result: null,
           error: { reason: 'io' as const, message: 'Wait for the active backup or restore to finish.' },
-        });
+        };
       }
-      return options.coordinator().run(sessionId, libraryId, allowReplace);
+      const response = await options.coordinator().run(sessionId, libraryId, allowReplace);
+      if (response.error !== null) {
+        const r = response.error.reason;
+        if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
+          recordRestoreDiagnostic('restore-failed', r, response.error.message, { phase: 'downloading' });
+        }
+      }
+      return response;
     },
-    verify: (sessionId: string, libraryId: string) => {
+    verify: async (sessionId: string, libraryId: string) => {
       if (options.busy()) {
-        return Promise.resolve({
+        return {
           result: null,
           error: { reason: 'io' as const, message: 'Wait for the active backup or restore to finish.' },
-        });
+        };
       }
-      return options.coordinator().verify(sessionId, libraryId);
+      const response = await options.coordinator().verify(sessionId, libraryId);
+      if (response.error !== null) {
+        const r = response.error.reason;
+        if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
+          recordRestoreDiagnostic('restore-verify-failed', r, response.error.message, { phase: 'verify-scan' });
+        }
+      } else if (response.result !== null && (response.result.missingCount > 0 || response.result.corruptCount > 0)) {
+        // Gap discovered — also record for discoverability even though not an error.
+        // Only if diagnostics consented; the service itself checks consent.
+        // We record as verify-failed with corrupt/offline-like reason so Review reports surfaces.
+        // For clean gaps (not-found), do not spam diagnostics — inline UI is enough.
+        if (response.result.corruptCount > 0) {
+          recordRestoreDiagnostic(
+            'restore-verify-failed',
+            'corrupt',
+            `${String(response.result.missingCount)} missing, ${String(response.result.corruptCount)} corrupt`,
+            {
+              missingCount: response.result.missingCount,
+              corruptCount: response.result.corruptCount,
+              phase: 'verify-scan',
+            },
+          );
+        }
+      }
+      return response;
     },
     trash: (sessionId: string, libraryId: string, confirmation: string) => {
       if (confirmation !== 'Permanently Delete Backup') {
@@ -121,11 +183,27 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       const { dialog } = await import('electron');
       const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
       if (canceled || filePaths.length === 0 || !filePaths[0]) return { exported: false, count: 0, error: null };
-      const _destDir = filePaths[0];
-      // For corrupt, we need to fetch the actual blobs — reuse verify's provider via coordinator's session.
-      // Simplified: report count without fetching bytes (export of corrupt images requires provider getStream)
-      // For now, just acknowledge — full fetch would require runner access.
-      return { exported: true, count: corrupt.length, error: null };
+      const destDir = filePaths[0];
+      const provider = options.coordinator().providerFor(sessionId, libraryId);
+      if (provider === null) return { exported: false, count: 0, error: 'Restore discovery expired; discover the backup again.' };
+      const { writeFile, mkdir } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      const { buffer } = await import('node:stream/consumers');
+      await mkdir(destDir, { recursive: true });
+      let exported = 0;
+      for (const entry of corrupt) {
+        try {
+          const stream = await provider.getStream(entry.path);
+          const bytes = await buffer(stream);
+          const fileName = entry.path.split(/[\\/]/u).at(-1) ?? `${entry.photoId ?? 'blob'}-${String(exported)}`;
+          const safeName = fileName.replace(/[^a-zA-Z0-9._-]/gu, '_');
+          await writeFile(join(destDir, safeName), bytes);
+          exported += 1;
+        } catch {
+          // best-effort per blob
+        }
+      }
+      return { exported: true, count: exported, error: null };
     },
     cancel: () => {
       options.coordinator().cancel();
