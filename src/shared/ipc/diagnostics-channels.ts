@@ -15,7 +15,14 @@ function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   return { name, request, response };
 }
 
-const diagnosticKindSchema = z.enum(['main-process-runtime-error', 'renderer-process-gone', 'child-process-gone', 'renderer-unresponsive']);
+const diagnosticKindSchema = z.enum([
+  'main-process-runtime-error',
+  'renderer-process-gone',
+  'child-process-gone',
+  'renderer-unresponsive',
+  'restore-verify-failed',
+  'restore-failed',
+]);
 export const queuedDiagnosticSchema = z.object({
   eventId: z.string().uuid(),
   capturedAt: z.string().datetime({ offset: true }),

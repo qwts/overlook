@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- central channel registry is intentionally large */
 import { z } from 'zod';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
@@ -18,7 +19,14 @@ import {
 } from '../backup/provider-descriptor.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
-import { restoreDiscoverResponseSchema, restoreProgressSchema, restoreRunResponseSchema } from '../backup/restore-contract.js';
+import {
+  restoreDiscoverResponseSchema,
+  restoreProgressSchema,
+  restoreRunResponseSchema,
+  restoreTrashRequestSchema,
+  restoreTrashResponseSchema,
+  restoreVerifyResponseSchema,
+} from '../backup/restore-contract.js';
 import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../destructive-actions.js';
 import { commandIdSchema, commandMenuContextSchema } from '../commands/menu-contract.js';
 import { activityPageRequestSchema, activityPageResponseSchema } from '../activity/schemas.js';
@@ -571,8 +579,34 @@ export const channels = {
   ),
   restoreRun: defineChannel(
     'restore:run',
-    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), allowReplace: z.boolean() }),
+    z.object({
+      sessionId: z.string().min(1),
+      libraryId: z.string().min(1),
+      verificationId: z.string().min(1),
+      allowReplace: z.boolean(),
+    }),
     restoreRunResponseSchema,
+  ),
+  restoreVerify: defineChannel(
+    'restore:verify',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1) }),
+    restoreVerifyResponseSchema,
+  ),
+  restoreTrash: defineChannel('restore:trash', restoreTrashRequestSchema, restoreTrashResponseSchema),
+  restoreExportCsv: defineChannel(
+    'restore:export-csv',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
+    z.object({ exported: z.boolean(), path: z.string().nullable(), error: z.string().nullable() }),
+  ),
+  restoreExportCorrupt: defineChannel(
+    'restore:export-corrupt',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
+    z.object({
+      exported: z.boolean(),
+      count: z.number().int().nonnegative(),
+      unavailable: z.number().int().nonnegative(),
+      error: z.string().nullable(),
+    }),
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
   // Export engine (#97): decrypt-on-export to a chosen folder.

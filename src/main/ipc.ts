@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- IPC registration is intentionally large */
 import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
@@ -15,7 +16,12 @@ import type {
   ProviderConnectResult,
   ProviderDescriptor,
 } from '../shared/backup/provider-descriptor.js';
-import type { RestoreDiscoverResponse, RestoreRunResponse } from '../shared/backup/restore-contract.js';
+import type {
+  RestoreDiscoverResponse,
+  RestoreRunResponse,
+  RestoreTrashResponse,
+  RestoreVerifyResponse,
+} from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
 import type { LibraryService } from './library/library-service.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
@@ -632,7 +638,19 @@ export interface RestoreFacade {
     providerId: string,
     key: { keyPath: string; password: string } | { localKey: true; password?: string | undefined },
   ): Promise<RestoreDiscoverResponse>;
-  run(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
+  run(sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
+  verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse>;
+  trash(sessionId: string, libraryId: string, verificationId: string, confirmation: string): Promise<RestoreTrashResponse>;
+  exportCsv(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; path: string | null; error: string | null }>;
+  exportCorrupt(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }>;
   cancel(): void;
 }
 
@@ -652,9 +670,27 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
     )(request),
   );
   ipcMain.handle(channels.restoreRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, allowReplace }) => getFacade().run(sessionId, libraryId, allowReplace))(
-      request,
-    ),
+    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, verificationId, allowReplace }) =>
+      getFacade().run(sessionId, libraryId, verificationId, allowReplace),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreVerify.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreVerify, ({ sessionId, libraryId }) => getFacade().verify(sessionId, libraryId))(request),
+  );
+  ipcMain.handle(channels.restoreTrash.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreTrash, ({ sessionId, libraryId, verificationId, confirmation }) =>
+      getFacade().trash(sessionId, libraryId, verificationId, confirmation),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreExportCsv.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreExportCsv, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCsv(sessionId, libraryId, verificationId),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreExportCorrupt.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreExportCorrupt, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCorrupt(sessionId, libraryId, verificationId),
+    )(request),
   );
   ipcMain.handle(channels.restoreCancel.name, (_event, request: unknown) =>
     wrapHandler(channels.restoreCancel, () => {

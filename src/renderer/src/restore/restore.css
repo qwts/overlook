@@ -165,6 +165,34 @@
   color: var(--text-muted);
 }
 
+.ovl-restore__verifyList {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.ovl-restore__verifyActions {
+  flex-wrap: wrap;
+}
+
+.ovl-restore__trashWarning {
+  border-color: var(--accent-red);
+}
+
+.ovl-restore__error,
+.ovl-restore__error strong,
+.ovl-restore__errorText {
+  user-select: text;
+}
+
+.ovl-restore__errorDetails {
+  margin-top: var(--space-2);
+}
+
+.ovl-restore__errorText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Partial-restore NOT FOUND report (#915): the path list is machine data —
    mono, scrollable, and selectable for copy/paste recovery work. */
 .ovl-restore__missing {
@@ -193,6 +221,12 @@
   gap: var(--space-4);
   padding: var(--space-5);
   text-align: center;
+}
+
+.ovl-restore__completeSummary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
 .ovl-restoreOnboarding {

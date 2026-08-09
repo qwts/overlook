@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+/* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { SettingsDialog } from './SettingsDialog';
@@ -257,6 +258,23 @@ function installStub(options?: {
         },
         error: null,
       }),
+    verify: () =>
+      Promise.resolve({
+        result: {
+          verificationId: 'story-verification',
+          libraryId: '01JZZZZZZZZZZZZZZZZZZZZZZZ',
+          generation: 7,
+          photos: 1542,
+          verifiedCount: 1542,
+          missingCount: 0,
+          corruptCount: 0,
+          missing: [],
+        },
+        error: null,
+      }),
+    trash: () => Promise.resolve({ trashed: false, error: null }),
+    exportCsv: () => Promise.resolve({ exported: false, path: null, error: null }),
+    exportCorrupt: () => Promise.resolve({ exported: false, count: 0, unavailable: 0, error: null }),
     cancel: () => Promise.resolve({}),
     onProgress: () => () => undefined,
   };
@@ -616,8 +634,8 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await waitFor(() => expect(body.getByTestId('restore-library-card')).toHaveTextContent('1,542 photos'));
     await expect(body.getByText('1 retained fallback generation available')).toBeVisible();
     await expect(body.getByText('Verified staged work is ready to resume')).toBeVisible();
-    await userEvent.click(body.getByRole('button', { name: 'Review restore' }));
-    await expect(body.getByText('This replaces the active library.')).toBeVisible();
+    await userEvent.click(body.getByRole('button', { name: 'Verify backup' }));
+    await waitFor(() => expect(body.getByText('This replaces the active library.')).toBeVisible());
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeDisabled();
     await userEvent.click(body.getByRole('checkbox'));
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeEnabled();

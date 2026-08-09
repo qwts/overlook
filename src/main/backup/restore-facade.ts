@@ -1,4 +1,7 @@
+import { join } from 'node:path';
+
 import type { AppAuthorizationResult, AppLockState } from '../crypto/app-lock-controller.js';
+import type { DiagnosticOccurrence } from '../diagnostics/diagnostics-service.js';
 import type { RestoreError } from './restore-types.js';
 import type { RestoreCoordinator } from './restore-coordinator.js';
 
@@ -9,6 +12,7 @@ export interface RestoreFacadeOptions {
   readonly busy: () => boolean;
   readonly lockState: () => AppLockState;
   readonly authorizePassword: (password: string) => Promise<AppAuthorizationResult>;
+  readonly recordDiagnostic?: ((occurrence: DiagnosticOccurrence) => boolean) | undefined;
 }
 
 type DiscoverKey = { keyPath: string; password: string } | { localKey: true; password?: string | undefined };
@@ -16,6 +20,36 @@ type DiscoverKey = { keyPath: string; password: string } | { localKey: true; pas
 type GateError = { reason: RestoreError['reason']; message: string };
 
 type LocalKeyGate = { readonly refused: GateError } | { readonly custodyPassword?: string };
+
+function truncate(message: string, max = 200): string {
+  return message.length > max ? `${message.slice(0, max - 3)}...` : message;
+}
+
+function recordRestoreDiagnostic(
+  options: RestoreFacadeOptions,
+  kind: 'restore-verify-failed' | 'restore-failed',
+  reason: string,
+  message: string,
+  extra: { missingCount?: number; corruptCount?: number; phase?: string } = {},
+): void {
+  options.recordDiagnostic?.({
+    kind,
+    failureReason: reason as DiagnosticOccurrence['failureReason'],
+    messagePreview: truncate(message),
+    phase: (extra.phase as DiagnosticOccurrence['phase']) ?? 'verify-scan',
+    ...(extra.missingCount === undefined ? {} : { missingCount: extra.missingCount }),
+    ...(extra.corruptCount === undefined ? {} : { corruptCount: extra.corruptCount }),
+  });
+}
+
+function csvCell(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function formatRestoreCsv(missing: readonly { path: string; kind: string; photoId: string | null; reason: string }[]): string {
+  const rows = missing.map((object) => [object.path, object.kind, object.photoId ?? '', object.reason].map(csvCell).join(','));
+  return ['path,kind,photoId,reason', ...rows].join('\n') + '\n';
+}
 
 /** #754: releasing the keystore-resident master key to restore discovery is
  * destructive-class authority (it can replace the active library). When an
@@ -70,14 +104,97 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
         ...(gate.custodyPassword === undefined ? {} : { custodyPassword: gate.custodyPassword }),
       });
     },
-    run: (sessionId: string, libraryId: string, allowReplace: boolean) => {
+    run: async (sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean) => {
       if (options.busy()) {
-        return Promise.resolve({
+        return {
           result: null,
           error: { reason: 'io' as const, message: 'Wait for the active backup or restore to finish.' },
-        });
+        };
       }
-      return options.coordinator().run(sessionId, libraryId, allowReplace);
+      const response = await options.coordinator().run(sessionId, libraryId, verificationId, allowReplace);
+      if (response.error !== null) {
+        const r = response.error.reason;
+        if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
+          recordRestoreDiagnostic(options, 'restore-failed', r, response.error.message, {
+            phase: response.error.phase ?? 'discovering',
+          });
+        }
+      }
+      return response;
+    },
+    verify: async (sessionId: string, libraryId: string) => {
+      if (options.busy()) {
+        return {
+          result: null,
+          error: { reason: 'io' as const, message: 'Wait for the active backup or restore to finish.' },
+        };
+      }
+      const response = await options.coordinator().verify(sessionId, libraryId);
+      if (response.error !== null) {
+        const r = response.error.reason;
+        if (r === 'corrupt' || r === 'offline' || r === 'disk-space' || r === 'unsupported' || r === 'io') {
+          recordRestoreDiagnostic(options, 'restore-verify-failed', r, response.error.message, {
+            phase: response.error.phase ?? 'verify-scan',
+          });
+        }
+      } else if (response.result !== null && (response.result.missingCount > 0 || response.result.corruptCount > 0)) {
+        // Gap discovered — also record for discoverability even though not an error.
+        // Only if diagnostics consented; the service itself checks consent.
+        // We record as verify-failed with corrupt/offline-like reason so Review reports surfaces.
+        // For clean gaps (not-found), do not spam diagnostics — inline UI is enough.
+        if (response.result.corruptCount > 0) {
+          recordRestoreDiagnostic(
+            options,
+            'restore-verify-failed',
+            'corrupt',
+            `${String(response.result.missingCount)} missing, ${String(response.result.corruptCount)} corrupt`,
+            {
+              missingCount: response.result.missingCount,
+              corruptCount: response.result.corruptCount,
+              phase: 'verify-scan',
+            },
+          );
+        }
+      }
+      return response;
+    },
+    trash: (sessionId: string, libraryId: string, verificationId: string, confirmation: string) => {
+      if (confirmation !== 'Permanently Delete Backup') {
+        return Promise.resolve({ trashed: false, error: { reason: 'io' as const, message: 'Confirmation text does not match.' } });
+      }
+      return options.coordinator().trash(sessionId, libraryId, verificationId, confirmation);
+    },
+    exportCsv: async (sessionId: string, libraryId: string, verificationId: string) => {
+      const verification = options.coordinator().verificationFor(sessionId, libraryId, verificationId);
+      if (verification === null) {
+        return { exported: false, path: null, error: 'Restore verification expired; verify the backup again.' };
+      }
+      const { dialog } = await import('electron');
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        defaultPath: `restore-missing-${libraryId}.csv`,
+        filters: [{ name: 'CSV', extensions: ['csv'] }],
+      });
+      if (canceled || !filePath) return { exported: false, path: null, error: null };
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(filePath, formatRestoreCsv(verification.missing), 'utf8');
+      return { exported: true, path: filePath, error: null };
+    },
+    exportCorrupt: async (sessionId: string, libraryId: string, verificationId: string) => {
+      const verification = options.coordinator().verificationFor(sessionId, libraryId, verificationId);
+      if (verification === null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
+      }
+      const corrupt = verification.missing.filter((object) => object.reason === 'failed-verification');
+      if (corrupt.length === 0) return { exported: true, count: 0, unavailable: 0, error: null };
+      const { dialog } = await import('electron');
+      const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+      if (canceled || filePaths.length === 0 || !filePaths[0]) return { exported: false, count: 0, unavailable: 0, error: null };
+      const destDir = filePaths[0];
+      const { writeFile } = await import('node:fs/promises');
+      return options.coordinator().exportCorrupt(sessionId, libraryId, verificationId, async (fileName, bytes) => {
+        const safeName = fileName.replace(/[^a-zA-Z0-9._-]/gu, '_');
+        await writeFile(join(destDir, safeName), bytes, { flag: 'wx' });
+      });
     },
     cancel: () => {
       options.coordinator().cancel();

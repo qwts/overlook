@@ -54,6 +54,13 @@ export class RestoreRuntime {
               await pool.close();
             }
           },
+          verify: async (request) => {
+            try {
+              return await engine.verify(request);
+            } finally {
+              await pool.close();
+            }
+          },
         };
       },
       sessionId: options.sessionId,

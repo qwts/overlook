@@ -1,8 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { test, expect, _electron as electron } from '@playwright/test';
-
+import { expect, test, type LaunchedApp, type LaunchSpec } from './support/app.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 // #90 exit criteria: the whole import path proven in CI — fixture folder in,
@@ -49,27 +48,24 @@ function filesContaining(dir: string, marker: Buffer): string[] {
   return hits;
 }
 
-async function launch(card: string) {
-  const userData = mkE2eTmpDir('overlook-e2e-import-');
-  const app = await electron.launch({
-    args: ['.'],
+type LaunchOverlook = (spec: LaunchSpec) => Promise<LaunchedApp>;
+
+async function launch(card: string, launchOverlook: LaunchOverlook): Promise<LaunchedApp> {
+  const launched = await launchOverlook({
+    prefix: 'overlook-e2e-import-',
+    readyTestId: null,
     env: {
-      ...process.env,
-      OVERLOOK_USER_DATA: userData,
-      OVERLOOK_INSECURE_KEYSTORE: '1',
       OVERLOOK_IMPORT_SOURCE: card,
     },
   });
-  const page = await app.firstWindow();
-  await page.getByRole('button', { name: 'Start a new library' }).click();
-  return { app, userData };
+  await launched.page.getByRole('button', { name: 'Start a new library' }).click();
+  return launched;
 }
 
-test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', async () => {
+test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', async ({ launchOverlook }) => {
   const card = makeCard();
-  const { app, userData } = await launch(card);
+  const { page, userData, close } = await launch(card, launchOverlook);
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
 
     // Options: the fixture card surfaced through the harness seam.
@@ -128,11 +124,13 @@ test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', async
     // Copy mode: the card is untouched.
     expect(readdirSync(card).sort()).toEqual([...CARD_FILES].sort());
   } finally {
-    await app.close();
+    await close();
   }
 });
 
-test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext at rest — and export beside the original', async () => {
+test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext at rest — and export beside the original', async ({
+  launchOverlook,
+}) => {
   // A card with one photo + its XMP companion, plus a companion nobody owns.
   const card = join(mkE2eTmpDir('overlook-e2e-sidecar-card-'), 'SDCARD');
   mkdirSync(card);
@@ -142,19 +140,15 @@ test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext
   writeFileSync(join(card, 'stray.xmp'), xmp, 'utf8');
 
   const destination = mkE2eTmpDir('overlook-e2e-sidecar-export-');
-  const userData = mkE2eTmpDir('overlook-e2e-sidecar-');
-  const app = await electron.launch({
-    args: ['.'],
+  const { page, userData, close } = await launchOverlook({
+    prefix: 'overlook-e2e-sidecar-',
+    readyTestId: null,
     env: {
-      ...process.env,
-      OVERLOOK_USER_DATA: userData,
-      OVERLOOK_INSECURE_KEYSTORE: '1',
       OVERLOOK_IMPORT_SOURCE: card,
       OVERLOOK_EXPORT_DESTINATION: destination,
     },
   });
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Start a new library' }).click();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
 
@@ -184,15 +178,14 @@ test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext
     expect(readFileSync(join(destination, 'exif-full.xmp'), 'utf8')).toBe(xmp);
     expect(existsSync(join(destination, 'exif-full.jpg'))).toBe(true);
   } finally {
-    await app.close();
+    await close();
   }
 });
 
-test('Move import: warning shown, sources emptied only after verified import', async () => {
+test('Move import: warning shown, sources emptied only after verified import', async ({ launchOverlook }) => {
   const card = makeCard();
-  const { app } = await launch(card);
+  const { page, close } = await launch(card, launchOverlook);
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     await page.getByRole('radio', { name: 'Move' }).click();
     await expect(page.getByRole('alert')).toContainText('only after encrypted custody and decrypt/hash verification');
@@ -207,14 +200,13 @@ test('Move import: warning shown, sources emptied only after verified import', a
       expect(existsSync(join(card, name))).toBe(false);
     }
   } finally {
-    await app.close();
+    await close();
   }
 });
 
-test('RAW matrix: every accepted extension imports with a visible tile and lightbox preview (#368)', async () => {
-  const { app } = await launch(makeRawMatrixCard());
+test('RAW matrix: every accepted extension imports with a visible tile and lightbox preview (#368)', async ({ launchOverlook }) => {
+  const { page, close } = await launch(makeRawMatrixCard(), launchOverlook);
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     await expect(page.getByText('8 new ·')).toBeVisible();
     await page.getByRole('button', { name: 'Import 8 photos' }).click();
@@ -241,25 +233,21 @@ test('RAW matrix: every accepted extension imports with a visible tile and light
     await expect(page.getByText('Preview', { exact: true })).toBeVisible();
     await expect(page.getByText('PREVIEW UNAVAILABLE')).toHaveCount(0);
   } finally {
-    await app.close();
+    await close();
   }
 });
 
-test('Folder Move (#489): explicit consent, verified per-file deletion, and folder preservation', async () => {
+test('Folder Move (#489): explicit consent, verified per-file deletion, and folder preservation', async ({ launchOverlook }) => {
   const folder = makeCard();
-  const userData = mkE2eTmpDir('overlook-e2e-import-');
-  const app = await electron.launch({
-    args: ['.'],
+  const { page, close } = await launchOverlook({
+    prefix: 'overlook-e2e-import-',
+    readyTestId: null,
     env: {
-      ...process.env,
-      OVERLOOK_USER_DATA: userData,
-      OVERLOOK_INSECURE_KEYSTORE: '1',
       // No OVERLOOK_IMPORT_SOURCE: the folder path is the source under test.
       OVERLOOK_IMPORT_FOLDER: folder,
     },
   });
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Start a new library' }).click();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
 
@@ -282,24 +270,20 @@ test('Folder Move (#489): explicit consent, verified per-file deletion, and fold
     expect(readdirSync(folder)).toEqual([]);
     expect(existsSync(folder)).toBe(true);
   } finally {
-    await app.close();
+    await close();
   }
 });
 
-test('Google Drive import (#465): selected cloud files use the copy-only encrypted pipeline', async () => {
+test('Google Drive import (#465): selected cloud files use the copy-only encrypted pipeline', async ({ launchOverlook }) => {
   const driveFiles = makeCard();
-  const userData = mkE2eTmpDir('overlook-e2e-drive-import-');
-  const app = await electron.launch({
-    args: ['.'],
+  const { page, close } = await launchOverlook({
+    prefix: 'overlook-e2e-drive-import-',
+    readyTestId: null,
     env: {
-      ...process.env,
-      OVERLOOK_USER_DATA: userData,
-      OVERLOOK_INSECURE_KEYSTORE: '1',
       OVERLOOK_GOOGLE_DRIVE_IMPORT_SOURCE: driveFiles,
     },
   });
   try {
-    const page = await app.firstWindow();
     await page.getByRole('button', { name: 'Start a new library' }).click();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     await page.getByRole('radio', { name: 'Google Drive' }).click();
@@ -319,6 +303,6 @@ test('Google Drive import (#465): selected cloud files use the copy-only encrypt
     expect(sources).toEqual(['Google Drive', 'Google Drive', 'Google Drive']);
     expect(readdirSync(driveFiles).sort()).toEqual([...CARD_FILES].sort());
   } finally {
-    await app.close();
+    await close();
   }
 });

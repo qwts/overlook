@@ -230,6 +230,10 @@ export interface OverlookApi {
     readonly pickKey: () => Promise<Res<typeof channels.restorePickKey>>;
     readonly discover: (request: Req<typeof channels.restoreDiscover>) => Promise<Res<typeof channels.restoreDiscover>>;
     readonly run: (request: Req<typeof channels.restoreRun>) => Promise<Res<typeof channels.restoreRun>>;
+    readonly verify: (request: Req<typeof channels.restoreVerify>) => Promise<Res<typeof channels.restoreVerify>>;
+    readonly trash: (request: Req<typeof channels.restoreTrash>) => Promise<Res<typeof channels.restoreTrash>>;
+    readonly exportCsv: (request: Req<typeof channels.restoreExportCsv>) => Promise<Res<typeof channels.restoreExportCsv>>;
+    readonly exportCorrupt: (request: Req<typeof channels.restoreExportCorrupt>) => Promise<Res<typeof channels.restoreExportCorrupt>>;
     readonly cancel: (request: Req<typeof channels.restoreCancel>) => Promise<Res<typeof channels.restoreCancel>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.restoreProgress.payload>) => void) => () => void;
   };
