@@ -253,7 +253,7 @@ export const channels = {
     z.object({ password: z.string().min(1).max(1024) }),
     z.object({
       ok: z.boolean(),
-      reason: z.enum(['wrong-password', 'recovery-required', 'throttled']).nullable(),
+      reason: z.enum(['wrong-password', 'recovery-required', 'throttled', 'library-in-use']).nullable(),
       retryAfterMs: z.number().int().nonnegative(),
     }),
   ),
@@ -292,7 +292,16 @@ export const channels = {
     z.object({
       ok: z.boolean(),
       reason: z
-        .enum(['not-enabled', 'cancelled', 'failed', 'locked-out', 'unavailable', 'enrollment-changed', 'recovery-required'])
+        .enum([
+          'not-enabled',
+          'cancelled',
+          'failed',
+          'locked-out',
+          'unavailable',
+          'enrollment-changed',
+          'recovery-required',
+          'library-in-use',
+        ])
         .nullable(),
     }),
   ),

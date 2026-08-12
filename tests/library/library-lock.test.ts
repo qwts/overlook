@@ -57,6 +57,44 @@ describe('library lock (#385)', () => {
     release();
   });
 
+  test('a live reused pid with a different process birth is stale and reclaimed', () => {
+    const dir = tempDir();
+    acquireLibraryLock(dir, 'instance-a', {
+      host: 'mac-a',
+      pid: 100,
+      isPidAlive: () => true,
+      processIdentity: () => 'old-birth',
+    });
+    const release = acquireLibraryLock(dir, 'instance-b', {
+      host: 'mac-a',
+      pid: 200,
+      isPidAlive: () => true,
+      processIdentity: (pid) => (pid === 100 ? 'reused-birth' : 'new-birth'),
+    });
+    assert.equal((JSON.parse(readFileSync(lockPath(dir), 'utf8')) as LibraryLockRecord).instanceId, 'instance-b');
+    release();
+  });
+
+  test('a live pid with the recorded process birth remains a genuine holder', () => {
+    const dir = tempDir();
+    acquireLibraryLock(dir, 'instance-a', {
+      host: 'mac-a',
+      pid: 100,
+      isPidAlive: () => true,
+      processIdentity: () => 'same-birth',
+    });
+    assert.throws(
+      () =>
+        acquireLibraryLock(dir, 'instance-b', {
+          host: 'mac-a',
+          pid: 200,
+          isPidAlive: () => true,
+          processIdentity: () => 'same-birth',
+        }),
+      (error: unknown) => error instanceof LibraryLockError && error.reason === 'held-by-instance',
+    );
+  });
+
   test('a lock from another machine refuses — liveness cannot be verified across machines', () => {
     const dir = tempDir();
     acquireLibraryLock(dir, 'instance-a', { host: 'mac-a', pid: 100, machineId: 'machine-a', isPidAlive: () => true });

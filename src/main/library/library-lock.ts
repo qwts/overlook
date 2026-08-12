@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 import { machineId } from './machine-id.js';
 
@@ -36,6 +37,7 @@ export interface LibraryLockRecord {
    * probe fails, in which case hostname comparison decides. */
   readonly machineId?: string;
   readonly acquiredAt: string;
+  readonly processIdentity?: string;
 }
 
 export interface LibraryLockOptions {
@@ -45,6 +47,7 @@ export interface LibraryLockOptions {
   /** Injected for tests: null = machine id unavailable (legacy behavior). */
   readonly machineId?: string | null;
   readonly isPidAlive?: (pid: number) => boolean;
+  readonly processIdentity?: (pid: number) => string | undefined;
   readonly now?: () => Date;
 }
 
@@ -68,6 +71,26 @@ function defaultIsPidAlive(pid: number): boolean {
     // EPERM means the process exists but belongs to another user — alive.
     return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
+}
+
+function defaultProcessIdentity(pid: number): string | undefined {
+  try {
+    if (process.platform === 'win32') return undefined;
+    return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 2_000 }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function holderIsAlive(
+  record: LibraryLockRecord,
+  isPidAlive: (pid: number) => boolean,
+  identity: (pid: number) => string | undefined,
+): boolean {
+  if (!isPidAlive(record.pid)) return false;
+  if (record.processIdentity === undefined) return true;
+  const currentIdentity = identity(record.pid);
+  return currentIdentity === undefined || currentIdentity === record.processIdentity;
 }
 
 export function lockPath(dataDir: string): string {
@@ -109,11 +132,10 @@ function readRecord(path: string): LibraryLockRecord | null {
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<LibraryLockRecord>;
     if (typeof raw.instanceId === 'string' && typeof raw.pid === 'number' && typeof raw.hostname === 'string') {
-      if (typeof raw.machineId === 'string' || raw.machineId === undefined) return raw as LibraryLockRecord;
-      // A non-string machineId never proves anything — drop it and let the
-      // hostname fallback judge, instead of rejecting the whole record.
-      const { machineId: _invalid, ...rest } = raw as LibraryLockRecord;
-      return rest;
+      const record = { ...raw };
+      if (typeof record.machineId !== 'string') delete record.machineId;
+      if (typeof record.processIdentity !== 'string') delete record.processIdentity;
+      return record as LibraryLockRecord;
     }
   } catch {
     // Unreadable/torn lock: treat as stale below — a half-written lock never
@@ -131,7 +153,9 @@ export function readLockHolder(dataDir: string, instanceId: string, options: Lib
   const record = readRecord(lockPath(dataDir));
   if (record === null || record.instanceId === instanceId) return null;
   if (!isSameMachine(record, options.host ?? hostname(), resolveMachineId(options))) return record.hostname;
-  return (options.isPidAlive ?? defaultIsPidAlive)(record.pid) ? record.hostname : null;
+  return holderIsAlive(record, options.isPidAlive ?? defaultIsPidAlive, options.processIdentity ?? defaultProcessIdentity)
+    ? record.hostname
+    : null;
 }
 
 /** Fail-loud startup probe (#842): when the startup-selected library is
@@ -162,6 +186,7 @@ export function acquireLibraryLock(dataDir: string, instanceId: string, options:
   const pid = options.pid ?? process.pid;
   const id = resolveMachineId(options);
   const isPidAlive = options.isPidAlive ?? defaultIsPidAlive;
+  const processIdentity = options.processIdentity ?? defaultProcessIdentity;
 
   const existing = existsSync(path) ? readRecord(path) : null;
   if (existsSync(path)) {
@@ -172,7 +197,7 @@ export function acquireLibraryLock(dataDir: string, instanceId: string, options:
           'held-by-other-host',
         );
       }
-      if (isPidAlive(existing.pid)) {
+      if (holderIsAlive(existing, isPidAlive, processIdentity)) {
         throw new LibraryLockError(
           `library is already open in another Overlook instance (pid ${String(existing.pid)})`,
           'held-by-instance',
@@ -188,12 +213,14 @@ export function acquireLibraryLock(dataDir: string, instanceId: string, options:
     reclaimStaleLock(path, existing, options.now ?? (() => new Date()));
   }
 
+  const identity = processIdentity(pid);
   const record: LibraryLockRecord = {
     instanceId,
     pid,
     hostname: host,
     ...(id === undefined ? {} : { machineId: id }),
     acquiredAt: (options.now?.() ?? new Date()).toISOString(),
+    ...(identity === undefined ? {} : { processIdentity: identity }),
   };
   // 'wx' = O_CREAT|O_EXCL: if another instance won the race between our
   // check and this write, this throws EEXIST and the open fails closed.
