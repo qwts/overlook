@@ -68,7 +68,11 @@ export function fitSize(image: LightboxSize, viewport: LightboxSize): LightboxSi
 export function fillZoom(image: LightboxSize, viewport: LightboxSize): number {
   const fitted = fitSize(image, viewport);
   if (fitted.width <= 0 || fitted.height <= 0) return 1;
+  if (image.width === image.height) return 1;
   const zoom = image.height > image.width ? viewport.width / fitted.width : viewport.height / fitted.height;
+  const overflowX = Math.max(0, fitted.width * zoom - viewport.width);
+  const overflowY = Math.max(0, fitted.height * zoom - viewport.height);
+  if (overflowX <= 1 && overflowY <= 1) return 1;
   return clamp(zoom, ZOOM_MIN, ZOOM_MAX);
 }
 
