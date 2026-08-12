@@ -44,6 +44,29 @@ function migrationTemporaryPath(appData: string): string {
   return candidate;
 }
 
+type RenameDirectory = (from: string, to: string) => void;
+
+export function renameProfileDirectoryForMigration(
+  legacyUserData: string,
+  temporary: string,
+  stableUserData: string,
+  rename: RenameDirectory = renameSync,
+): void {
+  rename(legacyUserData, temporary);
+  try {
+    rename(temporary, stableUserData);
+  } catch (error) {
+    try {
+      rename(temporary, legacyUserData);
+    } catch (rollbackError) {
+      throw new AggregateError([error], 'failed to capitalize the Overlook profile directory and roll it back', {
+        cause: rollbackError,
+      });
+    }
+    throw error;
+  }
+}
+
 function migrateLegacyProductProfile(appData: string, stableUserData: string): string | undefined {
   const legacyUserData = legacyProductProfile(appData);
   if (legacyUserData === undefined) return undefined;
@@ -53,19 +76,7 @@ function migrateLegacyProductProfile(appData: string, stableUserData: string): s
   if (existsSync(stableUserData) && !sameDirectory(legacyUserData, stableUserData)) return legacyUserData;
 
   const temporary = migrationTemporaryPath(appData);
-  renameSync(legacyUserData, temporary);
-  try {
-    renameSync(temporary, stableUserData);
-  } catch (error) {
-    try {
-      renameSync(temporary, legacyUserData);
-    } catch (rollbackError) {
-      throw new AggregateError([error], 'failed to capitalize the Overlook profile directory and roll it back', {
-        cause: rollbackError,
-      });
-    }
-    throw error;
-  }
+  renameProfileDirectoryForMigration(legacyUserData, temporary, stableUserData);
   return stableUserData;
 }
 

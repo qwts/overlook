@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { configureAppProfile } from '../../src/main/app-profile.js';
+import { configureAppProfile, renameProfileDirectoryForMigration } from '../../src/main/app-profile.js';
 import { OVERLOOK_PRODUCT_NAME } from '../../src/shared/app-identity.js';
 
 function profileApp(
@@ -61,6 +61,82 @@ describe('app profile identity', () => {
     assert.equal(existsSync(join(stable, 'libraries.json')), true);
     assert.equal(existsSync(join(stable, 'library', 'library.db')), true);
     assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
+  });
+
+  it('uses a distinct migration sibling when the first temporary name already exists', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-temp-'));
+    const legacy = join(appData, OVERLOOK_PRODUCT_NAME.toLowerCase());
+    const stable = join(appData, OVERLOOK_PRODUCT_NAME);
+    mkdirSync(legacy);
+    writeFileSync(join(legacy, 'libraries.json'), '{"version":1,"entries":[]}');
+    writeFileSync(join(appData, `.overlook-case-migration-${String(process.pid)}`), 'occupied');
+    const { app } = profileApp(true, { appData, userData: legacy });
+
+    configureAppProfile(app, undefined);
+
+    assert.equal(existsSync(join(stable, 'libraries.json')), true);
+  });
+
+  it('does not replace a distinct capitalized profile on a case-sensitive filesystem', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-collision-'));
+    const legacy = join(appData, OVERLOOK_PRODUCT_NAME.toLowerCase());
+    const stable = join(appData, OVERLOOK_PRODUCT_NAME);
+    mkdirSync(legacy);
+    writeFileSync(join(legacy, 'libraries.json'), 'legacy');
+    mkdirSync(stable, { recursive: true });
+    writeFileSync(join(stable, 'libraries.json'), 'stable');
+    const legacyStat = statSync(legacy);
+    const stableStat = statSync(stable);
+    if (legacyStat.dev === stableStat.dev && legacyStat.ino === stableStat.ino) return;
+    const { app, calls } = profileApp(true, { appData, userData: legacy });
+
+    configureAppProfile(app, undefined);
+
+    assert.equal(readFileSync(join(legacy, 'libraries.json'), 'utf8'), 'legacy');
+    assert.equal(readFileSync(join(stable, 'libraries.json'), 'utf8'), 'stable');
+    assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
+  });
+
+  it('restores the lowercase profile when the capitalization rename fails', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-rollback-'));
+    const legacy = join(appData, 'overlook');
+    const temporary = join(appData, '.migration');
+    const stable = join(appData, 'Overlook');
+    mkdirSync(legacy);
+    const destinationError = new Error('destination unavailable');
+
+    assert.throws(
+      () =>
+        renameProfileDirectoryForMigration(legacy, temporary, stable, (from, to) => {
+          if (to === stable) throw destinationError;
+          renameSync(from, to);
+        }),
+      (error: unknown) => error === destinationError,
+    );
+    assert.equal(existsSync(legacy), true);
+    assert.equal(existsSync(temporary), false);
+  });
+
+  it('reports both errors when capitalization and rollback fail', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-rollback-failure-'));
+    const legacy = join(appData, 'overlook');
+    const temporary = join(appData, '.migration');
+    const stable = join(appData, 'Overlook');
+    mkdirSync(legacy);
+    const destinationError = new Error('destination unavailable');
+    const rollbackError = new Error('rollback unavailable');
+    let calls = 0;
+
+    assert.throws(
+      () =>
+        renameProfileDirectoryForMigration(legacy, temporary, stable, (from, to) => {
+          calls += 1;
+          if (calls === 1) renameSync(from, to);
+          else if (calls === 2) throw destinationError;
+          else throw rollbackError;
+        }),
+      (error: unknown) => error instanceof AggregateError && error.errors[0] === destinationError && error.cause === rollbackError,
+    );
   });
 
   it('does not discover a legacy photos profile', () => {
