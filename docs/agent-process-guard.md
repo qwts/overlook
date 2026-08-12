@@ -42,9 +42,9 @@ numbers for a working checkout are in `.guard/history.jsonl`.
   `workers: 3` on CI): CI peak 4183 MB across 24 processes. Never measured
   locally — the lane pops real Electron windows and is CI-only in practice.
 - **`npm run test:perf`** (single worker, 200K-photo synthetic seed): still
-  unmeasured, and not measurable from CI — `perf.yml` runs on a runner, where the
-  guard is exempt and writes no record. A baseline for this lane needs an
-  owner-granted local run.
+  unmeasured, and not measurable from CI — `perf.yml` invokes `test:perf:inner`
+  directly on a runner, so the guard never runs there and writes no record. A
+  baseline for this lane needs an owner-granted local run.
 
 ## macOS and Linux do not agree
 

@@ -160,8 +160,8 @@ npm run docs:gov
 
 Then push and let CI verify the heavy lanes — `test:cov`, `test:e2e`,
 `test:stories:ci`, `test:perf`, `build` and the full `ci` chain. **CI is the
-authoritative lane** and is exempt from the memory guard, so nothing is lost but
-latency; running them locally is what exhausted the owner's machine. Ask first.
+authoritative lane** — its workflows invoke the `:inner` entrypoints directly, so
+no guard runs on runners; running heavy lanes locally exhausted the owner's machine. Ask first.
 
 - Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a
   `qwts/playbook-engineering` checkout at `v1`) and `INTEROP_IMAGE_TRAIL_ROOT`.
