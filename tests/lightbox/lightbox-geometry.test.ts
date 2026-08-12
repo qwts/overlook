@@ -46,6 +46,7 @@ describe('lightbox transform geometry (#307)', () => {
 
   test('Fill avoids unnecessary overflow for square and sub-pixel near-square images (#898)', () => {
     assert.equal(fillZoom({ width: 1000, height: 1000 }, { width: 700, height: 1600 }), 1);
+    assertClose(fillZoom({ width: 320, height: 320 }, { width: 1600, height: 900 }), 900 / 320);
     assert.equal(fillZoom({ width: 801, height: 800 }, { width: 800, height: 800 }), 1);
     assert.ok(fillZoom({ width: 810, height: 800 }, { width: 800, height: 800 }) > 1);
   });
