@@ -3,7 +3,8 @@
 Issues: [#501](https://github.com/qwts/photos/issues/501),
 [#513](https://github.com/qwts/photos/issues/513),
 [#499](https://github.com/qwts/photos/issues/499),
-[#449](https://github.com/qwts/photos/issues/449)
+[#449](https://github.com/qwts/photos/issues/449), and
+[overlook#898](https://github.com/qwts/overlook/issues/898)
 
 ## Purpose
 
@@ -14,8 +15,8 @@ Electron coverage, including the keyboard-pan contract from #449.
 
 ## Setup
 
-1. Open a library containing adjacent landscape and portrait photos, plus one
-   unavailable or corrupt item.
+1. Open a library containing adjacent landscape, portrait, square, and
+   near-square photos, plus one unavailable or corrupt item.
 2. Open the first photo in full view at the normal window size.
 3. Repeat the matrix at the minimum supported window size and with Inspector
    both closed and docked.
@@ -59,9 +60,13 @@ reference at its native 924×540 viewport. Confirm the orientation toolbar:
    ratio while retaining a useful normalized focal direction. A photo close to
    the window's aspect ratio may need no scrolling; it must never require both
    axes.
-6. Dock and undock Inspector, then resize the window. Confirm the transform
+6. Open the square and near-square photos in a square display area. Confirm
+   they remain wholly visible without unnecessary scrolling. Resize the display
+   so that Fill genuinely overflows one axis by more than one physical pixel,
+   then confirm only that axis scrolls.
+7. Dock and undock Inspector, then resize the window. Confirm the transform
    reclamps and every image continues to cover the required viewport axes.
-7. Rotate or flip one photo, then navigate. Confirm orientation resets for the
+8. Rotate or flip one photo, then navigate. Confirm orientation resets for the
    next photo while zoom/fill/pan persist.
 
 ## Reset and failure boundaries
@@ -95,7 +100,8 @@ reference at its native 924×540 viewport. Confirm the orientation toolbar:
 - `src/renderer/src/lightbox/Lightbox.stories.tsx`
 - `tests/e2e/lightbox.spec.ts`
 - `design/handoff/references/06-lightbox-default-contain.png`
-- Acceptance ledger entry `m06-lightbox-transform`
+- Acceptance ledger entries `m06-lightbox-transform` and
+  `m06-lightbox-fill-cover`
 
 ## Required gates
 
