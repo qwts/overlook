@@ -716,8 +716,8 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
 
 async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
   const release = releaseLibraryLock ?? (() => undefined);
-  releaseLibraryLock = undefined;
   await releaseLibraryLockAfter(() => closeLibraryResources(mode), release);
+  releaseLibraryLock = undefined;
 }
 
 const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({

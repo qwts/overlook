@@ -95,6 +95,23 @@ describe('library lock (#385)', () => {
     );
   });
 
+  test('the default process birth identity is stable across timezone changes', () => {
+    const dir = tempDir();
+    const previous = process.env['TZ'];
+    try {
+      process.env['TZ'] = 'UTC';
+      acquireLibraryLock(dir, 'instance-a');
+      process.env['TZ'] = 'America/Los_Angeles';
+      assert.throws(
+        () => acquireLibraryLock(dir, 'instance-b'),
+        (error: unknown) => error instanceof LibraryLockError && error.reason === 'held-by-instance',
+      );
+    } finally {
+      if (previous === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = previous;
+    }
+  });
+
   test('a lock from another machine refuses — liveness cannot be verified across machines', () => {
     const dir = tempDir();
     acquireLibraryLock(dir, 'instance-a', { host: 'mac-a', pid: 100, machineId: 'machine-a', isPidAlive: () => true });

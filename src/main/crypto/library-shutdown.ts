@@ -42,9 +42,6 @@ export async function drainWithCancellationFence(
 }
 
 export async function releaseLibraryLockAfter(work: () => Promise<void>, release: () => void): Promise<void> {
-  try {
-    await work();
-  } finally {
-    release();
-  }
+  await work();
+  release();
 }

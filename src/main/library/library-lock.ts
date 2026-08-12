@@ -76,7 +76,13 @@ function defaultIsPidAlive(pid: number): boolean {
 function defaultProcessIdentity(pid: number): string | undefined {
   try {
     if (process.platform === 'win32') return undefined;
-    return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 2_000 }).trim() || undefined;
+    return (
+      execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+        encoding: 'utf8',
+        timeout: 2_000,
+        env: { ...process.env, TZ: 'UTC', LC_ALL: 'C' },
+      }).trim() || undefined
+    );
   } catch {
     return undefined;
   }

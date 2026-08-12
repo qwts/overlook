@@ -9,7 +9,7 @@ import {
 } from '../../src/main/crypto/library-shutdown.js';
 
 describe('library shutdown barrier (#311)', () => {
-  test('releases the advisory lock when a vanished volume makes teardown fail', async () => {
+  test('retains the advisory lock when teardown fails before resources close', async () => {
     let released = false;
     await assert.rejects(
       releaseLibraryLockAfter(
@@ -19,6 +19,17 @@ describe('library shutdown barrier (#311)', () => {
         },
       ),
       /volume disconnected/u,
+    );
+    assert.equal(released, false);
+  });
+
+  test('releases the advisory lock after teardown succeeds', async () => {
+    let released = false;
+    await releaseLibraryLockAfter(
+      () => Promise.resolve(),
+      () => {
+        released = true;
+      },
     );
     assert.equal(released, true);
   });
