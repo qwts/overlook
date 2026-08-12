@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -42,6 +42,24 @@ describe('app profile identity', () => {
 
     assert.equal(configureAppProfile(app, undefined), undefined);
     assert.equal(existsSync(stable), true);
+    assert.deepEqual(readdirSync(appData), [OVERLOOK_PRODUCT_NAME]);
+    assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
+  });
+
+  it('capitalizes an existing lowercase profile without changing its children or custody', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-migration-'));
+    const legacy = join(appData, OVERLOOK_PRODUCT_NAME.toLowerCase());
+    const stable = join(appData, OVERLOOK_PRODUCT_NAME);
+    mkdirSync(join(legacy, 'library'), { recursive: true });
+    writeFileSync(join(legacy, 'libraries.json'), '{"version":1,"entries":[]}');
+    writeFileSync(join(legacy, 'library', 'library.db'), 'encrypted');
+    const { app, calls } = profileApp(true, { appData, userData: legacy });
+
+    configureAppProfile(app, undefined);
+
+    assert.deepEqual(readdirSync(appData), [OVERLOOK_PRODUCT_NAME]);
+    assert.equal(existsSync(join(stable, 'libraries.json')), true);
+    assert.equal(existsSync(join(stable, 'library', 'library.db')), true);
     assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
   });
 
