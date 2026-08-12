@@ -100,6 +100,7 @@ export const RapidAnnouncementsStayOrdered: Story = {
     try {
       await userEvent.click(canvas.getByRole('button', { name: 'Show first' }));
       await userEvent.click(canvas.getByRole('button', { name: 'Show second' }));
+      await expect(announcer).toHaveTextContent('First notification');
       await waitFor(async () => expect(announcements).toEqual(['First notification', 'Second notification']), { timeout: 2500 });
     } finally {
       observer.disconnect();
