@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import { OVERLOOK_PRODUCT_NAME } from '../shared/app-identity.js';
 
+const MIGRATION_DIRECTORY_PREFIX = '.overlook-case-migration-';
+
 interface ProfileApp {
   readonly isPackaged: boolean;
   getPath(name: 'appData' | 'userData'): string;
@@ -34,7 +36,7 @@ function legacyProductProfile(appData: string): string | undefined {
 }
 
 function migrationTemporaryPath(appData: string): string {
-  const stem = path.join(appData, `.overlook-case-migration-${String(process.pid)}`);
+  const stem = path.join(appData, `${MIGRATION_DIRECTORY_PREFIX}${String(process.pid)}`);
   let candidate = stem;
   let suffix = 0;
   while (existsSync(candidate)) {
@@ -42,6 +44,20 @@ function migrationTemporaryPath(appData: string): string {
     candidate = `${stem}-${String(suffix)}`;
   }
   return candidate;
+}
+
+function recoverInterruptedProfileMigration(appData: string, stableUserData: string): string | undefined {
+  if (!existsSync(appData)) return undefined;
+  const entries = readdirSync(appData, { withFileTypes: true });
+  if (entries.some((entry) => entry.isDirectory() && entry.name === OVERLOOK_PRODUCT_NAME)) return undefined;
+  const interrupted = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith(MIGRATION_DIRECTORY_PREFIX));
+  if (interrupted.length === 0) return undefined;
+  if (interrupted.length > 1) {
+    throw new Error('multiple interrupted Overlook profile migrations require manual reconciliation');
+  }
+  const temporary = path.join(appData, interrupted[0]?.name ?? '');
+  renameSync(temporary, stableUserData);
+  return stableUserData;
 }
 
 type RenameDirectory = (from: string, to: string) => void;
@@ -69,7 +85,7 @@ export function renameProfileDirectoryForMigration(
 
 function migrateLegacyProductProfile(appData: string, stableUserData: string): string | undefined {
   const legacyUserData = legacyProductProfile(appData);
-  if (legacyUserData === undefined) return undefined;
+  if (legacyUserData === undefined) return recoverInterruptedProfileMigration(appData, stableUserData);
   // A case-sensitive volume can contain both spellings. Never replace a
   // distinct destination; custody selection below will keep using whichever
   // populated profile already owns the data.

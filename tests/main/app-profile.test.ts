@@ -77,6 +77,33 @@ describe('app profile identity', () => {
     assert.equal(existsSync(join(stable, 'libraries.json')), true);
   });
 
+  it('resumes an interrupted case migration before creating a fresh profile', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-resume-'));
+    const temporary = join(appData, '.overlook-case-migration-crashed');
+    const stable = join(appData, OVERLOOK_PRODUCT_NAME);
+    mkdirSync(join(temporary, 'provider-auth', 'pcloud'), { recursive: true });
+    writeFileSync(join(temporary, 'libraries.json'), '{"version":1,"entries":[]}');
+    writeFileSync(join(temporary, 'provider-auth', 'pcloud', 'pcloud-auth.bin'), 'sealed');
+    const { app, calls } = profileApp(true, { appData, userData: join(appData, 'overlook') });
+
+    configureAppProfile(app, undefined);
+
+    assert.deepEqual(readdirSync(appData), [OVERLOOK_PRODUCT_NAME]);
+    assert.equal(existsSync(join(stable, 'libraries.json')), true);
+    assert.equal(existsSync(join(stable, 'provider-auth', 'pcloud', 'pcloud-auth.bin')), true);
+    assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
+  });
+
+  it('refuses ambiguous interrupted migrations instead of selecting arbitrary custody', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-ambiguous-'));
+    mkdirSync(join(appData, '.overlook-case-migration-first'));
+    mkdirSync(join(appData, '.overlook-case-migration-second'));
+    const { app } = profileApp(true, { appData, userData: join(appData, 'overlook') });
+
+    assert.throws(() => configureAppProfile(app, undefined), /multiple interrupted Overlook profile migrations/u);
+    assert.equal(existsSync(join(appData, OVERLOOK_PRODUCT_NAME)), false);
+  });
+
   it('does not replace a distinct capitalized profile on a case-sensitive filesystem', () => {
     const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-case-collision-'));
     const legacy = join(appData, OVERLOOK_PRODUCT_NAME.toLowerCase());
