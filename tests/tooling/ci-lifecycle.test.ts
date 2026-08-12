@@ -80,10 +80,10 @@ describe('governed CI lifecycle (ENG-0004)', () => {
       'npm run check:changesets',
       'npm run check:acceptance-coverage',
       'npm run check:a11y-budget',
-      'npm run test:cov',
+      'npm run test:cov:inner',
       'npm run build',
-      'npm run test:stories:ci',
-      'npm run test:e2e',
+      'npm run test:stories:ci:inner',
+      'npm run test:e2e:inner',
     ]) {
       assert.match(ci, new RegExp(command, 'u'));
     }
