@@ -1498,6 +1498,7 @@
     {
       "id": "a11y-audit-and-gates",
       "wiki": "Accessibility-Audit-2026-07",
+      "$note": "Issue #840 makes the Toast rapid-announcement story capture live-region mutations after play begins, so hosted Storybook timing cannot erase the first announcement before order is asserted.",
       "coverage": [
         {
           "type": "playwright-e2e",
