@@ -74,11 +74,12 @@ export const AutoDismiss: Story = {
 };
 
 function AnnouncementQueueDemo(): ReactElement {
-  const [toast, setToast] = useState<ToastItem>({ id: 'first', title: 'First notification' });
+  const [toast, setToast] = useState<ToastItem | null>(null);
   return (
     <div>
+      <Button onClick={() => setToast({ id: 'first', title: 'First notification' })}>Show first</Button>
       <Button onClick={() => setToast({ id: 'second', title: 'Second notification' })}>Show second</Button>
-      <ToastHost toasts={[toast]} autoDismissMs={5000} onDismiss={() => undefined} />
+      <ToastHost toasts={toast === null ? [] : [toast]} autoDismissMs={5000} onDismiss={() => undefined} />
     </div>
   );
 }
@@ -88,10 +89,21 @@ export const RapidAnnouncementsStayOrdered: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const announcer = canvas.getByTestId('screen-reader-announcer-polite');
-    await expect(announcer).toHaveTextContent('First notification');
-    await userEvent.click(canvas.getByRole('button', { name: 'Show second' }));
-    await expect(announcer).toHaveTextContent('First notification');
-    await waitFor(async () => expect(announcer).toHaveTextContent('Second notification'), { timeout: 2000 });
+    const announcements: string[] = [];
+    const observer = new MutationObserver(() => {
+      const announcement = announcer.textContent?.trim();
+      if (announcement !== undefined && announcement !== '' && announcements.at(-1) !== announcement) {
+        announcements.push(announcement);
+      }
+    });
+    observer.observe(announcer, { childList: true, subtree: true, characterData: true });
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: 'Show first' }));
+      await userEvent.click(canvas.getByRole('button', { name: 'Show second' }));
+      await waitFor(async () => expect(announcements).toEqual(['First notification', 'Second notification']), { timeout: 2500 });
+    } finally {
+      observer.disconnect();
+    }
   },
 };
 
