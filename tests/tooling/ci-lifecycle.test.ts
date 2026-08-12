@@ -13,6 +13,7 @@ const perf = readFileSync(join(root, '.github/workflows/perf.yml'), 'utf8');
 const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
 const versionCut = readFileSync(join(root, '.github/workflows/version-cut.yml'), 'utf8');
 const identityPolicy = readFileSync(join(root, 'docs/CI-Identity-And-Tokens.md'), 'utf8');
+const playwright = readFileSync(join(root, 'playwright.config.ts'), 'utf8');
 
 describe('governed CI lifecycle (ENG-0004)', () => {
   test('uses only governed CI triggers and PR-scoped cancellation', () => {
@@ -91,6 +92,13 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /^ {2}e2e-gate:\n {4}name: E2E gate$/mu);
     assert.match(ci, /^ {2}gate:\n {4}name: CI$/mu);
     assert.match(ci, /git branch main origin\/main/u);
+  });
+
+  test('keeps required E2E runs on the measured one-worker, zero-retry baseline (#897)', () => {
+    assert.match(ci, /OVERLOOK_E2E_WORKERS: .*inputs\.e2e_workers \|\| '1'/u);
+    assert.match(ci, /OVERLOOK_E2E_RETRIES: .*inputs\.e2e_retries \|\| '0'/u);
+    assert.match(playwright, /workers: positiveInteger\('OVERLOOK_E2E_WORKERS', 1\)/u);
+    assert.match(playwright, /retries: isCi \? positiveInteger\('OVERLOOK_E2E_RETRIES', 0\) : 0/u);
   });
 
   test('embeds the configured pCloud client ID in release package builds', () => {
