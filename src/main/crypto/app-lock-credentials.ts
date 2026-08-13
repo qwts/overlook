@@ -145,6 +145,10 @@ function policyOf(record: AppLockRecord): AnchorPolicy {
   return record.version === LEGACY_VERSION ? 'usability' : record.anchorPolicy;
 }
 
+function supersededByAnchor(record: AppLockRecord, anchor: CredentialAnchor | null): boolean {
+  return anchor?.libraryId === record.libraryId && anchor.generation > record.generation;
+}
+
 function aad(
   record: { readonly version: 1 | 2; readonly libraryId: string; readonly generation: number; readonly anchorPolicy?: AnchorPolicy },
   slot: 'password' | 'master',
@@ -262,7 +266,7 @@ export class AppLockCredentialStore {
         : { state: 'recovery-required', reason: 'anchor-missing' };
     }
     if (anchor.libraryId !== record.libraryId || anchor.generation !== record.generation || anchor.recordHash !== recordHash(raw)) {
-      return policyOf(record) === 'usability'
+      return policyOf(record) === 'usability' && !supersededByAnchor(record, anchor)
         ? { state: 'locked', libraryId: record.libraryId }
         : { state: 'recovery-required', reason: 'anchor-mismatch' };
     }
@@ -470,7 +474,7 @@ export class AppLockCredentialStore {
     ) {
       return true;
     }
-    if (policyOf(record) === 'hardened') return false;
+    if (policyOf(record) === 'hardened' || supersededByAnchor(record, current)) return false;
     try {
       this.options.anchorStore.write(expected);
       const repaired = this.options.anchorStore.read();

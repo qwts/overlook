@@ -192,6 +192,22 @@ describe('app-lock credential custody (#311, ADR-0013)', () => {
     assert.deepEqual(await store.unlock(password), { ok: false, reason: 'recovery-required' });
   });
 
+  test('a retained hardened anchor rejects rollback to an older usability record', async () => {
+    const { dataDir, anchors, store, masterKey } = world();
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    const path = join(dataDir, 'master.key');
+    const usabilityRecord = readFileSync(path);
+
+    assert.equal(await store.setAnchorPolicy(password, 'hardened'), true);
+    const hardenedAnchor = structuredClone(anchors.anchor);
+    writeFileSync(path, usabilityRecord);
+
+    assert.deepEqual(store.status(), { state: 'recovery-required', reason: 'anchor-mismatch' });
+    assert.deepEqual(await store.unlock(password), { ok: false, reason: 'recovery-required' });
+    assert.deepEqual(anchors.anchor, hardenedAnchor, 'stale usability custody cannot replace the newer hardened anchor');
+  });
+
   test('valid credentials report unavailable storage separately when usability repair cannot persist', async () => {
     const { anchors, store, masterKey } = world();
     const password = 'correct horse battery staple';
