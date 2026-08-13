@@ -1147,6 +1147,10 @@
         },
         {
           "type": "unit-dom",
+          "path": "tests/library/library-lock.test.ts"
+        },
+        {
+          "type": "unit-dom",
           "path": "tests/crypto/hidden-window-lock.test.ts"
         },
         {
@@ -1186,6 +1190,44 @@
         {
           "type": "manual",
           "reason": "On a notarized Developer ID build on a Touch ID Mac: upgrade a working com.qwts.overlook profile to com.zts1.overlook and prove existing Electron safeStorage custody still opens the library and provider tokens; verify the explicit password-confirmed Touch ID re-enrollment path, restart/unlock, cancel, failed scan, lockout, enrollment change, password fallback, password-change revocation, opt-out, and Keychain item accessibility/synchronization attributes. CI cannot provide both signed identities, physical biometric hardware, or mutate the enrolled biometric set."
+        }
+      ]
+    },
+    {
+      "id": "882-app-lock-anchor-recovery",
+      "wiki": "User-Story-M20-Privacy-lock-protected-albums",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/app-lock.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/lock/LockScreen.stories.tsx"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-credentials.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-controller.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/recovery-export-receipt.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/unlock-throttle.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Verify usability-mode anchor repair and hardened-mode recovery on notarized macOS and Windows builds, including real Keychain or Credential Manager loss, Touch ID cancellation and failure classification, recovery-export acknowledgement, receipt expiry, single-use consumption, VoiceOver, and password-manager behavior. CI cannot remove platform credential-store records or exercise physical biometric hardware."
         }
       ]
     },
@@ -1498,6 +1540,7 @@
     {
       "id": "a11y-audit-and-gates",
       "wiki": "Accessibility-Audit-2026-07",
+      "$note": "Issue #840 makes the Toast rapid-announcement story capture live-region mutations after play begins, so hosted Storybook timing cannot erase the first announcement before order is asserted.",
       "coverage": [
         {
           "type": "playwright-e2e",

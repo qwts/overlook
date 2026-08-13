@@ -15,6 +15,7 @@ function launch(userData: string): Promise<ElectronApplication> {
       OVERLOOK_INSECURE_KEYSTORE: '1',
       OVERLOOK_APP_LOCK_TEST_ANCHOR: '1',
       OVERLOOK_TOUCH_ID_FAKE: '1',
+      OVERLOOK_KEY_EXPORT_DESTINATION: `${userData}/hardened-recovery.key`,
     },
   });
 }
@@ -130,6 +131,31 @@ test('app lock withholds content across configuration, bypass attempts, restart,
 
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('tab', { name: 'Privacy' }).click();
+    const hardenedSwitch = page.getByRole('switch', { name: 'Hardened anchor protection' });
+    await expect(hardenedSwitch).toBeEnabled();
+    await hardenedSwitch.click();
+    const backupDialog = page.getByRole('dialog', { name: 'Back up encryption key' });
+    await backupDialog.getByLabel('Encrypt backup with password').fill('Recovery Export Password 93!');
+    await backupDialog.getByLabel('Confirm password').fill('Recovery Export Password 93!');
+    await backupDialog.getByRole('checkbox', { name: 'I understand this password cannot be reset or recovered.' }).check();
+    await backupDialog.getByRole('button', { name: 'Export key backup' }).click();
+    await expect(backupDialog).toContainText('Key backup saved.');
+    await backupDialog.getByRole('button', { name: 'Done' }).click();
+    const hardenDialog = page.getByRole('dialog', { name: 'Enable hardened protection' });
+    await hardenDialog.getByLabel('Current password').fill(PASSWORD);
+    await hardenDialog
+      .getByRole('checkbox', {
+        name: 'I saved the new recovery-key export and understand that losing it can make this library inaccessible.',
+      })
+      .check();
+    await hardenDialog.getByRole('button', { name: 'Enable hardened protection' }).click();
+    await expect(hardenedSwitch).toBeChecked();
+    await hardenedSwitch.click();
+    const usabilityDialog = page.getByRole('dialog', { name: 'Use automatic anchor repair' });
+    await usabilityDialog.getByLabel('Current password').fill(PASSWORD);
+    await usabilityDialog.getByRole('button', { name: 'Use automatic anchor repair' }).click();
+    await expect(hardenedSwitch).not.toBeChecked();
+
     const touchIdSwitch = page.getByRole('switch', { name: 'Unlock with Touch ID' });
     await expect(touchIdSwitch).toBeEnabled();
     await expect(touchIdSwitch).not.toBeChecked();
@@ -138,6 +164,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
     await touchIdDialog.getByLabel('Current password').fill('wrong password');
     await touchIdDialog.getByRole('button', { name: 'Enable Touch ID' }).click();
     await expect(touchIdDialog.getByRole('status')).toContainText('incorrect');
+    await page.waitForTimeout(1200); // The shared failed-attempt gate imposes a one-second backoff.
     await touchIdDialog.getByLabel('Current password').fill(PASSWORD);
     await touchIdDialog.getByRole('button', { name: 'Enable Touch ID' }).click();
     await expect(touchIdDialog).toHaveCount(0);
@@ -159,6 +186,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
     await changeDialog.getByLabel('Confirm password').fill(NEXT_PASSWORD);
     await changeDialog.getByRole('button', { name: 'Change app password' }).click();
     await expect(changeDialog.getByRole('status')).toContainText('incorrect');
+    await page.waitForTimeout(1200); // Password changes use the same persisted backoff as unlock.
     await changeDialog.getByLabel('Current password').fill(PASSWORD);
     await changeDialog.getByRole('button', { name: 'Change app password' }).click();
     await expect(changeDialog).toHaveCount(0);

@@ -77,6 +77,7 @@ export function App(): ReactElement {
           platform={platform}
           state={lock.state}
           retryAfterMs={lock.retryAfterMs}
+          attemptsRemaining={lock.attemptsRemaining}
           onSwitchLibrary={() => setLockedLibrarySwitcherOpen(true)}
         />
         {lockedLibrarySwitcherOpen ? <LibrarySwitcher switchOnly onClose={() => setLockedLibrarySwitcherOpen(false)} /> : null}

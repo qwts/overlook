@@ -32,6 +32,7 @@ export interface KeyDialogProps {
   readonly onClose: () => void;
   /** Green completion toasts ride the shell's toast host when wired. */
   readonly onToast?: ((title: string) => void) | undefined;
+  readonly onExported?: (() => void) | undefined;
 }
 
 function baseName(path: string): string {
@@ -78,7 +79,7 @@ function FingerprintRow({ fingerprint }: { fingerprint: string | null }): ReactE
   );
 }
 
-export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): ReactElement | null {
+export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialogProps): ReactElement | null {
   const intl = useIntl();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -129,6 +130,7 @@ export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): Rea
         }
         setSavedPath(path);
         onToast?.('Key backup saved');
+        onExported?.();
       })
       .catch(() => {
         setBusy(false);

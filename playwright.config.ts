@@ -23,12 +23,11 @@ export default defineConfig({
   fullyParallel: false,
   // exactOptionalPropertyTypes forbids an explicit `workers: undefined`, so spread
   // the CI-only override instead of image-trail's ternary.
-  ...(isCi ? { workers: positiveInteger('OVERLOOK_E2E_WORKERS', 3) } : {}),
-  // CI retries absorb the environment-flake class (Xvfb timing, runner contention) so a
-  // single hiccup can't fail the required E2E gate; a pass-on-retry is reported as
-  // "flaky", never silently green, so real instability stays visible in the report.
-  // Local runs keep 0 — a failure on a dev machine should stop and be investigated.
-  retries: isCi ? positiveInteger('OVERLOOK_E2E_RETRIES', 2) : 0,
+  ...(isCi ? { workers: positiveInteger('OVERLOOK_E2E_WORKERS', 1) } : {}),
+  // Required CI runs use the measured one-worker, zero-retry baseline from the
+  // E2E timing audit. A diagnostic workflow dispatch may opt into retries
+  // explicitly, but required and local runs stop on the first failure.
+  retries: isCi ? positiveInteger('OVERLOOK_E2E_RETRIES', 0) : 0,
   timeout: 30_000,
   expect: {
     timeout: 5_000,

@@ -16,6 +16,7 @@ import { TouchIdService } from './touch-id.js';
 import { createNativeTouchIdAdapter } from './touch-id-native.js';
 import { TestTouchIdAdapter } from './test-touch-id-adapter.js';
 import { registerInspectorWindowHandlers } from '../inspector-window-runtime.js';
+import { LibraryLockError } from '../library/library-lock.js';
 
 export interface AppLockRuntimeOptions {
   readonly dataDir: string;
@@ -43,6 +44,7 @@ export function createAppLockRuntime(options: AppLockRuntimeOptions): AppLockCon
     openAuthorized: options.openAuthorized,
     closeAuthorized: options.closeAuthorized,
     failClosed: options.failClosed,
+    classifyOpenError: (error) => (error instanceof LibraryLockError ? 'library-in-use' : undefined),
   });
 }
 
@@ -57,7 +59,13 @@ export function registerAppLockIpc(options: AppLockIpcOptions): () => void {
   registerInspectorWindowHandlers(() => options.controller.requireContentAccess());
   const emit = createEmitter(events.appLockStateChanged, (name, payload) => options.send(name, payload));
   const emitTouchId = createEmitter(events.appLockTouchIdChanged, (name, payload) => options.send(name, payload));
-  const offState = options.controller.subscribe((snapshot) => emit({ ...snapshot, retryAfterMs: options.controller.retryAfterMs() }));
+  const offState = options.controller.subscribe((snapshot) =>
+    emit({
+      ...snapshot,
+      retryAfterMs: options.controller.retryAfterMs(),
+      attemptsRemaining: options.controller.attemptsRemaining?.() ?? 3,
+    }),
+  );
   const offTouchId = options.controller.subscribeTouchId(emitTouchId);
   const offLifecycle = registerAppLockLifecycle({ controller: options.controller, settings: options.settings });
   return () => {

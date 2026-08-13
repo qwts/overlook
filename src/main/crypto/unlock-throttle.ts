@@ -43,6 +43,14 @@ export class UnlockThrottle {
     return Math.max(0, record.notBefore - this.now());
   }
 
+  failureCount(): number {
+    return this.read()?.failures ?? 0;
+  }
+
+  attemptsRemaining(limit = 3): number {
+    return Math.max(0, limit - this.failureCount());
+  }
+
   recordFailure(): number {
     const previous = this.read();
     const failures = Math.min((previous?.failures ?? 0) + 1, DELAYS_MS.length);
