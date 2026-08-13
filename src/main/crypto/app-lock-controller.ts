@@ -141,27 +141,7 @@ export class AppLockController {
 
   /** Re-authenticates an already-open app without changing lock state. */
   authorize(password: string): Promise<AppAuthorizationResult> {
-    return this.serialize(async () => {
-      this.requireContentAccess();
-      if (this.current.state === 'unconfigured-unlocked') return { ok: true };
-      const remaining = this.options.throttle?.remainingMs() ?? 0;
-      if (remaining > 0) return { ok: false, reason: 'throttled', retryAfterMs: remaining };
-      const result = await this.options.credentials.unlock(password);
-      if (!result.ok) {
-        const retryAfterMs = result.reason === 'wrong-password' ? this.options.throttle?.recordFailure() : undefined;
-        return {
-          ...result,
-          ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
-          ...(this.hasAttemptCounter() ? { attemptsRemaining: this.attemptsRemaining() } : {}),
-        };
-      }
-      try {
-        this.options.throttle?.reset();
-        return { ok: true };
-      } finally {
-        result.masterKey.fill(0);
-      }
-    });
+    return this.serialize(() => this.authorizeOpen(password));
   }
 
   unlockWithTouchId(): Promise<AppTouchIdUnlockResult> {
@@ -266,6 +246,8 @@ export class AppLockController {
   setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
     return this.serialize(async () => {
       this.requireContentAccess();
+      const authorization = await this.authorizeOpen(password);
+      if (!authorization.ok) return false;
       const changed = (await this.options.credentials.setAnchorPolicy?.(password, policy)) ?? false;
       if (changed) await this.credentialsChanged();
       return changed;
@@ -308,6 +290,46 @@ export class AppLockController {
 
   private hasAttemptCounter(): boolean {
     return this.options.throttle?.attemptsRemaining !== undefined || this.options.throttle?.failureCount !== undefined;
+  }
+
+  private async authorizeOpen(password: string): Promise<AppAuthorizationResult> {
+    this.requireContentAccess();
+    if (this.current.state === 'unconfigured-unlocked') return { ok: true };
+    if (this.attemptsRemaining() === 0) {
+      await this.enterRecoveryRequired();
+      return { ok: false, reason: 'recovery-required', attemptsRemaining: 0 };
+    }
+    const remaining = this.options.throttle?.remainingMs() ?? 0;
+    if (remaining > 0) return { ok: false, reason: 'throttled', retryAfterMs: remaining };
+    const result = await this.options.credentials.unlock(password);
+    if (!result.ok) {
+      const retryAfterMs = result.reason === 'wrong-password' ? this.options.throttle?.recordFailure() : undefined;
+      const attemptsRemaining = this.attemptsRemaining();
+      if (result.reason === 'recovery-required' || attemptsRemaining === 0) await this.enterRecoveryRequired();
+      return {
+        ...result,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+        ...(this.hasAttemptCounter() ? { attemptsRemaining } : {}),
+      };
+    }
+    try {
+      this.options.throttle?.reset();
+      return { ok: true };
+    } finally {
+      result.masterKey.fill(0);
+    }
+  }
+
+  private async enterRecoveryRequired(): Promise<void> {
+    if (this.current.state === 'unlocked') {
+      this.publish({ ...this.current, state: 'locking' });
+      try {
+        await this.options.closeAuthorized();
+      } catch {
+        this.options.failClosed?.();
+      }
+    }
+    this.publish({ ...this.current, state: 'recovery-required' });
   }
 
   private publish(snapshot: LockStateSnapshot): void {

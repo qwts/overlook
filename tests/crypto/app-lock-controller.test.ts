@@ -9,6 +9,7 @@ class FakeCredentials {
   credentialStatus: AppLockStatus = { state: 'locked', libraryId: 'library-a' };
   unlockResult: UnlockResult = { ok: true, masterKey: Buffer.alloc(32, 7) };
   recoveries = 0;
+  anchorPolicyChanges = 0;
   readonly unlockPasswords: string[] = [];
 
   status(): AppLockStatus {
@@ -25,6 +26,15 @@ class FakeCredentials {
   }
 
   changePassword(_current: string, _next: string): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  anchorPolicy(): 'usability' | 'hardened' {
+    return 'usability';
+  }
+
+  setAnchorPolicy(_password: string, _policy: 'usability' | 'hardened'): Promise<boolean> {
+    this.anchorPolicyChanges += 1;
     return Promise.resolve(true);
   }
 
@@ -167,6 +177,42 @@ describe('app-lock authority state machine (#311)', () => {
 
     assert.deepEqual(await controller.authorize('wrong'), { ok: false, reason: 'wrong-password' });
     assert.equal(controller.snapshot().state, 'unlocked');
+  });
+
+  test('anchor-policy re-authentication shares the three-attempt recovery budget', async () => {
+    const credentials = new FakeCredentials();
+    let failures = 0;
+    let closes = 0;
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => {
+        closes += 1;
+      },
+      throttle: {
+        remainingMs: () => 0,
+        recordFailure: () => {
+          failures += 1;
+          return 0;
+        },
+        reset: () => {
+          failures = 0;
+        },
+        failureCount: () => failures,
+        attemptsRemaining: (limit = 3) => Math.max(0, limit - failures),
+      },
+    });
+    await controller.unlock('unlock-password');
+    credentials.unlockResult = { ok: false, reason: 'wrong-password' };
+
+    assert.equal(await controller.setAnchorPolicy('wrong-1', 'hardened'), false);
+    assert.equal(await controller.setAnchorPolicy('wrong-2', 'hardened'), false);
+    assert.equal(await controller.setAnchorPolicy('wrong-3', 'hardened'), false);
+
+    assert.equal(credentials.anchorPolicyChanges, 0);
+    assert.equal(closes, 1);
+    assert.equal(controller.snapshot().state, 'recovery-required');
+    assert.deepEqual(credentials.unlockPasswords, ['unlock-password', 'wrong-1', 'wrong-2', 'wrong-3']);
   });
 
   test('throttle write failure restores locked state after a wrong password', async () => {
