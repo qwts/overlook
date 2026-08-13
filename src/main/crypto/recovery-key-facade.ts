@@ -23,6 +23,7 @@ export interface RecoveryKeyFacadeOptions {
   readonly pickExportDestination: () => Promise<string | null>;
   readonly pickImportSource: () => Promise<string | null>;
   readonly allowImport: () => boolean;
+  readonly onExported?: (() => void) | undefined;
 }
 
 export function createRecoveryKeyFacade(options: RecoveryKeyFacadeOptions) {
@@ -34,6 +35,7 @@ export function createRecoveryKeyFacade(options: RecoveryKeyFacadeOptions) {
       const temporary = `${destination}.tmp`;
       await writeFile(temporary, sealRecoveryKey(options.keyStore().masterKeyBytes(), password));
       await rename(temporary, destination);
+      options.onExported?.();
       return destination;
     },
     pickFile: options.pickImportSource,

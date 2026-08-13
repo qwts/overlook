@@ -1,6 +1,7 @@
 import type {
   AppAuthorizationResult,
   AppLockController,
+  AppSettingsMutationResult,
   AppTouchIdUnlockResult,
   AppUnlockResult,
   LockStateSnapshot,
@@ -19,7 +20,7 @@ import type { TouchIdEnableResult, TouchIdStatus } from './touch-id.js';
 
 /** The controller surface consumers depend on — structural, so both the real
  * AppLockController and this host satisfy it. */
-export type AppLockControllerLike = Pick<
+type CoreAppLockControllerLike = Pick<
   AppLockController,
   | 'initialize'
   | 'snapshot'
@@ -39,6 +40,9 @@ export type AppLockControllerLike = Pick<
   | 'remove'
   | 'recover'
 >;
+
+export type AppLockControllerLike = CoreAppLockControllerLike &
+  Partial<Pick<AppLockController, 'attemptsRemaining' | 'anchorPolicy' | 'setAnchorPolicy'>>;
 
 export class AppLockHost implements AppLockControllerLike {
   private inner: AppLockControllerLike;
@@ -88,6 +92,9 @@ export class AppLockHost implements AppLockControllerLike {
   retryAfterMs(): number {
     return this.inner.retryAfterMs();
   }
+  attemptsRemaining(): number {
+    return this.inner.attemptsRemaining?.() ?? 3;
+  }
   authorizationEpoch(): number {
     return this.epoch;
   }
@@ -126,10 +133,16 @@ export class AppLockHost implements AppLockControllerLike {
   configure(input: ConfigureAppLockInput): Promise<void> {
     return this.inner.configure(input);
   }
-  changePassword(currentPassword: string, nextPassword: string): Promise<boolean> {
+  changePassword(currentPassword: string, nextPassword: string): Promise<AppSettingsMutationResult> {
     return this.inner.changePassword(currentPassword, nextPassword);
   }
-  remove(password: string): Promise<boolean> {
+  anchorPolicy(): 'usability' | 'hardened' {
+    return this.inner.anchorPolicy?.() ?? 'usability';
+  }
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<AppSettingsMutationResult> {
+    return this.inner.setAnchorPolicy?.(password, policy) ?? Promise.resolve({ ok: false, reason: null });
+  }
+  remove(password: string): Promise<AppSettingsMutationResult> {
     return this.inner.remove(password);
   }
   recover(input: ConfigureAppLockInput): Promise<void> {

@@ -83,6 +83,21 @@
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
   },
+  "appLock.anchorPolicy.harden.ack": {
+    "defaultMessage": "I saved the new recovery-key export and understand that losing it can make this library inaccessible."
+  },
+  "appLock.anchorPolicy.harden.note": {
+    "defaultMessage": "A missing or changed local credential anchor will require the recovery-key file you just exported. This can happen after migration, restore, or OS credential-store loss."
+  },
+  "appLock.anchorPolicy.harden.title": {
+    "defaultMessage": "Enable hardened protection"
+  },
+  "appLock.anchorPolicy.usability.note": {
+    "defaultMessage": "After a valid password or Touch ID, Overlook will repair this Mac’s missing or changed local credential anchor. Malformed credential records still fail closed."
+  },
+  "appLock.anchorPolicy.usability.title": {
+    "defaultMessage": "Use automatic anchor repair"
+  },
   "appLock.password": {
     "defaultMessage": "App password"
   },
@@ -1051,6 +1066,9 @@
   },
   "lightbox.video.volume": {
     "defaultMessage": "Volume"
+  },
+  "lock.attemptsRemaining": {
+    "defaultMessage": "{count, plural, one {# attempt} other {# attempts}} remaining before recovery"
   },
   "lock.retryCountdown": {
     "defaultMessage": "Try again in {seconds}s"

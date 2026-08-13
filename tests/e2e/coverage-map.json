@@ -1194,6 +1194,44 @@
       ]
     },
     {
+      "id": "882-app-lock-anchor-recovery",
+      "wiki": "User-Story-M20-Privacy-lock-protected-albums",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/app-lock.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/lock/LockScreen.stories.tsx"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-credentials.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-controller.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/recovery-export-receipt.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/unlock-throttle.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Verify usability-mode anchor repair and hardened-mode recovery on notarized macOS and Windows builds, including real Keychain or Credential Manager loss, Touch ID cancellation and failure classification, recovery-export acknowledgement, receipt expiry, single-use consumption, VoiceOver, and password-manager behavior. CI cannot remove platform credential-store records or exercise physical biometric hardware."
+        }
+      ]
+    },
+    {
       "id": "m20-protected-albums",
       "wiki": "User-Story-M20-Privacy-lock-protected-albums",
       "coverage": [

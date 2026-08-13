@@ -82,6 +82,7 @@ const appLockPickRecovery = createInvoker(channels.appLockPickRecovery, invokeTr
 const appLockTouchIdStatus = createInvoker(channels.appLockTouchIdStatus, invokeTransport);
 const appLockTouchIdDisable = createInvoker(channels.appLockTouchIdDisable, invokeTransport);
 const appLockTouchIdUnlock = createInvoker(channels.appLockTouchIdUnlock, invokeTransport);
+const appLockAnchorPolicyStatus = createInvoker(channels.appLockAnchorPolicyStatus, invokeTransport);
 const interopStatus = createInvoker(channels.interopStatus, invokeTransport);
 const interopPairingSelect = createInvoker(channels.interopPairingSelect, invokeTransport);
 const interopRefresh = createInvoker(channels.interopRefresh, invokeTransport);
@@ -137,6 +138,8 @@ const overlook: OverlookApi = {
     configure: createInvoker(channels.appLockConfigure, invokeTransport),
     lockNow: async () => appLockNow({}),
     changePassword: createInvoker(channels.appLockChangePassword, invokeTransport),
+    anchorPolicyStatus: async () => appLockAnchorPolicyStatus({}),
+    setAnchorPolicy: createInvoker(channels.appLockSetAnchorPolicy, invokeTransport),
     remove: createInvoker(channels.appLockRemove, invokeTransport),
     pickRecovery: async () => appLockPickRecovery({}),
     recover: createInvoker(channels.appLockRecover, invokeTransport),
