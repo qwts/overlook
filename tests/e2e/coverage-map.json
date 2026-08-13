@@ -429,6 +429,10 @@
         {
           "type": "unit-dom",
           "path": "tests/lightbox/lightbox-geometry.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Issue #898 square and near-square Fill behavior is covered by docs/acceptance/acceptance-test-full-display-image.md, including the no-scroll threshold and one-axis overflow boundary."
         }
       ]
     },

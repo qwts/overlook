@@ -226,6 +226,22 @@ export const LandscapeFillCoversWidescreenAndPans: Story = {
   },
 };
 
+export const SquareFillAvoidsUnnecessaryScrolling: Story = {
+  args: { photo: { ...PHOTO, width: 1280, height: 1280, fileName: 'SQUARE.JPG' } },
+  parameters: { lightboxHeight: 540 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const image = canvas.getByRole('img', { name: 'SQUARE.JPG' });
+    const viewport = canvas.getByTestId('lightbox-viewport');
+    await waitFor(() => expect(viewport).toHaveAttribute('data-load-state', 'decoded'));
+    await userEvent.dblClick(image);
+    await expect(viewport).toHaveAttribute('data-mode', 'fill');
+    await expect(viewport).toHaveAttribute('data-zoom', '1.000');
+    await expect(viewport).toHaveAttribute('data-pan-x', '0.0');
+    await expect(viewport).toHaveAttribute('data-pan-y', '0.0');
+  },
+};
+
 export const NavigationPreservesViewIntentAndCloseResets: Story = {
   render: () => <NavigationTransformHarness />,
   play: async ({ canvasElement }) => {

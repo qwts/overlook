@@ -32,14 +32,23 @@ describe('lightbox transform geometry (#307)', () => {
     assert.equal(portrait.height, 400);
   });
 
-  test('Fill uses width for portrait and height for landscape orientation (#371, #501)', () => {
+  test('Fill uses the shorter image axis for landscape and portrait orientation (#371, #501, #898)', () => {
     const widescreen = { width: 1600, height: 900 };
     assertClose(fillZoom({ width: 700, height: 525 }, widescreen), 900 / 525);
     assertClose(fillZoom({ width: 525, height: 700 }, widescreen), 1600 / 525);
+    assertClose(fillZoom({ width: 1600, height: 700 }, widescreen), 900 / 700);
+    assertClose(fillZoom({ width: 700, height: 1600 }, widescreen), 1600 / (700 * (900 / 1600)));
     assertClose(fillZoom({ width: 2100, height: 700 }, widescreen), 1.6875);
     assert.equal(fillZoom({ width: 1600, height: 900 }, widescreen), 1);
     assert.equal(fillZoom({ width: 320, height: 180 }, widescreen), 5);
     assert.equal(fillZoom({ width: 0, height: 0 }, widescreen), 1);
+  });
+
+  test('Fill avoids unnecessary overflow for square and sub-pixel near-square images (#898)', () => {
+    assert.equal(fillZoom({ width: 1000, height: 1000 }, { width: 700, height: 1600 }), 1);
+    assertClose(fillZoom({ width: 320, height: 320 }, { width: 1600, height: 900 }), 900 / 320);
+    assert.equal(fillZoom({ width: 801, height: 800 }, { width: 800, height: 800 }), 1);
+    assert.ok(fillZoom({ width: 810, height: 800 }, { width: 800, height: 800 }) > 1);
   });
 
   test('pan clamps both axes without exposing space beyond an edge', () => {
@@ -107,6 +116,16 @@ describe('lightbox navigation view intent (#501)', () => {
     assertClose(landscape.zoom, 600 / 450);
     assert.ok(landscape.x > 0, 'landscape scrolls horizontally');
     assertClose(landscape.y, 0);
+  });
+
+  test('Fill intent keeps square images wholly visible in non-square viewports (#898)', () => {
+    const square = viewIntentToTransform(
+      { ...DEFAULT_VIEW_INTENT, mode: 'fill' },
+      { width: 1000, height: 1000 },
+      { width: 700, height: 1600 },
+    );
+
+    assert.deepEqual(square, { zoom: 1, x: 0, y: 0 });
   });
 });
 
