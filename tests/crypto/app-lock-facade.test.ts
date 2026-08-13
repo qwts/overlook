@@ -20,8 +20,8 @@ class FacadeCredentials {
     return Promise.resolve();
   }
 
-  unlock(_password: string): Promise<UnlockResult> {
-    return Promise.resolve(this.unlockValue);
+  unlock(password: string): Promise<UnlockResult> {
+    return Promise.resolve(password === 'current' ? this.unlockValue : { ok: false, reason: 'wrong-password' });
   }
 
   changePassword(current: string, next: string): Promise<boolean> {
