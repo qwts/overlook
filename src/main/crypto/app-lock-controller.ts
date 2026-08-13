@@ -16,6 +16,7 @@ export interface AppLockControllerOptions {
   readonly failClosed?: () => void;
   readonly throttle?: Pick<UnlockThrottle, 'remainingMs' | 'recordFailure' | 'reset'>;
   readonly touchId?: Pick<TouchIdService, 'status' | 'enable' | 'disable' | 'unlockMaster' | 'credentialsChanged'>;
+  readonly classifyOpenError?: (error: unknown) => 'library-in-use' | undefined;
 }
 
 export interface LockStateSnapshot {
@@ -25,11 +26,18 @@ export interface LockStateSnapshot {
 
 export type AppUnlockResult =
   | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'wrong-password' | 'recovery-required' | 'throttled' | 'library-in-use';
+      readonly retryAfterMs?: number;
+    };
+
+export type AppAuthorizationResult =
+  | { readonly ok: true }
   | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' | 'throttled'; readonly retryAfterMs?: number };
 
-export type AppAuthorizationResult = AppUnlockResult;
-
-export type AppTouchIdUnlockResult = { readonly ok: true } | { readonly ok: false; readonly reason: TouchIdUnlockFailureReason };
+export type AppTouchIdUnlockResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: TouchIdUnlockFailureReason | 'library-in-use' };
 
 export class AppLockController {
   private current: LockStateSnapshot;
@@ -98,9 +106,9 @@ export class AppLockController {
         await this.options.openAuthorized(result.masterKey);
         this.publish({ ...this.current, state: 'unlocked' });
         return { ok: true };
-      } catch {
+      } catch (error) {
         this.publish({ ...this.current, state: 'locked' });
-        return { ok: false, reason: 'recovery-required' };
+        return { ok: false, reason: this.options.classifyOpenError?.(error) ?? 'recovery-required' };
       } finally {
         result.masterKey.fill(0);
       }
@@ -143,9 +151,9 @@ export class AppLockController {
         await this.options.openAuthorized(result.masterKey);
         this.publish({ ...this.current, state: 'unlocked' });
         return { ok: true };
-      } catch {
+      } catch (error) {
         this.publish({ ...this.current, state: 'locked' });
-        return { ok: false, reason: 'recovery-required' };
+        return { ok: false, reason: this.options.classifyOpenError?.(error) ?? 'recovery-required' };
       } finally {
         result.masterKey.fill(0);
       }
