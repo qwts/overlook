@@ -65,10 +65,12 @@ describe('channel registry', () => {
       channels.appLockTouchIdUnlock.response.parse({
         ok: true,
         reason: null,
+        retryAfterMs: 0,
+        attemptsRemaining: 3,
         unlockKey: Buffer.alloc(32, 5),
         masterKey: Buffer.alloc(32, 6),
       }),
-      { ok: true, reason: null },
+      { ok: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 },
     );
   });
 
