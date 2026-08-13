@@ -10,6 +10,8 @@ class FakeCredentials {
   unlockResult: UnlockResult = { ok: true, masterKey: Buffer.alloc(32, 7) };
   recoveries = 0;
   anchorPolicyChanges = 0;
+  passwordChanges = 0;
+  removals = 0;
   readonly unlockPasswords: string[] = [];
 
   status(): AppLockStatus {
@@ -26,6 +28,7 @@ class FakeCredentials {
   }
 
   changePassword(_current: string, _next: string): Promise<boolean> {
+    this.passwordChanges += 1;
     return Promise.resolve(true);
   }
 
@@ -44,6 +47,7 @@ class FakeCredentials {
   }
 
   remove(_password: string): Promise<boolean> {
+    this.removals += 1;
     return Promise.resolve(true);
   }
 }
@@ -54,12 +58,14 @@ class FakeTouchId {
   unlockValue: TouchIdUnlockResult = { ok: true, masterKey: Buffer.alloc(32, 8) };
   credentialChanges = 0;
   disables = 0;
+  enables = 0;
 
   status(): Promise<TouchIdStatus> {
     return Promise.resolve(this.statusValue);
   }
 
   enable(_password: string): Promise<TouchIdEnableResult> {
+    this.enables += 1;
     return Promise.resolve(this.enableValue);
   }
 
@@ -213,6 +219,50 @@ describe('app-lock authority state machine (#311)', () => {
     assert.equal(closes, 1);
     assert.equal(controller.snapshot().state, 'recovery-required');
     assert.deepEqual(credentials.unlockPasswords, ['unlock-password', 'wrong-1', 'wrong-2', 'wrong-3']);
+  });
+
+  test('settings password ceremonies share the three-attempt recovery budget', async () => {
+    for (const ceremony of ['change-password', 'remove', 'touch-id'] as const) {
+      const credentials = new FakeCredentials();
+      const touchId = new FakeTouchId();
+      let failures = 0;
+      const controller = new AppLockController({
+        credentials,
+        touchId,
+        openAuthorized: () => undefined,
+        closeAuthorized: () => undefined,
+        throttle: {
+          remainingMs: () => 0,
+          recordFailure: () => {
+            failures += 1;
+            return 0;
+          },
+          reset: () => {
+            failures = 0;
+          },
+          failureCount: () => failures,
+          attemptsRemaining: (limit = 3) => Math.max(0, limit - failures),
+        },
+      });
+      await controller.unlock('unlock-password');
+      credentials.unlockResult = { ok: false, reason: 'wrong-password' };
+
+      for (const password of ['wrong-1', 'wrong-2', 'wrong-3']) {
+        const accepted =
+          ceremony === 'change-password'
+            ? await controller.changePassword(password, 'next-password')
+            : ceremony === 'remove'
+              ? await controller.remove(password)
+              : (await controller.enableTouchId(password)).ok;
+        assert.equal(accepted, false);
+      }
+
+      assert.equal(controller.snapshot().state, 'recovery-required', ceremony);
+      assert.equal(credentials.passwordChanges, 0, ceremony);
+      assert.equal(credentials.removals, 0, ceremony);
+      assert.equal(touchId.enables, 0, ceremony);
+      assert.deepEqual(credentials.unlockPasswords, ['unlock-password', 'wrong-1', 'wrong-2', 'wrong-3'], ceremony);
+    }
   });
 
   test('throttle write failure restores locked state after a wrong password', async () => {

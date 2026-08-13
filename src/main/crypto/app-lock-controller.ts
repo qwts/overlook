@@ -185,10 +185,20 @@ export class AppLockController {
   enableTouchId(password: string): Promise<TouchIdEnableResult> {
     return this.serialize(async () => {
       this.requireContentAccess();
-      const result =
-        this.options.touchId === undefined
-          ? ({ ok: false, reason: 'unsupported-platform' } as const)
-          : await this.options.touchId.enable(password);
+      if (this.options.touchId === undefined) return { ok: false, reason: 'unsupported-platform' };
+      const authorization = await this.authorizeOpen(password);
+      if (!authorization.ok) {
+        return {
+          ok: false,
+          reason:
+            authorization.reason === 'throttled'
+              ? 'locked-out'
+              : authorization.reason === 'storage-unavailable'
+                ? 'unavailable'
+                : authorization.reason,
+        };
+      }
+      const result = await this.options.touchId.enable(password);
       if (result.ok) await this.publishTouchId();
       return result;
     });
@@ -235,6 +245,8 @@ export class AppLockController {
   changePassword(currentPassword: string, nextPassword: string): Promise<boolean> {
     return this.serialize(async () => {
       this.requireContentAccess();
+      const authorization = await this.authorizeOpen(currentPassword);
+      if (!authorization.ok) return false;
       const changed = await this.options.credentials.changePassword(currentPassword, nextPassword);
       if (changed) await this.credentialsChanged();
       return changed;
@@ -260,6 +272,8 @@ export class AppLockController {
   remove(password: string): Promise<boolean> {
     return this.serialize(async () => {
       this.requireContentAccess();
+      const authorization = await this.authorizeOpen(password);
+      if (!authorization.ok) return false;
       const removed = await this.options.credentials.remove(password);
       if (removed) {
         await this.credentialsChanged();
