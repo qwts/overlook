@@ -28,7 +28,13 @@ import type { ProtectedLibraryService } from './library/protected-library-servic
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
 import type { ProtectedWorkflowService } from './library/protected-workflow-service.js';
 import type { OffloadPreflight, OffloadSummary, RestoreOriginalsSummary } from './backup/offload.js';
-import type { AppLockState, AppTouchIdUnlockResult, AppUnlockResult, LockStateSnapshot } from './crypto/app-lock-controller.js';
+import type {
+  AppLockState,
+  AppSettingsMutationResult,
+  AppTouchIdUnlockResult,
+  AppUnlockResult,
+  LockStateSnapshot,
+} from './crypto/app-lock-controller.js';
 import type { TouchIdEnableResult, TouchIdStatus } from './crypto/touch-id.js';
 import type { DiagnosticEvent } from './diagnostics/event-contract.js';
 import { mutateWithActivity } from './activity/activity-publication.js';
@@ -69,10 +75,10 @@ export interface AppLockFacade {
   touchIdDisable(): Promise<boolean>;
   configure(password: string): Promise<void>;
   lock(): Promise<void>;
-  changePassword(currentPassword: string, nextPassword: string): Promise<boolean>;
+  changePassword(currentPassword: string, nextPassword: string): Promise<AppSettingsMutationResult>;
   anchorPolicy(): 'usability' | 'hardened';
-  setAnchorPolicy(password: string, policy: 'usability' | 'hardened', confirmedExport: boolean): Promise<boolean>;
-  remove(password: string): Promise<boolean>;
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened', confirmedExport: boolean): Promise<AppSettingsMutationResult>;
+  remove(password: string): Promise<AppSettingsMutationResult>;
   pickRecovery(): Promise<string | null>;
   recover(
     path: string,
@@ -91,6 +97,14 @@ function lockStatus(facade: AppLockFacade): {
   attemptsRemaining: number;
 } {
   return { ...facade.snapshot(), retryAfterMs: facade.retryAfterMs(), attemptsRemaining: facade.attemptsRemaining() };
+}
+
+function settingsMutationStatus(result: AppSettingsMutationResult, facade: AppLockFacade) {
+  return {
+    reason: result.ok ? null : result.reason,
+    retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? facade.retryAfterMs()),
+    attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? facade.attemptsRemaining()),
+  };
 }
 
 export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
@@ -121,20 +135,28 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
     })(request),
   );
   ipcMain.handle(channels.appLockChangePassword.name, (_event, request: unknown) =>
-    validateHandler(channels.appLockChangePassword, async ({ currentPassword, nextPassword }) => ({
-      changed: await getFacade().changePassword(currentPassword, nextPassword),
-    }))(request),
+    validateHandler(channels.appLockChangePassword, async ({ currentPassword, nextPassword }) => {
+      const facade = getFacade();
+      const result = await facade.changePassword(currentPassword, nextPassword);
+      return { changed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
   );
   ipcMain.handle(channels.appLockAnchorPolicyStatus.name, (_event, request: unknown) =>
     wrapHandler(channels.appLockAnchorPolicyStatus, () => ({ policy: getFacade().anchorPolicy() }))(request),
   );
   ipcMain.handle(channels.appLockSetAnchorPolicy.name, (_event, request: unknown) =>
-    wrapHandler(channels.appLockSetAnchorPolicy, async ({ password, policy, confirmedExport }) => ({
-      changed: await getFacade().setAnchorPolicy(password, policy, confirmedExport),
-    }))(request),
+    wrapHandler(channels.appLockSetAnchorPolicy, async ({ password, policy, confirmedExport }) => {
+      const facade = getFacade();
+      const result = await facade.setAnchorPolicy(password, policy, confirmedExport);
+      return { changed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
   );
   ipcMain.handle(channels.appLockRemove.name, (_event, request: unknown) =>
-    validateHandler(channels.appLockRemove, async ({ password }) => ({ removed: await getFacade().remove(password) }))(request),
+    validateHandler(channels.appLockRemove, async ({ password }) => {
+      const facade = getFacade();
+      const result = await facade.remove(password);
+      return { removed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
   );
   ipcMain.handle(channels.appLockPickRecovery.name, (_event, request: unknown) =>
     validateHandler(channels.appLockPickRecovery, async () => ({ path: await getFacade().pickRecovery() }))(request),
@@ -150,7 +172,12 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
   ipcMain.handle(channels.appLockTouchIdEnable.name, (_event, request: unknown) =>
     validateHandler(channels.appLockTouchIdEnable, async ({ password }) => {
       const result = await getFacade().touchIdEnable(password);
-      return { enabled: result.ok, reason: result.ok ? null : result.reason };
+      return {
+        enabled: result.ok,
+        reason: result.ok ? null : result.reason,
+        retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? getFacade().retryAfterMs()),
+        attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? getFacade().attemptsRemaining()),
+      };
     })(request),
   );
   ipcMain.handle(channels.appLockTouchIdDisable.name, (_event, request: unknown) =>

@@ -152,6 +152,29 @@ describe('app-lock authority state machine (#311)', () => {
     assert.deepEqual(credentials.unlockPasswords, ['wrong-1', 'wrong-2', 'wrong-3']);
   });
 
+  test('corrupt throttle storage fails closed without aborting controller construction', () => {
+    const credentials = new FakeCredentials();
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => undefined,
+      throttle: {
+        remainingMs: () => {
+          throw new Error('secure storage unavailable');
+        },
+        recordFailure: () => 0,
+        reset: () => undefined,
+        failureCount: () => {
+          throw new Error('secure storage unavailable');
+        },
+      },
+    });
+
+    assert.deepEqual(controller.snapshot(), { state: 'recovery-required', libraryId: 'library-a' });
+    assert.equal(controller.attemptsRemaining(), 0);
+    assert.equal(controller.retryAfterMs(), 60_000);
+  });
+
   test('re-authentication verifies an unlocked app without reopening or changing lock state', async () => {
     const credentials = new FakeCredentials();
     let opens = 0;
@@ -211,9 +234,9 @@ describe('app-lock authority state machine (#311)', () => {
     await controller.unlock('unlock-password');
     credentials.unlockResult = { ok: false, reason: 'wrong-password' };
 
-    assert.equal(await controller.setAnchorPolicy('wrong-1', 'hardened'), false);
-    assert.equal(await controller.setAnchorPolicy('wrong-2', 'hardened'), false);
-    assert.equal(await controller.setAnchorPolicy('wrong-3', 'hardened'), false);
+    assert.equal((await controller.setAnchorPolicy('wrong-1', 'hardened')).ok, false);
+    assert.equal((await controller.setAnchorPolicy('wrong-2', 'hardened')).ok, false);
+    assert.equal((await controller.setAnchorPolicy('wrong-3', 'hardened')).ok, false);
 
     assert.equal(credentials.anchorPolicyChanges, 0);
     assert.equal(closes, 1);
@@ -250,9 +273,9 @@ describe('app-lock authority state machine (#311)', () => {
       for (const password of ['wrong-1', 'wrong-2', 'wrong-3']) {
         const accepted =
           ceremony === 'change-password'
-            ? await controller.changePassword(password, 'next-password')
+            ? (await controller.changePassword(password, 'next-password')).ok
             : ceremony === 'remove'
-              ? await controller.remove(password)
+              ? (await controller.remove(password)).ok
               : (await controller.enableTouchId(password)).ok;
         assert.equal(accepted, false);
       }
@@ -263,6 +286,31 @@ describe('app-lock authority state machine (#311)', () => {
       assert.equal(touchId.enables, 0, ceremony);
       assert.deepEqual(credentials.unlockPasswords, ['unlock-password', 'wrong-1', 'wrong-2', 'wrong-3'], ceremony);
     }
+  });
+
+  test('settings password ceremonies report the active retry delay', async () => {
+    const credentials = new FakeCredentials();
+    let throttled = false;
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => undefined,
+      throttle: {
+        remainingMs: () => (throttled ? 1_000 : 0),
+        recordFailure: () => 0,
+        reset: () => undefined,
+      },
+    });
+    await controller.unlock('unlock-password');
+    throttled = true;
+
+    assert.deepEqual(await controller.changePassword('current', 'next-password'), {
+      ok: false,
+      reason: 'throttled',
+      retryAfterMs: 1_000,
+    });
+    assert.equal(credentials.passwordChanges, 0);
+    assert.equal(controller.snapshot().state, 'unlocked');
   });
 
   test('throttle write failure restores locked state after a wrong password', async () => {
@@ -580,8 +628,8 @@ describe('Touch ID app-lock authority (#310)', () => {
       closeAuthorized: () => undefined,
     });
     await controller.unlock('password');
-    assert.equal(await controller.changePassword('current', 'next'), true);
-    assert.equal(await controller.remove('current'), true);
+    assert.deepEqual(await controller.changePassword('current', 'next'), { ok: true });
+    assert.deepEqual(await controller.remove('current'), { ok: true });
     assert.equal(touchId.credentialChanges, 2);
 
     const recoveryTouchId = new FakeTouchId();

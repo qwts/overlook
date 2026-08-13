@@ -82,8 +82,8 @@ describe('app-lock facade (#311)', () => {
     });
 
     assert.deepEqual(await facade.unlock('current'), { ok: true });
-    assert.equal(await facade.changePassword('current', 'next'), true);
-    assert.equal(await facade.remove('current'), true);
+    assert.deepEqual(await facade.changePassword('current', 'next'), { ok: true });
+    assert.deepEqual(await facade.remove('current'), { ok: true });
     await facade.lock();
     assert.equal(facade.snapshot().state, 'unconfigured-unlocked');
   });
@@ -103,10 +103,10 @@ describe('app-lock facade (#311)', () => {
       recoveryExportReceipt: (consume) => (consume ? receipts-- > 0 : receipts > 0),
     });
 
-    assert.equal(await facade.setAnchorPolicy('current', 'hardened', false), false);
-    assert.equal(await facade.setAnchorPolicy('wrong', 'hardened', true), false);
-    assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), true);
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', false), { ok: false, reason: null });
+    assert.deepEqual(await facade.setAnchorPolicy('wrong', 'hardened', true), { ok: false, reason: 'wrong-password' });
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', true), { ok: true });
     assert.equal(facade.anchorPolicy(), 'hardened');
-    assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), false, 'receipt is single-use');
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', true), { ok: false, reason: null }, 'receipt is single-use');
   });
 });

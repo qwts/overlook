@@ -87,6 +87,12 @@ const appLockStatusSchema = z.object({
   retryAfterMs: z.number().int().nonnegative(),
   attemptsRemaining: z.number().int().min(0).max(3),
 });
+const appAuthorizationFailureReasonSchema = z.enum(['wrong-password', 'recovery-required', 'throttled', 'storage-unavailable']);
+const appSettingsMutationFields = {
+  reason: appAuthorizationFailureReasonSchema.nullable(),
+  retryAfterMs: z.number().int().nonnegative(),
+  attemptsRemaining: z.number().int().min(0).max(3),
+};
 const touchIdUnavailableReasonSchema = z.enum([
   'unsupported-platform',
   'unsigned-build',
@@ -264,7 +270,7 @@ export const channels = {
   appLockChangePassword: defineChannel(
     'app-lock:change-password',
     z.object({ currentPassword: z.string().min(1).max(1024), nextPassword: z.string().min(8).max(1024) }),
-    z.object({ changed: z.boolean() }),
+    z.object({ changed: z.boolean(), ...appSettingsMutationFields }),
   ),
   appLockAnchorPolicyStatus: defineChannel(
     'app-lock:anchor-policy-status',
@@ -278,9 +284,13 @@ export const channels = {
       policy: z.enum(['usability', 'hardened']),
       confirmedExport: z.boolean(),
     }),
-    z.object({ changed: z.boolean() }),
+    z.object({ changed: z.boolean(), ...appSettingsMutationFields }),
   ),
-  appLockRemove: defineChannel('app-lock:remove', z.object({ password: z.string().min(1).max(1024) }), z.object({ removed: z.boolean() })),
+  appLockRemove: defineChannel(
+    'app-lock:remove',
+    z.object({ password: z.string().min(1).max(1024) }),
+    z.object({ removed: z.boolean(), ...appSettingsMutationFields }),
+  ),
   ...interopChannels,
   appLockPickRecovery: defineChannel('app-lock:pick-recovery', z.object({}), z.object({ path: z.string().nullable() })),
   appLockRecover: defineChannel(
@@ -298,7 +308,9 @@ export const channels = {
     z.object({ password: z.string().min(1).max(1024) }),
     z.object({
       enabled: z.boolean(),
-      reason: z.union([touchIdUnavailableReasonSchema, z.enum(['wrong-password', 'recovery-required'])]).nullable(),
+      reason: z.union([touchIdUnavailableReasonSchema, z.enum(['wrong-password', 'recovery-required', 'throttled'])]).nullable(),
+      retryAfterMs: z.number().int().nonnegative(),
+      attemptsRemaining: z.number().int().min(0).max(3),
     }),
   ),
   appLockTouchIdDisable: defineChannel('app-lock:touch-id-disable', z.object({}), z.object({ disabled: z.boolean() })),

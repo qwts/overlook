@@ -40,7 +40,13 @@ export interface TouchIdSecureAdapter {
 }
 
 export type TouchIdEnableResult =
-  { readonly ok: true } | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' | TouchIdUnavailableReason };
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'wrong-password' | 'recovery-required' | 'throttled' | TouchIdUnavailableReason;
+      readonly retryAfterMs?: number;
+      readonly attemptsRemaining?: number;
+    };
 
 export type TouchIdUnlockFailureReason =
   'not-enabled' | 'cancelled' | 'failed' | 'locked-out' | 'unavailable' | 'enrollment-changed' | 'recovery-required';

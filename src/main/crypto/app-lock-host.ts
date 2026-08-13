@@ -1,6 +1,7 @@
 import type {
   AppAuthorizationResult,
   AppLockController,
+  AppSettingsMutationResult,
   AppTouchIdUnlockResult,
   AppUnlockResult,
   LockStateSnapshot,
@@ -132,16 +133,16 @@ export class AppLockHost implements AppLockControllerLike {
   configure(input: ConfigureAppLockInput): Promise<void> {
     return this.inner.configure(input);
   }
-  changePassword(currentPassword: string, nextPassword: string): Promise<boolean> {
+  changePassword(currentPassword: string, nextPassword: string): Promise<AppSettingsMutationResult> {
     return this.inner.changePassword(currentPassword, nextPassword);
   }
   anchorPolicy(): 'usability' | 'hardened' {
     return this.inner.anchorPolicy?.() ?? 'usability';
   }
-  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
-    return this.inner.setAnchorPolicy?.(password, policy) ?? Promise.resolve(false);
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<AppSettingsMutationResult> {
+    return this.inner.setAnchorPolicy?.(password, policy) ?? Promise.resolve({ ok: false, reason: null });
   }
-  remove(password: string): Promise<boolean> {
+  remove(password: string): Promise<AppSettingsMutationResult> {
     return this.inner.remove(password);
   }
   recover(input: ConfigureAppLockInput): Promise<void> {

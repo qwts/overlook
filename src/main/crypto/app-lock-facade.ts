@@ -33,11 +33,12 @@ export function createAppLockFacade(options: AppLockFacadeOptions) {
     anchorPolicy: () => options.controller.anchorPolicy?.() ?? 'usability',
     setAnchorPolicy: async (password: string, policy: 'usability' | 'hardened', confirmedExport: boolean) => {
       if (policy === 'hardened' && (!confirmedExport || options.recoveryExportReceipt?.(false) !== true)) {
-        return Promise.resolve(false);
+        return { ok: false as const, reason: null };
       }
-      const changed = await (options.controller.setAnchorPolicy?.(password, policy) ?? Promise.resolve(false));
-      if (changed && policy === 'hardened') options.recoveryExportReceipt?.(true);
-      return changed;
+      const result = await (options.controller.setAnchorPolicy?.(password, policy) ??
+        Promise.resolve({ ok: false as const, reason: null }));
+      if (result.ok && policy === 'hardened') options.recoveryExportReceipt?.(true);
+      return result;
     },
     remove: (password: string) => options.controller.remove(password),
     pickRecovery: options.pickRecovery,

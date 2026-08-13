@@ -44,6 +44,15 @@ export type AppAuthorizationResult =
       readonly attemptsRemaining?: number;
     };
 
+export type AppSettingsMutationResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: Exclude<AppAuthorizationResult, { readonly ok: true }>['reason'] | null;
+      readonly retryAfterMs?: number;
+      readonly attemptsRemaining?: number;
+    };
+
 export type AppTouchIdUnlockResult =
   { readonly ok: true } | { readonly ok: false; readonly reason: TouchIdUnlockFailureReason | 'library-in-use' };
 
@@ -62,11 +71,19 @@ export class AppLockController {
   }
 
   retryAfterMs(): number {
-    return this.options.throttle?.remainingMs() ?? 0;
+    try {
+      return this.options.throttle?.remainingMs() ?? 0;
+    } catch {
+      return 60_000;
+    }
   }
 
   attemptsRemaining(): number {
-    return this.options.throttle?.attemptsRemaining?.(3) ?? Math.max(0, 3 - (this.options.throttle?.failureCount?.() ?? 0));
+    try {
+      return this.options.throttle?.attemptsRemaining?.(3) ?? Math.max(0, 3 - (this.options.throttle?.failureCount?.() ?? 0));
+    } catch {
+      return 0;
+    }
   }
 
   subscribe(listener: (snapshot: LockStateSnapshot) => void): () => void {
@@ -190,12 +207,9 @@ export class AppLockController {
       if (!authorization.ok) {
         return {
           ok: false,
-          reason:
-            authorization.reason === 'throttled'
-              ? 'locked-out'
-              : authorization.reason === 'storage-unavailable'
-                ? 'unavailable'
-                : authorization.reason,
+          reason: authorization.reason === 'storage-unavailable' ? 'unavailable' : authorization.reason,
+          ...(authorization.retryAfterMs === undefined ? {} : { retryAfterMs: authorization.retryAfterMs }),
+          ...(authorization.attemptsRemaining === undefined ? {} : { attemptsRemaining: authorization.attemptsRemaining }),
         };
       }
       const result = await this.options.touchId.enable(password);
@@ -242,14 +256,14 @@ export class AppLockController {
     });
   }
 
-  changePassword(currentPassword: string, nextPassword: string): Promise<boolean> {
+  changePassword(currentPassword: string, nextPassword: string): Promise<AppSettingsMutationResult> {
     return this.serialize(async () => {
       this.requireContentAccess();
       const authorization = await this.authorizeOpen(currentPassword);
-      if (!authorization.ok) return false;
+      if (!authorization.ok) return authorization;
       const changed = await this.options.credentials.changePassword(currentPassword, nextPassword);
       if (changed) await this.credentialsChanged();
-      return changed;
+      return changed ? { ok: true } : { ok: false, reason: null };
     });
   }
 
@@ -258,28 +272,28 @@ export class AppLockController {
     return this.options.credentials.anchorPolicy?.() ?? 'usability';
   }
 
-  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<AppSettingsMutationResult> {
     return this.serialize(async () => {
       this.requireContentAccess();
       const authorization = await this.authorizeOpen(password);
-      if (!authorization.ok) return false;
+      if (!authorization.ok) return authorization;
       const changed = (await this.options.credentials.setAnchorPolicy?.(password, policy)) ?? false;
       if (changed) await this.credentialsChanged();
-      return changed;
+      return changed ? { ok: true } : { ok: false, reason: null };
     });
   }
 
-  remove(password: string): Promise<boolean> {
+  remove(password: string): Promise<AppSettingsMutationResult> {
     return this.serialize(async () => {
       this.requireContentAccess();
       const authorization = await this.authorizeOpen(password);
-      if (!authorization.ok) return false;
+      if (!authorization.ok) return authorization;
       const removed = await this.options.credentials.remove(password);
       if (removed) {
         await this.credentialsChanged();
         this.publish({ state: 'unconfigured-unlocked', libraryId: null });
       }
-      return removed;
+      return removed ? { ok: true } : { ok: false, reason: null };
     });
   }
 
@@ -298,7 +312,7 @@ export class AppLockController {
   private fromCredentialStatus(status: AppLockStatus): LockStateSnapshot {
     if (status.state === 'unconfigured') return { state: 'unconfigured-unlocked', libraryId: null };
     if (status.state === 'locked') {
-      return (this.options.throttle?.failureCount?.() ?? 0) >= 3
+      return this.attemptsRemaining() === 0
         ? { state: 'recovery-required', libraryId: status.libraryId }
         : { state: 'locked', libraryId: status.libraryId };
     }

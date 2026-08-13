@@ -59,18 +59,22 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
     if (!canSubmit) return;
     setBusy(true);
     setError('');
-    const operation = async (): Promise<{ readonly accepted: boolean; readonly reason?: string }> => {
+    const operation = async (): Promise<{
+      readonly accepted: boolean;
+      readonly reason?: string | null;
+      readonly retryAfterMs?: number;
+    }> => {
       if (mode === 'set') {
         await window.overlook.appLock.configure({ password });
         return { accepted: true };
       }
       if (mode === 'change') {
         const result = await window.overlook.appLock.changePassword({ currentPassword: current, nextPassword: password });
-        return { accepted: result.changed };
+        return { accepted: result.changed, reason: result.reason, retryAfterMs: result.retryAfterMs };
       }
       if (mode === 'remove') {
         const result = await window.overlook.appLock.remove({ password: current });
-        return { accepted: result.removed };
+        return { accepted: result.removed, reason: result.reason, retryAfterMs: result.retryAfterMs };
       }
       if (mode === 'anchor-harden' || mode === 'anchor-usability') {
         const result = await window.overlook.appLock.setAnchorPolicy({
@@ -78,24 +82,30 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
           policy: mode === 'anchor-harden' ? 'hardened' : 'usability',
           confirmedExport: mode === 'anchor-harden' && acknowledged,
         });
-        return { accepted: result.changed };
+        return { accepted: result.changed, reason: result.reason, retryAfterMs: result.retryAfterMs };
       }
       const result = await window.overlook.appLock.touchIdEnable({ password: current });
-      return { accepted: result.enabled, ...(result.reason === null ? {} : { reason: result.reason }) };
+      return { accepted: result.enabled, reason: result.reason, retryAfterMs: result.retryAfterMs };
     };
     void operation()
-      .then(({ accepted, reason }) => {
+      .then(({ accepted, reason, retryAfterMs }) => {
         if (!accepted) {
           setError(
-            reason === 'not-enrolled'
-              ? 'Set up Touch ID in System Settings, then try again.'
-              : reason === 'locked-out'
-                ? 'Touch ID is locked. Use your password until macOS makes it available again.'
-                : reason === 'unsigned-build' || reason === 'native-unavailable' || reason === 'unsupported-platform'
-                  ? 'Touch ID is unavailable in this build.'
-                  : reason === 'unavailable'
-                    ? 'Touch ID or secure storage is unavailable.'
-                    : 'The current password is incorrect.',
+            reason === 'throttled'
+              ? `Try again in ${Math.max(1, Math.ceil((retryAfterMs ?? 0) / 1000))} seconds.`
+              : reason === 'not-enrolled'
+                ? 'Set up Touch ID in System Settings, then try again.'
+                : reason === 'locked-out'
+                  ? 'Touch ID is locked. Use your password until macOS makes it available again.'
+                  : reason === 'unsigned-build' || reason === 'native-unavailable' || reason === 'unsupported-platform'
+                    ? 'Touch ID is unavailable in this build.'
+                    : reason === 'unavailable' || reason === 'storage-unavailable'
+                      ? 'Touch ID or secure storage is unavailable.'
+                      : reason === 'recovery-required'
+                        ? 'Recovery is required before this security setting can change.'
+                        : reason === 'wrong-password'
+                          ? 'The current password is incorrect.'
+                          : 'The security change could not be completed safely.',
           );
           return;
         }
