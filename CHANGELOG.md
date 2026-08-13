@@ -1,5 +1,13 @@
 # photos
 
+## 0.67.3
+
+### Patch Changes
+
+- b7f9a0d: Keep intact app-lock credentials usable after local anchor loss, offer an authenticated hardened recovery policy, and enter recovery after three failed unlock attempts.
+- 7a6da68: Capitalize the existing OS profile directory as `Overlook` without changing its children or custody files.
+- 117828a: Recover stale library locks after disconnects and report genuine lock conflicts without sending users to recovery.
+
 ## 0.67.2
 
 ### Patch Changes
