@@ -10,11 +10,13 @@ export class AppLockedError extends Error {
 }
 
 export interface AppLockControllerOptions {
-  readonly credentials: Pick<AppLockCredentialStore, 'status' | 'configure' | 'unlock' | 'changePassword' | 'recover' | 'remove'>;
+  readonly credentials: Pick<AppLockCredentialStore, 'status' | 'configure' | 'unlock' | 'changePassword' | 'recover' | 'remove'> &
+    Partial<Pick<AppLockCredentialStore, 'anchorPolicy' | 'setAnchorPolicy'>>;
   readonly openAuthorized: (masterKey?: Buffer) => void | Promise<void>;
   readonly closeAuthorized: () => void | Promise<void>;
   readonly failClosed?: () => void;
-  readonly throttle?: Pick<UnlockThrottle, 'remainingMs' | 'recordFailure' | 'reset'>;
+  readonly throttle?: Pick<UnlockThrottle, 'remainingMs' | 'recordFailure' | 'reset'> &
+    Partial<Pick<UnlockThrottle, 'failureCount' | 'attemptsRemaining'>>;
   readonly touchId?: Pick<TouchIdService, 'status' | 'enable' | 'disable' | 'unlockMaster' | 'credentialsChanged'>;
   readonly classifyOpenError?: (error: unknown) => 'library-in-use' | undefined;
 }
@@ -28,13 +30,19 @@ export type AppUnlockResult =
   | { readonly ok: true }
   | {
       readonly ok: false;
-      readonly reason: 'wrong-password' | 'recovery-required' | 'throttled' | 'library-in-use';
+      readonly reason: 'wrong-password' | 'recovery-required' | 'throttled' | 'library-in-use' | 'storage-unavailable';
       readonly retryAfterMs?: number;
+      readonly attemptsRemaining?: number;
     };
 
 export type AppAuthorizationResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' | 'throttled'; readonly retryAfterMs?: number };
+  | {
+      readonly ok: false;
+      readonly reason: 'wrong-password' | 'recovery-required' | 'throttled' | 'storage-unavailable';
+      readonly retryAfterMs?: number;
+      readonly attemptsRemaining?: number;
+    };
 
 export type AppTouchIdUnlockResult =
   { readonly ok: true } | { readonly ok: false; readonly reason: TouchIdUnlockFailureReason | 'library-in-use' };
@@ -55,6 +63,10 @@ export class AppLockController {
 
   retryAfterMs(): number {
     return this.options.throttle?.remainingMs() ?? 0;
+  }
+
+  attemptsRemaining(): number {
+    return this.options.throttle?.attemptsRemaining?.(3) ?? Math.max(0, 3 - (this.options.throttle?.failureCount?.() ?? 0));
   }
 
   subscribe(listener: (snapshot: LockStateSnapshot) => void): () => void {
@@ -89,6 +101,10 @@ export class AppLockController {
   unlock(password: string): Promise<AppUnlockResult> {
     return this.serialize(async () => {
       if (this.current.state !== 'locked') return { ok: false, reason: 'recovery-required' };
+      if (this.attemptsRemaining() === 0) {
+        this.publish({ ...this.current, state: 'recovery-required' });
+        return { ok: false, reason: 'recovery-required', attemptsRemaining: 0 };
+      }
       const remaining = this.options.throttle?.remainingMs() ?? 0;
       if (remaining > 0) return { ok: false, reason: 'throttled', retryAfterMs: remaining };
       this.publish({ ...this.current, state: 'unlocking' });
@@ -96,9 +112,17 @@ export class AppLockController {
       if (!result.ok) {
         try {
           const retryAfterMs = result.reason === 'wrong-password' ? this.options.throttle?.recordFailure() : undefined;
-          return { ...result, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) };
+          const attemptsRemaining = this.attemptsRemaining();
+          return {
+            ...result,
+            ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+            ...(this.hasAttemptCounter() ? { attemptsRemaining } : {}),
+          };
         } finally {
-          this.publish({ ...this.current, state: result.reason === 'recovery-required' ? 'recovery-required' : 'locked' });
+          this.publish({
+            ...this.current,
+            state: result.reason === 'recovery-required' || this.attemptsRemaining() === 0 ? 'recovery-required' : 'locked',
+          });
         }
       }
       try {
@@ -125,7 +149,11 @@ export class AppLockController {
       const result = await this.options.credentials.unlock(password);
       if (!result.ok) {
         const retryAfterMs = result.reason === 'wrong-password' ? this.options.throttle?.recordFailure() : undefined;
-        return { ...result, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) };
+        return {
+          ...result,
+          ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+          ...(this.hasAttemptCounter() ? { attemptsRemaining: this.attemptsRemaining() } : {}),
+        };
       }
       try {
         this.options.throttle?.reset();
@@ -140,14 +168,25 @@ export class AppLockController {
     return this.serialize(async () => {
       if (this.current.state !== 'locked') return { ok: false, reason: 'recovery-required' };
       if (this.options.touchId === undefined) return { ok: false, reason: 'not-enabled' };
+      if (this.attemptsRemaining() === 0) {
+        this.publish({ ...this.current, state: 'recovery-required' });
+        return { ok: false, reason: 'recovery-required' };
+      }
+      const remaining = this.options.throttle?.remainingMs() ?? 0;
+      if (remaining > 0) return { ok: false, reason: 'locked-out' };
       this.publish({ ...this.current, state: 'unlocking' });
       const result = await this.options.touchId.unlockMaster().catch(() => ({ ok: false as const, reason: 'unavailable' as const }));
       if (!result.ok) {
-        this.publish({ ...this.current, state: result.reason === 'recovery-required' ? 'recovery-required' : 'locked' });
+        if (result.reason === 'failed') this.options.throttle?.recordFailure();
+        this.publish({
+          ...this.current,
+          state: result.reason === 'recovery-required' || this.attemptsRemaining() === 0 ? 'recovery-required' : 'locked',
+        });
         if (result.reason === 'enrollment-changed' || result.reason === 'recovery-required') await this.publishTouchId();
         return result;
       }
       try {
+        this.options.throttle?.reset();
         await this.options.openAuthorized(result.masterKey);
         this.publish({ ...this.current, state: 'unlocked' });
         return { ok: true };
@@ -219,6 +258,20 @@ export class AppLockController {
     });
   }
 
+  anchorPolicy(): 'usability' | 'hardened' {
+    this.requireContentAccess();
+    return this.options.credentials.anchorPolicy?.() ?? 'usability';
+  }
+
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
+    return this.serialize(async () => {
+      this.requireContentAccess();
+      const changed = (await this.options.credentials.setAnchorPolicy?.(password, policy)) ?? false;
+      if (changed) await this.credentialsChanged();
+      return changed;
+    });
+  }
+
   remove(password: string): Promise<boolean> {
     return this.serialize(async () => {
       this.requireContentAccess();
@@ -244,8 +297,16 @@ export class AppLockController {
 
   private fromCredentialStatus(status: AppLockStatus): LockStateSnapshot {
     if (status.state === 'unconfigured') return { state: 'unconfigured-unlocked', libraryId: null };
-    if (status.state === 'locked') return { state: 'locked', libraryId: status.libraryId };
+    if (status.state === 'locked') {
+      return (this.options.throttle?.failureCount?.() ?? 0) >= 3
+        ? { state: 'recovery-required', libraryId: status.libraryId }
+        : { state: 'locked', libraryId: status.libraryId };
+    }
     return { state: 'recovery-required', libraryId: null };
+  }
+
+  private hasAttemptCounter(): boolean {
+    return this.options.throttle?.attemptsRemaining !== undefined || this.options.throttle?.failureCount !== undefined;
   }
 
   private publish(snapshot: LockStateSnapshot): void {

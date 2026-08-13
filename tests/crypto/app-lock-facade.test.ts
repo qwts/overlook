@@ -9,6 +9,7 @@ class FacadeCredentials {
   statusValue: AppLockStatus = { state: 'unconfigured' };
   unlockValue: UnlockResult = { ok: true, masterKey: Buffer.alloc(32, 7) };
   configured: ConfigureAppLockInput | null = null;
+  policy: 'usability' | 'hardened' = 'usability';
 
   status(): AppLockStatus {
     return this.statusValue;
@@ -33,6 +34,16 @@ class FacadeCredentials {
 
   recover(_input: ConfigureAppLockInput): Promise<void> {
     return Promise.resolve();
+  }
+
+  anchorPolicy(): 'usability' | 'hardened' {
+    return this.policy;
+  }
+
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
+    if (password !== 'current') return Promise.resolve(false);
+    this.policy = policy;
+    return Promise.resolve(true);
   }
 }
 
@@ -75,5 +86,26 @@ describe('app-lock facade (#311)', () => {
     assert.equal(await facade.remove('current'), true);
     await facade.lock();
     assert.equal(facade.snapshot().state, 'unconfigured-unlocked');
+  });
+
+  test('requires and consumes a fresh recovery-export receipt before hardened policy', async () => {
+    const credentials = new FacadeCredentials();
+    credentials.statusValue = { state: 'locked', libraryId: 'library-a' };
+    const controller = new AppLockController({ credentials, openAuthorized: () => undefined, closeAuthorized: () => undefined });
+    await controller.unlock('current');
+    let receipts = 1;
+    const facade = createAppLockFacade({
+      controller,
+      currentMaster: () => Buffer.alloc(32),
+      libraryId: () => 'library-a',
+      dataDir: () => '/unused',
+      pickRecovery: () => Promise.resolve(null),
+      consumeRecoveryExportReceipt: () => receipts-- > 0,
+    });
+
+    assert.equal(await facade.setAnchorPolicy('current', 'hardened', false), false);
+    assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), true);
+    assert.equal(facade.anchorPolicy(), 'hardened');
+    assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), false, 'receipt is single-use');
   });
 });

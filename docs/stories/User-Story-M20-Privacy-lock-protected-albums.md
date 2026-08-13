@@ -40,6 +40,12 @@ The only locked-state actions are status, password unlock, supported biometric r
 
 The app password releases a random unlock key that wraps the existing master. The ADR-0008 recovery file continues to carry the master itself, so a fresh machine can restore the library and set a new local app password without knowing the forgotten one. Touch ID is disabled after recovery or password changes until the user opts in again. Protected-album password recovery requires that same recovery-file ceremony.
 
+### Anchor loss and migration
+
+Existing and newly configured libraries use the usability anchor policy by default. If migration, restore, or OS credential-store loss removes or changes only the local anchor while the credential record remains intact, a correct app password or matching device-bound Touch ID enrollment repairs the anchor before the library opens. Malformed credential records still require recovery, and a credential-store write failure stays locked without consuming an authentication attempt.
+
+Privacy settings can enable hardened anchor protection. Enabling it requires a recovery-key export completed in that settings ceremony, explicit acknowledgement that migration or credential-store loss will require that file, and the current app password. Hardened libraries never repair a missing or changed anchor from the password slot; they open the existing recovery-key picker and establish new local custody only after the exported key is authenticated. A fresh machine therefore needs the exported recovery key, then a new app password and optional Touch ID enrollment.
+
 ## Acceptance coverage
 
 The complete testable matrix is in ADR-0013. The repo ledger tracks:

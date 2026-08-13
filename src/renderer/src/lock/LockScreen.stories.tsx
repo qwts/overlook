@@ -7,18 +7,20 @@ import { LockScreen } from './LockScreen';
 function installStub(result: Awaited<ReturnType<OverlookApi['appLock']['unlock']>>): void {
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     appLock: {
-      status: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0 }),
+      status: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0, attemptsRemaining: 3 }),
       unlock: () => Promise.resolve(result),
       configure: () => Promise.reject(new Error('not used')),
       lockNow: () => Promise.reject(new Error('not used')),
       changePassword: () => Promise.reject(new Error('not used')),
+      anchorPolicyStatus: () => Promise.resolve({ policy: 'usability' }),
+      setAnchorPolicy: () => Promise.resolve({ changed: false }),
       remove: () => Promise.reject(new Error('not used')),
       pickRecovery: () => Promise.resolve({ path: '/Users/ansel/Desktop/overlook-recovery.key' }),
       recover: () => Promise.resolve({ recovered: true, reason: null }),
       touchIdStatus: () => Promise.resolve({ available: true, reason: null, enabled: true, reenrollmentRequired: false }),
       touchIdEnable: () => Promise.resolve({ enabled: true, reason: null }),
       touchIdDisable: () => Promise.resolve({ disabled: true }),
-      touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'cancelled' }),
+      touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'cancelled', retryAfterMs: 0, attemptsRemaining: 3 }),
       onChanged: () => () => undefined,
       onTouchIdChanged: () => () => undefined,
     },
@@ -31,10 +33,10 @@ function installStub(result: Awaited<ReturnType<OverlookApi['appLock']['unlock']
 const meta: Meta<typeof LockScreen> = {
   title: 'App/LockScreen',
   component: LockScreen,
-  args: { platform: 'darwin', state: 'locked', retryAfterMs: 0, onSwitchLibrary: fn() },
+  args: { platform: 'darwin', state: 'locked', retryAfterMs: 0, attemptsRemaining: 3, onSwitchLibrary: fn() },
   decorators: [
     (Story) => {
-      installStub({ ok: false, reason: 'wrong-password', retryAfterMs: 1_000 });
+      installStub({ ok: false, reason: 'wrong-password', retryAfterMs: 1_000, attemptsRemaining: 2 });
       return <Story />;
     },
   ],
@@ -67,7 +69,7 @@ export const PasswordFailureAndThrottle: Story = {
 export const LibraryInUseKeepsPasswordFallback: Story = {
   decorators: [
     (Story) => {
-      installStub({ ok: false, reason: 'library-in-use', retryAfterMs: 0 });
+      installStub({ ok: false, reason: 'library-in-use', retryAfterMs: 0, attemptsRemaining: 3 });
       return <Story />;
     },
   ],

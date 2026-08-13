@@ -48,7 +48,12 @@ export type TouchIdUnlockFailureReason =
 export type TouchIdUnlockResult =
   { readonly ok: true; readonly masterKey: Buffer } | { readonly ok: false; readonly reason: TouchIdUnlockFailureReason };
 
-type CredentialSource = Pick<AppLockCredentialStore, 'anchor' | 'releaseUnlockKey' | 'unlockWithKey'>;
+type CredentialSource = Pick<AppLockCredentialStore, 'releaseUnlockKey' | 'unlockWithKey'> &
+  Partial<Pick<AppLockCredentialStore, 'recordAnchor' | 'anchor'>>;
+
+function credentialIdentity(credentials: CredentialSource): CredentialAnchor | null {
+  return credentials.recordAnchor?.() ?? credentials.anchor?.() ?? null;
+}
 
 const markerFields = {
   account: z.string().regex(/^v1:[a-f0-9]{64}$/u),
@@ -134,7 +139,7 @@ export class TouchIdService {
 
   async status(): Promise<TouchIdStatus> {
     const marker = this.readMarker();
-    const anchor = this.credentials.anchor();
+    const anchor = credentialIdentity(this.credentials);
     if (marker !== null && !matches(marker, anchor)) {
       await this.revoke(marker);
     }
@@ -150,12 +155,15 @@ export class TouchIdService {
   async enable(password: string): Promise<TouchIdEnableResult> {
     const availability = this.adapter.availability();
     if (!availability.available) return { ok: false, reason: availability.reason ?? 'unavailable' };
-    const anchor = this.credentials.anchor();
+    const anchor = credentialIdentity(this.credentials);
     if (anchor === null) return { ok: false, reason: 'recovery-required' };
     const released: UnlockKeyResult = await this.credentials.releaseUnlockKey(password);
-    if (!released.ok) return released;
+    if (!released.ok) {
+      if (released.reason === 'storage-unavailable') return { ok: false, reason: 'unavailable' };
+      return { ok: false, reason: released.reason };
+    }
     try {
-      const currentAnchor = this.credentials.anchor();
+      const currentAnchor = credentialIdentity(this.credentials);
       if (!sameAnchor(anchor, currentAnchor)) return { ok: false, reason: 'recovery-required' };
       const marker = markerFor(anchor);
       const previous = this.readMarker();
@@ -200,6 +208,7 @@ export class TouchIdService {
       unlockKey = await this.adapter.read(marker.account, 'Unlock Overlook');
       const released: MasterReleaseResult = this.credentials.unlockWithKey(unlockKey);
       if (released.ok) return released;
+      if (released.reason === 'storage-unavailable') return { ok: false, reason: 'unavailable' };
       await this.revoke(marker);
       return { ok: false, reason: released.reason === 'recovery-required' ? 'recovery-required' : 'enrollment-changed' };
     } catch (error) {
@@ -215,7 +224,7 @@ export class TouchIdService {
    * eagerly removes its native item and marker; a crash is reconciled by status(). */
   async credentialsChanged(): Promise<void> {
     const marker = this.readMarker();
-    if (marker !== null && !matches(marker, this.credentials.anchor())) await this.revoke(marker);
+    if (marker !== null && !matches(marker, credentialIdentity(this.credentials))) await this.revoke(marker);
   }
 
   private readMarker(): StoredTouchIdMarker | null {

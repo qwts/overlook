@@ -7,12 +7,14 @@ export interface AppLockFacadeOptions {
   readonly libraryId: () => string;
   readonly dataDir: () => string;
   readonly pickRecovery: () => Promise<string | null>;
+  readonly consumeRecoveryExportReceipt?: (() => boolean) | undefined;
 }
 
 export function createAppLockFacade(options: AppLockFacadeOptions) {
   return {
     snapshot: () => options.controller.snapshot(),
     retryAfterMs: () => options.controller.retryAfterMs(),
+    attemptsRemaining: () => options.controller.attemptsRemaining?.() ?? 3,
     unlock: (password: string) => options.controller.unlock(password),
     touchIdStatus: () => options.controller.touchIdStatus(),
     touchIdUnlock: () => options.controller.unlockWithTouchId(),
@@ -28,6 +30,13 @@ export function createAppLockFacade(options: AppLockFacadeOptions) {
     },
     lock: () => options.controller.lock(),
     changePassword: (currentPassword: string, nextPassword: string) => options.controller.changePassword(currentPassword, nextPassword),
+    anchorPolicy: () => options.controller.anchorPolicy?.() ?? 'usability',
+    setAnchorPolicy: (password: string, policy: 'usability' | 'hardened', confirmedExport: boolean) => {
+      if (policy === 'hardened' && (!confirmedExport || options.consumeRecoveryExportReceipt?.() !== true)) {
+        return Promise.resolve(false);
+      }
+      return options.controller.setAnchorPolicy?.(password, policy) ?? Promise.resolve(false);
+    },
     remove: (password: string) => options.controller.remove(password),
     pickRecovery: options.pickRecovery,
     recover: (path: string, recoveryPassword: string, nextPassword: string) =>

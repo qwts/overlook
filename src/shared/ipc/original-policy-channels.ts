@@ -52,7 +52,7 @@ export const originalPolicyChannels = {
     z.object({ challengeId: z.string().uuid(), password: z.string().min(1).max(1024) }),
     z.object({
       ok: z.boolean(),
-      reason: z.enum(['wrong-password', 'recovery-required', 'throttled']).nullable(),
+      reason: z.enum(['wrong-password', 'recovery-required', 'throttled', 'storage-unavailable']).nullable(),
       retryAfterMs: z.number().int().nonnegative(),
     }),
   ),

@@ -61,6 +61,7 @@ const wrapHandler: typeof validateHandler = (channel, handler) =>
 export interface AppLockFacade {
   snapshot(): LockStateSnapshot;
   retryAfterMs(): number;
+  attemptsRemaining(): number;
   unlock(password: string): Promise<AppUnlockResult>;
   touchIdStatus(): Promise<TouchIdStatus>;
   touchIdUnlock(): Promise<AppTouchIdUnlockResult>;
@@ -69,6 +70,8 @@ export interface AppLockFacade {
   configure(password: string): Promise<void>;
   lock(): Promise<void>;
   changePassword(currentPassword: string, nextPassword: string): Promise<boolean>;
+  anchorPolicy(): 'usability' | 'hardened';
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened', confirmedExport: boolean): Promise<boolean>;
   remove(password: string): Promise<boolean>;
   pickRecovery(): Promise<string | null>;
   recover(
@@ -81,8 +84,13 @@ export interface AppLockFacade {
   }>;
 }
 
-function lockStatus(facade: AppLockFacade): { state: AppLockState; libraryId: string | null; retryAfterMs: number } {
-  return { ...facade.snapshot(), retryAfterMs: facade.retryAfterMs() };
+function lockStatus(facade: AppLockFacade): {
+  state: AppLockState;
+  libraryId: string | null;
+  retryAfterMs: number;
+  attemptsRemaining: number;
+} {
+  return { ...facade.snapshot(), retryAfterMs: facade.retryAfterMs(), attemptsRemaining: facade.attemptsRemaining() };
 }
 
 export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
@@ -96,6 +104,7 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
         ok: result.ok,
         reason: result.ok ? null : result.reason,
         retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? getFacade().retryAfterMs()),
+        attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? getFacade().attemptsRemaining()),
       };
     })(request),
   );
@@ -114,6 +123,14 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
   ipcMain.handle(channels.appLockChangePassword.name, (_event, request: unknown) =>
     validateHandler(channels.appLockChangePassword, async ({ currentPassword, nextPassword }) => ({
       changed: await getFacade().changePassword(currentPassword, nextPassword),
+    }))(request),
+  );
+  ipcMain.handle(channels.appLockAnchorPolicyStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.appLockAnchorPolicyStatus, () => ({ policy: getFacade().anchorPolicy() }))(request),
+  );
+  ipcMain.handle(channels.appLockSetAnchorPolicy.name, (_event, request: unknown) =>
+    wrapHandler(channels.appLockSetAnchorPolicy, async ({ password, policy, confirmedExport }) => ({
+      changed: await getFacade().setAnchorPolicy(password, policy, confirmedExport),
     }))(request),
   );
   ipcMain.handle(channels.appLockRemove.name, (_event, request: unknown) =>
@@ -142,7 +159,12 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
   ipcMain.handle(channels.appLockTouchIdUnlock.name, (_event, request: unknown) =>
     validateHandler(channels.appLockTouchIdUnlock, async () => {
       const result = await getFacade().touchIdUnlock();
-      return { ok: result.ok, reason: result.ok ? null : result.reason };
+      return {
+        ok: result.ok,
+        reason: result.ok ? null : result.reason,
+        retryAfterMs: result.ok ? 0 : getFacade().retryAfterMs(),
+        attemptsRemaining: result.ok ? 3 : getFacade().attemptsRemaining(),
+      };
     })(request),
   );
 }

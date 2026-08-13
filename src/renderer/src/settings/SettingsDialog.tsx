@@ -74,6 +74,9 @@ export function SettingsDialog({
   const [appLockConfigured, setAppLockConfigured] = useState(false);
   const [touchIdStatus, setTouchIdStatus] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
   const [touchIdBusy, setTouchIdBusy] = useState(false);
+  const [anchorPolicy, setAnchorPolicy] = useState<'usability' | 'hardened' | null>(null);
+  const [pendingHarden, setPendingHarden] = useState(false);
+  const [recoveryExported, setRecoveryExported] = useState(false);
 
   useEffect(() => {
     if (!open || requestedSection === undefined) return;
@@ -103,6 +106,11 @@ export function SettingsDialog({
       unsubscribe();
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !appLockConfigured) return;
+    void window.overlook.appLock.anchorPolicyStatus().then(({ policy }) => setAnchorPolicy(policy));
+  }, [open, appLockConfigured]);
 
   useEffect(() => {
     if (!open) return;
@@ -239,6 +247,16 @@ export function SettingsDialog({
                   })
                   .catch(() => setTouchIdBusy(false));
               }}
+              anchorPolicy={anchorPolicy}
+              onAnchorPolicyChange={(policy) => {
+                if (policy === 'hardened') {
+                  setRecoveryExported(false);
+                  setPendingHarden(true);
+                  setKeyMode('backup');
+                  return;
+                }
+                setPasswordMode('anchor-usability');
+              }}
             />
           )}
         </div>
@@ -249,7 +267,12 @@ export function SettingsDialog({
           mode={keyMode}
           onClose={() => {
             setKeyMode(null);
+            if (pendingHarden) {
+              setPendingHarden(false);
+              if (recoveryExported) setPasswordMode('anchor-harden');
+            }
           }}
+          onExported={() => setRecoveryExported(true)}
         />
       ) : null}
       {restoreOpen ? (
@@ -264,7 +287,15 @@ export function SettingsDialog({
         </Dialog>
       ) : null}
       {passwordMode === null ? null : (
-        <AppPasswordDialog mode={passwordMode} onClose={() => setPasswordMode(null)} onDone={() => setPasswordMode(null)} />
+        <AppPasswordDialog
+          mode={passwordMode}
+          onClose={() => setPasswordMode(null)}
+          onDone={() => {
+            if (passwordMode === 'anchor-harden') setAnchorPolicy('hardened');
+            if (passwordMode === 'anchor-usability') setAnchorPolicy('usability');
+            setPasswordMode(null);
+          }}
+        />
       )}
     </Dialog>
   );

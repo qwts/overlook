@@ -107,6 +107,35 @@ describe('app-lock authority state machine (#311)', () => {
     assert.equal(controller.snapshot().state, 'locked');
   });
 
+  test('three incorrect passwords enter explicit recovery while preserving the retry count', async () => {
+    const credentials = new FakeCredentials();
+    credentials.unlockResult = { ok: false, reason: 'wrong-password' };
+    let failures = 0;
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => undefined,
+      throttle: {
+        remainingMs: () => 0,
+        recordFailure: () => {
+          failures += 1;
+          return 0;
+        },
+        reset: () => {
+          failures = 0;
+        },
+        failureCount: () => failures,
+        attemptsRemaining: (limit = 3) => Math.max(0, limit - failures),
+      },
+    });
+
+    assert.deepEqual(await controller.unlock('wrong-1'), { ok: false, reason: 'wrong-password', retryAfterMs: 0, attemptsRemaining: 2 });
+    assert.deepEqual(await controller.unlock('wrong-2'), { ok: false, reason: 'wrong-password', retryAfterMs: 0, attemptsRemaining: 1 });
+    assert.deepEqual(await controller.unlock('wrong-3'), { ok: false, reason: 'wrong-password', retryAfterMs: 0, attemptsRemaining: 0 });
+    assert.equal(controller.snapshot().state, 'recovery-required');
+    assert.deepEqual(credentials.unlockPasswords, ['wrong-1', 'wrong-2', 'wrong-3']);
+  });
+
   test('re-authentication verifies an unlocked app without reopening or changing lock state', async () => {
     const credentials = new FakeCredentials();
     let opens = 0;
@@ -319,7 +348,7 @@ describe('Touch ID app-lock authority (#310)', () => {
     assert.deepEqual(await controller.unlockWithTouchId(), { ok: false, reason: 'library-in-use' });
     assert.equal(controller.snapshot().state, 'locked');
   });
-  test('successful biometric release opens M without reading or resetting password throttle', async () => {
+  test('successful biometric release opens M and resets the shared authentication throttle', async () => {
     const credentials = new FakeCredentials();
     const touchId = new FakeTouchId();
     const releasedMaster = Buffer.alloc(32, 8);
@@ -336,7 +365,7 @@ describe('Touch ID app-lock authority (#310)', () => {
       throttle: {
         remainingMs: () => {
           throttleCalls += 1;
-          return 60_000;
+          return 0;
         },
         recordFailure: () => {
           throttleCalls += 1;
@@ -351,11 +380,11 @@ describe('Touch ID app-lock authority (#310)', () => {
     assert.deepEqual(await controller.unlockWithTouchId(), { ok: true });
     assert.deepEqual(opened, [Buffer.alloc(32, 8)]);
     assert.deepEqual(releasedMaster, Buffer.alloc(32));
-    assert.equal(throttleCalls, 0);
+    assert.equal(throttleCalls, 2, 'one admission read and one reset');
     assert.equal(controller.snapshot().state, 'unlocked');
   });
 
-  test('cancel and failed scans stay locked without changing password throttle', async () => {
+  test('only a biometric nonmatch increments the shared authentication throttle', async () => {
     const credentials = new FakeCredentials();
     const touchId = new FakeTouchId();
     let throttleWrites = 0;
@@ -382,7 +411,7 @@ describe('Touch ID app-lock authority (#310)', () => {
     touchId.unlockMaster = () => Promise.reject(new Error('native boundary failed'));
     assert.deepEqual(await controller.unlockWithTouchId(), { ok: false, reason: 'unavailable' });
     assert.equal(controller.snapshot().state, 'locked');
-    assert.equal(throttleWrites, 0);
+    assert.equal(throttleWrites, 1);
     assert.deepEqual(await controller.unlock('password'), { ok: true }, 'password fallback remains authoritative');
   });
 

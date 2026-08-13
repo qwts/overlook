@@ -29,6 +29,8 @@ export interface PrivacyPaneProps {
   readonly touchIdStatus: Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null;
   readonly touchIdBusy: boolean;
   readonly onTouchIdChange: (enabled: boolean) => void;
+  readonly anchorPolicy: 'usability' | 'hardened' | null;
+  readonly onAnchorPolicyChange: (policy: 'usability' | 'hardened') => void;
 }
 
 export function PrivacyPane({
@@ -41,6 +43,8 @@ export function PrivacyPane({
   touchIdStatus,
   touchIdBusy,
   onTouchIdChange,
+  anchorPolicy,
+  onAnchorPolicyChange,
 }: PrivacyPaneProps): ReactElement {
   // The recovery row's fingerprint (#240) — the same identifier the
   // KeyDialog shows; '—' while the keystore is unavailable.
@@ -110,6 +114,17 @@ export function PrivacyPane({
           checked={touchIdStatus?.enabled ?? false}
           disabled={!appLockConfigured || touchIdBusy || touchIdStatus === null || (!touchIdStatus.available && !touchIdStatus.enabled)}
           onChange={onTouchIdChange}
+        />
+      </Field>
+      <Field
+        label="Hardened anchor protection"
+        hint="Off repairs this Mac’s local credential anchor after a valid password or Touch ID. On treats an anchor change as recovery and requires a freshly exported recovery key."
+      >
+        <Switch
+          accessibleLabel="Hardened anchor protection"
+          checked={anchorPolicy === 'hardened'}
+          disabled={!appLockConfigured || anchorPolicy === null}
+          onChange={(enabled) => onAnchorPolicyChange(enabled ? 'hardened' : 'usability')}
         />
       </Field>
       <ProtectedAlbumSettings />

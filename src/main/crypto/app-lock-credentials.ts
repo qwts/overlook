@@ -11,7 +11,8 @@ const MAGIC = Buffer.from('OVLK', 'ascii');
 const MASTER_FILE = 'master.key';
 const CONFIGURED_MARKER_FILE = 'app-lock.configured';
 const CONFIGURED_MARKER = Buffer.from('OVLK1\n', 'ascii');
-const VERSION = 1;
+const LEGACY_VERSION = 1;
+const VERSION = 2;
 const KEY_BYTES = 32;
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
@@ -21,6 +22,8 @@ export interface CredentialAnchor {
   readonly generation: number;
   readonly recordHash: string;
 }
+
+export type AnchorPolicy = 'usability' | 'hardened';
 
 export interface CredentialAnchorStore {
   isAvailable(): boolean;
@@ -38,13 +41,16 @@ export type AppLockStatus =
     };
 
 export type UnlockResult =
-  { readonly ok: true; readonly masterKey: Buffer } | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' };
+  | { readonly ok: true; readonly masterKey: Buffer }
+  | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' | 'storage-unavailable' };
 
 export type UnlockKeyResult =
-  { readonly ok: true; readonly unlockKey: Buffer } | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' };
+  | { readonly ok: true; readonly unlockKey: Buffer }
+  | { readonly ok: false; readonly reason: 'wrong-password' | 'recovery-required' | 'storage-unavailable' };
 
 export type MasterReleaseResult =
-  { readonly ok: true; readonly masterKey: Buffer } | { readonly ok: false; readonly reason: 'invalid-unlock-key' | 'recovery-required' };
+  | { readonly ok: true; readonly masterKey: Buffer }
+  | { readonly ok: false; readonly reason: 'invalid-unlock-key' | 'recovery-required' | 'storage-unavailable' };
 
 export interface AppLockCredentialStoreOptions {
   readonly dataDir: string;
@@ -74,24 +80,38 @@ const slotSchema = z
   })
   .strict();
 
-const recordSchema = z
+const recordFields = {
+  libraryId: z.string().min(1).max(256),
+  generation: z.number().int().positive(),
+  kdf: z
+    .object({
+      name: z.literal('scrypt'),
+      N: z.literal(PASSWORD_KDF_V1.N),
+      r: z.literal(PASSWORD_KDF_V1.r),
+      p: z.literal(PASSWORD_KDF_V1.p),
+      salt: canonicalBase64.refine((value) => Buffer.from(value, 'base64').length === PASSWORD_KDF_V1.saltBytes),
+    })
+    .strict(),
+  passwordSlot: slotSchema,
+  masterSlot: slotSchema,
+};
+
+const legacyRecordSchema = z
   .object({
-    version: z.literal(VERSION),
-    libraryId: z.string().min(1).max(256),
-    generation: z.number().int().positive(),
-    kdf: z
-      .object({
-        name: z.literal('scrypt'),
-        N: z.literal(PASSWORD_KDF_V1.N),
-        r: z.literal(PASSWORD_KDF_V1.r),
-        p: z.literal(PASSWORD_KDF_V1.p),
-        salt: canonicalBase64.refine((value) => Buffer.from(value, 'base64').length === PASSWORD_KDF_V1.saltBytes),
-      })
-      .strict(),
-    passwordSlot: slotSchema,
-    masterSlot: slotSchema,
+    version: z.literal(LEGACY_VERSION),
+    ...recordFields,
   })
   .strict();
+
+const currentRecordSchema = z
+  .object({
+    version: z.literal(VERSION),
+    anchorPolicy: z.enum(['usability', 'hardened']),
+    ...recordFields,
+  })
+  .strict();
+
+const recordSchema = z.union([legacyRecordSchema, currentRecordSchema]);
 
 type AppLockRecord = z.output<typeof recordSchema>;
 type SealedSlot = z.output<typeof slotSchema>;
@@ -121,8 +141,19 @@ function parseRecord(raw: Buffer): AppLockRecord | null {
   }
 }
 
-function aad(record: Pick<AppLockRecord, 'libraryId' | 'generation'>, slot: 'password' | 'master'): Buffer {
-  return Buffer.from(`OVLK|${String(VERSION)}|${record.libraryId}|${String(record.generation)}|${slot}|AES-256-GCM`, 'utf8');
+function policyOf(record: AppLockRecord): AnchorPolicy {
+  return record.version === LEGACY_VERSION ? 'usability' : record.anchorPolicy;
+}
+
+function aad(
+  record: { readonly version: 1 | 2; readonly libraryId: string; readonly generation: number; readonly anchorPolicy?: AnchorPolicy },
+  slot: 'password' | 'master',
+): Buffer {
+  const policy = record.version === LEGACY_VERSION ? '' : `|${record.anchorPolicy ?? 'usability'}`;
+  return Buffer.from(
+    `OVLK|${String(record.version)}|${record.libraryId}|${String(record.generation)}${policy}|${slot}|AES-256-GCM`,
+    'utf8',
+  );
 }
 
 function seal(key: Buffer, plaintext: Buffer, associatedData: Buffer): SealedSlot {
@@ -149,15 +180,21 @@ function validateInput({ libraryId, password, masterKey }: ConfigureAppLockInput
   if (masterKey.length !== KEY_BYTES) throw new Error('master key must be 32 bytes');
 }
 
-async function createRecord(input: ConfigureAppLockInput, generation: number): Promise<AppLockRecord> {
+async function createRecord(input: ConfigureAppLockInput, generation: number, anchorPolicy: AnchorPolicy): Promise<AppLockRecord> {
   validateInput(input);
   const salt = createPasswordSaltV1();
   const passwordKey = await derivePasswordKeyV1(input.password, salt);
   const unlockKey = randomBytes(KEY_BYTES);
-  const header = { libraryId: input.libraryId, generation };
+  const header: { readonly version: 2; readonly libraryId: string; readonly generation: number; readonly anchorPolicy: AnchorPolicy } = {
+    version: VERSION,
+    libraryId: input.libraryId,
+    generation,
+    anchorPolicy,
+  };
   try {
     return {
       version: VERSION,
+      anchorPolicy,
       libraryId: input.libraryId,
       generation,
       kdf: { name: 'scrypt', N: PASSWORD_KDF_V1.N, r: PASSWORD_KDF_V1.r, p: PASSWORD_KDF_V1.p, salt: salt.toString('base64') },
@@ -213,11 +250,21 @@ export class AppLockCredentialStore {
     }
     const record = parseRecord(raw);
     if (record === null) return { state: 'recovery-required', reason: 'invalid-record' };
-    if (!this.options.anchorStore.isAvailable()) return { state: 'recovery-required', reason: 'anchor-unavailable' };
+    if (!this.options.anchorStore.isAvailable()) {
+      return policyOf(record) === 'usability'
+        ? { state: 'locked', libraryId: record.libraryId }
+        : { state: 'recovery-required', reason: 'anchor-unavailable' };
+    }
     const anchor = this.options.anchorStore.read();
-    if (anchor === null) return { state: 'recovery-required', reason: 'anchor-missing' };
+    if (anchor === null) {
+      return policyOf(record) === 'usability'
+        ? { state: 'locked', libraryId: record.libraryId }
+        : { state: 'recovery-required', reason: 'anchor-missing' };
+    }
     if (anchor.libraryId !== record.libraryId || anchor.generation !== record.generation || anchor.recordHash !== recordHash(raw)) {
-      return { state: 'recovery-required', reason: 'anchor-mismatch' };
+      return policyOf(record) === 'usability'
+        ? { state: 'locked', libraryId: record.libraryId }
+        : { state: 'recovery-required', reason: 'anchor-mismatch' };
     }
     this.writeConfiguredMarker();
     return { state: 'locked', libraryId: record.libraryId };
@@ -251,6 +298,10 @@ export class AppLockCredentialStore {
     try {
       unlockKey = open(passwordKey, record.passwordSlot, aad(record, 'password'));
       if (unlockKey.length !== KEY_BYTES) return { ok: false, reason: 'recovery-required' };
+      if (!this.repairAnchor(record)) {
+        unlockKey.fill(0);
+        return { ok: false, reason: 'storage-unavailable' };
+      }
       return { ok: true, unlockKey };
     } catch {
       return { ok: false, reason: 'wrong-password' };
@@ -268,7 +319,12 @@ export class AppLockCredentialStore {
     if (record === null) return { ok: false, reason: 'recovery-required' };
     try {
       const masterKey = open(unlockKey, record.masterSlot, aad(record, 'master'));
-      return masterKey.length === KEY_BYTES ? { ok: true, masterKey } : { ok: false, reason: 'recovery-required' };
+      if (masterKey.length !== KEY_BYTES) return { ok: false, reason: 'recovery-required' };
+      if (!this.repairAnchor(record)) {
+        masterKey.fill(0);
+        return { ok: false, reason: 'storage-unavailable' };
+      }
+      return { ok: true, masterKey };
     } catch {
       return { ok: false, reason: 'invalid-unlock-key' };
     }
@@ -283,7 +339,7 @@ export class AppLockCredentialStore {
       return false;
     }
     try {
-      await this.replaceRecord({ libraryId: record.libraryId, password: nextPassword, masterKey: unlocked.masterKey });
+      await this.replaceRecord({ libraryId: record.libraryId, password: nextPassword, masterKey: unlocked.masterKey }, policyOf(record));
       return true;
     } finally {
       unlocked.masterKey.fill(0);
@@ -291,7 +347,31 @@ export class AppLockCredentialStore {
   }
 
   async recover(input: ConfigureAppLockInput): Promise<void> {
-    await this.replaceRecord(input);
+    const current = this.readRecord();
+    await this.replaceRecord(input, current === null ? 'usability' : policyOf(current));
+  }
+
+  anchorPolicy(): AnchorPolicy {
+    const record = this.readRecord();
+    if (record === null) throw new Error('app-lock record is unavailable');
+    return policyOf(record);
+  }
+
+  async setAnchorPolicy(password: string, policy: AnchorPolicy): Promise<boolean> {
+    const unlocked = await this.unlock(password);
+    if (!unlocked.ok) return false;
+    const record = this.readRecord();
+    if (record === null) {
+      unlocked.masterKey.fill(0);
+      return false;
+    }
+    try {
+      if (policyOf(record) === policy && record.version === VERSION) return true;
+      await this.replaceRecord({ libraryId: record.libraryId, password, masterKey: unlocked.masterKey }, policy);
+      return true;
+    } finally {
+      unlocked.masterKey.fill(0);
+    }
   }
 
   async remove(password: string): Promise<boolean> {
@@ -322,11 +402,19 @@ export class AppLockCredentialStore {
     return this.options.anchorStore.read();
   }
 
-  private async replaceRecord(input: ConfigureAppLockInput): Promise<void> {
+  recordAnchor(): CredentialAnchor | null {
+    const raw = existsSync(this.masterPath) ? readFileSync(this.masterPath) : null;
+    const record = raw === null ? null : parseRecord(raw);
+    return raw === null || record === null
+      ? null
+      : { libraryId: record.libraryId, generation: record.generation, recordHash: recordHash(raw) };
+  }
+
+  private async replaceRecord(input: ConfigureAppLockInput, anchorPolicy: AnchorPolicy = 'usability'): Promise<void> {
     if (!this.options.anchorStore.isAvailable()) throw new Error('OS credential store is unavailable');
     const current = parseRecord(existsSync(this.masterPath) ? readFileSync(this.masterPath) : Buffer.alloc(0));
     const generation = Math.max(current?.generation ?? 0, this.options.anchorStore.read()?.generation ?? 0) + 1;
-    const record = await createRecord(input, generation);
+    const record = await createRecord(input, generation, anchorPolicy);
     const raw = recordBytes(record);
     mkdirSync(this.options.dataDir, { recursive: true });
     writeFileAtomic(this.pendingPath, raw);
@@ -364,6 +452,36 @@ export class AppLockCredentialStore {
   private clearAnchorOrThrow(): void {
     this.options.anchorStore.clear();
     if (this.options.anchorStore.read() !== null) throw new Error('OS credential store refused to clear the app-lock anchor');
+  }
+
+  private readRecord(): AppLockRecord | null {
+    return existsSync(this.masterPath) ? parseRecord(readFileSync(this.masterPath)) : null;
+  }
+
+  private repairAnchor(record: AppLockRecord): boolean {
+    const raw = readFileSync(this.masterPath);
+    const expected = { libraryId: record.libraryId, generation: record.generation, recordHash: recordHash(raw) };
+    if (!this.options.anchorStore.isAvailable()) return false;
+    const current = this.options.anchorStore.read();
+    if (
+      current?.libraryId === expected.libraryId &&
+      current.generation === expected.generation &&
+      current.recordHash === expected.recordHash
+    ) {
+      return true;
+    }
+    if (policyOf(record) === 'hardened') return false;
+    try {
+      this.options.anchorStore.write(expected);
+      const repaired = this.options.anchorStore.read();
+      return (
+        repaired?.libraryId === expected.libraryId &&
+        repaired.generation === expected.generation &&
+        repaired.recordHash === expected.recordHash
+      );
+    } catch {
+      return false;
+    }
   }
 
   private writeConfiguredMarker(): void {

@@ -1,14 +1,35 @@
 import { useState, type ReactElement } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { strengthOf } from '../../../shared/crypto/password-strength.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { PasswordField } from '../components/PasswordField';
+import { Checkbox } from '../components/Checkbox';
 
 import './settings.css';
 
-export type AppPasswordMode = 'set' | 'change' | 'remove' | 'touch-id';
+export type AppPasswordMode = 'set' | 'change' | 'remove' | 'touch-id' | 'anchor-harden' | 'anchor-usability';
+
+const messages = defineMessages({
+  anchorHardenTitle: { id: 'appLock.anchorPolicy.harden.title', defaultMessage: 'Enable hardened protection' },
+  anchorUsabilityTitle: { id: 'appLock.anchorPolicy.usability.title', defaultMessage: 'Use automatic anchor repair' },
+  anchorAck: {
+    id: 'appLock.anchorPolicy.harden.ack',
+    defaultMessage: 'I saved the new recovery-key export and understand that losing it can make this library inaccessible.',
+  },
+  anchorHardenNote: {
+    id: 'appLock.anchorPolicy.harden.note',
+    defaultMessage:
+      'A missing or changed local credential anchor will require the recovery-key file you just exported. This can happen after migration, restore, or OS credential-store loss.',
+  },
+  anchorUsabilityNote: {
+    id: 'appLock.anchorPolicy.usability.note',
+    defaultMessage:
+      'After a valid password or Touch ID, Overlook will repair this Mac’s missing or changed local credential anchor. Malformed credential records still fail closed.',
+  },
+});
 
 export interface AppPasswordDialogProps {
   readonly mode: AppPasswordMode;
@@ -17,18 +38,21 @@ export interface AppPasswordDialogProps {
 }
 
 export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogProps): ReactElement {
+  const intl = useIntl();
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const next = mode === 'remove' || mode === 'touch-id' ? current : password;
+  const [acknowledged, setAcknowledged] = useState(false);
+  const currentOnly = mode === 'remove' || mode === 'touch-id' || mode === 'anchor-harden' || mode === 'anchor-usability';
+  const next = currentOnly ? current : password;
   const strength = strengthOf(next);
   const mismatch = mode !== 'remove' && confirm.length > 0 && confirm !== password;
   const canSubmit =
     !busy &&
-    (mode === 'remove' || mode === 'touch-id'
-      ? current.length > 0
+    (currentOnly
+      ? current.length > 0 && (mode !== 'anchor-harden' || acknowledged)
       : password.length >= 8 && password === confirm && strength.score >= 3 && (mode === 'set' || current.length > 0));
 
   const submit = (): void => {
@@ -47,6 +71,14 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
       if (mode === 'remove') {
         const result = await window.overlook.appLock.remove({ password: current });
         return { accepted: result.removed };
+      }
+      if (mode === 'anchor-harden' || mode === 'anchor-usability') {
+        const result = await window.overlook.appLock.setAnchorPolicy({
+          password: current,
+          policy: mode === 'anchor-harden' ? 'hardened' : 'usability',
+          confirmedExport: mode === 'anchor-harden' && acknowledged,
+        });
+        return { accepted: result.changed };
       }
       const result = await window.overlook.appLock.touchIdEnable({ password: current });
       return { accepted: result.enabled, ...(result.reason === null ? {} : { reason: result.reason }) };
@@ -69,7 +101,7 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
         }
         onDone();
       })
-      .catch(() => setError('The password change could not be completed safely.'))
+      .catch(() => setError('The security change could not be completed safely.'))
       .finally(() => setBusy(false));
   };
 
@@ -80,7 +112,11 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
         ? 'Change app password'
         : mode === 'remove'
           ? 'Remove app password'
-          : 'Enable Touch ID';
+          : mode === 'touch-id'
+            ? 'Enable Touch ID'
+            : mode === 'anchor-harden'
+              ? intl.formatMessage(messages.anchorHardenTitle)
+              : intl.formatMessage(messages.anchorUsabilityTitle);
   return (
     <Dialog
       open
@@ -112,10 +148,14 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
               ? 'Removing the app password returns custody to this OS keychain. Your separate recovery key is unchanged.'
               : mode === 'touch-id'
                 ? 'Confirm your app password. Overlook stores only its unlock key in this Mac’s device-only Keychain, protected by your current Touch ID enrollment.'
-                : 'While locked, every decrypted original stays sealed — nothing can be viewed, exported, restored, or synced until you unlock.'}
+                : mode === 'anchor-harden'
+                  ? intl.formatMessage(messages.anchorHardenNote)
+                  : mode === 'anchor-usability'
+                    ? intl.formatMessage(messages.anchorUsabilityNote)
+                    : 'While locked, every decrypted original stays sealed — nothing can be viewed, exported, restored, or synced until you unlock.'}
           </div>
         </div>
-        {mode === 'change' || mode === 'remove' || mode === 'touch-id' ? (
+        {mode === 'change' || currentOnly ? (
           <label>
             <div className="ovl-key__label mono-data">Current password</div>
             <PasswordField
@@ -128,7 +168,7 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
             />
           </label>
         ) : null}
-        {mode === 'remove' || mode === 'touch-id' ? null : (
+        {currentOnly ? null : (
           <>
             <label>
               <div className="ovl-key__label mono-data">New password</div>
@@ -173,6 +213,9 @@ export function AppPasswordDialog({ mode, onClose, onDone }: AppPasswordDialogPr
             </label>
           </>
         )}
+        {mode === 'anchor-harden' ? (
+          <Checkbox checked={acknowledged} onChange={setAcknowledged} label={intl.formatMessage(messages.anchorAck)} />
+        ) : null}
         <div className="ovl-key__mismatch" role="status" aria-live="polite">
           {error}
         </div>

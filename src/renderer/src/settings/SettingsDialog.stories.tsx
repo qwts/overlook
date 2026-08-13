@@ -32,6 +32,7 @@ function installStub(options?: {
   readonly deferQuickActionSettings?: boolean;
   readonly deferInteropUnlock?: boolean;
   readonly iCloudAvailable?: boolean;
+  readonly appLockConfigured?: boolean;
 }): void {
   let current: AppSettings = { ...defaultSettings };
   const nonInteractiveIdentity = { interactiveAuth: false, reconnectRequired: false, accountIdentity: 'stable-subject' } as const;
@@ -280,18 +281,26 @@ function installStub(options?: {
   };
   const appLockListeners = new Set<Parameters<OverlookApi['appLock']['onChanged']>[0]>();
   const appLockApi: OverlookApi['appLock'] = {
-    status: () => Promise.resolve({ state: 'unconfigured-unlocked', libraryId: null, retryAfterMs: 0 }),
-    unlock: () => Promise.resolve({ ok: true, reason: null, retryAfterMs: 0 }),
-    configure: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0 }),
-    lockNow: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0 }),
+    status: () =>
+      Promise.resolve({
+        state: options?.appLockConfigured === true ? ('unlocked' as const) : ('unconfigured-unlocked' as const),
+        libraryId: options?.appLockConfigured === true ? 'story-library' : null,
+        retryAfterMs: 0,
+        attemptsRemaining: 3,
+      }),
+    unlock: () => Promise.resolve({ ok: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 }),
+    configure: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0, attemptsRemaining: 3 }),
+    lockNow: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0, attemptsRemaining: 3 }),
     changePassword: () => Promise.resolve({ changed: true }),
+    anchorPolicyStatus: () => Promise.resolve({ policy: 'usability' }),
+    setAnchorPolicy: () => Promise.resolve({ changed: true }),
     remove: () => Promise.resolve({ removed: true }),
     pickRecovery: () => Promise.resolve({ path: null }),
     recover: () => Promise.resolve({ recovered: false, reason: 'invalid' }),
     touchIdStatus: () => Promise.resolve({ available: false, reason: 'unsigned-build', enabled: false, reenrollmentRequired: false }),
     touchIdEnable: () => Promise.resolve({ enabled: false, reason: 'unsigned-build' }),
     touchIdDisable: () => Promise.resolve({ disabled: true }),
-    touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'not-enabled' }),
+    touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'not-enabled', retryAfterMs: 0, attemptsRemaining: 3 }),
     onChanged: (listener) => {
       appLockListeners.add(listener);
       return () => appLockListeners.delete(listener);
@@ -784,6 +793,25 @@ export const PrivacySection: Story = {
     await userEvent.click(within(clearConfirmation).getByRole('button', { name: 'Clear report' }));
     await expect(body.getByText('No reports are waiting locally.')).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: 'Done' }));
+  },
+};
+
+export const HardenedAnchorProtection: Story = {
+  decorators: [
+    (Story) => {
+      installStub({ appLockConfigured: true });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('tab', { name: 'Privacy' }));
+    const hardened = await waitFor(() => body.getByRole('switch', { name: 'Hardened anchor protection' }));
+    await expect(hardened).toBeEnabled();
+    await expect(hardened).not.toBeChecked();
+    await userEvent.click(hardened);
+    await expect(body.getByRole('dialog', { name: 'Back up encryption key' })).toBeVisible();
+    await expect(body.getByText(/requires a freshly exported recovery key/u)).toBeVisible();
   },
 };
 

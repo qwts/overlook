@@ -46,6 +46,10 @@ export interface OverlookApi {
     readonly configure: (request: Req<typeof channels.appLockConfigure>) => Promise<Res<typeof channels.appLockConfigure>>;
     readonly lockNow: () => Promise<Res<typeof channels.appLockNow>>;
     readonly changePassword: (request: Req<typeof channels.appLockChangePassword>) => Promise<Res<typeof channels.appLockChangePassword>>;
+    readonly anchorPolicyStatus: () => Promise<Res<typeof channels.appLockAnchorPolicyStatus>>;
+    readonly setAnchorPolicy: (
+      request: Req<typeof channels.appLockSetAnchorPolicy>,
+    ) => Promise<Res<typeof channels.appLockSetAnchorPolicy>>;
     readonly remove: (request: Req<typeof channels.appLockRemove>) => Promise<Res<typeof channels.appLockRemove>>;
     readonly pickRecovery: () => Promise<Res<typeof channels.appLockPickRecovery>>;
     readonly recover: (request: Req<typeof channels.appLockRecover>) => Promise<Res<typeof channels.appLockRecover>>;

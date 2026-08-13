@@ -13,6 +13,7 @@ import { KeyStore } from './crypto/keystore.js';
 import { createAppLockRuntime, registerAppLockIpc } from './crypto/app-lock-runtime.js';
 import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/library-shutdown.js';
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
+import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifySearchIndexAsync } from './db/photos-repository.js';
@@ -739,11 +740,8 @@ const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportSta
   reloadWindows: reloadContentWindowsForLock,
   harnessEnv,
 });
-
 let appLockHost: AppLockHost | undefined;
-
-// Each controller is dataDir-bound; the host lets bound-once consumers (IPC,
-// lifecycle, external-open) follow a library switch (#385, ADR-0017 §4).
+const recoveryExportReceipt = new RecoveryExportReceipt();
 function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
   return createAppLockRuntime({
     dataDir: libraryDataDir(),
@@ -816,12 +814,11 @@ void externalOpen.whenReady().then(async () => {
   registerRelocationHandlers(getRelocationRuntime);
   registerAppLockIpc({
     controller: lock,
-    currentMaster: () => {
-      return requireParts('master key').keyStore.masterKeyBytes();
-    },
+    currentMaster: () => requireParts('master key').keyStore.masterKeyBytes(),
     libraryId: () => getProviderRuntime().libraryId(),
     dataDir: () => libraryDataDir(),
     pickRecovery: () => pickRecoveryKeyPath(harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
+    consumeRecoveryExportReceipt: () => recoveryExportReceipt.consume(registryRuntime.resolveActive().id),
     send: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
     settings: () => getSettingsStore().get(),
   });
@@ -830,6 +827,7 @@ void externalOpen.whenReady().then(async () => {
     harnessEnv,
     requireContentAccess: () => lock.requireContentAccess(),
     allowKeyImport: () => lock.snapshot().state === 'unconfigured-unlocked',
+    onRecoveryKeyExported: () => recoveryExportReceipt.mark(registryRuntime.resolveActive().id),
     getLibrary: getLibraryService,
     getActivity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
     getHistory: () =>
@@ -852,9 +850,7 @@ void externalOpen.whenReady().then(async () => {
     getExport: () => egressRuntime.exports(),
     getNativeDrag: () => egressRuntime.nativeDrag(),
     getPhotoKit: () => egressRuntime.photoKit(),
-    getKeyStore: () => {
-      return requireParts('key store').keyStore;
-    },
+    getKeyStore: () => requireParts('key store').keyStore,
     getRestore: getRestoreRuntime,
     getPurge: getPurgeRuntime,
     activeLibraryId: () => registryRuntime.resolveActive().id,

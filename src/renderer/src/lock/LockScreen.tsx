@@ -12,16 +12,27 @@ import './lock-screen.css';
 
 const messages = defineMessages({
   retryCountdown: { id: 'lock.retryCountdown', defaultMessage: 'Try again in {seconds}s' },
+  attemptsRemaining: {
+    id: 'lock.attemptsRemaining',
+    defaultMessage: '{count, plural, one {# attempt} other {# attempts}} remaining before recovery',
+  },
 });
 
 export interface LockScreenProps {
   readonly platform: string;
   readonly state: 'locked' | 'unlocking' | 'locking' | 'recovery-required';
   readonly retryAfterMs: number;
+  readonly attemptsRemaining: number;
   readonly onSwitchLibrary: () => void;
 }
 
-export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: LockScreenProps): ReactElement {
+export function LockScreen({
+  platform,
+  state,
+  retryAfterMs,
+  attemptsRemaining: initialAttempts,
+  onSwitchLibrary,
+}: LockScreenProps): ReactElement {
   const intl = useIntl();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +40,7 @@ export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: L
   const [clock, setClock] = useState(() => Date.now());
   const [touchId, setTouchId] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
   const [touchIdBusy, setTouchIdBusy] = useState(false);
+  const [attemptsRemaining, setAttemptsRemaining] = useState(initialAttempts);
   const busy = state === 'unlocking' || state === 'locking';
 
   useEffect(() => {
@@ -53,6 +65,7 @@ export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: L
       }
       setPassword('');
       setDeadline(Date.now() + result.retryAfterMs);
+      setAttemptsRemaining(result.attemptsRemaining);
       setClock(Date.now());
       setError(
         result.reason === 'throttled'
@@ -74,6 +87,8 @@ export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: L
       .touchIdUnlock()
       .then((result) => {
         if (result.ok) return;
+        setDeadline(Date.now() + result.retryAfterMs);
+        setAttemptsRemaining(result.attemptsRemaining);
         setError(touchIdError(result.reason ?? 'unavailable'));
         if (result.reason === 'enrollment-changed' || result.reason === 'not-enabled') {
           void window.overlook.appLock.touchIdStatus().then(setTouchId);
@@ -148,6 +163,9 @@ export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: L
                   {intl.formatMessage(messages.retryCountdown, { seconds: waitSeconds })}
                 </div>
               ) : null}
+              <div className="mono-data" data-testid="app-lock-attempts-remaining">
+                {intl.formatMessage(messages.attemptsRemaining, { count: attemptsRemaining })}
+              </div>
             </>
           )}
           {recoveryRequired ? null : (

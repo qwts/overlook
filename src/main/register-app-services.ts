@@ -63,6 +63,7 @@ export interface AppServicesOptions {
   readonly harnessEnv: (name: string) => string | undefined;
   readonly requireContentAccess: () => void;
   readonly allowKeyImport: () => boolean;
+  readonly onRecoveryKeyExported?: (() => void) | undefined;
   readonly getLibrary: () => LibraryService;
   readonly getActivity: () => ActivityFacade;
   readonly getHistory: () => HistoryService;
@@ -155,6 +156,7 @@ export function registerAppServices(options: AppServicesOptions): void {
       allowImport: options.allowKeyImport,
       pickExportDestination: () => pickKeyExport(options),
       pickImportSource: () => pickRecoveryKeyPath(options.harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
+      onExported: options.onRecoveryKeyExported,
     }),
   );
   registerRestoreHandlers(() =>

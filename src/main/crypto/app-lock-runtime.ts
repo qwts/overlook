@@ -59,7 +59,13 @@ export function registerAppLockIpc(options: AppLockIpcOptions): () => void {
   registerInspectorWindowHandlers(() => options.controller.requireContentAccess());
   const emit = createEmitter(events.appLockStateChanged, (name, payload) => options.send(name, payload));
   const emitTouchId = createEmitter(events.appLockTouchIdChanged, (name, payload) => options.send(name, payload));
-  const offState = options.controller.subscribe((snapshot) => emit({ ...snapshot, retryAfterMs: options.controller.retryAfterMs() }));
+  const offState = options.controller.subscribe((snapshot) =>
+    emit({
+      ...snapshot,
+      retryAfterMs: options.controller.retryAfterMs(),
+      attemptsRemaining: options.controller.attemptsRemaining?.() ?? 3,
+    }),
+  );
   const offTouchId = options.controller.subscribeTouchId(emitTouchId);
   const offLifecycle = registerAppLockLifecycle({ controller: options.controller, settings: options.settings });
   return () => {
