@@ -40,7 +40,8 @@ export function LockScreen({
   const [clock, setClock] = useState(() => Date.now());
   const [touchId, setTouchId] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
   const [touchIdBusy, setTouchIdBusy] = useState(false);
-  const [attemptsRemaining, setAttemptsRemaining] = useState(initialAttempts);
+  const [localAttemptsRemaining, setLocalAttemptsRemaining] = useState(initialAttempts);
+  const attemptsRemaining = Math.min(initialAttempts, localAttemptsRemaining);
   const busy = state === 'unlocking' || state === 'locking';
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export function LockScreen({
       }
       setPassword('');
       setDeadline(Date.now() + result.retryAfterMs);
-      setAttemptsRemaining(result.attemptsRemaining);
+      setLocalAttemptsRemaining(result.attemptsRemaining);
       setClock(Date.now());
       setError(
         result.reason === 'throttled'
@@ -88,7 +89,7 @@ export function LockScreen({
       .then((result) => {
         if (result.ok) return;
         setDeadline(Date.now() + result.retryAfterMs);
-        setAttemptsRemaining(result.attemptsRemaining);
+        setLocalAttemptsRemaining(result.attemptsRemaining);
         setError(touchIdError(result.reason ?? 'unavailable'));
         if (result.reason === 'enrollment-changed' || result.reason === 'not-enabled') {
           void window.overlook.appLock.touchIdStatus().then(setTouchId);
