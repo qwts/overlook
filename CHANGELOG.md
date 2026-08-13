@@ -1,5 +1,11 @@
 # photos
 
+## 0.67.2
+
+### Patch Changes
+
+- d51de02: Keep square and sub-pixel near-square photos wholly visible when double-clicking the lightbox while preserving one-axis Fill for landscape and portrait photos.
+
 ## 0.67.1
 
 ### Patch Changes
