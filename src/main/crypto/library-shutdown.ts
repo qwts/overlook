@@ -40,3 +40,8 @@ export async function drainWithCancellationFence(
   await drainBeforeDeadline(tasks, timeoutMs);
   cancelScheduled();
 }
+
+export async function releaseLibraryLockAfter(work: () => Promise<void>, release: () => void): Promise<void> {
+  await work();
+  release();
+}

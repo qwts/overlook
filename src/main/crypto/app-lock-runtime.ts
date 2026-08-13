@@ -16,6 +16,7 @@ import { TouchIdService } from './touch-id.js';
 import { createNativeTouchIdAdapter } from './touch-id-native.js';
 import { TestTouchIdAdapter } from './test-touch-id-adapter.js';
 import { registerInspectorWindowHandlers } from '../inspector-window-runtime.js';
+import { LibraryLockError } from '../library/library-lock.js';
 
 export interface AppLockRuntimeOptions {
   readonly dataDir: string;
@@ -43,6 +44,7 @@ export function createAppLockRuntime(options: AppLockRuntimeOptions): AppLockCon
     openAuthorized: options.openAuthorized,
     closeAuthorized: options.closeAuthorized,
     failClosed: options.failClosed,
+    classifyOpenError: (error) => (error instanceof LibraryLockError ? 'library-in-use' : undefined),
   });
 }
 

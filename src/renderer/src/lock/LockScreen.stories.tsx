@@ -64,6 +64,22 @@ export const PasswordFailureAndThrottle: Story = {
   },
 };
 
+export const LibraryInUseKeepsPasswordFallback: Story = {
+  decorators: [
+    (Story) => {
+      installStub({ ok: false, reason: 'library-in-use', retryAfterMs: 0 });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText('App password'), 'correct password');
+    await userEvent.click(canvas.getByRole('button', { name: 'Unlock' }));
+    await expect(await canvas.findByText(/open in another Overlook instance/u)).toBeVisible();
+    await expect(canvas.getByLabelText('App password')).toBeEnabled();
+  },
+};
+
 export const TouchIdCancellationKeepsPasswordFallback: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

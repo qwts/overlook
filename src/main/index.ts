@@ -11,7 +11,7 @@ import { BlobStore, BlobStoreError } from './blobs/blob-store.js';
 import { broadcast, registerWindowAllClosedQuit, reloadContentWindowsForLock, relaunchLocked } from './app-window.js';
 import { KeyStore } from './crypto/keystore.js';
 import { createAppLockRuntime, registerAppLockIpc } from './crypto/app-lock-runtime.js';
-import { drainWithCancellationFence } from './crypto/library-shutdown.js';
+import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/library-shutdown.js';
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
@@ -112,10 +112,8 @@ const registryRuntime = new LibraryRegistryRuntime({
 const libraryDataDir = (): string => registryRuntime.dataDir();
 configureSettingsLibrary(libraryDataDir);
 
-// Per-library advisory lock (ADR-0017 §5, #385): acquired at open, released last in teardown.
 const instanceId = ulid();
 let releaseLibraryLock: (() => void) | undefined;
-
 let libraryParts: LibraryParts | undefined, releasedMaster: Buffer | undefined;
 
 function getLibraryService(): LibraryService {
@@ -226,8 +224,7 @@ function requireParts(what: string): LibraryParts {
 }
 
 let importRuntime: ImportRuntime | undefined;
-let rawRepairService: RawRepairService | undefined;
-let posterCaptureService: PosterCaptureService | undefined;
+let rawRepairService: RawRepairService | undefined, posterCaptureService: PosterCaptureService | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
@@ -399,8 +396,7 @@ function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
-let purgeService: PurgeService | undefined;
-let purgeRuntime: DrainablePurgeFacade | undefined;
+let purgeService: PurgeService | undefined, purgeRuntime: DrainablePurgeFacade | undefined;
 let consistencyChecker: ConsistencyChecker | undefined;
 const startupMaintenance = new StartupMaintenance({
   purge: () => getPurgeService().purgeExpired(),
@@ -666,7 +662,7 @@ const egressRuntime = new EgressRuntime({
   unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
 });
 
-async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
+async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
   [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
   egressRuntime.close();
@@ -700,8 +696,6 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   libraryParts?.protected.close();
   if (libraryParts !== undefined) {
     try {
-      // Clean close checkpoints WAL (ADR-0017 §4): the closed directory is a
-      // complete, copy/eject-safe unit with no live -wal/-shm sidecars.
       libraryParts.db.pragma('wal_checkpoint(TRUNCATE)');
     } catch {
       // Checkpoint failure never blocks close — SQLite replays on next open.
@@ -718,13 +712,14 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   [consistencyChecker, embeddingRuntime] = [undefined, undefined];
   egressRuntime.reset();
   if (mode !== 'restore') restoreRuntime = undefined;
-  releaseLibraryLock?.();
+}
+
+async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
+  const release = releaseLibraryLock ?? (() => undefined);
+  await releaseLibraryLockAfter(() => closeLibraryResources(mode), release);
   releaseLibraryLock = undefined;
 }
 
-// Live switch (#385) + relocation (#483): see library/switch-runtime.ts,
-// library/relocation-runtime.ts, and library-lifecycle-wiring.ts for the
-// contracts — both runtimes are built from this one deps bag.
 const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({
   registryRuntime,
   instanceId,
