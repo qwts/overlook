@@ -40,8 +40,11 @@ export function LockScreen({
   const [clock, setClock] = useState(() => Date.now());
   const [touchId, setTouchId] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
   const [touchIdBusy, setTouchIdBusy] = useState(false);
-  const [localAttemptsRemaining, setLocalAttemptsRemaining] = useState(initialAttempts);
-  const attemptsRemaining = Math.min(initialAttempts, localAttemptsRemaining);
+  const [attemptState, setAttemptState] = useState({ lockState: state, authoritative: initialAttempts, remaining: initialAttempts });
+  if (attemptState.lockState !== state || attemptState.authoritative !== initialAttempts) {
+    setAttemptState({ lockState: state, authoritative: initialAttempts, remaining: initialAttempts });
+  }
+  const attemptsRemaining = Math.min(initialAttempts, attemptState.remaining);
   const busy = state === 'unlocking' || state === 'locking';
 
   useEffect(() => {
@@ -66,7 +69,7 @@ export function LockScreen({
       }
       setPassword('');
       setDeadline(Date.now() + result.retryAfterMs);
-      setLocalAttemptsRemaining(result.attemptsRemaining);
+      setAttemptState({ lockState: state, authoritative: initialAttempts, remaining: result.attemptsRemaining });
       setClock(Date.now());
       setError(
         result.reason === 'throttled'
@@ -75,7 +78,9 @@ export function LockScreen({
             ? 'This library is open in another Overlook instance. Close it there, then try again.'
             : result.reason === 'recovery-required'
               ? 'This library requires its exported recovery key.'
-              : 'That password did not unlock this library.',
+              : result.reason === 'storage-unavailable'
+                ? 'Secure storage is unavailable. Check the operating system credential store, then try again.'
+                : 'That password did not unlock this library.',
       );
     });
   };
@@ -89,7 +94,7 @@ export function LockScreen({
       .then((result) => {
         if (result.ok) return;
         setDeadline(Date.now() + result.retryAfterMs);
-        setLocalAttemptsRemaining(result.attemptsRemaining);
+        setAttemptState({ lockState: state, authoritative: initialAttempts, remaining: result.attemptsRemaining });
         setError(touchIdError(result.reason ?? 'unavailable'));
         if (result.reason === 'enrollment-changed' || result.reason === 'not-enabled') {
           void window.overlook.appLock.touchIdStatus().then(setTouchId);
