@@ -164,6 +164,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
     await touchIdDialog.getByLabel('Current password').fill('wrong password');
     await touchIdDialog.getByRole('button', { name: 'Enable Touch ID' }).click();
     await expect(touchIdDialog.getByRole('status')).toContainText('incorrect');
+    await page.waitForTimeout(1200); // The shared failed-attempt gate imposes a one-second backoff.
     await touchIdDialog.getByLabel('Current password').fill(PASSWORD);
     await touchIdDialog.getByRole('button', { name: 'Enable Touch ID' }).click();
     await expect(touchIdDialog).toHaveCount(0);
@@ -185,6 +186,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
     await changeDialog.getByLabel('Confirm password').fill(NEXT_PASSWORD);
     await changeDialog.getByRole('button', { name: 'Change app password' }).click();
     await expect(changeDialog.getByRole('status')).toContainText('incorrect');
+    await page.waitForTimeout(1200); // Password changes use the same persisted backoff as unlock.
     await changeDialog.getByLabel('Current password').fill(PASSWORD);
     await changeDialog.getByRole('button', { name: 'Change app password' }).click();
     await expect(changeDialog).toHaveCount(0);
