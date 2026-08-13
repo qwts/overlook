@@ -328,6 +328,22 @@ describe('app-lock authority state machine (#311)', () => {
     assert.equal(credentials.recoveries, 0);
     assert.equal(controller.snapshot().state, 'unlocked');
   });
+
+  test('successful recovery clears the persisted failed-attempt state', async () => {
+    const credentials = new FakeCredentials();
+    credentials.credentialStatus = { state: 'recovery-required', reason: 'anchor-missing' };
+    let resets = 0;
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => undefined,
+      throttle: { remainingMs: () => 0, recordFailure: () => 0, reset: () => (resets += 1) },
+    });
+
+    await controller.recover({ libraryId: 'library-a', password: 'Strong Password 1!', masterKey: Buffer.alloc(32, 3) });
+    assert.equal(resets, 1);
+    assert.equal(controller.snapshot().state, 'locked');
+  });
 });
 
 describe('Touch ID app-lock authority (#310)', () => {

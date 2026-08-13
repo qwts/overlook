@@ -100,10 +100,11 @@ describe('app-lock facade (#311)', () => {
       libraryId: () => 'library-a',
       dataDir: () => '/unused',
       pickRecovery: () => Promise.resolve(null),
-      consumeRecoveryExportReceipt: () => receipts-- > 0,
+      recoveryExportReceipt: (consume) => (consume ? receipts-- > 0 : receipts > 0),
     });
 
     assert.equal(await facade.setAnchorPolicy('current', 'hardened', false), false);
+    assert.equal(await facade.setAnchorPolicy('wrong', 'hardened', true), false);
     assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), true);
     assert.equal(facade.anchorPolicy(), 'hardened');
     assert.equal(await facade.setAnchorPolicy('current', 'hardened', true), false, 'receipt is single-use');

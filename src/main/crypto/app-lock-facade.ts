@@ -7,7 +7,7 @@ export interface AppLockFacadeOptions {
   readonly libraryId: () => string;
   readonly dataDir: () => string;
   readonly pickRecovery: () => Promise<string | null>;
-  readonly consumeRecoveryExportReceipt?: (() => boolean) | undefined;
+  readonly recoveryExportReceipt?: ((consume: boolean) => boolean) | undefined;
 }
 
 export function createAppLockFacade(options: AppLockFacadeOptions) {
@@ -31,11 +31,13 @@ export function createAppLockFacade(options: AppLockFacadeOptions) {
     lock: () => options.controller.lock(),
     changePassword: (currentPassword: string, nextPassword: string) => options.controller.changePassword(currentPassword, nextPassword),
     anchorPolicy: () => options.controller.anchorPolicy?.() ?? 'usability',
-    setAnchorPolicy: (password: string, policy: 'usability' | 'hardened', confirmedExport: boolean) => {
-      if (policy === 'hardened' && (!confirmedExport || options.consumeRecoveryExportReceipt?.() !== true)) {
+    setAnchorPolicy: async (password: string, policy: 'usability' | 'hardened', confirmedExport: boolean) => {
+      if (policy === 'hardened' && (!confirmedExport || options.recoveryExportReceipt?.(false) !== true)) {
         return Promise.resolve(false);
       }
-      return options.controller.setAnchorPolicy?.(password, policy) ?? Promise.resolve(false);
+      const changed = await (options.controller.setAnchorPolicy?.(password, policy) ?? Promise.resolve(false));
+      if (changed && policy === 'hardened') options.recoveryExportReceipt?.(true);
+      return changed;
     },
     remove: (password: string) => options.controller.remove(password),
     pickRecovery: options.pickRecovery,

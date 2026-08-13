@@ -12,8 +12,17 @@ export class RecoveryExportReceipt {
   }
 
   consume(libraryId: string): boolean {
-    const receipt = this.receipt;
+    const valid = this.has(libraryId);
     this.receipt = null;
+    return valid;
+  }
+
+  has(libraryId: string): boolean {
+    const receipt = this.receipt;
     return receipt !== null && receipt.libraryId === libraryId && receipt.expiresAt >= this.now();
+  }
+
+  use(libraryId: string, consume: boolean): boolean {
+    return consume ? this.consume(libraryId) : this.has(libraryId);
   }
 }

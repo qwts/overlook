@@ -290,6 +290,7 @@ export class AppLockController {
         throw new AppLockedError('App lock recovery requires a closed library');
       }
       await this.options.credentials.recover(input);
+      this.options.throttle?.reset();
       await this.credentialsChanged();
       this.publish({ state: 'locked', libraryId: input.libraryId });
     });

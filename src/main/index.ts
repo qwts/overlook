@@ -818,7 +818,7 @@ void externalOpen.whenReady().then(async () => {
     libraryId: () => getProviderRuntime().libraryId(),
     dataDir: () => libraryDataDir(),
     pickRecovery: () => pickRecoveryKeyPath(harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
-    consumeRecoveryExportReceipt: () => recoveryExportReceipt.consume(registryRuntime.resolveActive().id),
+    recoveryExportReceipt: (consume) => recoveryExportReceipt.use(registryRuntime.resolveActive().id, consume),
     send: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
     settings: () => getSettingsStore().get(),
   });

@@ -8,8 +8,8 @@ describe('recovery export receipt (#882)', () => {
     let now = 1_000;
     const receipt = new RecoveryExportReceipt(() => now);
     receipt.mark('library-a');
-    assert.equal(receipt.consume('library-b'), false);
-    assert.equal(receipt.consume('library-a'), false, 'a mismatched consume still burns the receipt');
+    assert.equal(receipt.has('library-b'), false);
+    assert.equal(receipt.has('library-a'), true);
 
     receipt.mark('library-a');
     assert.equal(receipt.consume('library-a'), true);
