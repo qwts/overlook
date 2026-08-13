@@ -477,6 +477,28 @@ describe('Touch ID app-lock authority (#310)', () => {
     assert.deepEqual(await controller.unlock('password'), { ok: true }, 'password fallback remains authoritative');
   });
 
+  test('biometric throttle write failure restores locked state', async () => {
+    const credentials = new FakeCredentials();
+    const touchId = new FakeTouchId();
+    touchId.unlockValue = { ok: false, reason: 'failed' };
+    const controller = new AppLockController({
+      credentials,
+      touchId,
+      openAuthorized: () => undefined,
+      closeAuthorized: () => undefined,
+      throttle: {
+        remainingMs: () => 0,
+        recordFailure: () => {
+          throw new Error('keychain unavailable');
+        },
+        reset: () => undefined,
+      },
+    });
+
+    await assert.rejects(controller.unlockWithTouchId(), /keychain unavailable/u);
+    assert.equal(controller.snapshot().state, 'locked');
+  });
+
   test('opt-in requires an open library and opt-out publishes the resulting status', async () => {
     const credentials = new FakeCredentials();
     const touchId = new FakeTouchId();

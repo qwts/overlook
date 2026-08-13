@@ -157,11 +157,14 @@ export class AppLockController {
       this.publish({ ...this.current, state: 'unlocking' });
       const result = await this.options.touchId.unlockMaster().catch(() => ({ ok: false as const, reason: 'unavailable' as const }));
       if (!result.ok) {
-        if (result.reason === 'failed') this.options.throttle?.recordFailure();
-        this.publish({
-          ...this.current,
-          state: result.reason === 'recovery-required' || this.attemptsRemaining() === 0 ? 'recovery-required' : 'locked',
-        });
+        try {
+          if (result.reason === 'failed') this.options.throttle?.recordFailure();
+        } finally {
+          this.publish({
+            ...this.current,
+            state: result.reason === 'recovery-required' || this.attemptsRemaining() === 0 ? 'recovery-required' : 'locked',
+          });
+        }
         if (result.reason === 'enrollment-changed' || result.reason === 'recovery-required') await this.publishTouchId();
         return result;
       }
