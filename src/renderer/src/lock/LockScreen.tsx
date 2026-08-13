@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Button } from '../components/Button';
-import { Icon } from '../components/Icon';
-import { PasswordField } from '../components/PasswordField';
-import { TitleBar } from '../components/TitleBar';
+import { Button } from '../components/Button.js';
+import { Icon } from '../components/Icon.js';
+import { PasswordField } from '../components/PasswordField.js';
+import { TitleBar } from '../components/TitleBar.js';
 import { commandById } from '../../../shared/commands/registry.js';
-import { RecoveryUnlock } from './RecoveryUnlock';
+import { RecoveryUnlock } from './RecoveryUnlock.js';
 
 import './lock-screen.css';
 

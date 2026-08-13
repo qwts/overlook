@@ -1,8 +1,8 @@
 import { useState, type ReactElement } from 'react';
 
 import { strengthOf } from '../../../shared/crypto/password-strength.js';
-import { Button } from '../components/Button';
-import { PasswordField } from '../components/PasswordField';
+import { Button } from '../components/Button.js';
+import { PasswordField } from '../components/PasswordField.js';
 
 function baseName(path: string): string {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
