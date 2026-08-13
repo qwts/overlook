@@ -1,4 +1,10 @@
-import type { AppLockController, AppTouchIdUnlockResult, AppUnlockResult, LockStateSnapshot } from './app-lock-controller.js';
+import type {
+  AppAuthorizationResult,
+  AppLockController,
+  AppTouchIdUnlockResult,
+  AppUnlockResult,
+  LockStateSnapshot,
+} from './app-lock-controller.js';
 import type { ConfigureAppLockInput } from './app-lock-credentials.js';
 import type { TouchIdEnableResult, TouchIdStatus } from './touch-id.js';
 
@@ -102,7 +108,7 @@ export class AppLockHost implements AppLockControllerLike {
   unlock(password: string): Promise<AppUnlockResult> {
     return this.inner.unlock(password);
   }
-  authorize(password: string): Promise<AppUnlockResult> {
+  authorize(password: string): Promise<AppAuthorizationResult> {
     return this.inner.authorize(password);
   }
   unlockWithTouchId(): Promise<AppTouchIdUnlockResult> {

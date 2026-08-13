@@ -246,6 +246,22 @@ describe('app-lock authority state machine (#311)', () => {
     assert.equal(controller.snapshot().state, 'locked');
   });
 
+  test('a post-password library lock conflict stays locked and never becomes recovery-required', async () => {
+    const credentials = new FakeCredentials();
+    const lockError = new Error('library is already open');
+    const controller = new AppLockController({
+      credentials,
+      openAuthorized: () => {
+        throw lockError;
+      },
+      closeAuthorized: () => undefined,
+      classifyOpenError: (error) => (error === lockError ? 'library-in-use' : undefined),
+    });
+
+    assert.deepEqual(await controller.unlock('password'), { ok: false, reason: 'library-in-use' });
+    assert.equal(controller.snapshot().state, 'locked');
+  });
+
   test('legacy startup opens once and configuration closes into locked state', async () => {
     const credentials = new FakeCredentials();
     credentials.credentialStatus = { state: 'unconfigured' };
@@ -286,6 +302,23 @@ describe('app-lock authority state machine (#311)', () => {
 });
 
 describe('Touch ID app-lock authority (#310)', () => {
+  test('a post-biometric library lock conflict stays locked and never becomes recovery-required', async () => {
+    const credentials = new FakeCredentials();
+    const touchId = new FakeTouchId();
+    const lockError = new Error('library is already open');
+    const controller = new AppLockController({
+      credentials,
+      touchId,
+      openAuthorized: () => {
+        throw lockError;
+      },
+      closeAuthorized: () => undefined,
+      classifyOpenError: (error) => (error === lockError ? 'library-in-use' : undefined),
+    });
+
+    assert.deepEqual(await controller.unlockWithTouchId(), { ok: false, reason: 'library-in-use' });
+    assert.equal(controller.snapshot().state, 'locked');
+  });
   test('successful biometric release opens M without reading or resetting password throttle', async () => {
     const credentials = new FakeCredentials();
     const touchId = new FakeTouchId();

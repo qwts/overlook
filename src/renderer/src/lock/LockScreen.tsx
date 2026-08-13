@@ -57,9 +57,11 @@ export function LockScreen({ platform, state, retryAfterMs, onSwitchLibrary }: L
       setError(
         result.reason === 'throttled'
           ? 'Try again after the security delay.'
-          : result.reason === 'recovery-required'
-            ? 'This library requires its exported recovery key.'
-            : 'That password did not unlock this library.',
+          : result.reason === 'library-in-use'
+            ? 'This library is open in another Overlook instance. Close it there, then try again.'
+            : result.reason === 'recovery-required'
+              ? 'This library requires its exported recovery key.'
+              : 'That password did not unlock this library.',
       );
     });
   };
@@ -185,6 +187,8 @@ function touchIdError(reason: NonNullable<Awaited<ReturnType<typeof window.overl
       return 'Touch ID enrollment changed. Unlock with your password, then enable it again in Settings.';
     case 'recovery-required':
       return 'This library requires its exported recovery key.';
+    case 'library-in-use':
+      return 'This library is open in another Overlook instance. Close it there, then try again.';
     case 'not-enabled':
     case 'unavailable':
       return 'Touch ID is unavailable. Enter your app password.';

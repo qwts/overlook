@@ -1147,6 +1147,10 @@
         },
         {
           "type": "unit-dom",
+          "path": "tests/library/library-lock.test.ts"
+        },
+        {
+          "type": "unit-dom",
           "path": "tests/crypto/hidden-window-lock.test.ts"
         },
         {
