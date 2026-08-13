@@ -93,7 +93,9 @@ export function LockScreen({
       .touchIdUnlock()
       .then((result) => {
         if (result.ok) return;
-        setDeadline(Date.now() + result.retryAfterMs);
+        const now = Date.now();
+        setDeadline(now + result.retryAfterMs);
+        setClock(now);
         setAttemptState({ lockState: state, authoritative: initialAttempts, remaining: result.attemptsRemaining });
         setError(touchIdError(result.reason ?? 'unavailable'));
         if (result.reason === 'enrollment-changed' || result.reason === 'not-enabled') {

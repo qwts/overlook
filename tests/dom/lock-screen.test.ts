@@ -165,3 +165,65 @@ test('LockScreen distinguishes unavailable secure storage from a wrong password'
   assert.match(status.textContent, /Secure storage is unavailable/u);
   assert.doesNotMatch(status.textContent, /password did not unlock/u);
 });
+
+test('LockScreen keeps password unlock available after a zero-delay Touch ID failure', async () => {
+  const originalNow = Date.now;
+  let now = 1_000;
+  Date.now = () => now;
+  try {
+    const appLock = {
+      touchIdStatus: () => Promise.resolve({ available: true, reason: null, enabled: true, reenrollmentRequired: false }),
+      onTouchIdChanged: () => () => undefined,
+      touchIdUnlock: () => Promise.resolve({ ok: false as const, reason: 'cancelled' as const, retryAfterMs: 0, attemptsRemaining: 3 }),
+    } as unknown as OverlookApi['appLock'];
+    Object.defineProperty(window, 'overlook', {
+      configurable: true,
+      value: { appLock },
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        createElement(
+          IntlProvider,
+          { locale: 'en', defaultLocale: 'en' },
+          createElement(LockScreen, {
+            platform: 'darwin',
+            state: 'locked',
+            retryAfterMs: 0,
+            attemptsRemaining: 3,
+            onSwitchLibrary: () => undefined,
+          }),
+        ),
+      );
+      await Promise.resolve();
+    });
+    const password = document.querySelector('input[name="app-password"]');
+    const touchIdButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Unlock with Touch ID');
+    assert.ok(password instanceof HTMLInputElement);
+    assert.ok(touchIdButton instanceof HTMLButtonElement);
+    act(() => {
+      Object.defineProperty(password, 'value', {
+        configurable: true,
+        value: 'app password',
+        writable: true,
+      });
+      password.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    now = 2_000;
+    await act(async () => {
+      touchIdButton.click();
+      await Promise.resolve();
+    });
+
+    const unlockButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Unlock');
+    assert.ok(unlockButton instanceof HTMLButtonElement);
+    assert.equal(unlockButton.disabled, false);
+    assert.equal(document.querySelector('#lock-screen-retry-countdown'), null);
+  } finally {
+    Date.now = originalNow;
+  }
+});
