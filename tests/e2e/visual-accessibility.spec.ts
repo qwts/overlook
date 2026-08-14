@@ -65,6 +65,25 @@ test('reduced motion collapses shared transitions and repeating status animation
   expect(repeatingMotion).toEqual({ duration: '0.001s', iterations: '1' });
 });
 
+test('Windows forced colors map semantic chrome to system colors', async ({ launchOverlook }) => {
+  const { page } = await launchOverlook({ prefix: 'overlook-e2e-visual-forced-colors-', env: { OVERLOOK_SEED: '4' } });
+  await page.emulateMedia({ forcedColors: 'active' });
+
+  await expect.poll(() => page.evaluate<boolean>("matchMedia('(forced-colors: active)').matches")).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate<{ surface: string; text: string; selection: string }>(`(() => {
+        const style = getComputedStyle(document.documentElement);
+        return {
+          surface: style.getPropertyValue('--surface-window').trim().toLowerCase(),
+          text: style.getPropertyValue('--text-body').trim().toLowerCase(),
+          selection: style.getPropertyValue('--selection').trim().toLowerCase(),
+        };
+      })()`),
+    )
+    .toEqual({ surface: 'canvas', text: 'canvastext', selection: 'highlight' });
+});
+
 test('shell, Settings, grid, and Lightbox controls remain reachable at 200% Electron zoom', async ({ launchOverlook }) => {
   const { app, page } = await launchOverlook({ prefix: 'overlook-e2e-visual-zoom-', env: { OVERLOOK_SEED: '12' } });
   const zoomFactor = await app.evaluate(({ BrowserWindow }) => {

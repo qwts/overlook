@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 import {
   createAppearanceRuntime,
+  HIGH_CONTRAST_WINDOW_BACKGROUND,
   withAppearanceBootstrapQuery,
   WINDOW_BACKGROUND,
   type AppearanceSettingsSource,
@@ -42,6 +43,7 @@ class FakeSettings implements AppearanceSettingsSource {
 class FakeNativeTheme extends EventEmitter implements NativeThemeSource {
   private source: Appearance = 'system';
   systemDark = false;
+  systemHighContrast = false;
 
   get themeSource(): Appearance {
     return this.source;
@@ -53,6 +55,10 @@ class FakeNativeTheme extends EventEmitter implements NativeThemeSource {
 
   get shouldUseDarkColors(): boolean {
     return this.source === 'dark' || (this.source === 'system' && this.systemDark);
+  }
+
+  get shouldUseHighContrastColors(): boolean {
+    return this.systemHighContrast;
   }
 
   override on(event: 'updated', listener: () => void): this {
@@ -87,6 +93,13 @@ test('appearance runtime synchronizes persisted, system, and native window theme
   nativeTheme.systemDark = false;
   nativeTheme.emit('updated');
   assert.deepEqual(applied.at(-1), { appearance: 'light', backgroundColor: WINDOW_BACKGROUND.light });
+
+  nativeTheme.systemHighContrast = true;
+  nativeTheme.emit('updated');
+  assert.deepEqual(applied.at(-1), { appearance: 'light', backgroundColor: HIGH_CONTRAST_WINDOW_BACKGROUND.light });
+  nativeTheme.systemDark = true;
+  nativeTheme.emit('updated');
+  assert.deepEqual(applied.at(-1), { appearance: 'dark', backgroundColor: HIGH_CONTRAST_WINDOW_BACKGROUND.dark });
 
   const count = applied.length;
   runtime.dispose();

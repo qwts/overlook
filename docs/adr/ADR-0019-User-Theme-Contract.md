@@ -99,3 +99,23 @@ Theming works only if component CSS references tokens — every hardcoded color 
 - **Deliberately excluded, with rationale recorded:** any CSS import mode (unbounded sanitization risk, no product need); user-themable spacing/typography/motion (layout and readability risk — revisit only with a concrete need and a per-token safety argument); marketplace/sharing (epic out-of-scope).
 - **Deferred, with owners:** handoff↔renderer token parity check → backlog issue out of this epic; gradient tokens joining the themable surface → revisit after v1 ships (needs a gradient grammar, which reopens the parsing question); in-app LLM generation → the #379 assistant epic, against this contract unchanged.
 - **Revisit when:** the token schema needs a breaking rename (bump `tokensVersion`, add a migration map in the schema module — the warn-and-skip rule covers additive growth only).
+
+## Amendment: operating-system high contrast (#651, 2026-08-14)
+
+High contrast is an accessibility layer, not a fourth persisted `appearance`
+value. `Dark`, `Light`, and `System` continue to choose the base palette. The
+renderer follows `prefers-contrast: more` live and applies reviewed dark/light
+high-contrast token overrides through `data-contrast='more'`.
+
+Windows `forced-colors` is a separate, authoritative layer that maps semantic
+and legacy raw tokens to CSS system colors. Components do not opt out globally;
+isolated future exceptions require evidence that user content, rather than app
+chrome, would otherwise be destroyed. Forced colors and the high-contrast
+overlay take precedence over future user-theme values. A user theme may choose
+the base palette, but it may not suppress an active OS accessibility mode.
+
+This preserves the existing appearance schema and recovery contract while
+adding two system-owned presentation states. The declared-pair gate validates
+both reviewed high-contrast palettes, Storybook audits four base/contrast
+variants, Electron covers forced-color activation, and physical packaged macOS
+and Windows passes own OS integration and native chrome.

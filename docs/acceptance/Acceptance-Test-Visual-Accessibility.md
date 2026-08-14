@@ -43,10 +43,25 @@ hidden Electron harness cannot reproduce.
 6. Repeat at the minimum supported window size. Confirm controls wrap or scroll
    within their owning region; no label overlaps another control.
 
-## High-contrast appearance decision
+## High contrast and forced colors
 
-The current design package supplies reviewed dark tokens and the first-party
-light work under #395, but no high-contrast source palette or native
-`forced-colors` mapping. #401 therefore does not invent unreviewed values. The
-declared-pair gate protects shipped themes now; [#651](https://github.com/qwts/photos/issues/651)
-owns the first-party high-contrast/forced-colors design and platform acceptance.
+High contrast is an operating-system accessibility layer over the selected
+Dark, Light, or System appearance; it is not a separate persisted appearance.
+It always takes precedence over first-party and user-theme colors.
+
+1. On macOS, launch a packaged build with **Increase contrast** disabled. Open
+   Settings, Grid/List, Lightbox, dialogs, destructive confirmations, and
+   protected-photo surfaces in Dark and Light.
+2. Enable **Increase contrast** without restarting. Confirm borders, focus and
+   selected rings, text hierarchy, status colors, scrims, and photo chrome all
+   strengthen immediately while the selected base appearance remains stable.
+3. Disable the preference and confirm the standard palette returns live.
+4. On Windows, repeat with a High Contrast theme. Confirm Overlook uses the
+   chosen system Canvas, CanvasText, Highlight, HighlightText, ButtonBorder,
+   GrayText, and LinkText colors. Controls, selection, focus, disabled states,
+   destructive actions, and photo-overlay controls remain distinguishable.
+5. Change the Windows High Contrast theme while Overlook is open. Confirm the
+   system palette updates without relaunch and that no app-wide
+   `forced-color-adjust: none` opt-out defeats the user's colors.
+6. Repeat with any installed user theme. Confirm the OS accessibility palette
+   remains authoritative and Reset Appearance remains reachable.
