@@ -487,15 +487,24 @@ export const channels = {
   ),
   protectedAlbumExportPickDestination: defineChannel(
     'protected-album:export-pick-destination',
-    z.object({}),
-    z.object({ path: z.string().nullable() }),
+    z.object({
+      albumId: z.string().min(1).max(256),
+      photoIds: z.array(z.string().min(1)).min(1),
+      format: z.enum(['original', 'jpeg']).optional(),
+    }),
+    z.object({ path: z.string().nullable(), authorization: z.string().uuid().nullable() }),
+  ),
+  protectedAlbumExportRevokeDestination: defineChannel(
+    'protected-album:export-revoke-destination',
+    z.object({ authorization: z.string().uuid() }),
+    z.object({ revoked: z.boolean() }),
   ),
   protectedAlbumExportRun: defineChannel(
     'protected-album:export-run',
     z.object({
       albumId: z.string().min(1).max(256),
       photoIds: z.array(z.string().min(1)).min(1),
-      destination: z.string().min(1),
+      authorization: z.string().uuid(),
       format: z.enum(['original', 'jpeg']).optional(),
     }),
     z.object({

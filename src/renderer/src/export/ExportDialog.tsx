@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import type { ExportDestinationIntent } from '../../../shared/ipc/export-channels.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
@@ -81,6 +82,11 @@ interface Bar {
   readonly total: number;
 }
 
+interface DestinationSelection {
+  readonly path: string;
+  readonly authorization: string;
+}
+
 export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: ExportDialogProps): ReactElement | null {
   const intl = useIntl();
   const { formatCount } = useFormats();
@@ -93,7 +99,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const [metadata, setMetadata] = useState<'original' | 'overlook' | 'none'>('original');
   const [destinationKind, setDestinationKind] = useState<'folder' | 'apple-photos'>('folder');
   const [decrypt, setDecrypt] = useState(true);
-  const [destination, setDestination] = useState<string | null>(null);
+  const [destination, setDestination] = useState<DestinationSelection | null>(null);
   const [bar, setBar] = useState<Bar>({ done: 0, total: allPhotos ? 0 : photoIds.length });
   const [exported, setExported] = useState(0);
   const [failed, setFailed] = useState(0);
@@ -134,18 +140,39 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const count = photoIds.length;
   const noun = count === 1 ? 'photo' : 'photos';
   const exportLabel = allPhotos ? intl.formatMessage(messages.allPhotos) : `Export ${formatCount(count)} ${noun}`;
+  const intent: ExportDestinationIntent = allPhotos
+    ? { operation: 'all', metadata }
+    : { operation: 'selected', photoIds: [...photoIds], format, metadata };
+
+  const discardDestination = (): void => {
+    if (destination !== null) {
+      void window.overlook.export.revokeDestination({ authorization: destination.authorization });
+      setDestination(null);
+    }
+  };
+
+  const close = (): void => {
+    discardDestination();
+    onClose();
+  };
 
   const start = (): void => {
-    if (destinationKind === 'folder' && destination === null) {
-      return;
-    }
-    setPhase('running');
     const run =
       destinationKind === 'apple-photos'
         ? window.overlook.photoKit.export({ photoIds: [...photoIds] })
-        : allPhotos
-          ? window.overlook.export.runAll({ destination: destination ?? '', metadata })
-          : window.overlook.export.run({ photoIds: [...photoIds], destination: destination ?? '', format, metadata });
+        : destination === null
+          ? null
+          : allPhotos
+            ? window.overlook.export.runAll({ authorization: destination.authorization, metadata })
+            : window.overlook.export.run({
+                photoIds: [...photoIds],
+                authorization: destination.authorization,
+                format,
+                metadata,
+              });
+    if (run === null) return;
+    setRunError(false);
+    setPhase('running');
     void run
       .then((summary) => {
         setExported(summary.exported);
@@ -168,7 +195,12 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
       })
       .catch(() => {
         setRunError(true);
-        setPhase('done');
+        if (destinationKind === 'folder') {
+          setDestination(null);
+          setPhase('options');
+        } else {
+          setPhase('done');
+        }
         announce('Export failed. No source photos were changed.', 'assertive');
       });
   };
@@ -179,11 +211,11 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
       title="Export"
       icon="share"
       width={420}
-      onClose={phase === 'running' ? undefined : onClose}
+      onClose={phase === 'running' ? undefined : close}
       footer={
         phase === 'options' ? (
           <>
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
             <Button
@@ -206,7 +238,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             Cancel
           </Button>
         ) : (
-          <Button variant="primary" onClick={onClose}>
+          <Button variant="primary" onClick={close}>
             Done
           </Button>
         )
@@ -225,7 +257,10 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             <Segmented
               label={intl.formatMessage(messages.exportDestination)}
               value={destinationKind}
-              onChange={setDestinationKind}
+              onChange={(next) => {
+                if (next !== destinationKind) discardDestination();
+                setDestinationKind(next);
+              }}
               options={[
                 { value: 'folder', icon: 'folder', label: intl.formatMessage(messages.folder) },
                 { value: 'apple-photos', icon: 'image', label: intl.formatMessage(messages.applePhotos), disabled: allPhotos },
@@ -239,7 +274,10 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                 label="Format"
                 value={destinationKind === 'apple-photos' ? 'original' : format}
                 disabled={destinationKind === 'apple-photos'}
-                onChange={setFormat}
+                onChange={(next) => {
+                  if (next !== format) discardDestination();
+                  setFormat(next);
+                }}
                 options={[
                   { value: 'original', label: 'Original' },
                   { value: 'jpeg', label: 'JPEG' },
@@ -253,7 +291,10 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               label={intl.formatMessage(messages.metadata)}
               value={destinationKind === 'apple-photos' ? 'original' : metadata}
               disabled={destinationKind === 'apple-photos'}
-              onChange={setMetadata}
+              onChange={(next) => {
+                if (next !== metadata) discardDestination();
+                setMetadata(next);
+              }}
               options={[
                 { value: 'original', label: intl.formatMessage(messages.metadataSource) },
                 { value: 'overlook', label: intl.formatMessage(messages.metadataEdits) },
@@ -301,14 +342,15 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                 icon="folder"
                 size="sm"
                 onClick={() => {
-                  void window.overlook.export.pickDestination({}).then(({ path }) => {
-                    if (path !== null) {
-                      setDestination(path);
+                  void window.overlook.export.pickDestination({ intent }).then(({ path, authorization }) => {
+                    if (path !== null && authorization !== null) {
+                      setRunError(false);
+                      setDestination({ path, authorization });
                     }
                   });
                 }}
               >
-                {destination === null ? 'Choose folder…' : (destination.split('/').at(-1) ?? destination)}
+                {destination === null ? 'Choose folder…' : (destination.path.split('/').at(-1) ?? destination.path)}
               </Button>
             </div>
           ) : (
@@ -319,11 +361,17 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
           )}
           {destinationKind !== 'folder' || destination === null ? null : (
             <CopyableValue
-              value={destination}
+              value={destination.path}
               label={intl.formatMessage(messages.copyDestination)}
               className="ovl-export__destinationPath"
             />
           )}
+          {runError ? (
+            <div className="ovl-export__failed" role="alert">
+              <Icon name="triangle-alert" size={15} />
+              Export failed — check the destination and try again.
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="ovl-export__running">

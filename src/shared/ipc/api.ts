@@ -182,7 +182,12 @@ export interface OverlookApi {
     ) => Promise<Res<typeof channels.protectedAlbumToggleFavorite>>;
     readonly delete: (request: Req<typeof channels.protectedAlbumDelete>) => Promise<Res<typeof channels.protectedAlbumDelete>>;
     readonly restore: (request: Req<typeof channels.protectedAlbumRestore>) => Promise<Res<typeof channels.protectedAlbumRestore>>;
-    readonly pickExportDestination: () => Promise<Res<typeof channels.protectedAlbumExportPickDestination>>;
+    readonly pickExportDestination: (
+      request: Req<typeof channels.protectedAlbumExportPickDestination>,
+    ) => Promise<Res<typeof channels.protectedAlbumExportPickDestination>>;
+    readonly revokeExportDestination: (
+      request: Req<typeof channels.protectedAlbumExportRevokeDestination>,
+    ) => Promise<Res<typeof channels.protectedAlbumExportRevokeDestination>>;
     readonly export: (request: Req<typeof channels.protectedAlbumExportRun>) => Promise<Res<typeof channels.protectedAlbumExportRun>>;
     readonly cancelExport: () => Promise<Res<typeof channels.protectedAlbumExportCancel>>;
     readonly onChanged: (listener: () => void) => () => void;
@@ -223,6 +228,9 @@ export interface OverlookApi {
   };
   readonly export: {
     readonly pickDestination: (request: Req<typeof channels.exportPickDestination>) => Promise<Res<typeof channels.exportPickDestination>>;
+    readonly revokeDestination: (
+      request: Req<typeof channels.exportRevokeDestination>,
+    ) => Promise<Res<typeof channels.exportRevokeDestination>>;
     readonly run: (request: Req<typeof channels.exportRun>) => Promise<Res<typeof channels.exportRun>>;
     readonly runAll: (request: Req<typeof channels.exportRunAll>) => Promise<Res<typeof channels.exportRunAll>>;
     readonly runBoard: (request: Req<typeof channels.exportRunBoard>) => Promise<Res<typeof channels.exportRunBoard>>;

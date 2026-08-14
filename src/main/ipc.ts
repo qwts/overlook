@@ -29,6 +29,7 @@ import { requireMoveImportConfirmation, type ImportMoveSource } from './import/i
 import type { LibraryService } from './library/library-service.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
+import { ExportDestinationAuthority } from './export/export-destination-authority.js';
 import type { ProtectedWorkflowService } from './library/protected-workflow-service.js';
 import type { OffloadPreflight, OffloadSummary, RestoreOriginalsSummary } from './backup/offload.js';
 import type {
@@ -306,12 +307,49 @@ export function registerBoardHandlers(
   registerBoardIpcHandlers(getService, wrapHandler, getActivity, onManifestChanged);
 }
 
+function registerProtectedAlbumExportHandlers(
+  getExport: () => ProtectedExportFacade,
+  destinationAuthority: ExportDestinationAuthority,
+): void {
+  ipcMain.handle(channels.protectedAlbumExportPickDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.protectedAlbumExportPickDestination, async (intent) => {
+      const path = await getExport().pickDestination();
+      return {
+        path,
+        authorization: path === null ? null : destinationAuthority.issue(event.sender.id, { operation: 'protected', ...intent }, path),
+      };
+    })(request),
+  );
+  ipcMain.handle(channels.protectedAlbumExportRevokeDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.protectedAlbumExportRevokeDestination, ({ authorization }) => ({
+      revoked: destinationAuthority.revoke(event.sender.id, authorization),
+    }))(request),
+  );
+  ipcMain.handle(channels.protectedAlbumExportRun.name, (event, request: unknown) =>
+    wrapHandler(channels.protectedAlbumExportRun, ({ albumId, photoIds, authorization, format }) => {
+      const destination = destinationAuthority.consume(
+        event.sender.id,
+        { operation: 'protected', albumId, photoIds, format },
+        authorization,
+      );
+      return getExport().run(albumId, photoIds, destination, format);
+    })(request),
+  );
+  ipcMain.handle(channels.protectedAlbumExportCancel.name, (_event, request: unknown) =>
+    wrapHandler(channels.protectedAlbumExportCancel, () => {
+      getExport().cancel();
+      return {};
+    })(request),
+  );
+}
+
 export function registerProtectedAlbumHandlers(
   getLibrary: () => ProtectedLibraryService,
   getExport: () => ProtectedExportFacade,
   getWorkflow: () => ProtectedWorkflowService,
   pickRecovery: () => Promise<string | null>,
   readRecovery: (path: string) => Promise<Buffer>,
+  destinationAuthority = new ExportDestinationAuthority(),
 ): void {
   ipcMain.handle(channels.protectedAlbumsList.name, (_event, request: unknown) =>
     wrapHandler(channels.protectedAlbumsList, () => ({ albums: getLibrary().listOpaque() }))(request),
@@ -371,20 +409,7 @@ export function registerProtectedAlbumHandlers(
   ipcMain.handle(channels.protectedAlbumRestore.name, (_event, request: unknown) =>
     wrapHandler(channels.protectedAlbumRestore, ({ albumId, photoIds }) => getLibrary().restore(albumId, photoIds))(request),
   );
-  ipcMain.handle(channels.protectedAlbumExportPickDestination.name, (_event, request: unknown) =>
-    wrapHandler(channels.protectedAlbumExportPickDestination, async () => ({ path: await getExport().pickDestination() }))(request),
-  );
-  ipcMain.handle(channels.protectedAlbumExportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.protectedAlbumExportRun, ({ albumId, photoIds, destination, format }) =>
-      getExport().run(albumId, photoIds, destination, format),
-    )(request),
-  );
-  ipcMain.handle(channels.protectedAlbumExportCancel.name, (_event, request: unknown) =>
-    wrapHandler(channels.protectedAlbumExportCancel, () => {
-      getExport().cancel();
-      return {};
-    })(request),
-  );
+  registerProtectedAlbumExportHandlers(getExport, destinationAuthority);
 }
 
 export interface PurgeFacade {
@@ -798,9 +823,18 @@ export interface ExportRunResult {
   readonly failures: { photoId: string; fileName: string; reason: string }[];
 }
 
-export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
-  ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, destination, format, metadata }) => {
+export function registerExportHandlers(
+  getFacade: () => ExportFacade,
+  getActivity?: () => ActivityFacade,
+  destinationAuthority = new ExportDestinationAuthority(),
+): void {
+  ipcMain.handle(channels.exportRun.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format, metadata }) => {
+      const destination = destinationAuthority.consume(
+        event.sender.id,
+        { operation: 'selected', photoIds, format, metadata },
+        authorization,
+      );
       const result = await getFacade().run(photoIds, destination, format, metadata);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
@@ -812,8 +846,9 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
       return result;
     })(request),
   );
-  ipcMain.handle(channels.exportRunAll.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRunAll, async ({ destination, metadata }) => {
+  ipcMain.handle(channels.exportRunAll.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRunAll, async ({ authorization, metadata }) => {
+      const destination = destinationAuthority.consume(event.sender.id, { operation: 'all', metadata }, authorization);
       const result = await getFacade().runAll(destination, metadata);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
@@ -825,9 +860,10 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
       return result;
     })(request),
   );
-  ipcMain.handle(channels.exportRunBoard.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRunBoard, async (input) => {
-      const result = await getFacade().runBoard(input);
+  ipcMain.handle(channels.exportRunBoard.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRunBoard, async ({ authorization, ...input }) => {
+      const destination = destinationAuthority.consume(event.sender.id, { operation: 'board', request: input }, authorization);
+      const result = await getFacade().runBoard({ ...input, destination });
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: input.board.placements.map((placement) => placement.photoId),
@@ -851,8 +887,19 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
       return {};
     })(request),
   );
-  ipcMain.handle(channels.exportPickDestination.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportPickDestination, async () => ({ path: await getFacade().pickDestination() }))(request),
+  ipcMain.handle(channels.exportPickDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.exportPickDestination, async ({ intent }) => {
+      const path = await getFacade().pickDestination();
+      return {
+        path,
+        authorization: path === null ? null : destinationAuthority.issue(event.sender.id, intent, path),
+      };
+    })(request),
+  );
+  ipcMain.handle(channels.exportRevokeDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRevokeDestination, ({ authorization }) => ({
+      revoked: destinationAuthority.revoke(event.sender.id, authorization),
+    }))(request),
   );
 }
 
