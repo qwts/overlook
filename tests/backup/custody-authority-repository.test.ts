@@ -81,14 +81,30 @@ describe('custody authority provenance (#729)', () => {
 
     ledger.markOffloaded('A', authority.id);
     assert.equal(ledger.status('A'), 'offloaded');
+    assert.deepEqual(authorities.forPhoto('A'), authority);
+    assert.equal(authorities.forPhoto('missing'), undefined);
+    assert.deepEqual(authorities.offloadedAuthorities(), [authority]);
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }]);
 
     ledger.repairStatus('A', 'error');
+    assert.deepEqual(authorities.offloadedAuthorities(), [authority], 'clean bound errors remain in custody integrity recovery');
     assert.deepEqual(authorities.soleCustodyCounts(), [{ authority, items: 1, bytes: 42 }], 'remote-loss truth keeps the source binding');
+    assert.deepEqual(authorities.markProviderRequired('pcloud', 'other'), []);
+    assert.deepEqual(authorities.markProviderRequired('pcloud', '42'), [authority.id]);
+    assert.equal(authorities.forPhoto('A')?.state, 'provider-required');
+    assert.deepEqual(authorities.providerRequirements(), [
+      { authority: { ...authority, state: 'provider-required' }, items: 1, bytes: 42 },
+    ]);
+    authorities.restoreBound([authority.id]);
+    assert.equal(authorities.forPhoto('A')?.state, 'bound');
 
     run(db, `UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = 'A'`);
     ledger.setStatus('A', 'synced');
+    assert.equal(authorities.forPhoto('A'), undefined);
+    assert.deepEqual(authorities.offloadedAuthorities(), []);
     assert.equal(authorities.soleCustodyCounts().length, 0, 'durable verified local bytes clear the binding atomically');
+    authorities.deleteUnreferenced('pcloud', '42');
+    assert.equal(authorities.get(authority.id), undefined, 'ordinary disconnect can remove unreferenced authority metadata');
   });
 
   test('legacy unbound offloaded rows are counted separately and never assigned to a new authority', () => {

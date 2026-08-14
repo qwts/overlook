@@ -776,6 +776,80 @@ const SCHEMA_V22: Migration = {
   },
 };
 
+const SCHEMA_V23: Migration = {
+  version: 23,
+  name: 'photo-sidecars',
+  // Encrypted sidecar custody (#484, ADR-0031 §4): companion files (XMP/AAE)
+  // imported beside an original are owned by the photo — one row per
+  // encrypted companion, purged with the photo, never exposed as a library
+  // photo. content_hash addresses the sidecars/ blob namespace; key_id names
+  // the envelope key like photos.key_id.
+  up(db) {
+    db.exec(`
+      CREATE TABLE photo_sidecars (
+        photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK (role IN ('xmp', 'aae')),
+        file_name TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        key_id INTEGER NOT NULL REFERENCES keys(id),
+        imported_at TEXT NOT NULL,
+        PRIMARY KEY (photo_id, content_hash)
+      ) WITHOUT ROWID;
+      CREATE INDEX idx_photo_sidecars_hash ON photo_sidecars (content_hash);
+    `);
+  },
+};
+
+const SCHEMA_V24: Migration = {
+  version: 24,
+  name: 'authored-photo-metadata',
+  // #508: authored/imported descriptive metadata remains inside SQLCipher,
+  // with imported keyword provenance and explicit user suppression kept
+  // separately. FTS is rebuilt to index the effective search projection.
+  up(db) {
+    db.exec(`
+      ALTER TABLE photos ADD COLUMN user_title TEXT;
+      ALTER TABLE photos ADD COLUMN user_description TEXT;
+      ALTER TABLE photos ADD COLUMN imported_keywords TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(imported_keywords));
+      ALTER TABLE photos ADD COLUMN user_tags TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(user_tags));
+      ALTER TABLE photos ADD COLUMN suppressed_keywords TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(suppressed_keywords));
+      ALTER TABLE photos ADD COLUMN metadata_tags_search TEXT NOT NULL DEFAULT '';
+      ALTER TABLE photos ADD COLUMN metadata_version INTEGER NOT NULL DEFAULT 1 CHECK (metadata_version > 0);
+
+      DROP TRIGGER photos_fts_ai;
+      DROP TRIGGER photos_fts_ad;
+      DROP TRIGGER photos_fts_au;
+      DROP TABLE photos_fts;
+      CREATE VIRTUAL TABLE photos_fts USING fts5(
+        file_name, place, camera, user_title, user_description, metadata_tags_search,
+        content='photos', content_rowid='rowid'
+      );
+      CREATE TRIGGER photos_fts_ai AFTER INSERT ON photos BEGIN
+        INSERT INTO photos_fts (rowid, file_name, place, camera, user_title, user_description, metadata_tags_search)
+        VALUES (new.rowid, new.file_name, new.place, new.camera, new.user_title, new.user_description, new.metadata_tags_search);
+      END;
+      CREATE TRIGGER photos_fts_ad AFTER DELETE ON photos BEGIN
+        INSERT INTO photos_fts (
+          photos_fts, rowid, file_name, place, camera, user_title, user_description, metadata_tags_search
+        ) VALUES (
+          'delete', old.rowid, old.file_name, old.place, old.camera, old.user_title, old.user_description, old.metadata_tags_search
+        );
+      END;
+      CREATE TRIGGER photos_fts_au AFTER UPDATE ON photos BEGIN
+        INSERT INTO photos_fts (
+          photos_fts, rowid, file_name, place, camera, user_title, user_description, metadata_tags_search
+        ) VALUES (
+          'delete', old.rowid, old.file_name, old.place, old.camera, old.user_title, old.user_description, old.metadata_tags_search
+        );
+        INSERT INTO photos_fts (rowid, file_name, place, camera, user_title, user_description, metadata_tags_search)
+        VALUES (new.rowid, new.file_name, new.place, new.camera, new.user_title, new.user_description, new.metadata_tags_search);
+      END;
+      INSERT INTO photos_fts(photos_fts) VALUES ('rebuild');
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -799,6 +873,8 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V20,
   SCHEMA_V21,
   SCHEMA_V22,
+  SCHEMA_V23,
+  SCHEMA_V24,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

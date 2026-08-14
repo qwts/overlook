@@ -22,6 +22,14 @@ export type InverseParameters =
       readonly after: boolean;
     }
   | {
+      readonly kind: 'favorites';
+      readonly changes: readonly {
+        readonly photoId: string;
+        readonly before: boolean;
+        readonly after: boolean;
+      }[];
+    }
+  | {
       readonly kind: 'album-membership';
       readonly albumId: string;
       readonly photoIds: readonly string[];

@@ -11,8 +11,9 @@ import { BlobStore, BlobStoreError } from './blobs/blob-store.js';
 import { broadcast, registerWindowAllClosedQuit, reloadContentWindowsForLock, relaunchLocked } from './app-window.js';
 import { KeyStore } from './crypto/keystore.js';
 import { createAppLockRuntime, registerAppLockIpc } from './crypto/app-lock-runtime.js';
-import { drainWithCancellationFence } from './crypto/library-shutdown.js';
+import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/library-shutdown.js';
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
+import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifySearchIndexAsync } from './db/photos-repository.js';
@@ -28,7 +29,7 @@ import type { PosterCaptureService } from './import/poster-capture-service.js';
 import { buildMaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
-import { BackupEngine, type BackupRunResult } from './backup/backup-engine.js';
+import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
 import { createBackupAuditLogger } from './backup/backup-audit.js';
 import { createBackupIntegrityRuntime } from './backup/integrity-runtime.js';
 import { sealManifestJson } from './backup/manifest-sealer.js';
@@ -36,20 +37,21 @@ import { createRecoveryHealthCheck } from './backup/recovery-health.js';
 import type { OffloadService } from './backup/offload.js';
 import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { createOriginalCustodyRuntime } from './backup/original-custody-runtime.js';
+import { createCustodyRoutingRuntime, refreshCustodyHints } from './backup/custody-routing-runtime.js';
 import type { ProviderRuntime } from './backup/provider-runtime.js';
 import { createProviderRuntime } from './backup/provider-runtime-factory.js';
 import type { RestoreRuntime } from './backup/restore-runtime.js';
 import { createRestoreRuntime } from './backup/restore-runtime-factory.js';
 import { recoverInterruptedActivation, restorePaths } from './backup/restore-staging.js';
 import { sealKeyStoreRecoveryBootstrap } from './backup/recovery-bootstrap.js';
-import { ConsistencyChecker } from './library/consistency.js';
-import { createPurgeRepository, PurgeService } from './library/purge-service.js';
+import type { ConsistencyChecker } from './library/consistency.js';
+import { createConsistencyChecker } from './library/consistency-factory.js';
+import type { PurgeService } from './library/purge-service.js';
+import { createPurgeService } from './library/purge-factory.js';
 import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-runtime.js';
 import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
 import { createBackupClaimDeps } from './db/backup-claims.js';
-import type { DrainableExportFacade } from './export/export-runtime.js';
-import { createExportFacade } from './export/export-facade-factory.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { registerIpcHandlers, registerRelocationHandlers } from './ipc.js';
@@ -77,6 +79,8 @@ import type { LibraryParts } from './library/library-parts.js';
 import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
 import type { EmbeddingService } from './embedding/embedding-service.js';
+import { EgressRuntime } from './egress-runtime.js';
+import { applicationEvents } from './application-events.js';
 
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
@@ -109,14 +113,8 @@ const registryRuntime = new LibraryRegistryRuntime({
 const libraryDataDir = (): string => registryRuntime.dataDir();
 configureSettingsLibrary(libraryDataDir);
 
-// Per-library advisory lock (ADR-0017 §5, #385): acquired at open, released last in teardown.
 const instanceId = ulid();
 let releaseLibraryLock: (() => void) | undefined;
-
-const emitExportProgress = createEmitter(events.exportProgress, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-const emitLibraryChanged = createEmitter(events.libraryChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-const emitBoardsReload = createEmitter(events.boardsReload, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-
 let libraryParts: LibraryParts | undefined, releasedMaster: Buffer | undefined;
 
 function getLibraryService(): LibraryService {
@@ -137,6 +135,7 @@ function getLibraryService(): LibraryService {
     }
     const db = openLibraryDatabase({ path: path.join(dataDir, 'library.db'), dbKey });
     registryRuntime.markOpened();
+    refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
     // photos.key_id references keys(id): the current key's row must exist
@@ -168,14 +167,14 @@ function getLibraryService(): LibraryService {
           fullService?.invalidate(photoId);
         }
       },
-      progress: (done, total) => emitExportProgress({ done, total }),
+      progress: (done, total) => applicationEvents.exportProgress({ done, total }),
       pickDestination: () => pickExportDestination(harnessEnv),
       failure: () => console.error('[overlook] protected export failed'),
       repairFailure: () => console.error('[overlook] protected migration repair failed'),
       workflowProgress: (progress) => broadcast((win) => win.webContents.send(events.protectedWorkflowProgress.name, progress)),
       workflowChanged: () => broadcast((win) => win.webContents.send(events.protectedAlbumsChanged.name, {})),
       ordinaryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
     });
@@ -190,8 +189,12 @@ function getLibraryService(): LibraryService {
       broadcast((win) => win.webContents.send(name, payload));
     });
     libraryService = new LibraryService(db, {
-      libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+      libraryChanged: (photoIds, membership, albumIds) => {
+        applicationEvents.libraryChanged({
+          photoIds: [...photoIds],
+          membership,
+          ...(albumIds === undefined ? {} : { albumIds: [...albumIds] }),
+        });
         notifyEmbeddingEligibilityChanged(photoIds);
       },
       originalClassificationChanged: (photoIds) => {
@@ -222,8 +225,7 @@ function requireParts(what: string): LibraryParts {
 }
 
 let importRuntime: ImportRuntime | undefined;
-let rawRepairService: RawRepairService | undefined;
-let posterCaptureService: PosterCaptureService | undefined;
+let rawRepairService: RawRepairService | undefined, posterCaptureService: PosterCaptureService | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
@@ -262,8 +264,8 @@ function ensureMaintenanceServices(): void {
     runtime,
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
-    emitChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds] }),
-    emitThumbsChanged: (photoIds) => emitLibraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
+    emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
     embeddingEligible: notifyEmbeddingEligibilityChanged,
@@ -321,9 +323,8 @@ function getProtectedRuntime(): ProtectedRuntime {
   return requireParts('protected runtime').protected;
 }
 
-let backupEngine: BackupEngine | undefined;
-let offloadService: OffloadService | undefined;
-let ephemeralOriginalService: EphemeralOriginalService | undefined;
+let backupEngine: BackupEngine | undefined, custodyRoutingLifecycle: ReturnType<typeof createCustodyRoutingRuntime> | undefined;
+let offloadService: OffloadService | undefined, ephemeralOriginalService: EphemeralOriginalService | undefined;
 const activeBackupControllers = new Set<AbortController>();
 const activeBackupRuns = new Set<Promise<BackupRunResult>>();
 let providerRuntime: ProviderRuntime | undefined;
@@ -334,7 +335,6 @@ const changeProviderWork = (delta: 1 | -1): void => {
   providerWork.change(delta);
   embeddingRuntime?.service.notifyWorkAvailable();
 };
-const providerIdle = (): Promise<void> => providerWork.idle();
 
 let embeddingRuntime: EmbeddingRuntime | undefined;
 
@@ -361,6 +361,8 @@ function getProviderRuntime(): ProviderRuntime {
     // Only an ALREADY-OPEN library's parts — never requireParts, which would
     // bootstrap an empty library into a fresh onboarding-restore profile.
     guardParts: () => libraryParts ?? null,
+    libraryRegistry: registryRuntime,
+    pauseCustodyReconnectProofs: () => custodyRoutingLifecycle?.pauseReconnectProofs() ?? Promise.resolve(() => undefined),
   });
   return providerRuntime;
 }
@@ -395,8 +397,7 @@ function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
-let purgeService: PurgeService | undefined;
-let purgeRuntime: DrainablePurgeFacade | undefined;
+let purgeService: PurgeService | undefined, purgeRuntime: DrainablePurgeFacade | undefined;
 let consistencyChecker: ConsistencyChecker | undefined;
 const startupMaintenance = new StartupMaintenance({
   purge: () => getPurgeService().purgeExpired(),
@@ -454,15 +455,34 @@ function getBackupEngine(): BackupEngine {
       mockRootDir: path.join(app.getPath('userData'), 'mock-remote'),
       fault: harnessEnv('OVERLOOK_BACKUP_FAULT'),
     });
+    const custodyRouting = createCustodyRoutingRuntime({
+      db: parts.db,
+      backupTarget: provider,
+      libraryId: () => getProviderRuntime().libraryId(),
+      provider: (providerId) => getProviderRuntime().provider(providerId),
+      backupTargetConnected: () => getProviderRuntime().activeId() !== null,
+      status: (photoId) => ledger.status(photoId),
+      now: () => new Date().toISOString(),
+      masterKey: () => parts.keyStore.masterKeyBytes(),
+      persistAccountIdentity: (providerId, identity) => getProviderRuntime().refreshAccountIdentity(providerId, identity),
+      writeCustodyHints: (hints) => {
+        registryRuntime.getRegistry().updateCustodyHints(registryRuntime.resolveActive().id, hints);
+      },
+      audit,
+    });
+    custodyRoutingLifecycle = custodyRouting;
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
       broadcast((win) => win.webContents.send(name, payload));
     });
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
+      ...custodyRouting.integrity,
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
+      markVerified: (photoId) =>
+        ledger.healIntegrityError(photoId) ? emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'offloaded' }] }) : undefined,
       markUnrecoverable: (photoId) => {
         ledger.repairStatus(photoId, 'error');
         emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });
@@ -481,6 +501,7 @@ function getBackupEngine(): BackupEngine {
       manifestSnapshot: () => repo.manifestSnapshot(),
       activitySnapshot: () => activityBackupSnapshot(parts.db),
       boardsSnapshot: () => boardsSnapshot(parts.db),
+      ...sidecarBackupDeps(parts.db, parts.blobStore),
       // Live reads (#111): every run and every maybeAutoRun sees the
       // store's current values — no restart needed after a settings change.
       settings: () => {
@@ -512,6 +533,9 @@ function getBackupEngine(): BackupEngine {
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
+      offloadAuthority: custodyRouting.offloadAuthority,
+      custody: custodyRouting.resolver,
+      custodyChanged: custodyRouting.custodyChanged,
       ledger,
       repo,
       blobs: parts.blobStore,
@@ -527,51 +551,32 @@ function getBackupEngine(): BackupEngine {
     });
     offloadService = custody.offload;
     ephemeralOriginalService = custody.ephemeral;
-    purgeService = new PurgeService({
-      repo: createPurgeRepository(repo),
-      blobs: {
-        deleteOriginal: async (hash) => parts.blobStore.deleteOriginal(hash),
-        deleteThumbs: async (hash) => parts.blobStore.deleteThumbs(hash),
-      },
-      provider,
-      connected: () => getProviderRuntime().activeId() !== null,
+    purgeService = createPurgeService({
+      db: parts.db,
+      repo,
+      blobStore: parts.blobStore,
+      remoteProvider: custodyRouting.remoteProvider,
+      custodyChanged: custodyRouting.custodyChanged,
       // Purging changes manifestSnapshot() — same owed-generation rule (and
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
       },
       audit,
       retention: () => getSettingsStore().get().trashRetention,
-      now: () => Date.now(),
-      sleep: async (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
-    purgeRuntime = createPurgeRuntime(purgeService);
-    consistencyChecker = new ConsistencyChecker({
-      rows: () => repo.allRows(),
-      hiddenOwnedHashes: () => repo.migrationOwnedContentHashes(),
-      blobs: {
-        listOriginalHashes: async () => parts.blobStore.listOriginalHashes(),
-        listThumbHashes: async () => parts.blobStore.listThumbHashes(),
-        listStaged: async () => parts.blobStore.listStaged(),
-        hasOriginal: (hash) => parts.blobStore.hasOriginal(hash),
-        deleteOriginal: async (hash) => parts.blobStore.deleteOriginal(hash),
-        deleteThumbs: async (hash) => parts.blobStore.deleteThumbs(hash),
-        removeStaged: async (name) => parts.blobStore.removeStaged(name),
-      },
-      remoteHas: async (hash) => {
-        try {
-          await provider.verify(`blobs/${hash.slice(0, 2)}/${hash}`);
-          return true;
-        } catch {
-          return false;
-        }
-      },
+    purgeRuntime = createPurgeRuntime(purgeService, changeProviderWork);
+    consistencyChecker = createConsistencyChecker({
+      db: parts.db,
+      repo,
+      blobStore: parts.blobStore,
+      provider,
       setStatus: (photoId, status) => {
         ledger.repairStatus(photoId, status);
       },
       libraryChanged: (photoIds) => {
-        emitLibraryChanged({ photoIds: [...photoIds] });
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' });
       },
       audit,
     });
@@ -649,29 +654,19 @@ function getBackupEngine(): BackupEngine {
   return backupEngine;
 }
 
-let exportFacade: DrainableExportFacade | undefined;
+const egressRuntime = new EgressRuntime({
+  parts: () => requireParts('egress'),
+  ephemeral: getEphemeralOriginalService,
+  imports: getImportService,
+  dataDir: libraryDataDir,
+  harnessEnv,
+  unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
+});
 
-function getExportFacade(): DrainableExportFacade {
-  if (exportFacade === undefined) {
-    const parts = requireParts('export');
-    exportFacade = createExportFacade({
-      db: parts.db,
-      blobStore: parts.blobStore,
-      resolveKey: parts.keyStore.resolver(),
-      ephemeral: getEphemeralOriginalService,
-      pickDestination: () => pickExportDestination(harnessEnv),
-      progress: (done, total) => emitExportProgress({ done, total }),
-    });
-  }
-  return exportFacade;
-}
-
-async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
-  const full = mode !== 'restore';
-  autoBackupTrigger = undefined;
-  manifestSyncTrigger = undefined;
+async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
+  [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
-  exportFacade?.close();
+  egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
   rawRepairService?.close();
@@ -680,25 +675,28 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     closeProductionInboundMoveLibrary(),
     importRuntime?.service.drain() ?? Promise.resolve(),
-    exportFacade?.drain() ?? Promise.resolve(),
+    egressRuntime.drain(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
     startupMaintenance.drain(),
-    Promise.allSettled([...activeBackupRuns, providerRuntime?.drainICloudDriveOperations()]),
-    full ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
-    full ? providerIdle() : Promise.resolve(),
+    custodyRoutingLifecycle?.close() ?? Promise.resolve(),
+    Promise.allSettled([
+      ...activeBackupRuns,
+      providerRuntime?.drainICloudDriveOperations(),
+      providerRuntime?.drainReconnectVerifications(),
+    ]),
+    mode !== 'restore' ? (restoreRuntime?.close() ?? Promise.resolve()) : Promise.resolve(),
+    mode !== 'restore' ? providerWork.idle() : Promise.resolve(),
     Promise.all([thumbService?.close() ?? Promise.resolve(), fullService?.close() ?? Promise.resolve()]),
     importRuntime?.pool.close() ?? Promise.resolve(),
-    ...(full ? [session.defaultSession.clearCache()] : []),
+    ...(mode !== 'restore' ? [session.defaultSession.clearCache()] : []),
     ...(mode === 'lock' ? [reloadContentWindowsForLock()] : []),
   ]);
   lockInteropRuntime();
   libraryParts?.protected.close();
   if (libraryParts !== undefined) {
     try {
-      // Clean close checkpoints WAL (ADR-0017 §4): the closed directory is a
-      // complete, copy/eject-safe unit with no live -wal/-shm sidecars.
       libraryParts.db.pragma('wal_checkpoint(TRUNCATE)');
     } catch {
       // Checkpoint failure never blocks close — SQLite replays on next open.
@@ -706,32 +704,24 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
     libraryParts.db.close();
     libraryParts.keyStore.close();
   }
-  libraryService = undefined;
-  libraryParts = undefined;
-  importRuntime = undefined;
-  rawRepairService = undefined;
-  posterCaptureService = undefined;
-  thumbService = undefined;
-  fullService = undefined;
-  backupEngine = undefined;
-  offloadService = undefined;
+  providerRuntime?.renewReconnectVerificationLifecycle();
+  [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
+  [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
+  [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
-  consistencyChecker = undefined;
-  embeddingRuntime = undefined;
-  exportFacade = undefined;
-  if (full) restoreRuntime = undefined;
-  releaseLibraryLock?.();
+  [consistencyChecker, embeddingRuntime] = [undefined, undefined];
+  egressRuntime.reset();
+  if (mode !== 'restore') restoreRuntime = undefined;
+}
+
+async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
+  const release = releaseLibraryLock ?? (() => undefined);
+  await releaseLibraryLockAfter(() => closeLibraryResources(mode), release);
   releaseLibraryLock = undefined;
 }
 
-const closeLibraryForRestore = (): Promise<void> => closeLibrary('restore');
-const closeLibraryForLock = (): Promise<void> => closeLibrary('lock');
-
-// Live switch (#385) + relocation (#483): see library/switch-runtime.ts,
-// library/relocation-runtime.ts, and library-lifecycle-wiring.ts for the
-// contracts — both runtimes are built from this one deps bag.
-const { switchLibrary, getRelocationRuntime, settleRelocationJournals } = createLibraryLifecycle({
+const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({
   registryRuntime,
   instanceId,
   safeStorage: pickSafeStorage,
@@ -750,11 +740,8 @@ const { switchLibrary, getRelocationRuntime, settleRelocationJournals } = create
   reloadWindows: reloadContentWindowsForLock,
   harnessEnv,
 });
-
 let appLockHost: AppLockHost | undefined;
-
-// Each controller is dataDir-bound; the host lets bound-once consumers (IPC,
-// lifecycle, external-open) follow a library switch (#385, ADR-0017 §4).
+const recoveryExportReceipt = new RecoveryExportReceipt();
 function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
   return createAppLockRuntime({
     dataDir: libraryDataDir(),
@@ -773,7 +760,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
         releasedMaster = undefined;
       }
     },
-    closeAuthorized: closeLibraryForLock,
+    closeAuthorized: () => closeLibrary('lock'),
     failClosed: relaunchLocked,
   });
 }
@@ -794,10 +781,9 @@ function getRestoreRuntime(): RestoreRuntime {
     localMasterKey: () => requireParts('restore key').keyStore.masterKeyBytes(),
     sources: (providerId) => ensureRestoreProviderRegistry().restoreSources(providerId),
     sessionId: ulid,
-    progress: createEmitter(events.restoreProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    }),
-    beforeActivate: closeLibraryForRestore,
+    progress: createEmitter(events.restoreProgress, (name, payload) => broadcast((win) => win.webContents.send(name, payload))),
+    statusChanged: createEmitter(events.restoreStatusChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload))),
+    beforeActivate: () => closeLibrary('restore'),
     harnessEnv,
     workChanged: changeProviderWork,
   });
@@ -813,9 +799,7 @@ void externalOpen.whenReady().then(async () => {
   // caches an entry and before anything opens or classifies libraries. A
   // corrupt registry falls through to resolveFailure()'s loud dialog below.
   await settleRelocationJournals();
-  const registryFailure = registryRuntime.resolveFailure();
-  if (registryFailure !== null) {
-    dialog.showErrorBox('Library registry is damaged', registryFailure);
+  if (!reportStartupFailures((title, message) => dialog.showErrorBox(title, message))) {
     app.exit(1);
     return;
   }
@@ -829,12 +813,11 @@ void externalOpen.whenReady().then(async () => {
   registerRelocationHandlers(getRelocationRuntime);
   registerAppLockIpc({
     controller: lock,
-    currentMaster: () => {
-      return requireParts('master key').keyStore.masterKeyBytes();
-    },
+    currentMaster: () => requireParts('master key').keyStore.masterKeyBytes(),
     libraryId: () => getProviderRuntime().libraryId(),
     dataDir: () => libraryDataDir(),
     pickRecovery: () => pickRecoveryKeyPath(harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
+    recoveryExportReceipt: (consume) => recoveryExportReceipt.use(registryRuntime.resolveActive().id, consume),
     send: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
     settings: () => getSettingsStore().get(),
   });
@@ -843,10 +826,13 @@ void externalOpen.whenReady().then(async () => {
     harnessEnv,
     requireContentAccess: () => lock.requireContentAccess(),
     allowKeyImport: () => lock.snapshot().state === 'unconfigured-unlocked',
+    onRecoveryKeyExported: () => recoveryExportReceipt.mark(registryRuntime.resolveActive().id),
     getLibrary: getLibraryService,
     getActivity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
     getHistory: () =>
-      createHistoryService(requireParts('history'), getLibraryService(), markManifestDebt, (boardId) => emitBoardsReload({ boardId })),
+      createHistoryService(requireParts('history'), getLibraryService(), markManifestDebt, (boardId) =>
+        applicationEvents.boardsReload({ boardId }),
+      ),
     libraries: {
       ...registryRuntime.facade({
         openLibraryId: () => (libraryService === undefined ? null : registryRuntime.resolveActive().id),
@@ -860,10 +846,10 @@ void externalOpen.whenReady().then(async () => {
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
-    getExport: getExportFacade,
-    getKeyStore: () => {
-      return requireParts('key store').keyStore;
-    },
+    getExport: () => egressRuntime.exports(),
+    getNativeDrag: () => egressRuntime.nativeDrag(),
+    getPhotoKit: () => egressRuntime.photoKit(),
+    getKeyStore: () => requireParts('key store').keyStore,
     getRestore: getRestoreRuntime,
     getPurge: getPurgeRuntime,
     activeLibraryId: () => registryRuntime.resolveActive().id,
@@ -902,7 +888,7 @@ if (!productionInterop.nativeHostRequested) {
   registerQuitTeardown({
     isLibraryOpen: () => libraryService !== undefined,
     lockState: () => appLockHost?.snapshot().state,
-    close: closeLibraryForLock,
+    close: () => closeLibrary('lock'),
   });
 }
 

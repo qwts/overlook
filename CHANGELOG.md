@@ -1,5 +1,140 @@
 # photos
 
+## 0.67.6
+
+### Patch Changes
+
+- 34a0108: Make double-click Fill in full view actually cover the viewport: the image now scales by the larger viewport-to-image ratio, so it reaches all four edges and overflows only the single longer axis, instead of leaving bars beside square, near-square, and moderately proportioned photos.
+
+## 0.67.5
+
+### Patch Changes
+
+- 3e646b4: Treat cloud restore object presence as getStream, not a provider listing miss, so a complete backup is not restored as empty.
+
+## 0.67.4
+
+### Patch Changes
+
+- f120505: Keep verified-only cloud restore from aborting on extra gaps, show 1/N verify and restore progress, and let closing the dialog reopen the still-running job from the status bar.
+
+## 0.67.3
+
+### Patch Changes
+
+- b7f9a0d: Keep intact app-lock credentials usable after local anchor loss, offer an authenticated hardened recovery policy, and enter recovery after three failed unlock attempts.
+- 7a6da68: Capitalize the existing OS profile directory as `Overlook` without changing its children or custody files.
+- 117828a: Recover stale library locks after disconnects and report genuine lock conflicts without sending users to recovery.
+
+## 0.67.2
+
+### Patch Changes
+
+- d51de02: Keep square and sub-pixel near-square photos wholly visible when double-clicking the lightbox while preserving one-axis Fill for landscape and portrait photos.
+
+## 0.67.1
+
+### Patch Changes
+
+- a6df036: Publish the provider-relative `Overlook Interop/v1` root and Drive owner in the shared v1 contract.
+
+## 0.67.0
+
+### Minor Changes
+
+- 6105304: Add accessible copy actions to load-bearing Inspector, Activity, import,
+  export, recovery-key, and diagnostics values.
+- 29fa96e: Add registry-only library display-name editing, reset-to-folder-name, duplicate disambiguation, and live titlebar updates.
+- 330fa1d: Add signed macOS file-promise drag-out for selected ordinary photos.
+- 4a9a79a: Add encrypted, searchable photo titles, descriptions, imported keywords, authored tags, bulk tag management, and metadata-aware export choices.
+- 4c8249d: Add explicit, signed Apple Photos import and add-only export with reviewed selection, lock-aware custody, and plaintext staging cleanup.
+- 47b87b2: Make rendered machine data selectable by default and add an accessible,
+  announced copy primitive for load-bearing values.
+
+### Patch Changes
+
+- 648009a: Keep repeated pCloud disconnect requests idempotent after the first request
+  clears custody, repair the restart fixture, and cover legacy custody failures.
+- a5c0d81: Show Windows shortcut labels in the Windows toolbar and shortcut reference.
+
+## 0.66.0
+
+### Minor Changes
+
+- 86c6eeb: Bind every backup-provider connection to a stable, non-secret account identity
+  and show its persisted account label in provider status.
+- de32dcd: Route cloud-only original reads, restores, integrity checks, and remote deletion
+  through their recorded provider account and library namespace.
+- 6a48c14: Require account and authenticated library-namespace proof before cloud-only
+  custody resumes, and reconcile legacy offloaded rows one verified object at a
+  time through the bounded integrity scrub.
+- 37504c3: Block provider disconnects and account switches while cloud-only originals
+  still depend on that authorization, and preserve recoverable provider-required
+  state when authorization is removed through the emergency ceremony.
+
+## 0.65.6
+
+### Patch Changes
+
+- be2c750: Update backup status, sidebar, and Inspector provider names immediately when a
+  different disconnected backup provider is selected in Settings.
+
+## 0.65.5
+
+### Patch Changes
+
+- 797a5ff: Restore everything that verifies when no retained cloud backup generation is
+  complete, instead of failing the whole restore over a single missing object.
+  Unrecoverable objects are reported in full as NOT FOUND, kept visible in the
+  library as errored rows, listed durably in restore-report.json, and filled in
+  by re-running the restore after they are recovered on the provider.
+
+## 0.65.4
+
+### Patch Changes
+
+- 5a9851f: Re-enable pCloud in release builds when the configured OAuth client ID is
+  available, while retaining the explicit build-time kill switch.
+
+## 0.65.3
+
+### Patch Changes
+
+- 329a40c: Select every photo in the complete active library, album, search, and filter result instead of only the loaded gallery page.
+- d3b8faa: Apply complete Select All favorite actions to unloaded photos, preserve refined complete selections across page refreshes, and let Shift+Delete escalate protected Originals that sit on pages the grid has not loaded yet.
+
+## 0.65.2
+
+### Patch Changes
+
+- ddbf2df: Add library-wide export of unencrypted original files.
+- 5d66b23: Select complete Shift-click and Shift-keyboard ranges across virtualized gallery rows and active album, search, and filter projections.
+
+## 0.65.1
+
+### Patch Changes
+
+- ee3dee0: Keep the library switcher reachable when the startup library is app-locked and held by another Overlook instance.
+
+## 0.65.0
+
+### Minor Changes
+
+- 9034d91: Common video and Apple/iPhone media import as first-class library items: MP4/M4V, QuickTime MOV (H.264, HEVC, ProRes), WebM, AVI, MPEG-PS, and provisional Matroska classify by byte signature — never by extension — with bounded probes recording container, codecs, duration, dimensions, rotation, frame rate/VFR, audio presence, and HDR color hints. Audio-only MPEG files classify as audio, never as fake video. Playability stays a per-device runtime derivation: MP4/QuickTime/WebM play when every stream decodes locally; AVI, MPEG-PS, and Matroska are preserved-only (imported, protected, backed up, exported) with honest playback-limitation UI. Range-served playback MIME follows the probed container.
+- a570d41: Photos imported beside XMP or AAE sidecar files now carry those companions into encrypted custody by default: discovered by basename next to the original, encrypted per photo with the association authenticated in the envelope, imported under the same Copy/Move verified-then-delete transaction, included in backup manifests and restore, exported beside the original under its resolved name, and purged with the owning photo. Companions that match no photo are reported in the import summary, never silently dropped.
+- 251a2f5: Rename a library folder in place from the library switcher: the new name appears in Finder or Explorer while the library ID, keys, encrypted database, albums, backup links, and display name stay untouched. Renames run through the journaled relocation engine (crash-safe, refusal-first), validate names conservatively for every platform the disk might visit, and support case-only renames on case-insensitive filesystems.
+
+### Patch Changes
+
+- 3463d3d: Require app-locked libraries to be opened and unlocked before relocation.
+
+## 0.64.3
+
+### Patch Changes
+
+- 2b1502a: Fix a whole-app crash (SIGABRT) when switching libraries or pausing indexing while an embedding was being computed: terminating the ONNX worker mid-inference made onnxruntime throw into the torn-down worker environment. Workers now retire cooperatively — the in-flight job settles first, and a hard terminate remains only as a backstop for a wedged worker.
+- 41cd05b: Judge library-lock staleness by a stable machine identity instead of the hostname, so a crashed instance's lock is reclaimed even after the hostname drifts with network state (`.local` ↔ `.lan`). Startup now fails loud when the selected library is lock-held by another instance, naming the holder and pointing at the library switcher instead of leaving the user in a different library.
+
 ## 0.64.2
 
 ### Patch Changes

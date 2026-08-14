@@ -14,6 +14,8 @@ const checkpointSchema = z.strictObject({
   completedBlobIds: z.array(z.string().min(1)).readonly(),
   completedThumbnailIds: z.array(z.string().min(1)).readonly(),
   completedProtectedObjectIds: z.array(z.string().min(1)).readonly().default([]),
+  /** Sidecar objects already restored + verified (#484). */
+  completedSidecarIds: z.array(z.string().min(1)).readonly().optional(),
 });
 
 export interface RestorePaths {

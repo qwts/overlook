@@ -5,6 +5,7 @@ import type {
   BackupManifestV3,
   BackupManifestV4,
   BackupManifestV5,
+  BackupManifestV6,
   ProtectedBackupAlbumV3,
   ProtectedBackupObjectV3,
   ProtectedBackupPhotoV3,
@@ -227,7 +228,7 @@ export class ProtectedRecoveryRepository {
     })();
   }
 
-  restore(manifest: BackupManifestV3 | BackupManifestV4 | BackupManifestV5): void {
+  restore(manifest: BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6): void {
     this.db.transaction(() => {
       for (const album of manifest.protectedAlbums) {
         runNamed(

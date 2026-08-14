@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted 2026-07-16 on [#308](https://github.com/qwts/photos/issues/308) after the threat-model/recovery pass below and the [#322 review](https://github.com/qwts/photos/pull/322) found no major issues. This ADR extends [ADR-0004](./ADR-0004-Encryption-And-Key-Management.md) and [ADR-0008](./ADR-0008-Recovery-Key-Format.md); it does not rewrite either decision.
+Accepted 2026-07-16 on [#308](https://github.com/qwts/photos/issues/308) after the threat-model/recovery pass below and the [#322 review](https://github.com/qwts/photos/pull/322) found no major issues. Amended 2026-08-12 by [#882](https://github.com/qwts/overlook/issues/882) to add authenticated usability and hardened anchor policies plus a bounded authentication-to-recovery transition. This ADR extends [ADR-0004](./ADR-0004-Encryption-And-Key-Management.md) and [ADR-0008](./ADR-0008-Recovery-Key-Format.md); it does not rewrite either decision.
 
 ## Context
 
@@ -28,9 +28,10 @@ The password never wraps library keys directly. Rotating the app password rotate
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "libraryId": "...",
   "generation": 1,
+  "anchorPolicy": "usability",
   "kdf": {
     "name": "scrypt",
     "N": 131072,
@@ -51,11 +52,18 @@ The password never wraps library keys directly. Rotating the app password rotate
 }
 ```
 
-The canonical header, library id, generation, slot name, and algorithm identifiers are AAD. Password-slot authentication is the verifier; no second password hash or comparison value is stored. Unknown magic, version, parameters, algorithms, lengths, duplicate fields, or non-canonical encodings fail closed before KDF work. Fixed KDF parameters cannot be downgraded by editing the file. A future cost change increments the format version.
+The canonical header, library id, generation, anchor policy, slot name, and algorithm identifiers are AAD. Password-slot authentication is the verifier; no second password hash or comparison value is stored. Unknown magic, version, parameters, algorithms, lengths, duplicate fields, or non-canonical encodings fail closed before KDF work. Fixed KDF parameters and hardened policy cannot be downgraded by editing the file. A future cost change increments the format version.
 
-Version 1 uses ADR-0008's scrypt profile: `N=2^17`, `r=8`, `p=1`, 32-byte output, 16-byte random salt, and a 160 MiB memory ceiling. The main-process schema also enforces an 8–1024 character password and the existing strength score ≥3 when creating or changing it. Fresh salt, nonces, and `U` are generated for every change.
+Both versions use ADR-0008's scrypt profile. Version 1 reads as `usability` and rotates to version 2 on the next credential or policy change. Creation and change retain the existing password limits and generate fresh salt, nonces, and `U`.
 
-An OS credential-store anchor, kept outside the library/backup directory, stores only `{libraryId, generation, SHA-256(record)}`. It is not an unlock secret. The adapter uses Keychain on macOS, Credential Manager on Windows, and Secret Service on Linux; a `safeStorage`-sealed file beside the library is not an anchor because an attacker could roll that file back with the custody record. If the platform store is unavailable, app lock cannot be enabled and an already configured profile stays recovery-required. A record rollback, replay from another library, anchor mismatch, corrupted anchor, or missing anchor on an existing configured profile enters locked recovery-required state. A fresh-machine restore has no anchor by definition and establishes a new record and anchor only after ADR-0008 recovery succeeds.
+An OS credential-store anchor, kept outside the library/backup directory, stores only `{libraryId, generation, SHA-256(record)}`. It is not an unlock secret. The adapter uses Keychain on macOS, Credential Manager on Windows, and Secret Service on Linux; a `safeStorage`-sealed file beside the library is not an anchor because an attacker could roll that file back with the custody record.
+
+The authenticated `anchorPolicy` chooses how an intact, canonical record behaves when that external anchor is missing or mismatched:
+
+- `usability` is the default. A valid password or local Touch ID custody repairs and verifies the anchor before content opens. Unavailable credential storage stays locked with an opaque storage refusal.
+- `hardened` requires ADR-0008 recovery when the anchor is missing, mismatched, or unavailable. Enabling requires the current password, a same-ceremony recovery export, and explicit migration-risk acknowledgement; disabling requires the current password from a trusted session.
+
+Malformed or unauthenticated records require recovery in both modes. Editing the policy breaks slot authentication. Only usability may establish a fresh-machine anchor from intact credentials; hardened uses the recovery file. A usability record whose generation is older than the retained anchor for the same library is a rollback and requires recovery, so a pre-hardening record cannot overwrite newer hardened custody.
 
 Enabling, changing, removing, and recovering lock use a small transition journal plus temp-file/fsync/rename and a two-phase anchor update. The anchor atomically records the committed generation and, during transition, one pending generation/hash. Startup accepts the committed pair, completes an exact pending pair, or aborts a pending update when the committed pair is still intact; every other combination requires recovery. Any mixed crash state resumes with fresh authorization or stays locked; it never falls back to the legacy keychain path. Removing lock requires current password or the recovery ceremony, atomically restores the ADR-0004 `safeStorage` custody record, and deletes the anchor only after that record commits.
 
@@ -63,7 +71,7 @@ Plaintext password strings are never persisted, logged, placed in renderer stora
 
 ### 2. Retry throttling
 
-Password attempts are serialized in the main process. Failures wait 1, 2, 4, 8, 16, 32, then 60 seconds, capped at 60 seconds for later attempts. The failure count and wall-clock `notBefore` are `safeStorage`-sealed and survive restart; success resets them. Corrupt throttle state fails closed to a 60-second delay and emits an identifier-only audit event.
+Password and Touch ID attempts are serialized. The first two counted failures wait 1 and 2 seconds; the third requires recovery. The sealed count and `notBefore` survive restart and reset after successful authentication. Wrong passwords and biometric non-matches count; cancellation, unavailability, lockout, storage failure, and library-lock conflicts do not. The renderer shows remaining attempts and opens recovery at zero. Corrupt throttle state fails closed.
 
 This throttle protects the interactive surface, not an offline copy of the custody record. Offline resistance comes from scrypt and password strength. Deleting local throttle state is not claimed to stop an attacker who can already copy the record.
 
@@ -117,7 +125,7 @@ The ADR-0008 recovery file still contains `M`; app lock does not change its form
 
 Without either a working app credential/biometric session or the separately saved recovery file plus its password, the only reset is an explicit destructive erase of the local profile. Reset detaches the configured backup but does not silently delete remote ciphertext; remote deletion is a separate confirmation. The UI must not call destructive erase “password reset.”
 
-Fresh-machine cloud restore uses the recovery file to obtain `M`, restores the library, requires a new app password if lock was configured, writes a new local anchor, and leaves biometrics disabled. It never asks for or preserves the old app password. Recovery export, password change/removal, destructive reset, and protected-album recovery require a fresh password or recovery-file ceremony; a previously unlocked renderer session or Touch ID success alone is insufficient for security-setting changes.
+Fresh-machine cloud restore of a hardened record uses the recovery file to obtain `M`, restores the library, requires a new app password if lock was configured, writes a new local anchor, and leaves biometrics disabled. A usability record may instead authenticate its intact password slot and re-establish the missing local anchor; a locally enrolled Touch ID item may do the same only when device-bound marker and custody identity still match. Recovery export, password change/removal, anchor-policy changes, destructive reset, and protected-album recovery require a fresh password or recovery-file ceremony; a previously unlocked renderer session or Touch ID success alone is insufficient for security-setting changes.
 
 ### 5. Touch ID release slot
 
@@ -167,7 +175,8 @@ The design does not protect against a compromised OS/kernel, keylogger, debugger
 | Legacy → configured migration; configured launch blocks database/key/service creation       | #311             | Unit custody/state-machine tests, crash matrix, Electron restart E2E    |
 | Manual, idle, suspend, screen-lock, user-switch, optional hidden triggers                   | #311             | Injected lifecycle adapter tests plus packaged-app manual script        |
 | IPC, protocol, menu, shortcut, deep-link, export, backup, restore, cache bypass matrix      | #311             | Table-driven main-process tests and Electron E2E                        |
-| Wrong-password authentication, 1–60s throttle, restart persistence, opaque errors           | #311             | Deterministic clock/KDF tests and UI stories                            |
+| Wrong-password authentication, persisted throttle/recovery state, opaque errors             | #311             | Deterministic clock/KDF tests and UI stories                            |
+| Three-attempt recovery transition; usability repair; hardened policy and migration          | #882             | Custody/throttle/Touch ID tests, settings stories, Electron restart E2E |
 | Change/remove/recovery/destructive-reset ceremonies; anchor rollback/downgrade/crash states | #311             | Unit fault matrix, fresh-profile recovery E2E, security review          |
 | Supported signed Touch ID opt-in/unlock and password fallback                               | #310             | Native adapter contract, deterministic fake, signed macOS owner test    |
 | Touch ID cancel/lockout/unavailable/enrollment change/unsigned build/revocation             | #310             | Adapter and packaging tests; no simulated success in unsupported builds |

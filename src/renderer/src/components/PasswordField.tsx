@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 
-import { Icon } from './Icon';
+import { Icon } from './Icon.js';
 
 import './controls.css';
 

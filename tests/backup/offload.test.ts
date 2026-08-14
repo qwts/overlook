@@ -11,6 +11,12 @@ import { buffer } from 'node:stream/consumers';
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, type BackupEngineDeps } from '../../src/main/backup/backup-engine.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
+import { CustodyAuthorityRepository } from '../../src/main/backup/custody-authority-repository.js';
+import { CustodyHandleResolver, custodyRemoteRoot } from '../../src/main/backup/custody-handle.js';
+import { CustodyGate, CustodyHintCoordinator } from '../../src/main/backup/custody-gate.js';
+import { ProviderRuntime } from '../../src/main/backup/provider-runtime.js';
+import { DeterministicICloudDriveBridge } from '../../src/main/backup/icloud-drive/deterministic-bridge.js';
+import type { LibraryEntry } from '../../src/shared/library/registry.js';
 import { OffloadService, RehydrateError } from '../../src/main/backup/offload.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -18,7 +24,14 @@ import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import type { EnvelopeKey } from '../../src/main/crypto/envelope.js';
+import type { SafeStorageLike } from '../../src/main/crypto/keystore.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
+
+const fakeSafeStorage: SafeStorageLike = {
+  isEncryptionAvailable: () => true,
+  encryptString: (plainText) => Buffer.from(plainText, 'utf8'),
+  decryptString: (encrypted) => encrypted.toString('utf8'),
+};
 
 // #107: originals live only in the cloud, safely, and come back when
 // needed — over the REAL store/ledger/provider, backed up by the REAL
@@ -63,6 +76,18 @@ async function world(count: number, providerConnected = true) {
   }
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-remote-')) });
   const ledger = new SyncLedger(db);
+  const authorities = new CustodyAuthorityRepository(db);
+  const remoteRoot = custodyRemoteRoot('01JZZZZZZZZZZZZZZZZZZZZZZZ');
+  const custody = new CustodyHandleResolver({
+    authorityForPhoto: (photoId) => authorities.forPhoto(photoId),
+    provider: (providerId) => (providerId === provider.id ? provider : undefined),
+    remoteRoot: () => remoteRoot,
+  });
+  const custodyHints: NonNullable<LibraryEntry['custodyHints']>[] = [];
+  const hintCoordinator = new CustodyHintCoordinator({
+    authorities,
+    write: (hints) => custodyHints.push(hints),
+  });
   const audits: string[] = [];
   const engineDeps: BackupEngineDeps = {
     provider,
@@ -89,6 +114,20 @@ async function world(count: number, providerConnected = true) {
   const service = new OffloadService({
     provider,
     providerConnected: () => providerConnected,
+    offloadAuthority: async (bytes) => {
+      const identity = await provider.accountIdentity();
+      const authority = authorities.create({
+        providerId: provider.id,
+        accountId: identity.accountId,
+        accountLabel: identity.accountLabel,
+        remoteRoot,
+        createdAt: '2026-07-13T03:00:00.000Z',
+      });
+      hintCoordinator.beforeBinding({ providerId: authority.providerId, accountId: authority.accountId }, bytes);
+      return authority.id;
+    },
+    custody,
+    custodyChanged: () => hintCoordinator.refresh(),
     ledger,
     repo: {
       get: (id) => repo.get(id),
@@ -111,6 +150,8 @@ async function world(count: number, providerConnected = true) {
     repo,
     store,
     provider,
+    authorities,
+    custodyHints,
     ledger,
     key,
     plaintexts,
@@ -128,6 +169,11 @@ describe('offload + rehydrate (#107)', () => {
     await w.engine.run();
     const photo = w.repo.get('P0');
     assert.notEqual(photo, undefined);
+    const deleteOriginal = w.store.deleteOriginal.bind(w.store);
+    w.store.deleteOriginal = async (hash) => {
+      assert.notEqual(w.authorities.forPhoto('P0'), undefined, 'the binding is durable before local deletion starts');
+      await deleteOriginal(hash);
+    };
 
     const summary = await w.service.offload(['P0']);
     assert.deepEqual({ offloaded: summary.offloaded, skipped: summary.skipped }, { offloaded: 1, skipped: 0 });
@@ -135,6 +181,10 @@ describe('offload + rehydrate (#107)', () => {
     assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'offloaded', reason: null }]);
     assert.equal(summary.freedBytes, photo?.bytes);
     assert.equal(w.ledger.status('P0'), 'offloaded');
+    assert.equal(w.authorities.forPhoto('P0')?.accountId, 'mock-account', 'sole-remote state records the verified account');
+    assert.deepEqual(w.custodyHints.at(-1), [
+      { providerId: 'mock', accountId: 'mock-account', soleCustodyItems: 1, soleCustodyBytes: photo?.bytes },
+    ]);
     assert.equal(w.store.hasOriginal(photo?.contentHash ?? ''), false, 'original evicted');
     // Thumbs stay: the grid keeps browsing offline (ADR-0007).
     const thumb = await buffer(w.store.getThumbStream(photo?.contentHash ?? '', 'thumb', () => w.key.key, 'P0'));
@@ -252,7 +302,16 @@ describe('offload + rehydrate (#107)', () => {
     ]);
     assert.equal(w.store.hasOriginal(failedHash ?? ''), true);
     assert.equal(w.ledger.status('P0'), 'synced');
+    assert.equal(w.authorities.forPhoto('P0'), undefined, 'a failed eviction rolls back its pending custody binding');
     assert.equal(w.ledger.status('P1'), 'offloaded');
+    assert.deepEqual(w.custodyHints.at(-1), [
+      {
+        providerId: 'mock',
+        accountId: 'mock-account',
+        soleCustodyItems: 1,
+        soleCustodyBytes: w.repo.get('P1')?.bytes,
+      },
+    ]);
   });
 
   test('EXIT CRITERIA: rehydrate restores byte-identical, verifies, and flips synced', async () => {
@@ -266,9 +325,60 @@ describe('offload + rehydrate (#107)', () => {
     assert.equal(w.ledger.status('P0'), 'synced');
     const restored = await buffer(w.store.getStream(photo?.contentHash ?? '', () => w.key.key, 'P0'));
     assert.deepEqual(restored, w.plaintexts.get('P0'), 'plaintext round-trips through the cloud');
+    assert.deepEqual(w.custodyHints.at(-1), [], 'verified local recovery clears the sealed-library stake');
     assert.ok(w.audits.some((line) => line.startsWith('REHYDRATE-OK photo=P0')));
     assert.deepEqual(w.changed.at(-1), [{ id: 'P0', syncState: 'synced' }]);
     assert.equal(w.storageChanges(), 2, 'standalone rehydrate refreshes immediately after offload');
+  });
+
+  test('a real offload blocks disconnect until verified local restoration reaches zero (#732)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    assert.equal((await w.service.offload(['P0'])).offloaded, 1);
+    const activeLibrary = { id: '01JZZZZZZZZZZZZZZZZZZZZZZZ', name: 'Active' };
+    const gate = new CustodyGate({ authorities: w.authorities, activeLibrary: () => activeLibrary, libraries: () => [] });
+    let providerId: string | null = 'mock';
+    const dataDir = mkdtempSync(join(tmpdir(), 'overlook-provider-gate-'));
+    const runtime = new ProviderRuntime({
+      dataDir: () => dataDir,
+      safeStorage: () => fakeSafeStorage,
+      openExternal: () => Promise.resolve(),
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      providerId: () => providerId,
+      isPackaged: false,
+      harnessEnv: (name) => (name === 'OVERLOOK_E2E' ? '1' : undefined),
+      pcloudEnabled: false,
+      pcloudClientId: () => null,
+      iCloudDriveBridge: new DeterministicICloudDriveBridge(),
+      custodyPreflight: (credential) => gate.preflight(credential),
+    });
+    runtime.buildProvider({ mockRootDir: mkdtempSync(join(tmpdir(), 'overlook-runtime-gate-')), fault: undefined });
+
+    const blocked = await runtime.disconnect('mock');
+    assert.equal(blocked.code, 'custody-restore-required');
+    assert.equal(blocked.custody?.totalItems, 1);
+    assert.equal(providerId, 'mock');
+
+    assert.equal((await w.service.restoreOriginals()).restored, 1);
+    assert.deepEqual(await runtime.disconnect('mock'), { ok: true, reason: null });
+    assert.equal(providerId, null);
+  });
+
+  test('provider-required authority refuses a new binding without aborting the batch (#732)', async () => {
+    const w = await world(2);
+    await w.engine.run();
+    assert.equal((await w.service.offload(['P0'])).offloaded, 1);
+    const authority = w.authorities.forPhoto('P0');
+    assert.ok(authority);
+    run(w.db, `UPDATE custody_authorities SET state = 'provider-required' WHERE id = ?`, authority.id);
+
+    assert.deepEqual((await w.service.offload(['P1'])).results, [{ photoId: 'P1', outcome: 'failed', reason: 'remote-unverified' }]);
+    assert.equal(w.ledger.status('P1'), 'synced');
+    assert.deepEqual(w.custodyHints.at(-1), [
+      { providerId: 'mock', accountId: 'mock-account', soleCustodyItems: 1, soleCustodyBytes: w.repo.get('P0')?.bytes },
+    ]);
   });
 
   test('a corrupt download never publishes: record stays cleanly offloaded', async () => {
@@ -337,7 +447,26 @@ describe('offload + rehydrate (#107)', () => {
     await w.service.offload(['P0']);
     w.provider.setConnected(false);
     const summary = await w.service.restoreOriginals(['P0']);
-    assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'failed', reason: 'provider-disconnected' }]);
+    assert.deepEqual(summary.results, [{ photoId: 'P0', outcome: 'failed', reason: 'custody-disconnected' }]);
+    assert.equal(w.ledger.status('P0'), 'offloaded');
+  });
+
+  test('a different account receives no restore read for a bound row (#731)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    await w.service.offload(['P0']);
+    let reads = 0;
+    const getStream = w.provider.getStream.bind(w.provider);
+    w.provider.getStream = (path) => {
+      reads += 1;
+      return getStream(path);
+    };
+    w.provider.setAccountIdentity({ accountId: 'different-account', accountLabel: 'other@example.test' });
+
+    assert.deepEqual((await w.service.restoreOriginals(['P0'])).results, [
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-wrong-account' },
+    ]);
+    assert.equal(reads, 0);
     assert.equal(w.ledger.status('P0'), 'offloaded');
   });
 
@@ -347,7 +476,7 @@ describe('offload + rehydrate (#107)', () => {
     await expired.service.offload(['P0']);
     expired.provider.authState = () => Promise.resolve('expired');
     assert.deepEqual((await expired.service.restoreOriginals(['P0'])).results, [
-      { photoId: 'P0', outcome: 'failed', reason: 'provider-expired' },
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-unavailable' },
     ]);
     assert.equal(expired.ledger.status('P0'), 'offloaded');
 
@@ -356,7 +485,7 @@ describe('offload + rehydrate (#107)', () => {
     await offline.service.offload(['P0']);
     offline.provider.authState = () => Promise.reject(new Error('offline'));
     assert.deepEqual((await offline.service.restoreOriginals(['P0'])).results, [
-      { photoId: 'P0', outcome: 'failed', reason: 'provider-offline' },
+      { photoId: 'P0', outcome: 'failed', reason: 'custody-unavailable' },
     ]);
     assert.equal(offline.ledger.status('P0'), 'offloaded');
   });

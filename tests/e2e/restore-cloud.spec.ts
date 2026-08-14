@@ -137,13 +137,17 @@ test('fresh profile restores complete state; wrong password is isolated and canc
     await page.getByLabel('Recovery-key password').fill(PASSWORD);
     await page.getByRole('button', { name: 'Discover backups' }).click();
     await expect(page.getByTestId('restore-library-card')).toContainText(`${String(PHOTO_COUNT)} photos`);
-    await page.getByRole('button', { name: 'Review restore' }).click();
+    await page.getByRole('button', { name: 'Verify backup' }).click();
+    await expect(page.getByRole('button', { name: `Restore ${String(PHOTO_COUNT)} photos` })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('restore-verify')).toHaveCount(0);
     await page.getByRole('button', { name: `Restore ${String(PHOTO_COUNT)} photos` }).click();
     await expect(page.getByRole('button', { name: 'Cancel and keep staged progress' })).toBeVisible();
     await page.evaluate(() => (globalThis as unknown as { overlook: OverlookApi }).overlook.restore.cancel({}));
     await expect(page.getByRole('alert')).toContainText('Restore paused');
     expect(existsSync(join(target, 'library', 'library.db'))).toBe(false);
 
+    await page.getByRole('button', { name: 'Verify backup' }).click();
+    await expect(page.getByRole('button', { name: `Restore ${String(PHOTO_COUNT)} photos` })).toBeVisible({ timeout: 15000 });
     await page.getByRole('button', { name: `Restore ${String(PHOTO_COUNT)} photos` }).click();
     await expect.poll(() => existsSync(join(target, 'library', 'library.db')), { timeout: 30_000 }).toBe(true);
   } finally {
@@ -204,7 +208,14 @@ test('corrupt newest manifest falls back and reports the rejected generation (#2
         const discovered = await api.restore.discover({ providerId: 'mock', keyPath: recoveryKeyPath, password });
         const library = discovered.libraries.find((candidate) => candidate.validation === 'valid');
         if (discovered.sessionId === null || library === undefined) return { discovery: discovered, restored: null };
-        const restored = await api.restore.run({ sessionId: discovered.sessionId, libraryId: library.libraryId, allowReplace: false });
+        const verified = await api.restore.verify({ sessionId: discovered.sessionId, libraryId: library.libraryId });
+        if (verified.result === null) return { discovery: discovered, restored: verified };
+        const restored = await api.restore.run({
+          sessionId: discovered.sessionId,
+          libraryId: library.libraryId,
+          verificationId: verified.result.verificationId,
+          allowReplace: false,
+        });
         return { discovery: discovered, restored };
       },
       { recoveryKeyPath: keyPath, password: PASSWORD },
@@ -220,7 +231,7 @@ test('corrupt newest manifest falls back and reports the rejected generation (#2
   }
 });
 
-test('corrupt only-generation blob fails without publishing a library (#291)', async () => {
+test('corrupt only-generation blob partial-restores and reports the NOT FOUND object (#291/#915)', async () => {
   const source = mkE2eTmpDir('overlook-e2e-corrupt-source-');
   const target = mkE2eTmpDir('overlook-e2e-corrupt-target-');
   const keyPath = join(mkE2eTmpDir('overlook-e2e-corrupt-key-'), 'overlook-recovery.key');
@@ -240,17 +251,30 @@ test('corrupt only-generation blob fails without publishing a library (#291)', a
         if (discovered.error !== null || discovered.sessionId === null) return { discoveryError: discovered.error, run: null };
         const library = discovered.libraries.find((candidate) => candidate.validation === 'valid');
         if (library === undefined) return { discoveryError: { reason: 'corrupt', message: 'no valid library' }, run: null };
+        const verified = await api.restore.verify({ sessionId: discovered.sessionId, libraryId: library.libraryId });
+        if (verified.result === null) return { discoveryError: verified.error, run: null };
         return {
           discoveryError: null,
-          run: await api.restore.run({ sessionId: discovered.sessionId, libraryId: library.libraryId, allowReplace: false }),
+          run: await api.restore.run({
+            sessionId: discovered.sessionId,
+            libraryId: library.libraryId,
+            verificationId: verified.result.verificationId,
+            allowReplace: false,
+          }),
         };
       },
       { recoveryKeyPath: keyPath, password: PASSWORD },
     );
+    // #915: with no complete retained generation, the restore recovers what
+    // verifies and reports the unverifiable object instead of failing whole.
     expect(response.discoveryError).toBeNull();
-    expect(response.run?.result).toBeNull();
-    expect(response.run?.error).toMatchObject({ reason: 'corrupt' });
-    expect(existsSync(join(target, 'library', 'library.db'))).toBe(false);
+    expect(response.run?.error).toBeNull();
+    expect(response.run?.result).toMatchObject({
+      photos: 1,
+      missing: [{ kind: 'original', reason: 'failed-verification', path: `blobs/${firstHash?.slice(0, 2) ?? ''}/${firstHash ?? ''}` }],
+    });
+    expect(existsSync(join(target, 'library', 'library.db'))).toBe(true);
+    expect(existsSync(join(target, 'library', 'restore-report.json'))).toBe(true);
   } finally {
     await app.close();
   }
@@ -292,7 +316,14 @@ test('activation failure rolls the existing library back through the full restor
         const discovered = await api.restore.discover({ providerId: 'mock', keyPath: recoveryKeyPath, password });
         const library = discovered.libraries.find((candidate) => candidate.validation === 'valid');
         if (discovered.sessionId === null || library === undefined) return null;
-        return api.restore.run({ sessionId: discovered.sessionId, libraryId: library.libraryId, allowReplace: true });
+        const verified = await api.restore.verify({ sessionId: discovered.sessionId, libraryId: library.libraryId });
+        if (verified.result === null) return verified;
+        return api.restore.run({
+          sessionId: discovered.sessionId,
+          libraryId: library.libraryId,
+          verificationId: verified.result.verificationId,
+          allowReplace: true,
+        });
       },
       { recoveryKeyPath: keyPath, password: PASSWORD },
     );

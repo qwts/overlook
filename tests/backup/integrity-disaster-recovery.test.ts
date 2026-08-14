@@ -74,6 +74,8 @@ test('repaired bootstrap and manifest restore the complete library into a fresh 
     const scrubber = createBackupIntegrityRuntime({
       db,
       provider,
+      authorities: { offloadedAuthorities: () => [], legacyUnboundCount: () => ({ items: 0, bytes: 0 }) },
+      custody: { resolveAuthority: () => Promise.reject(new Error('no offloaded authority')) },
       repo,
       blobs: store,
       resolveKey: keyStore.resolver(),
@@ -130,7 +132,7 @@ test('repaired bootstrap and manifest restore the complete library into a fresh 
       }),
       events: { progress: () => undefined },
     }).run({ masterKey, allowReplace: false });
-    assert.deepEqual(restored, { libraryId: LIBRARY_ID, generation: 3, photos: 1, resumed: false });
+    assert.deepEqual(restored, { libraryId: LIBRARY_ID, generation: 3, photos: 1, resumed: false, missing: [] });
 
     const restoredKeys = KeyStore.open({ safeStorage, dataDir: targetDir });
     const restoredDbKey = restoredKeys.resolver()(1);

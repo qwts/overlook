@@ -9,7 +9,13 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
-import { ExportEngine, ExportPreflightError, writeFileCleanly, type ExportEngineDeps } from '../../src/main/export/export-engine.js';
+import {
+  authoredMetadataXmp,
+  ExportEngine,
+  ExportPreflightError,
+  writeFileCleanly,
+  type ExportEngineDeps,
+} from '../../src/main/export/export-engine.js';
 import { transcodeToJpeg } from '../../src/main/export/transcode.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import type { EnvelopeKey } from '../../src/main/crypto/envelope.js';
@@ -54,6 +60,13 @@ function fullRow(
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState: 'local',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 
@@ -222,6 +235,38 @@ describe('export engine (#97)', () => {
     const world = await seededWorld(1);
     const summary = await world.engine.exportPhotos(['GHOST', ...world.rows.keys()], world.destination);
     assert.deepEqual({ exported: summary.exported, failed: summary.failed }, { exported: 1, failed: 1 });
+    assert.deepEqual(summary.failures, [{ photoId: 'GHOST', fileName: 'GHOST', reason: 'photo GHOST is not in the library' }]);
+  });
+
+  test('metadata export writes authored XMP by choice or omits all sidecars for privacy (#508)', async () => {
+    const authored = await seededWorld(1);
+    const current = authored.rows.get('PHOTO0');
+    assert.notEqual(current, undefined);
+    if (current !== undefined) {
+      authored.rows.set(current.id, {
+        ...current,
+        title: 'Night & light',
+        description: 'A <private> note',
+        tags: ['Portfolio', 'Travel'],
+      });
+    }
+    const summary = await authored.engine.exportPhotos(['PHOTO0'], authored.destination, undefined, 'original', 'overlook');
+    assert.deepEqual(summary.files[0]?.sidecarNames, ['IMG_4021.xmp']);
+    const xmp = readFileSync(join(authored.destination, 'IMG_4021.xmp'), 'utf8');
+    assert.match(xmp, /Night &amp; light/u);
+    assert.match(xmp, /A &lt;private&gt; note/u);
+    assert.match(xmp, /<rdf:li>Portfolio<\/rdf:li>/u);
+    assert.deepEqual(authoredMetadataXmp(authored.rows.get('PHOTO0')!), Buffer.from(xmp));
+
+    const privateExport = await seededWorld(1);
+    const engine = new ExportEngine({
+      ...privateExport.deps,
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 12 }],
+      sidecarStream: () => Readable.from(['source sidecar']),
+    });
+    const privateSummary = await engine.exportPhotos(['PHOTO0'], privateExport.destination, undefined, 'original', 'none');
+    assert.deepEqual(privateSummary.files[0]?.sidecarNames, []);
+    assert.deepEqual(readdirSync(privateExport.destination), ['IMG_4021.JPG']);
   });
 });
 

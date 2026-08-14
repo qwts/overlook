@@ -10,6 +10,8 @@ import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/Switch';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { CopyableValue } from '../components/CopyableValue';
+import { PhotoKitImportSource, type PhotoKitState } from './PhotoKitImportSource.js';
 
 import './import.css';
 
@@ -36,6 +38,7 @@ const messages = defineMessages({
     id: 'import.move.complete',
     defaultMessage: '{moved} moved · {retained} retained after encrypted custody verification.',
   },
+  copySourcePath: { id: 'import.copy.sourcePath', defaultMessage: 'import source path' },
 });
 
 // ImportDialog (#88, sources reworked by #237): the design's 440px import
@@ -45,7 +48,7 @@ const messages = defineMessages({
 // Move through the verified per-file cleanup path, with a fresh confirmation
 // every time; Google Drive remains Copy-only (#489).
 
-export type ImportSourceKind = 'sd' | 'folder' | 'drop' | 'google-drive';
+export type ImportSourceKind = 'sd' | 'folder' | 'drop' | 'google-drive' | 'apple-photos';
 
 interface ScanSummary {
   readonly total: number;
@@ -53,11 +56,23 @@ interface ScanSummary {
   readonly newBytes: number;
   readonly newRaw: number;
   readonly newJpg: number;
+  /** Companion sidecars attached to NEW media (#484). */
+  readonly newSidecars: number;
+  /** Allowlisted companions matching no media — reported, never dropped. */
+  readonly unmatchedCompanions: number;
 }
 
 /** Natural-case source text; mono-data applies the visual uppercase treatment. */
 function summaryDetail(summary: ScanSummary, formatCount: (value: number) => string, formatBytes: (bytes: number) => string): string {
-  return `${formatCount(summary.newCount)} new · ${formatBytes(summary.newBytes)} · ${formatCount(summary.newRaw)} RAW / ${formatCount(summary.newJpg)} JPG`;
+  const base = `${formatCount(summary.newCount)} new · ${formatBytes(summary.newBytes)} · ${formatCount(summary.newRaw)} RAW / ${formatCount(summary.newJpg)} JPG`;
+  return summary.newSidecars > 0 ? `${base} · ${formatCount(summary.newSidecars)} sidecar${summary.newSidecars === 1 ? '' : 's'}` : base;
+}
+
+/** Honest companion reporting (#484): allowlisted sidecars whose stem matched
+ * no media are named in the card, never silently discarded. */
+function unmatchedCompanionNote(summary: ScanSummary, formatCount: (value: number) => string): string | null {
+  if (summary.unmatchedCompanions === 0) return null;
+  return `${formatCount(summary.unmatchedCompanions)} sidecar file${summary.unmatchedCompanions === 1 ? '' : 's'} without a matching photo skipped`;
 }
 
 type SdState =
@@ -129,6 +144,8 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
   const [folder, setFolder] = useState<FolderState>({ status: 'empty' });
   const [drop, setDrop] = useState<DropState>({ status: 'scanning' });
   const [googleDrive, setGoogleDrive] = useState<GoogleDriveState>({ status: 'empty' });
+  const [photoKit, setPhotoKit] = useState<PhotoKitState>({ status: 'empty' });
+  const [photoKitSelection, setPhotoKitSelection] = useState<ReadonlySet<string>>(() => new Set());
   const googlePickRequestRef = useRef(0);
   // A drop can land while the dialog is already open (toolbar-opened, or a
   // second drop): re-select the Dropped segment so the footer imports what
@@ -205,7 +222,10 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
       })
       .catch(() => {
         if (!stale) {
-          setDrop({ status: 'ready', summary: { total: 0, newCount: 0, newBytes: 0, newRaw: 0, newJpg: 0 } });
+          setDrop({
+            status: 'ready',
+            summary: { total: 0, newCount: 0, newBytes: 0, newRaw: 0, newJpg: 0, newSidecars: 0, unmatchedCompanions: 0 },
+          });
         }
       });
     return () => {
@@ -260,6 +280,28 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
       });
   };
 
+  const chooseApplePhotos = (): void => {
+    setPhotoKit({ status: 'loading' });
+    setPhotoKitSelection(new Set());
+    void window.overlook.photoKit
+      .reviewImport()
+      .then((result) => {
+        if (result.status === 'ready' && result.reviewId !== null) {
+          setPhotoKit({
+            status: 'ready',
+            reviewId: result.reviewId,
+            authorization: result.authorization === 'limited' ? 'limited' : 'authorized',
+            assets: result.assets,
+          });
+        } else {
+          setPhotoKit({ status: 'error', reason: result.status === 'ready' ? 'cancelled' : result.status });
+        }
+      })
+      .catch(() => {
+        setPhotoKit({ status: 'error', reason: 'unavailable' });
+      });
+  };
+
   useEffect(
     () => () => {
       googlePickRequestRef.current += 1;
@@ -272,6 +314,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
     if (!open) {
       googlePickRequestRef.current += 1;
       void window.overlook.import.cancelGoogleDrivePick().catch(() => undefined);
+      void window.overlook.photoKit.cancel().catch(() => undefined);
     }
   }, [open]);
 
@@ -286,6 +329,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
   const [copyBar, setCopyBar] = useState<Bar>({ done: 0, total: 0 });
   const [thumbBar, setThumbBar] = useState<Bar>({ done: 0, total: 0 });
   const [imported, setImported] = useState(0);
+  const [sidecars, setSidecars] = useState(0);
   const [moved, setMoved] = useState(0);
   const [retained, setRetained] = useState(0);
   const [duplicates, setDuplicates] = useState(0);
@@ -318,7 +362,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
     if (phase !== 'running' || copyQuarter < 0 || announcedCopyQuarter.current === copyQuarter) return;
     announcedCopyQuarter.current = copyQuarter;
     announce(
-      `${source !== 'google-drive' && mode === 'move' ? 'Moving and encrypting' : 'Copying and encrypting'}: ${formatCount(copyBar.done)} of ${formatCount(copyBar.total)}`,
+      `${source !== 'google-drive' && source !== 'apple-photos' && mode === 'move' ? 'Moving and encrypting' : 'Copying and encrypting'}: ${formatCount(copyBar.done)} of ${formatCount(copyBar.total)}`,
       'polite',
       'import-copy-progress',
     );
@@ -352,31 +396,44 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
   }
 
   const usingSd = source === 'sd';
-  const moveAllowed = source !== 'google-drive';
+  const moveAllowed = source !== 'google-drive' && source !== 'apple-photos';
   const importMode = moveAllowed ? mode : 'copy';
   const moveReady = importMode !== 'move' || moveConfirmed;
   const activeSummary =
-    source === 'google-drive'
-      ? googleDrive.status === 'ready'
-        ? googleDrive.summary
+    source === 'apple-photos'
+      ? photoKit.status === 'ready'
+        ? {
+            total: photoKit.assets.length,
+            newCount: photoKitSelection.size,
+            newBytes: 0,
+            newRaw: 0,
+            newJpg: 0,
+            newSidecars: 0,
+            unmatchedCompanions: 0,
+          }
         : null
-      : source === 'drop'
-        ? drop.status === 'ready'
-          ? drop.summary
+      : source === 'google-drive'
+        ? googleDrive.status === 'ready'
+          ? googleDrive.summary
           : null
-        : source === 'sd'
-          ? sd.status === 'ready'
-            ? sd.summary
+        : source === 'drop'
+          ? drop.status === 'ready'
+            ? drop.summary
             : null
-          : folder.status === 'ready'
-            ? folder.summary
-            : null;
+          : source === 'sd'
+            ? sd.status === 'ready'
+              ? sd.summary
+              : null
+            : folder.status === 'ready'
+              ? folder.summary
+              : null;
   const total = activeSummary?.newCount ?? 0;
   const available = activeSummary !== null && total > 0;
 
   const close = (showRecent: boolean): void => {
     googlePickRequestRef.current += 1;
     void window.overlook.import.cancelGoogleDrivePick().catch(() => undefined);
+    void window.overlook.photoKit.cancel().catch(() => undefined);
     if (cleanCount !== null) {
       onComplete?.(cleanCount); // the modal is gone — the toast is visible
     }
@@ -391,19 +448,24 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
     setCopyBar({ done: 0, total });
     setThumbBar({ done: 0, total });
     const run =
-      source === 'google-drive'
-        ? googleDrive.status === 'ready'
-          ? window.overlook.import.runGoogleDrive({ selectionId: googleDrive.selectionId })
-          : Promise.reject(new Error('Google Drive selection is unavailable'))
-        : source === 'drop'
-          ? window.overlook.import.run({ files: [...(dropped ?? [])], mode: importMode })
-          : window.overlook.import.run({
-              path: source === 'sd' ? (sd.status === 'ready' ? sd.path : '') : folder.status === 'ready' ? folder.path : '',
-              mode: importMode,
-            });
+      source === 'apple-photos'
+        ? photoKit.status === 'ready'
+          ? window.overlook.photoKit.import({ reviewId: photoKit.reviewId, assetIds: [...photoKitSelection] })
+          : Promise.reject(new Error('Apple Photos review is unavailable'))
+        : source === 'google-drive'
+          ? googleDrive.status === 'ready'
+            ? window.overlook.import.runGoogleDrive({ selectionId: googleDrive.selectionId })
+            : Promise.reject(new Error('Google Drive selection is unavailable'))
+          : source === 'drop'
+            ? window.overlook.import.run({ files: [...(dropped ?? [])], mode: importMode })
+            : window.overlook.import.run({
+                path: source === 'sd' ? (sd.status === 'ready' ? sd.path : '') : folder.status === 'ready' ? folder.path : '',
+                mode: importMode,
+              });
     void run
       .then((summary) => {
         setImported(summary.imported);
+        setSidecars(summary.sidecars);
         setMoved(summary.moved);
         setRetained(summary.retained);
         setDuplicates(summary.duplicates);
@@ -469,7 +531,8 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
               // Cancel semantics (#88): the engine finishes the file in
               // flight and keeps everything completed; the run's own
               // resolution moves us to the done summary.
-              void window.overlook.import.cancel({});
+              if (source === 'apple-photos') void window.overlook.photoKit.cancel();
+              else void window.overlook.import.cancel({});
             }}
           >
             Cancel
@@ -502,10 +565,25 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                 { value: 'sd' as const, icon: 'hard-drive' as const, label: 'SD card' },
                 { value: 'folder' as const, icon: 'folder' as const, label: 'Local folder' },
                 { value: 'google-drive' as const, icon: 'cloud' as const, label: 'Google Drive' },
+                { value: 'apple-photos' as const, icon: 'image' as const, label: 'Apple Photos' },
               ]}
             />
           </div>
-          {source === 'google-drive' ? (
+          {source === 'apple-photos' ? (
+            <PhotoKitImportSource
+              state={photoKit}
+              selection={photoKitSelection}
+              onChoose={chooseApplePhotos}
+              onToggle={(assetId, checked) => {
+                setPhotoKitSelection((current) => {
+                  const next = new Set(current);
+                  if (checked) next.add(assetId);
+                  else next.delete(assetId);
+                  return next;
+                });
+              }}
+            />
+          ) : source === 'google-drive' ? (
             googleDrive.status === 'ready' ? (
               <div className="ovl-import__card" data-testid="import-source-card">
                 <Icon name="cloud" size={16} color="var(--accent-cyan)" />
@@ -558,6 +636,11 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                     {formatCount(drop.summary.newCount)} photo{drop.summary.newCount === 1 ? '' : 's'} ready to import
                   </div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(drop.summary, formatCount, formatBytes)}</div>
+                  {unmatchedCompanionNote(drop.summary, formatCount) === null ? null : (
+                    <div className="ovl-import__cardMeta mono-data" data-testid="import-unmatched-companions">
+                      {unmatchedCompanionNote(drop.summary, formatCount)}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -575,6 +658,9 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                 <div className="ovl-import__cardText">
                   <div className="ovl-import__cardTitle">{sd.label}</div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(sd.summary, formatCount, formatBytes)}</div>
+                  {unmatchedCompanionNote(sd.summary, formatCount) === null ? null : (
+                    <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(sd.summary, formatCount)}</div>
+                  )}
                 </div>
               </div>
             ) : sd.status === 'scanning' ? (
@@ -608,10 +694,18 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
             <div className="ovl-import__card" data-testid="import-source-card">
               <Icon name="folder" size={16} color="var(--accent-cyan)" />
               <div className="ovl-import__cardText">
-                <div className="ovl-import__cardPath mono-data">{folder.path}</div>
+                <CopyableValue
+                  value={folder.path}
+                  label={intl.formatMessage(messages.copySourcePath)}
+                  className="ovl-import__cardPathValue"
+                  textClassName="ovl-import__cardPath"
+                />
                 <div className="ovl-import__cardMeta mono-data">
                   {folder.status === 'ready' ? summaryDetail(folder.summary, formatCount, formatBytes) : 'Scanning…'}
                 </div>
+                {folder.status === 'ready' && unmatchedCompanionNote(folder.summary, formatCount) !== null ? (
+                  <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(folder.summary, formatCount)}</div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -695,6 +789,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   ? 'Import failed — nothing was deleted from the source. Check the source and try again.'
                   : `${[
                       `${formatCount(imported)} imported`,
+                      ...(sidecars > 0 ? [`${formatCount(sidecars)} sidecar${sidecars === 1 ? '' : 's'}`] : []),
                       ...(importMode === 'move' ? [`${formatCount(moved)} moved`, `${formatCount(retained)} retained`] : []),
                       ...(duplicates > 0 ? [`${formatCount(duplicates)} duplicate${duplicates === 1 ? '' : 's'}`] : []),
                       ...(failed > 0 ? [`${formatCount(failed)} failed`] : []),

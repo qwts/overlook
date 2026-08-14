@@ -8,6 +8,7 @@ import {
   scanFiles,
   scanSource,
   type ImportSource,
+  type ScannedFile,
   type SourceScanProgress,
   type SourceScanSummary,
 } from './source-scanner.js';
@@ -157,7 +158,14 @@ export class ImportService {
           () => undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         this.assertMoveOutsideLibrary(fresh, mode);
         const existing = files.length - fresh.length;
         const result = await this.engine.importFiles(fresh, mode, path, controller.signal);
@@ -185,7 +193,14 @@ export class ImportService {
           () => undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         this.assertMoveOutsideLibrary(fresh, mode);
         const existing = files.length - fresh.length;
         const result = await this.engine.importFiles(fresh, mode, 'dropped', controller.signal);
@@ -193,6 +208,74 @@ export class ImportService {
         if (summary.photoIds.length > 0) {
           this.events.imported(summary.photoIds);
         }
+        return summary;
+      } finally {
+        this.controller = null;
+      }
+    });
+  }
+
+  /** PhotoKit hands Overlook-owned plaintext staging to the ordinary
+   * journaled import path. Copy-only keeps the Apple Photos source intact;
+   * cleanupPath survives crashes until the journal finishes or resumes. */
+  async runPhotoKitFiles(
+    assets: readonly {
+      readonly path: string;
+      readonly createdAt: string | null;
+      readonly latitude: number | null;
+      readonly longitude: number | null;
+    }[],
+    cleanupPath: string,
+    onJournaled: () => void,
+    cleanupPreflightFailure: () => Promise<void>,
+  ): Promise<ImportSummary> {
+    return this.serialize(async () => {
+      const controller = new AbortController();
+      this.controller = controller;
+      try {
+        let files: readonly ScannedFile[];
+        try {
+          ({ files } = await this.scanners.files(
+            assets.map(({ path }) => path),
+            { hasContentHash: (hash) => this.repo.hasContentHash(hash) },
+            () => undefined,
+            controller.signal,
+          ));
+        } catch (error) {
+          await cleanupPreflightFailure().catch((cleanupError: unknown) => {
+            console.error('[overlook] PhotoKit preflight cleanup failed', cleanupError);
+          });
+          throw error;
+        }
+        const metadata = new Map(assets.map((asset) => [asset.path, asset]));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => {
+            const source = metadata.get(filePath);
+            const sourceMetadata = {
+              ...(source?.createdAt === null || source?.createdAt === undefined ? {} : { takenAt: source.createdAt }),
+              ...(source?.latitude === null || source?.latitude === undefined ? {} : { gpsLat: source.latitude }),
+              ...(source?.longitude === null || source?.longitude === undefined ? {} : { gpsLon: source.longitude }),
+            };
+            return {
+              path: filePath,
+              fileName,
+              kind,
+              ...(sidecars.length === 0 ? {} : { sidecars }),
+              ...(Object.keys(sourceMetadata).length === 0 ? {} : { sourceMetadata }),
+            };
+          });
+        const existing = files.length - fresh.length;
+        const scannedPaths = new Set(files.map((file) => file.path));
+        const unsupported = assets.filter((asset) => !scannedPaths.has(asset.path)).length;
+        const result = await this.engine.importFiles(fresh, 'copy', 'Apple Photos', controller.signal, cleanupPath, onJournaled);
+        const summary = {
+          ...result,
+          duplicates: result.duplicates + existing,
+          failed: result.failed + unsupported,
+          retained: result.retained + existing + unsupported,
+        };
+        if (summary.photoIds.length > 0) this.events.imported(summary.photoIds);
         return summary;
       } finally {
         this.controller = null;
@@ -273,7 +356,14 @@ export class ImportService {
           undefined,
           controller.signal,
         );
-        const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
+        const fresh = files
+          .filter((file) => file.isNew)
+          .map(({ path: filePath, fileName, kind, sidecars }) => ({
+            path: filePath,
+            fileName,
+            kind,
+            ...(sidecars.length === 0 ? {} : { sidecars }),
+          }));
         const summary = await this.engine.importFiles(fresh, 'copy', 'Google Drive', controller.signal, selection.rootPath ?? undefined);
         if (summary.photoIds.length > 0) this.events.imported(summary.photoIds);
         return summary;

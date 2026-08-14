@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   assertNoPendingRelocation,
   discardRelocation,
@@ -10,11 +12,14 @@ import {
   type RelocationDeps,
   type RelocationProbe,
 } from './relocation-engine.js';
+import { describeFolderNameObjection, objectToFolderName } from '../../shared/library/folder-name.js';
 import type { RelocationOutcome, RelocationMode, RelocationProgress, RelocationState } from '../../shared/library/relocation.js';
+import { hasAppLockCustody } from './relocation-verify.js';
 
 // Relocation runtime (#483, ADR-0022 §4): the IPC-facing wrapper around the
-// engine. Inactive libraries relocate directly; the ACTIVE library runs the
-// switch-shaped sequence (guards → teardown → relocate → reactivate), and
+// engine. Inactive libraries relocate directly unless app-lock custody requires
+// an authenticated open; the ACTIVE library runs the switch-shaped sequence
+// (guards → teardown → relocate → reactivate), and
 // reactivation happens whatever the move's outcome — on success the registry
 // points at the destination, on any refusal/failure it still points at the
 // source, so the same reopen lands on the right directory both ways.
@@ -87,6 +92,17 @@ export class RelocationRuntime {
     }
     const sourcePath = entry.path;
     const isActive = this.options.active.openLibraryId() === id;
+    // Inactive OVLK custody has no authenticated password authority in this
+    // process. Require the user to open and unlock it before allowing renderer-
+    // initiated relocation to move its custody or delete its source. An
+    // unreadable probe maps to the stable source-unreadable refusal, never an
+    // opaque IPC failure (ADR-0022 amendment, PR #853 review).
+    const custody = this.probeAppLockCustody(sourcePath);
+    if (!isActive && custody !== 'none') {
+      return custody === 'app-locked'
+        ? { ok: false, reason: 'app-locked', detail: 'open and unlock the library before moving it' }
+        : { ok: false, reason: 'source-unreadable', detail: `cannot read the library's custody files at ${sourcePath}` };
+    }
     if (isActive) {
       const lockState = this.options.active.lockState();
       if (lockState !== undefined && lockState !== 'unconfigured-unlocked' && lockState !== 'unlocked') {
@@ -141,6 +157,37 @@ export class RelocationRuntime {
     }
   }
 
+  /** Rename the library's folder in place (#686): parent fixed, new final
+   * path component. Validation is conservative and cross-platform (the disk
+   * roams); everything else — quiesce/reactivate for the active library,
+   * journaling, refusal vocabulary — is the move path with a sibling
+   * destination. Case-only renames are legal; a same-name rename refuses. */
+  async rename(id: string, newName: string): Promise<RelocationMoveOutcome> {
+    const objection = objectToFolderName(newName);
+    if (objection !== null) {
+      return { ok: false, reason: 'invalid-destination', detail: describeFolderNameObjection(objection) };
+    }
+    const entry = this.options.engineDeps.registry.get(id);
+    if (entry === undefined) {
+      return { ok: false, reason: 'io-error', detail: `library ${id} is not registered` };
+    }
+    const source = path.resolve(entry.path);
+    if (newName === path.basename(source)) {
+      return { ok: false, reason: 'invalid-destination', detail: 'the folder already has this name' };
+    }
+    return this.move(id, path.join(path.dirname(source), newName));
+  }
+
+  /** hasAppLockCustody reads master.key; ACLs or a flaky network volume can
+   * make that read throw — a designed refusal, not an opaque handler error. */
+  private probeAppLockCustody(dir: string): 'app-locked' | 'unreadable' | 'none' {
+    try {
+      return hasAppLockCustody(dir) ? 'app-locked' : 'none';
+    } catch {
+      return 'unreadable';
+    }
+  }
+
   /** Cancellation is honored at file boundaries and only ever before the
    * registry commit (ADR-0022 §4) — after it, the engine no longer checks. */
   cancel(id: string): boolean {
@@ -157,6 +204,15 @@ export class RelocationRuntime {
     const journal = this.options.engineDeps.journals.load(id);
     if (entry === undefined || journal === null) return { ok: false, reason: 'io-error', detail: `library ${id} has no resumable move` };
     const isActive = this.options.active.openLibraryId() === id;
+    if (!isActive) {
+      const custody = this.probeAppLockCustody(entry.path);
+      if (custody === 'app-locked') {
+        return { ok: false, reason: 'app-locked', detail: 'open and unlock the library before resuming its move' };
+      }
+      if (custody === 'unreadable') {
+        return { ok: false, reason: 'source-unreadable', detail: `cannot read the library's custody files at ${entry.path}` };
+      }
+    }
     if (isActive) {
       const lockState = this.options.active.lockState();
       if (lockState !== undefined && lockState !== 'unconfigured-unlocked' && lockState !== 'unlocked') {

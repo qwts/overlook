@@ -1,7 +1,8 @@
+/* eslint-disable max-lines -- central channel registry is intentionally large */
 import { z } from 'zod';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
-import { libraryDescriptorSchema, libraryIdSchema } from '../library/registry.js';
+import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
 import { mediaInfoSchema } from '../library/media-info.js';
 import {
   relocationFailureReasonSchema,
@@ -11,23 +12,40 @@ import {
 } from '../library/relocation.js';
 import {
   providerConnectionStatusSchema,
+  providerConnectResultSchema,
   providerDescriptorSchema,
   providerIdSchema,
   providerCapacityStatusSchema,
 } from '../backup/provider-descriptor.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
-import { restoreDiscoverResponseSchema, restoreProgressSchema, restoreRunResponseSchema } from '../backup/restore-contract.js';
-import { PHOTO_PURGE_AUTHORIZATION } from '../destructive-actions.js';
+import {
+  restoreDiscoverResponseSchema,
+  restoreProgressSchema,
+  restoreRunResponseSchema,
+  restoreStatusSchema,
+  restoreTrashRequestSchema,
+  restoreTrashResponseSchema,
+  restoreVerifyResponseSchema,
+} from '../backup/restore-contract.js';
+import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../destructive-actions.js';
 import { commandIdSchema, commandMenuContextSchema } from '../commands/menu-contract.js';
 import { activityPageRequestSchema, activityPageResponseSchema } from '../activity/schemas.js';
 import { historyExecuteRequestSchema, historyExecuteResponseSchema, historyStatusSchema } from '../history/schemas.js';
 import { inspectorWindowChannels, windowEvents } from '../inspector-window-contract.js';
 import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
+import * as librarySelection from './library-selection-channels.js';
+import { libraryQuerySchema } from './library-query-schemas.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
+import { favoriteChannels } from './favorite-channels.js';
+import { photoMetadataChannels } from './photo-metadata-channels.js';
+import { exportChannels } from './export-channels.js';
+import { nativeDragChannels } from './native-drag-channels.js';
+import { photoKitChannels, photoKitEvents } from './photo-kit-channels.js';
+import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -57,20 +75,25 @@ const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload
 
 const pageCursorSchema = z.object({ sortKey: z.union([z.string(), z.number()]), id: z.string() });
 
-const chipFiltersSchema = z.object({
-  favorites: z.boolean().optional(),
-  raw: z.boolean().optional(),
-  offloaded: z.boolean().optional(),
-  localOnly: z.boolean().optional(),
+const libraryChangedSchema = z.object({
+  photoIds: z.array(z.string()),
+  derivativeOnly: z.boolean().optional(),
+  membership: z.enum(['none', 'favorite', 'album', 'library']).optional(),
+  albumIds: z.array(z.string()).optional(),
 });
-
-const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'offloaded', 'deleted']);
 const appLockStateSchema = z.enum(['unconfigured-unlocked', 'locked', 'unlocking', 'unlocked', 'locking', 'recovery-required']);
 const appLockStatusSchema = z.object({
   state: appLockStateSchema,
   libraryId: z.string().nullable(),
   retryAfterMs: z.number().int().nonnegative(),
+  attemptsRemaining: z.number().int().min(0).max(3),
 });
+const appAuthorizationFailureReasonSchema = z.enum(['wrong-password', 'recovery-required', 'throttled', 'storage-unavailable']);
+const appSettingsMutationFields = {
+  reason: appAuthorizationFailureReasonSchema.nullable(),
+  retryAfterMs: z.number().int().nonnegative(),
+  attemptsRemaining: z.number().int().min(0).max(3),
+};
 const touchIdUnavailableReasonSchema = z.enum([
   'unsupported-platform',
   'unsigned-build',
@@ -99,6 +122,10 @@ const scanSummarySchema = z.object({
   newRaw: z.number().int().nonnegative(),
   newJpg: z.number().int().nonnegative(),
   newOther: z.number().int().nonnegative(),
+  /** Companion sidecars attached to NEW media (#484). */
+  newSidecars: z.number().int().nonnegative(),
+  /** Allowlisted companions matching no media — reported, never dropped. */
+  unmatchedCompanions: z.number().int().nonnegative(),
 });
 
 const googleDrivePickFailureSchema = z.enum([
@@ -117,6 +144,8 @@ const importRunSummarySchema = z.object({
   duplicates: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
+  /** Companion sidecars in verified encrypted custody (#484). */
+  sidecars: z.number().int().nonnegative(),
 });
 
 const syncStatusSchema = z.enum(['local', 'syncing', 'synced', 'offloaded', 'error']);
@@ -158,9 +187,9 @@ const offloadPreflightSchema = z.object({
 });
 const restoreOriginalFailureReasonSchema = z.enum([
   'not-offloaded',
-  'provider-disconnected',
-  'provider-expired',
-  'provider-offline',
+  'custody-disconnected',
+  'custody-wrong-account',
+  'custody-unavailable',
   'download-failed',
   'verify-failed',
 ]);
@@ -183,6 +212,13 @@ const photoRecordSchema = z.object({
   gpsLat: z.number().nullable(),
   gpsLon: z.number().nullable(),
   place: z.string().nullable(),
+  title: photoTitleSchema.nullable(),
+  description: photoDescriptionSchema.nullable(),
+  tags: photoTagsSchema.readonly(),
+  userTags: photoTagsSchema.readonly(),
+  importedKeywords: photoTagsSchema.readonly(),
+  suppressedKeywords: photoTagsSchema.readonly(),
+  metadataVersion: z.number().int().positive(),
   importedAt: z.string(),
   importSource: z.string(),
   favorite: z.boolean(),
@@ -209,6 +245,7 @@ export const channels = {
   ping: defineChannel('demo:ping', z.object({ message: z.string() }), z.object({ echoed: z.string() })),
   getPlatform: defineChannel('app:get-platform', z.object({}), z.object({ platform: z.string() })),
   getLocale: defineChannel('app:get-locale', z.object({}), z.object({ locale: z.string() })),
+  clipboardWrite: defineChannel('clipboard:write', z.object({ text: z.string().max(1_000_000) }), z.object({})),
   windowMinimize: defineChannel('window:minimize', z.object({}), z.object({})),
   windowToggleMaximize: defineChannel('window:toggle-maximize', z.object({}), z.object({ maximized: z.boolean() })),
   windowClose: defineChannel('window:close', z.object({}), z.object({})),
@@ -224,8 +261,9 @@ export const channels = {
     z.object({ password: z.string().min(1).max(1024) }),
     z.object({
       ok: z.boolean(),
-      reason: z.enum(['wrong-password', 'recovery-required', 'throttled']).nullable(),
+      reason: z.enum(['wrong-password', 'recovery-required', 'throttled', 'library-in-use', 'storage-unavailable']).nullable(),
       retryAfterMs: z.number().int().nonnegative(),
+      attemptsRemaining: z.number().int().min(0).max(3),
     }),
   ),
   appLockConfigure: defineChannel('app-lock:configure', z.object({ password: z.string().min(8).max(1024) }), appLockStatusSchema),
@@ -233,9 +271,27 @@ export const channels = {
   appLockChangePassword: defineChannel(
     'app-lock:change-password',
     z.object({ currentPassword: z.string().min(1).max(1024), nextPassword: z.string().min(8).max(1024) }),
-    z.object({ changed: z.boolean() }),
+    z.object({ changed: z.boolean(), ...appSettingsMutationFields }),
   ),
-  appLockRemove: defineChannel('app-lock:remove', z.object({ password: z.string().min(1).max(1024) }), z.object({ removed: z.boolean() })),
+  appLockAnchorPolicyStatus: defineChannel(
+    'app-lock:anchor-policy-status',
+    z.object({}),
+    z.object({ policy: z.enum(['usability', 'hardened']) }),
+  ),
+  appLockSetAnchorPolicy: defineChannel(
+    'app-lock:set-anchor-policy',
+    z.object({
+      password: z.string().min(1).max(1024),
+      policy: z.enum(['usability', 'hardened']),
+      confirmedExport: z.boolean(),
+    }),
+    z.object({ changed: z.boolean(), ...appSettingsMutationFields }),
+  ),
+  appLockRemove: defineChannel(
+    'app-lock:remove',
+    z.object({ password: z.string().min(1).max(1024) }),
+    z.object({ removed: z.boolean(), ...appSettingsMutationFields }),
+  ),
   ...interopChannels,
   appLockPickRecovery: defineChannel('app-lock:pick-recovery', z.object({}), z.object({ path: z.string().nullable() })),
   appLockRecover: defineChannel(
@@ -253,7 +309,9 @@ export const channels = {
     z.object({ password: z.string().min(1).max(1024) }),
     z.object({
       enabled: z.boolean(),
-      reason: z.union([touchIdUnavailableReasonSchema, z.enum(['wrong-password', 'recovery-required'])]).nullable(),
+      reason: z.union([touchIdUnavailableReasonSchema, z.enum(['wrong-password', 'recovery-required', 'throttled'])]).nullable(),
+      retryAfterMs: z.number().int().nonnegative(),
+      attemptsRemaining: z.number().int().min(0).max(3),
     }),
   ),
   appLockTouchIdDisable: defineChannel('app-lock:touch-id-disable', z.object({}), z.object({ disabled: z.boolean() })),
@@ -263,26 +321,35 @@ export const channels = {
     z.object({
       ok: z.boolean(),
       reason: z
-        .enum(['not-enabled', 'cancelled', 'failed', 'locked-out', 'unavailable', 'enrollment-changed', 'recovery-required'])
+        .enum([
+          'not-enabled',
+          'cancelled',
+          'failed',
+          'locked-out',
+          'unavailable',
+          'enrollment-changed',
+          'recovery-required',
+          'library-in-use',
+        ])
         .nullable(),
+      retryAfterMs: z.number().int().nonnegative(),
+      attemptsRemaining: z.number().int().min(0).max(3),
     }),
   ),
   // Library contract (#71) — the renderer's typed window into the library.
   libraryPage: defineChannel(
     'library:page',
-    z.object({
-      source: sourceFilterSchema,
+    libraryQuerySchema.extend({
       limit: z.number().int().positive().max(500),
       cursor: pageCursorSchema.optional(),
-      recentSince: z.string().optional(),
-      query: z.string().optional(),
-      chips: chipFiltersSchema.optional(),
-      order: z.enum(['date', 'name', 'size']).optional(),
-      albumId: z.string().optional(),
     }),
     z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
   ),
+  ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
+  ...photoMetadataChannels,
+  ...nativeDragChannels,
+  ...photoKitChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({
@@ -292,11 +359,7 @@ export const channels = {
     }),
     z.object({ repaired: z.boolean(), pendingCount: z.number().int().nonnegative() }),
   ),
-  libraryToggleFavorite: defineChannel(
-    'library:toggle-favorite',
-    z.object({ id: z.string() }),
-    z.object({ favorite: z.boolean(), pendingCount: z.number().int().nonnegative() }),
-  ),
+  ...favoriteChannels,
   ...originalPolicy.originalPolicyChannels,
   libraryCounts: defineChannel(
     'library:counts',
@@ -556,23 +619,39 @@ export const channels = {
   ),
   restoreRun: defineChannel(
     'restore:run',
-    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), allowReplace: z.boolean() }),
+    z.object({
+      sessionId: z.string().min(1),
+      libraryId: z.string().min(1),
+      verificationId: z.string().min(1),
+      allowReplace: z.boolean(),
+    }),
     restoreRunResponseSchema,
   ),
-  restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
-  // Export engine (#97): decrypt-on-export to a chosen folder.
-  exportPickDestination: defineChannel('export:pick-destination', z.object({}), z.object({ path: z.string().nullable() })),
-  exportRun: defineChannel(
-    'export:run',
-    z.object({ photoIds: z.array(z.string()).min(1), destination: z.string(), format: z.enum(['original', 'jpeg']).optional() }),
+  restoreVerify: defineChannel(
+    'restore:verify',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1) }),
+    restoreVerifyResponseSchema,
+  ),
+  restoreTrash: defineChannel('restore:trash', restoreTrashRequestSchema, restoreTrashResponseSchema),
+  restoreExportCsv: defineChannel(
+    'restore:export-csv',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
+    z.object({ exported: z.boolean(), path: z.string().nullable(), error: z.string().nullable() }),
+  ),
+  restoreExportCorrupt: defineChannel(
+    'restore:export-corrupt',
+    z.object({ sessionId: z.string().min(1), libraryId: z.string().min(1), verificationId: z.string().min(1) }),
     z.object({
-      exported: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-      cancelled: z.number().int().nonnegative(),
-      previewTranscodes: z.number().int().nonnegative(),
+      exported: z.boolean(),
+      count: z.number().int().nonnegative(),
+      unavailable: z.number().int().nonnegative(),
+      error: z.string().nullable(),
     }),
   ),
-  exportCancel: defineChannel('export:cancel', z.object({}), z.object({})),
+  restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
+  restoreStatus: defineChannel('restore:status', z.object({}), restoreStatusSchema),
+  // Export engine (#97): decrypt-on-export to a chosen folder.
+  ...exportChannels,
   // Backup engine (#105): the toolbar's manual trigger. 'disconnected'
   // (#114): providerId null blocks manual runs too, not just auto-backup.
   backupRun: defineChannel(
@@ -654,15 +733,12 @@ export const channels = {
   // registered provider needs — local providers connect instantly while
   // interactive providers open a system-browser OAuth flow. Tokens never cross
   // this boundary; the renderer only learns ok/reason.
-  backupConnect: defineChannel(
-    'backup:connect',
-    z.object({ providerId: providerIdSchema }),
-    z.object({ ok: z.boolean(), reason: z.string().nullable() }),
-  ),
-  backupDisconnect: defineChannel(
-    'backup:disconnect',
-    z.object({ providerId: providerIdSchema }),
-    z.object({ ok: z.boolean(), reason: z.string().nullable() }),
+  backupConnect: defineChannel('backup:connect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
+  backupDisconnect: defineChannel('backup:disconnect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
+  backupRemoveAuthorizationAnyway: defineChannel(
+    'backup:remove-authorization-anyway',
+    z.object({ providerId: providerIdSchema, authorization: z.literal(PROVIDER_AUTHORIZATION_REMOVAL) }),
+    providerConnectResultSchema,
   ),
   // Capacity route (#684): when a provider has no in-app account-capacity figure
   // (iCloud), the card routes the user to the OS surface that owns it. Main opens
@@ -696,7 +772,7 @@ export const channels = {
   libraryRegistryList: defineChannel('library-registry:list', z.object({}), z.object({ libraries: z.array(libraryDescriptorSchema) })),
   libraryRegistryCreate: defineChannel(
     'library-registry:create',
-    z.object({ name: z.string().min(1).max(120), path: z.string().min(1).nullable() }),
+    z.object({ name: libraryDisplayNameSchema, path: z.string().min(1).nullable() }),
     z.object({ library: libraryDescriptorSchema }),
   ),
   // open = the live switch (#385/#386). Designed refusals (locked, backup
@@ -718,6 +794,16 @@ export const channels = {
   ),
   libraryRegistryRemove: defineChannel('library-registry:remove', z.object({ id: libraryIdSchema }), z.object({ removed: z.boolean() })),
   libraryRegistryCurrent: defineChannel('library-registry:current', z.object({}), z.object({ library: libraryDescriptorSchema })),
+  libraryRegistrySetDisplayName: defineChannel(
+    'library-registry:set-display-name',
+    z.object({ id: libraryIdSchema, name: libraryDisplayNameSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
+  libraryRegistryResetDisplayName: defineChannel(
+    'library-registry:reset-display-name',
+    z.object({ id: libraryIdSchema }),
+    z.object({ library: libraryDescriptorSchema }),
+  ),
   // Register an EXISTING library directory (#386). path null = main opens the
   // native directory picker; cancellation is an outcome, not an error.
   libraryRegistryAdd: defineChannel(
@@ -738,6 +824,14 @@ export const channels = {
   libraryRelocationMove: defineChannel(
     'library-relocation:move',
     z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
+    relocationMoveResponseSchema,
+  ),
+  /** Rename the library's folder in place (#686): parent fixed, new final
+   * path component, validated conservatively for every platform the disk
+   * might visit. Same journaled engine and refusal vocabulary as move. */
+  libraryRelocationRename: defineChannel(
+    'library-relocation:rename',
+    z.object({ id: libraryIdSchema, newName: z.string().min(1).max(255) }),
     relocationMoveResponseSchema,
   ),
   /** Cancel the in-flight move for a library — honored at file boundaries,
@@ -811,12 +905,9 @@ export const events = {
   ...boardEvents,
   ...embeddingEvents,
   // Targeted library pushes (#71) — never refetch-the-world signals.
-  // `derivativeOnly` marks a change that only regenerated a thumb/poster
-  // derivative (a captured video poster, a repaired preview) with no membership
-  // or metadata change — the renderer refreshes just those tiles' images and
-  // must NOT refetch/replace the page (which would reset scroll and drop the
-  // lightbox/selection for items beyond page 1). #744 review.
-  libraryChanged: defineEvent('library:changed', z.object({ photoIds: z.array(z.string()), derivativeOnly: z.boolean().optional() })),
+  // `derivativeOnly` refreshes tile images without replacing the page or
+  // dropping deep scroll/lightbox/selection state (#744).
+  libraryChanged: defineEvent('library:changed', libraryChangedSchema),
   ...originalPolicy.originalPolicyEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',
@@ -882,6 +973,7 @@ export const events = {
     z.object({ done: z.number().int().nonnegative(), total: z.number().int().nonnegative(), photoId: z.string().nullable() }),
   ),
   restoreProgress: defineEvent('restore:progress', restoreProgressSchema),
+  restoreStatusChanged: defineEvent('restore:status-changed', restoreStatusSchema),
   protectedAlbumsChanged: defineEvent('protected-album:changed', z.object({})),
   protectedWorkflowProgress: defineEvent(
     'protected-album:workflow-progress',
@@ -892,6 +984,7 @@ export const events = {
       total: z.number().int().nonnegative(),
     }),
   ),
+  ...photoKitEvents,
 } as const;
 
 export type PingRequest = z.output<typeof channels.ping.request>;

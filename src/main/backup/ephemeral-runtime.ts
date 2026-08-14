@@ -2,13 +2,13 @@ import type { KeyResolver } from '../crypto/envelope.js';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import { EphemeralOriginalService, type EphemeralStage } from './ephemeral-originals.js';
-import type { StorageProvider } from './provider.js';
+import type { CustodyHandleResolver } from './custody-handle.js';
 import type { SyncLedger } from './sync-ledger.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 
 export interface EphemeralRuntimeOptions {
-  readonly provider: StorageProvider;
-  readonly providerConnected: () => boolean;
+  readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyChanged: () => void;
   readonly ledger: SyncLedger;
   readonly repo: PhotosRepository;
   readonly blobs: BlobStore;
@@ -25,8 +25,8 @@ export interface EphemeralRuntimeOptions {
 
 export function createEphemeralRuntime(options: EphemeralRuntimeOptions): EphemeralOriginalService {
   return new EphemeralOriginalService({
-    provider: options.provider,
-    providerConnected: options.providerConnected,
+    custody: options.custody,
+    custodyChanged: options.custodyChanged,
     ledger: options.ledger,
     repo: { get: (id) => options.repo.get(id) },
     blobs: {

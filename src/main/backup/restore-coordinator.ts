@@ -1,9 +1,21 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { addAbortSignal, Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import { openRecoveryKey, RecoveryError } from '../crypto/recovery.js';
+import { createDecryptStream } from '../crypto/envelope.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
-import type { RestoreRequest, RestoreRunResult } from './restore-engine.js';
+import type { RestoreRequest, RestoreRunResult, RestoreVerifyResult } from './restore-engine.js';
 import type { StorageProvider } from './provider.js';
 import { RestoreError, toRestoreError, type RestoreProgress } from './restore-types.js';
-import type { RestoreDiscoverResponse, RestoreLibrarySummary, RestoreRunResponse } from '../../shared/backup/restore-contract.js';
+import type {
+  RestoreDiscoverResponse,
+  RestoreLibrarySummary,
+  RestoreRunResponse,
+  RestoreStatusSnapshot,
+  RestoreTrashResponse,
+  RestoreVerifyResponse,
+} from '../../shared/backup/restore-contract.js';
 
 export interface RestoreSource {
   readonly libraryId: string;
@@ -20,10 +32,12 @@ interface RestoreSession {
   readonly masterKey: Buffer;
   readonly custodyPassword: string | null;
   readonly sources: ReadonlyMap<string, DiscoveredSource>;
+  readonly verifications: Map<string, RestoreVerifyResult>;
 }
 
 export interface RestoreRunner {
   run(request: RestoreRequest): Promise<RestoreRunResult>;
+  verify?(request: RestoreRequest): Promise<RestoreVerifyResult>;
 }
 
 /** How discovery obtains the master key (#741 follow-up): the separately
@@ -48,20 +62,24 @@ export interface RestoreCoordinatorDeps {
   readonly sessionId: () => string;
   readonly resumeAvailable?: ((libraryId: string, candidate: RestoreCandidate) => Promise<boolean>) | undefined;
   readonly progress: (value: RestoreProgress) => void;
+  readonly statusChanged?: ((status: RestoreStatusSnapshot) => void) | undefined;
   readonly workStarted?: (() => void) | undefined;
   readonly workFinished?: (() => void) | undefined;
   readonly activated?: ((result: RestoreRunResult) => void) | undefined;
 }
 
-function errorResult(error: unknown): { reason: RestoreError['reason']; message: string } {
+type FailurePhase = 'discovering' | 'downloading' | 'rebuilding' | 'activating' | 'verify-scan';
+
+function errorResult(error: unknown, phase?: FailurePhase): { reason: RestoreError['reason']; message: string; phase?: FailurePhase } {
   if (error instanceof RecoveryError) {
     return {
       reason: error.reason === 'wrong-password' ? 'wrong-key' : 'corrupt',
       message: error.reason === 'wrong-password' ? 'The recovery-key password is incorrect.' : 'This is not an Overlook recovery key.',
+      ...(phase === undefined ? {} : { phase }),
     };
   }
   const mapped = toRestoreError(error);
-  return { reason: mapped.reason, message: mapped.message };
+  return { reason: mapped.reason, message: mapped.message, ...(phase === undefined ? {} : { phase }) };
 }
 
 function invalidSummary(libraryId: string, error: RestoreError): RestoreLibrarySummary {
@@ -80,16 +98,78 @@ function invalidSummary(libraryId: string, error: RestoreError): RestoreLibraryS
   };
 }
 
+function verificationMatches(left: RestoreVerifyResult, right: RestoreVerifyResult): boolean {
+  return (
+    left.libraryId === right.libraryId &&
+    left.generation === right.generation &&
+    left.manifestPath === right.manifestPath &&
+    left.sealedManifestSha256 === right.sealedManifestSha256 &&
+    left.objectSetSha256 === right.objectSetSha256 &&
+    isDeepStrictEqual(left.missing, right.missing)
+  );
+}
+
 export class RestoreCoordinator {
   private session: RestoreSession | null = null;
   private controller: AbortController | null = null;
   private readonly active = new Set<Promise<unknown>>();
+  private phase: RestoreStatusSnapshot['phase'] = 'idle';
+  private lastProgress: RestoreProgress | null = null;
+  private lastError: RestoreStatusSnapshot['lastError'] = null;
+  private lastResult: RestoreStatusSnapshot['lastResult'] = null;
+  private lastLibraries: readonly RestoreLibrarySummary[] = [];
+  private lastLibraryId: string | null = null;
 
   constructor(private readonly deps: RestoreCoordinatorDeps) {}
 
   private clearSession(): void {
     this.session?.masterKey.fill(0);
     this.session = null;
+  }
+
+  private emitStatus(): void {
+    this.deps.statusChanged?.(this.status());
+  }
+
+  private setPhase(phase: RestoreStatusSnapshot['phase']): void {
+    this.phase = phase;
+    this.emitStatus();
+  }
+
+  private recordProgress(progress: RestoreProgress): void {
+    this.lastProgress = progress;
+    this.deps.progress(progress);
+    this.emitStatus();
+  }
+
+  status(): RestoreStatusSnapshot {
+    const session = this.session;
+    const verificationEntry = session === null ? undefined : [...session.verifications.entries()][0];
+    const verification = verificationEntry?.[1];
+    const singleSource = session !== null && session.sources.size === 1 ? [...session.sources.keys()][0] : undefined;
+    return {
+      phase: this.phase,
+      sessionId: session?.id ?? null,
+      libraryId: this.lastLibraryId ?? singleSource ?? null,
+      providerId: session?.providerId ?? null,
+      progress: this.lastProgress,
+      lastError: this.lastError,
+      lastResult: this.lastResult,
+      verification:
+        verificationEntry === undefined || verification === undefined
+          ? null
+          : {
+              verificationId: verificationEntry[0],
+              libraryId: verification.libraryId,
+              generation: verification.generation,
+              photos: verification.photos,
+              verifiedCount: verification.verifiedCount,
+              missingCount: verification.missingCount,
+              corruptCount: verification.corruptCount,
+              missing: [...verification.missing],
+            },
+      libraries: this.lastLibraries,
+    };
   }
 
   discover(providerId: string, keyPath: string, password: string): Promise<RestoreDiscoverResponse> {
@@ -103,6 +183,7 @@ export class RestoreCoordinator {
   expireSession(): void {
     if (this.controller !== null) return;
     this.clearSession();
+    if (this.phase === 'session' || this.phase === 'failed') this.setPhase('idle');
   }
 
   discoverFrom(providerId: string, source: RestoreKeySource): Promise<RestoreDiscoverResponse> {
@@ -125,6 +206,12 @@ export class RestoreCoordinator {
       return { sessionId: null, libraries: [], error: { reason: 'io', message: 'A restore is already running.' } };
     }
     this.clearSession();
+    this.lastError = null;
+    this.lastResult = null;
+    this.lastProgress = null;
+    this.lastLibraries = [];
+    this.lastLibraryId = null;
+    this.setPhase('idle');
     let masterKey: Buffer;
     try {
       masterKey = await this.openMasterKey(source);
@@ -171,7 +258,10 @@ export class RestoreCoordinator {
       }
       const id = this.deps.sessionId();
       const custodyPassword = source.kind === 'local-master' ? (source.custodyPassword ?? null) : null;
-      this.session = { id, providerId, masterKey, custodyPassword, sources: valid };
+      this.session = { id, providerId, masterKey, custodyPassword, sources: valid, verifications: new Map() };
+      this.lastLibraries = libraries;
+      this.lastLibraryId = libraries.find((library) => library.validation === 'valid')?.libraryId ?? null;
+      this.setPhase('session');
       return { sessionId: id, libraries, error: null };
     } catch (error) {
       masterKey.fill(0);
@@ -179,11 +269,88 @@ export class RestoreCoordinator {
     }
   }
 
-  run(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
-    return this.track(() => this.runOperation(sessionId, libraryId, allowReplace));
+  run(sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
+    return this.track(() => this.runOperation(sessionId, libraryId, verificationId, allowReplace));
   }
 
-  private async runOperation(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse> {
+  verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse> {
+    return this.track(() => this.verifyOperation(sessionId, libraryId));
+  }
+
+  trash(sessionId: string, libraryId: string, verificationId: string, confirmation: string): Promise<RestoreTrashResponse> {
+    return this.track(() => this.trashOperation(sessionId, libraryId, verificationId, confirmation));
+  }
+
+  private async runOperation(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    allowReplace: boolean,
+  ): Promise<RestoreRunResponse> {
+    const session = this.session;
+    const source = session?.sources.get(libraryId);
+    if (session === null || session.id !== sessionId || source === undefined) {
+      return { result: null, error: { reason: 'io', message: 'Restore discovery expired; discover the backup again.' } };
+    }
+    if (this.controller !== null) {
+      return { result: null, error: { reason: 'io', message: 'A restore is already running.' } };
+    }
+    const verification = session.verifications.get(verificationId);
+    if (verification === undefined || verification.libraryId !== libraryId) {
+      return { result: null, error: { reason: 'io', message: 'Restore verification expired; verify the backup again.' } };
+    }
+    session.verifications.delete(verificationId);
+    const controller = new AbortController();
+    this.controller = controller;
+    this.lastLibraryId = libraryId;
+    this.lastError = null;
+    this.lastResult = null;
+    this.setPhase('running');
+    this.deps.workStarted?.();
+    let failurePhase: FailurePhase = 'discovering';
+    try {
+      const expectedGeneration = source.discovery.newestGeneration;
+      const runner = this.deps.createRunner(source.provider, (progress) => {
+        if (progress.stage !== 'complete') failurePhase = progress.stage === 'verifying' ? 'discovering' : progress.stage;
+        this.recordProgress(progress);
+      });
+      const result = await runner.run({
+        masterKey: session.masterKey,
+        allowReplace,
+        signal: controller.signal,
+        verification,
+        ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
+      });
+      this.deps.activated?.(result);
+      this.lastResult = {
+        libraryId: result.libraryId,
+        generation: result.generation,
+        photos: result.photos,
+        resumed: result.resumed,
+        missing: result.missing,
+      };
+      this.clearSession();
+      this.setPhase('complete');
+      return {
+        result: {
+          ...result,
+          fallbackFromGeneration: expectedGeneration !== result.generation ? expectedGeneration : null,
+          relaunching: true,
+        },
+        error: null,
+      };
+    } catch (error) {
+      const mapped = errorResult(error, failurePhase);
+      this.lastError = mapped;
+      this.setPhase('failed');
+      return { result: null, error: mapped };
+    } finally {
+      this.controller = null;
+      this.deps.workFinished?.();
+    }
+  }
+
+  private async verifyOperation(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse> {
     const session = this.session;
     const source = session?.sources.get(libraryId);
     if (session === null || session.id !== sessionId || source === undefined) {
@@ -194,32 +361,193 @@ export class RestoreCoordinator {
     }
     const controller = new AbortController();
     this.controller = controller;
+    this.lastLibraryId = libraryId;
+    this.lastError = null;
+    this.setPhase('verify-scan');
     this.deps.workStarted?.();
     try {
-      const expectedGeneration = source.discovery.newestGeneration;
-      const runner = this.deps.createRunner(source.provider, this.deps.progress);
-      const result = await runner.run({
+      const runner = this.deps.createRunner(source.provider, (progress) => {
+        this.recordProgress(progress);
+      });
+      if (runner.verify === undefined) {
+        this.setPhase('session');
+        return { result: null, error: { reason: 'io', message: 'Verify is not available in this runner.' } };
+      }
+      const result = await runner.verify({
         masterKey: session.masterKey,
-        allowReplace,
+        allowReplace: false,
         signal: controller.signal,
         ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
       });
-      this.deps.activated?.(result);
-      this.clearSession();
+      const verificationId = randomUUID();
+      session.verifications.clear();
+      session.verifications.set(verificationId, result);
+      this.setPhase('session');
       return {
         result: {
-          ...result,
-          fallbackFromGeneration: expectedGeneration !== result.generation ? expectedGeneration : null,
-          relaunching: true,
+          verificationId,
+          libraryId: result.libraryId,
+          generation: result.generation,
+          photos: result.photos,
+          verifiedCount: result.verifiedCount,
+          missingCount: result.missingCount,
+          corruptCount: result.corruptCount,
+          missing: [...result.missing],
         },
         error: null,
       };
     } catch (error) {
-      return { result: null, error: errorResult(error) };
+      const mapped = errorResult(error, 'verify-scan');
+      this.lastError = mapped;
+      this.setPhase('failed');
+      return { result: null, error: mapped };
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
     }
+  }
+
+  private async trashOperation(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    confirmation: string,
+  ): Promise<RestoreTrashResponse> {
+    if (confirmation !== 'Permanently Delete Backup') {
+      return { trashed: false, error: { reason: 'io', message: 'Confirmation text does not match.' } };
+    }
+    const session = this.session;
+    const source = session?.sources.get(libraryId);
+    if (session === null || session.id !== sessionId || source === undefined) {
+      return { trashed: false, error: { reason: 'io', message: 'Restore discovery expired; discover the backup again.' } };
+    }
+    const verification = session.verifications.get(verificationId);
+    if (verification === undefined || verification.libraryId !== libraryId) {
+      return { trashed: false, error: { reason: 'io', message: 'Restore verification expired; verify the backup again.' } };
+    }
+    session.verifications.delete(verificationId);
+    try {
+      const entries = await source.provider.list('.', undefined);
+      for (const entry of entries) {
+        await source.provider.delete(entry.path);
+      }
+      const remaining = await source.provider.list('.', undefined);
+      if (remaining.length > 0) {
+        return {
+          trashed: false,
+          error: { reason: 'io', message: `Backup trash is incomplete; ${String(remaining.length)} objects remain.` },
+        };
+      }
+      this.clearSession();
+      return { trashed: true, error: null };
+    } catch (error) {
+      return { trashed: false, error: errorResult(error) };
+    }
+  }
+
+  providerFor(sessionId: string, libraryId: string): StorageProvider | null {
+    const session = this.session;
+    if (session === null || session.id !== sessionId) return null;
+    return session.sources.get(libraryId)?.provider ?? null;
+  }
+
+  verificationFor(sessionId: string, libraryId: string, verificationId: string): RestoreVerifyResult | null {
+    const session = this.session;
+    if (session === null || session.id !== sessionId) return null;
+    const verification = session.verifications.get(verificationId);
+    return verification?.libraryId === libraryId ? verification : null;
+  }
+
+  exportCorrupt(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+    writeImage: (fileName: string, bytes: Buffer) => Promise<void>,
+  ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }> {
+    return this.track(async () => {
+      const session = this.session;
+      const source = session?.sources.get(libraryId);
+      const verification = this.verificationFor(sessionId, libraryId, verificationId);
+      if (session === null || source === undefined || verification === null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
+      }
+      if (this.controller !== null) {
+        return { exported: false, count: 0, unavailable: 0, error: 'A restore is already running.' };
+      }
+      const candidate = source.discovery.candidates.find(
+        (item) =>
+          item.path === verification.manifestPath &&
+          item.generation === verification.generation &&
+          item.sealedSha256 === verification.sealedManifestSha256,
+      );
+      if (candidate === undefined) {
+        return { exported: false, count: 0, unavailable: 0, error: 'Restore verification expired; verify the backup again.' };
+      }
+      const corrupt = verification.missing.filter((item) => item.reason === 'failed-verification');
+      const controller = new AbortController();
+      this.controller = controller;
+      this.deps.workStarted?.();
+      let count = 0;
+      let unavailable = 0;
+      try {
+        const runner = this.deps.createRunner(source.provider, this.deps.progress);
+        if (runner.verify === undefined) {
+          return { exported: false, count: 0, unavailable: 0, error: 'Verify is not available in this runner.' };
+        }
+        const current = await runner.verify({
+          masterKey: session.masterKey,
+          allowReplace: false,
+          signal: controller.signal,
+          ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
+        });
+        if (!verificationMatches(current, verification)) {
+          session.verifications.delete(verificationId);
+          return { exported: false, count: 0, unavailable: 0, error: 'The backup changed after verification. Verify it again.' };
+        }
+        for (const item of corrupt) {
+          const photo = item.kind === 'original' ? candidate.manifest.photos.find((entry) => entry.id === item.photoId) : undefined;
+          if (photo === undefined) {
+            unavailable += 1;
+            continue;
+          }
+          try {
+            const remote = addAbortSignal(controller.signal, await source.provider.getStream(item.path));
+            const ciphertext = await buffer(remote);
+            const plaintext = await buffer(
+              Readable.from([ciphertext]).pipe(createDecryptStream(source.discovery.resolveKey, { photoId: photo.id })),
+            );
+            if (createHash('sha256').update(plaintext).digest('hex') === photo.contentHash) {
+              plaintext.fill(0);
+              unavailable += 1;
+              continue;
+            }
+            try {
+              await writeImage(`${photo.id}-${photo.fileName}`, plaintext);
+            } finally {
+              plaintext.fill(0);
+            }
+            count += 1;
+          } catch {
+            if (controller.signal.aborted) throw new RestoreError('cancelled', 'restore cancelled');
+            unavailable += 1;
+          }
+        }
+        return {
+          exported: unavailable === 0,
+          count,
+          unavailable,
+          error:
+            unavailable === 0
+              ? null
+              : `${String(count)} decryptable images exported; ${String(unavailable)} corrupt objects were unavailable.`,
+        };
+      } catch (error) {
+        return { exported: false, count, unavailable, error: errorResult(error).message };
+      } finally {
+        this.controller = null;
+        this.deps.workFinished?.();
+      }
+    });
   }
 
   cancel(): void {
@@ -229,12 +557,14 @@ export class RestoreCoordinator {
   dispose(): void {
     this.cancel();
     this.clearSession();
+    this.setPhase('idle');
   }
 
   async close(): Promise<void> {
     this.cancel();
     await Promise.allSettled([...this.active]);
     this.clearSession();
+    this.setPhase('idle');
   }
 
   private track<T>(operation: () => Promise<T>): Promise<T> {

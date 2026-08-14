@@ -100,7 +100,7 @@ describe('switch runtime (#385)', () => {
     );
   });
 
-  test('refusals return typed outcomes (#386): locked, provider busy, already switching — nothing is stamped', async () => {
+  test('refusals return typed outcomes (#386): live locked, provider busy, already switching — nothing is stamped', async () => {
     const locked = harness({ lockState: () => 'locked' });
     assert.deepEqual(await createSwitchLibrary(locked.deps)(B), { ok: false, reason: 'locked', host: null });
     assert.deepEqual(locked.calls, [], 'refusal happens before anything is stamped');
@@ -121,6 +121,23 @@ describe('switch runtime (#385)', () => {
     assert.deepEqual(await switchLibrary(B), { ok: false, reason: 'switch-in-progress', host: null });
     releaseClose();
     await first;
+  });
+
+  test('ACCEPTANCE #847: a stable lock screen with no open library can repoint and rebind app-lock custody', async () => {
+    for (const state of ['locked', 'recovery-required']) {
+      const closed = harness({ lockState: () => state, openLibraryId: () => null });
+      const result = await createSwitchLibrary(closed.deps)(B);
+      assert.equal(result.ok, true, `${state} can leave the unavailable startup library`);
+      assert.deepEqual(closed.calls, [`select:${B}:null`, 'activate', 'swap', 'reload']);
+    }
+  });
+
+  test('ACCEPTANCE #847: transient app-lock states still refuse even when no library is open', async () => {
+    for (const state of ['locking', 'unlocking']) {
+      const transient = harness({ lockState: () => state, openLibraryId: () => null });
+      assert.deepEqual(await createSwitchLibrary(transient.deps)(B), { ok: false, reason: 'locked', host: null });
+      assert.deepEqual(transient.calls, []);
+    }
   });
 
   test('the pre-flight probe refuses a missing or locked-elsewhere target BEFORE teardown (#386)', async () => {

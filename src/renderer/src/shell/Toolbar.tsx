@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN } from '../../../shared/library/app-state.js';
+import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
 import type { ChipFilters } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -62,13 +63,16 @@ const filterLabels: Record<keyof ChipFilters, (typeof messages)[keyof typeof mes
 // and the primary Import entry point (#88 dialog via onImport). Backup
 // lands with M08 — until then it surfaces its stub toast.
 export interface ToolbarProps {
+  readonly platform: CommandPlatform;
   /** Opens the ImportDialog (#88); wired by the shell. */
   readonly onImport?: (() => void) | undefined;
+  /** Opens the unencrypted-library export through the shared command handler. */
+  readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
   readonly onTransfer?: (() => void) | undefined;
 }
 
-export function Toolbar({ onImport, onLock, onTransfer }: ToolbarProps = {}): ReactElement {
+export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }: ToolbarProps): ReactElement {
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -98,7 +102,13 @@ export function Toolbar({ onImport, onLock, onTransfer }: ToolbarProps = {}): Re
           <img className="ovl-toolbar__mark" src={overlookIcon} alt="" width={20} height={20} />
           <span className="ovl-toolbar__brand">{BRAND_WORDMARK}</span>
         </div>
-        <SearchField value={draft} onChange={onSearch} width={300} label={intl.formatMessage(messages.search)} />
+        <SearchField
+          value={draft}
+          onChange={onSearch}
+          shortcut={formatShortcut(commandById('app.search.focus'), platform)}
+          width={300}
+          label={intl.formatMessage(messages.search)}
+        />
         <IconButton
           icon="funnel"
           label={intl.formatMessage(messages.filters)}
@@ -165,6 +175,11 @@ export function Toolbar({ onImport, onLock, onTransfer }: ToolbarProps = {}): Re
         {onTransfer === undefined ? null : (
           <Button variant="secondary" icon="refresh-cw" size="md" onClick={onTransfer}>
             <FormattedMessage id="toolbar.transfer" defaultMessage="Transfer & Sync" />
+          </Button>
+        )}
+        {onExportAll === undefined ? null : (
+          <Button variant="secondary" icon="share" size="md" onClick={onExportAll}>
+            {intl.formatMessage(commandById('library.exportAll').label)}
           </Button>
         )}
         <Button

@@ -6,12 +6,21 @@ import { buffer } from 'node:stream/consumers';
 import {
   assertSafeRemotePath,
   ProviderError,
+  type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
   type RemoteEntry,
   type StorageProvider,
 } from '../provider.js';
 import type { GoogleDriveAuthClient } from './auth-client.js';
+import {
+  GOOGLE_DRIVE_DISCOVERY_PROTOCOL,
+  googleDriveDiscoveryHash,
+  googleDriveFileIdentity,
+  googleDriveFolderIdentity,
+  googleDriveLibraryIdentity,
+  googleDriveRootIdentity,
+} from './discovery-protocol.js';
 import type { GoogleDrivePathStore } from './path-store.js';
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -44,10 +53,6 @@ export interface GoogleDriveProviderOptions {
   readonly rootName?: string;
   readonly owner?: string;
   readonly fetchImpl?: typeof fetch;
-}
-
-function pathHash(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function quoteQuery(value: string): string {
@@ -98,6 +103,7 @@ export class GoogleDriveProvider implements StorageProvider {
     platforms: ['darwin', 'win32', 'linux'],
     interactiveAuth: true,
     reconnectRequired: true,
+    accountIdentity: 'stable-subject',
   } as const;
 
   private readonly fetchImpl: typeof fetch;
@@ -118,6 +124,19 @@ export class GoogleDriveProvider implements StorageProvider {
 
   authState(): Promise<ProviderAuthState> {
     return Promise.resolve(this.options.auth.authState());
+  }
+
+  async accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity> {
+    const url = new URL(`${API}/about`);
+    url.searchParams.set('fields', 'user(permissionId,emailAddress)');
+    const data = await this.json(url.toString(), undefined, 'read account identity', signal);
+    const user = typeof data['user'] === 'object' && data['user'] !== null ? (data['user'] as Record<string, unknown>) : {};
+    const accountId = typeof user['permissionId'] === 'string' ? user['permissionId'].trim() : '';
+    const accountLabel = typeof user['emailAddress'] === 'string' ? user['emailAddress'].trim() : '';
+    if (accountId === '' || accountLabel === '') {
+      throw new ProviderError('Google Drive account identity is unavailable', 'transient');
+    }
+    return { accountId, accountLabel };
   }
 
   forLibrary(libraryId: string): StorageProvider {
@@ -166,7 +185,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const metadata = {
       name,
       mimeType: BINARY_MIME,
-      appProperties: this.properties(`library:${this.options.libraryId}/file:${path}`),
+      appProperties: this.properties(googleDriveFileIdentity(this.options.libraryId, path)),
       ...(existing === null ? { parents: [parentId] } : {}),
     };
     const endpoint =
@@ -269,17 +288,20 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   private properties(identity: string): Record<string, string> {
-    return { overlookOwner: this.owner, overlookPathHash: pathHash(identity) };
+    return {
+      [GOOGLE_DRIVE_DISCOVERY_PROTOCOL.ownerPropertyKey]: this.owner,
+      [GOOGLE_DRIVE_DISCOVERY_PROTOCOL.pathHashPropertyKey]: googleDriveDiscoveryHash(identity),
+    };
   }
 
   private pathLibraryId(libraryId = this.options.libraryId): string {
     if (this.rootName === 'Overlook' && this.owner === BACKUP_OWNER) return libraryId;
-    return `interop_${pathHash(`${this.rootName}\0${this.owner}\0${libraryId}`).slice(0, 56)}`;
+    return `interop_${googleDriveDiscoveryHash(`${this.rootName}\0${this.owner}\0${libraryId}`).slice(0, 56)}`;
   }
 
   private cachedRootId(): string | null {
     if (this.rootName === 'Overlook' && this.owner === BACKUP_OWNER) return this.options.paths.overlookFolderId();
-    return this.options.paths.folderId(`root_${pathHash(`${this.rootName}\0${this.owner}`).slice(0, 59)}`, '');
+    return this.options.paths.folderId(`root_${googleDriveDiscoveryHash(`${this.rootName}\0${this.owner}`).slice(0, 59)}`, '');
   }
 
   private setCachedRootId(id: string | null): void {
@@ -287,7 +309,7 @@ export class GoogleDriveProvider implements StorageProvider {
       this.options.paths.setOverlookFolderId(id);
       return;
     }
-    this.options.paths.setFolderId(`root_${pathHash(`${this.rootName}\0${this.owner}`).slice(0, 59)}`, '', id);
+    this.options.paths.setFolderId(`root_${googleDriveDiscoveryHash(`${this.rootName}\0${this.owner}`).slice(0, 59)}`, '', id);
   }
 
   private async walk(folderId: string, relativePath: string, out: RemoteEntry[], signal?: AbortSignal): Promise<void> {
@@ -314,7 +336,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const cached = this.cachedRootId();
     if (cached !== null && (await this.validFolder(cached, signal))) return cached;
     if (cached !== null) this.setCachedRootId(null);
-    const identity = 'overlook-root';
+    const identity = googleDriveRootIdentity();
     const found = await this.findOne(
       [
         `name = '${quoteQuery(this.rootName)}'`,
@@ -347,7 +369,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const root = await this.resolveOverlookFolder(create, signal);
     if (root === null) return null;
     if (path === '') {
-      const identity = `library:${this.options.libraryId}`;
+      const identity = googleDriveLibraryIdentity(this.options.libraryId);
       const found = await this.findOne(
         [
           `name = '${quoteQuery(this.options.libraryId)}'`,
@@ -368,7 +390,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const parentId = await this.resolveFolder(parentPath, create, signal);
     if (parentId === null) return null;
     const name = posix.basename(path);
-    const identity = `library:${this.options.libraryId}/folder:${path}`;
+    const identity = googleDriveFolderIdentity(this.options.libraryId, path);
     const found = await this.findOne(
       [
         `name = '${quoteQuery(name)}'`,
@@ -397,7 +419,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const parentPath = posix.dirname(path) === '.' ? '' : posix.dirname(path);
     const parentId = await this.resolveFolder(parentPath, false, signal);
     if (parentId === null) return null;
-    const identity = `library:${this.options.libraryId}/file:${path}`;
+    const identity = googleDriveFileIdentity(this.options.libraryId, path);
     const found = await this.findOne(
       [
         `name = '${quoteQuery(posix.basename(path))}'`,
@@ -416,7 +438,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   private propertyQuery(identity: string): string {
-    return `appProperties has { key='overlookOwner' and value='${this.owner}' } and appProperties has { key='overlookPathHash' and value='${pathHash(identity)}' }`;
+    return `appProperties has { key='${GOOGLE_DRIVE_DISCOVERY_PROTOCOL.ownerPropertyKey}' and value='${this.owner}' } and appProperties has { key='${GOOGLE_DRIVE_DISCOVERY_PROTOCOL.pathHashPropertyKey}' and value='${googleDriveDiscoveryHash(identity)}' }`;
   }
 
   private async validFolder(id: string, signal?: AbortSignal): Promise<boolean> {
@@ -551,7 +573,7 @@ export class GoogleDriveProvider implements StorageProvider {
     if (parsed.protocol !== 'https:' || (parsed.hostname !== 'www.googleapis.com' && parsed.hostname !== 'content.googleapis.com')) {
       throw new ProviderError('refusing to send Google credentials to an unexpected host', 'corrupt');
     }
-    const token = await this.options.auth.accessToken(retried);
+    const token = await this.options.auth.accessToken(retried, init.signal ?? undefined);
     const headers = new Headers(init.headers);
     headers.set('authorization', `Bearer ${token}`);
     let response: Response;

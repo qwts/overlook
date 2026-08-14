@@ -20,6 +20,12 @@ export interface ProviderQuota {
   readonly totalBytes: number | null;
 }
 
+/** Stable, non-secret provider subject established before activation. */
+export interface ProviderAccountIdentity {
+  readonly accountId: string;
+  readonly accountLabel: string;
+}
+
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -90,6 +96,10 @@ export interface StorageProvider {
   forLibrary(libraryId: string): StorageProvider;
 
   authState(): Promise<ProviderAuthState>;
+
+  /** Reads the provider-native account subject. Missing or malformed
+   * identity is a retryable provider failure, never anonymous authority. */
+  accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity>;
 
   /** Uploads `plaintext` (already-encrypted envelope bytes) to `path`,
    * replacing any existing entry. Resolves the provider's recorded size. */

@@ -4,9 +4,12 @@ import { Readable } from 'node:stream';
 import type { ExtractedMetadata } from './exif.js';
 import type { ThumbnailOutcome, ThumbnailRequest } from './thumbnail-service.js';
 import type { EnvelopeKey, KeyResolver } from '../crypto/envelope.js';
+import type { SidecarRecord } from '../db/sidecar-repository.js';
 import { probeMediaInfo, sniffImageKind, sniffVideoKind } from '../../shared/library/media-signatures.js';
 import type { MediaInfo } from '../../shared/library/media-info.js';
+import type { SidecarRole } from '../../shared/library/sidecar-files.js';
 import type { FileKind, PhotoInsert, PhotoRecord } from '../../shared/library/types.js';
+import { extractXmpKeywords } from './xmp-metadata.js';
 
 // Import engine (#87): source files → encrypted, verified library records —
 // interruptible at any point without loss. The journal (import-journal.ts)
@@ -24,6 +27,16 @@ export type ImportMode = 'copy' | 'move';
  * and failures jump straight to done with their status set. */
 export type ImportFileStage = 'pending' | 'recorded' | 'thumbed' | 'done';
 
+/** One companion's journaled custody state (#484): contentHash lands after
+ * the encrypted put; sourceDeleted after the verified Move delete. */
+export interface ManifestSidecar {
+  readonly path: string;
+  readonly fileName: string;
+  readonly role: SidecarRole;
+  contentHash?: string | undefined;
+  sourceDeleted?: boolean | undefined;
+}
+
 export interface ManifestFile {
   readonly path: string;
   readonly fileName: string;
@@ -34,6 +47,14 @@ export interface ManifestFile {
   photoId?: string | undefined;
   error?: string | undefined;
   moveLease?: MoveCompensationCandidate | undefined;
+  sidecars?: ManifestSidecar[] | undefined;
+  sourceMetadata?:
+    | {
+        readonly takenAt?: string | undefined;
+        readonly gpsLat?: number | undefined;
+        readonly gpsLon?: number | undefined;
+      }
+    | undefined;
 }
 
 export interface MoveCompensationCandidate {
@@ -63,6 +84,8 @@ export interface ImportSummary {
   readonly failed: number;
   /** User-cancelled remainder — never started, sources untouched (#88). */
   readonly cancelled: number;
+  /** Companion sidecars in verified encrypted custody (#484). */
+  readonly sidecars: number;
   readonly photoIds: readonly string[];
   /** Main-process-only inverse custody; IPC response schemas discard it. */
   readonly moveCompensations: readonly MoveCompensationCandidate[];
@@ -99,6 +122,9 @@ export interface ImportEngineDeps {
     readonly hasContentHash: (hash: string) => boolean;
     readonly get: (id: string) => PhotoRecord | undefined;
     readonly insert: (photo: PhotoInsert) => void;
+    /** Idempotent per (photo, content) — resume-safe (#484). */
+    readonly insertSidecar: (record: SidecarRecord) => void;
+    readonly addImportedKeywords?: ((photoId: string, keywords: readonly string[]) => boolean) | undefined;
     readonly repairGeneratedDimensions: (id: string, width: number, height: number) => boolean;
     readonly setDimensionStatus: (id: string, status: PhotoRecord['dimensionStatus']) => boolean;
     readonly setPreviewFailure: (id: string, failure: PhotoRecord['previewFailure']) => boolean;
@@ -110,6 +136,12 @@ export interface ImportEngineDeps {
       photoId: string,
     ) => Promise<{ readonly keyId: number; readonly bytes: number }>;
     readonly verifyOriginal: (contentHash: string, resolveKey: KeyResolver, photoId: string) => Promise<boolean>;
+    readonly putSidecar: (
+      plaintext: Readable,
+      key: EnvelopeKey,
+      photoId: string,
+    ) => Promise<{ readonly contentHash: string; readonly keyId: number; readonly bytes: number }>;
+    readonly verifySidecar: (photoId: string, contentHash: string, resolveKey: KeyResolver) => Promise<boolean>;
   };
   readonly generateThumbs: (request: ThumbnailRequest) => Promise<ThumbnailOutcome>;
   readonly extractMetadata: (bytes: Buffer, kind: FileKind) => Promise<ExtractedMetadata>;
@@ -127,6 +159,10 @@ export interface ImportFileInput {
   readonly path: string;
   readonly fileName: string;
   readonly kind: FileKind;
+  /** Companions discovered beside the file (#484); absent for sources
+   * without filesystem adjacency. */
+  readonly sidecars?: readonly { readonly path: string; readonly fileName: string; readonly role: SidecarRole }[];
+  readonly sourceMetadata?: ManifestFile['sourceMetadata'];
 }
 
 export class ImportEngine {
@@ -150,15 +186,26 @@ export class ImportEngine {
     source: string,
     signal?: AbortSignal,
     cleanupPath?: string,
+    onJournaled?: () => void,
   ): Promise<ImportSummary> {
     const manifest: ImportManifest = {
       batchId: this.deps.newId(),
       mode,
       source,
       ...(cleanupPath === undefined ? {} : { cleanupPath }),
-      files: files.map((file) => ({ ...file, stage: 'pending' as const })),
+      files: files.map((file) => ({
+        path: file.path,
+        fileName: file.fileName,
+        kind: file.kind,
+        stage: 'pending' as const,
+        ...(file.sidecars === undefined || file.sidecars.length === 0
+          ? {}
+          : { sidecars: file.sidecars.map((sidecar) => ({ ...sidecar })) }),
+        ...(file.sourceMetadata === undefined ? {} : { sourceMetadata: { ...file.sourceMetadata } }),
+      })),
     };
     await this.deps.journal.begin(manifest);
+    onJournaled?.();
     return this.run(manifest, signal);
   }
 
@@ -243,6 +290,9 @@ export class ImportEngine {
       duplicates: manifest.files.filter((file) => file.status === 'duplicate').length,
       failed: manifest.files.filter((file) => file.status === 'failed').length,
       cancelled: manifest.files.filter((file) => file.status === 'cancelled').length,
+      sidecars: manifest.files
+        .filter((file) => file.status === 'imported')
+        .reduce((sum, file) => sum + (file.sidecars?.filter((sidecar) => sidecar.contentHash !== undefined).length ?? 0), 0),
       photoIds: manifest.files.flatMap((file) => (file.status === 'imported' && file.photoId !== undefined ? [file.photoId] : [])),
       moveCompensations: manifest.files.flatMap((file) => (file.stage === 'done' && file.moveLease !== undefined ? [file.moveLease] : [])),
     };
@@ -257,6 +307,9 @@ export class ImportEngine {
     if (manifest.mode === 'move' && file.stage === 'thumbed' && file.moveLease !== undefined && !this.deps.sourceExists(file.path)) {
       const verified = await this.deps.blobs.verifyOriginal(file.moveLease.contentHash, this.deps.resolveKey, file.moveLease.photoId);
       if (!verified) throw new Error(`blob verification failed for ${file.fileName}; source recovery remains pending`);
+      // The original's source is already gone; companion sources may remain
+      // from a crash between the two deletes (#484).
+      await this.deleteMovedSidecarSources(file, manifest, persist);
       setStage(file, 'done');
       await persist();
       return;
@@ -317,6 +370,11 @@ export class ImportEngine {
       }
 
       if (file.stage === 'recorded') {
+        // Companion custody (#484) rides the recorded stage so a resume redoes
+        // it safely: putSidecar's no-replace publish and the OR IGNORE row
+        // insert are both idempotent. Sidecar bytes never persist as durable
+        // plaintext — read, encrypt, zeroize.
+        await this.importSidecars(file, persist);
         // Idempotent on resume: putThumb's no-replace publish tolerates redone
         // derivatives; a placeholder outcome is an imported photo, not a fail.
         const outcome = await this.deps.generateThumbs({
@@ -361,6 +419,9 @@ export class ImportEngine {
           // the process dies immediately after unlink succeeds.
           await persist();
           await this.deps.deleteFile(file.path);
+          // Companion sources go the same way: verified encrypted custody
+          // first, delete second, per sidecar (#484).
+          await this.deleteMovedSidecarSources(file, manifest, persist);
         }
         setStage(file, 'done');
         await persist();
@@ -368,6 +429,84 @@ export class ImportEngine {
     } finally {
       bytes.fill(0);
     }
+  }
+
+  /** Encrypts each companion into the photo's sidecar custody and records
+   * its row (#484). Idempotent: no-replace publish + OR IGNORE insert. A
+   * vanished/unreadable companion fails the file honestly (the photo's own
+   * row stays imported; resume retries). */
+  private async importSidecars(file: ManifestFile, persist: () => Promise<void>): Promise<void> {
+    const sidecars = file.sidecars ?? [];
+    if (sidecars.length === 0 || file.photoId === undefined) return;
+    let changed = false;
+    for (const sidecar of sidecars) {
+      if (sidecar.contentHash !== undefined) continue;
+      const bytes = await this.deps.readFile(sidecar.path);
+      try {
+        const key = this.deps.currentKey();
+        const ref = await this.deps.blobs.putSidecar(Readable.from([bytes]), key, file.photoId);
+        this.deps.repo.insertSidecar({
+          photoId: file.photoId,
+          role: sidecar.role,
+          fileName: sidecar.fileName,
+          contentHash: ref.contentHash,
+          bytes: ref.bytes,
+          keyId: ref.keyId,
+          importedAt: this.deps.now(),
+        });
+        if (sidecar.role === 'xmp') {
+          const keywords = extractXmpKeywords(bytes);
+          if (keywords.length > 0) this.deps.repo.addImportedKeywords?.(file.photoId, keywords);
+        }
+        sidecar.contentHash = ref.contentHash;
+        changed = true;
+      } finally {
+        bytes.fill(0);
+      }
+    }
+    if (changed) await persist();
+  }
+
+  /** Move mode: a companion source is deleted only after ITS encrypted copy
+   * decrypts and re-hashes clean — same per-file contract as the original.
+   * A source shared across owners (an XMP beside a RAW+JPG pair attaches to
+   * both) is deleted only by its LAST pending owner (PR #849 review): an
+   * early unlink would strand the next owner's custody read after its photo
+   * row already committed. */
+  private async deleteMovedSidecarSources(file: ManifestFile, manifest: ImportManifest, persist: () => Promise<void>): Promise<void> {
+    const sidecars = file.sidecars ?? [];
+    if (sidecars.length === 0 || file.photoId === undefined) return;
+    let changed = false;
+    for (const sidecar of sidecars) {
+      if (sidecar.contentHash === undefined || sidecar.sourceDeleted === true) continue;
+      if (!this.deps.sourceExists(sidecar.path)) {
+        sidecar.sourceDeleted = true;
+        changed = true;
+        continue;
+      }
+      if (this.sidecarSourceStillNeeded(sidecar.path, file, manifest)) {
+        continue; // a later owner still has to read it; that owner deletes
+      }
+      const verified = await this.deps.blobs.verifySidecar(file.photoId, sidecar.contentHash, this.deps.resolveKey);
+      if (!verified) {
+        throw new Error(`sidecar verification failed for ${sidecar.fileName}; source retained`);
+      }
+      await this.deps.deleteFile(sidecar.path);
+      sidecar.sourceDeleted = true;
+      changed = true;
+    }
+    if (changed) await persist();
+  }
+
+  /** True while another non-terminal manifest file references the same
+   * companion source without recorded custody yet. */
+  private sidecarSourceStillNeeded(path: string, current: ManifestFile, manifest: ImportManifest): boolean {
+    return manifest.files.some(
+      (other) =>
+        other !== current &&
+        other.stage !== 'done' &&
+        (other.sidecars ?? []).some((sidecar) => sidecar.path === path && sidecar.contentHash === undefined),
+    );
   }
 
   private toRecord(
@@ -394,10 +533,11 @@ export class ImportEngine {
       aperture: meta.aperture,
       shutter: meta.shutter,
       focalLength: meta.focalLength,
-      takenAt: meta.takenAt,
-      gpsLat: meta.gpsLat,
-      gpsLon: meta.gpsLon,
+      takenAt: file.sourceMetadata?.takenAt ?? meta.takenAt,
+      gpsLat: file.sourceMetadata?.gpsLat ?? meta.gpsLat,
+      gpsLon: file.sourceMetadata?.gpsLon ?? meta.gpsLon,
       place: null, // never fabricated — GPS is stored, not geocoded (ADR-0006)
+      importedKeywords: meta.keywords ?? [],
       importedAt: this.deps.now(),
       importSource: source,
       keyId,

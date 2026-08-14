@@ -2,13 +2,20 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
-import type { RestoreLibrarySummary, RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
+import type {
+  RestoreLibrarySummary,
+  RestoreMissingObject,
+  RestoreProgressContract,
+  RestoreStatusSnapshot,
+} from '../../../shared/backup/restore-contract.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { Badge } from '../components/Badge.js';
 import { Button } from '../components/Button.js';
 import { Checkbox } from '../components/Checkbox.js';
 import { Icon } from '../components/Icon.js';
 import { ProgressBar } from '../components/ProgressBar.js';
+import { RestoreLibraryCard } from './restore-library-card.js';
+import { restoreProgressDetail, restoreStageLabel, restoreStepFromStatus, type RestoreWorkflowStep } from './restore-progress.js';
 
 import './restore.css';
 
@@ -17,7 +24,7 @@ export interface RestoreWorkflowProps {
   readonly onStartNew?: (() => void) | undefined;
 }
 
-type Step = 'setup' | 'choose' | 'confirm' | 'running' | 'complete';
+type Step = RestoreWorkflowStep;
 
 const ERROR_HELP: Record<string, string> = {
   auth: 'Reconnect the provider, then try discovery again.',
@@ -59,78 +66,47 @@ const messages = defineMessages({
     defaultMessage: "This library's stored key restores its own backups — no key file needed.",
   },
   localKeyNoMatch: { id: 'restore.localKey.noMatch', defaultMessage: "No cloud library matches this Mac's stored key." },
+  missingHeading: { id: 'restore.missing.heading', defaultMessage: 'Restore complete — some items were NOT FOUND' },
+  missingCount: {
+    id: 'restore.missing.count',
+    defaultMessage: '{count, plural, one {# object was} other {# objects were}} not found or failed verification in the cloud backup',
+  },
+  missingHelp: {
+    id: 'restore.missing.help',
+    defaultMessage:
+      'Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder.',
+  },
+  restoredCount: {
+    id: 'restore.restored.count',
+    defaultMessage: '{count, plural, one {# photo restored.} other {# photos restored.}}',
+  },
   localKeyPasswordLabel: { id: 'restore.localKey.passwordLabel', defaultMessage: 'App password' },
   localKeyPasswordHelp: {
     id: 'restore.localKey.passwordHelp',
     defaultMessage: "Your app lock protects this Mac's stored key. Enter the password you unlock Overlook with.",
   },
+  verifyHeading: { id: 'restore.verify.heading', defaultMessage: 'Verify backup before restore' },
+  verifyCounts: {
+    id: 'restore.verify.counts',
+    defaultMessage: '{missing} missing, {corrupt} corrupt (failed verification) — {verified} verified',
+  },
+  verifyHelp: {
+    id: 'restore.verify.help',
+    defaultMessage:
+      'A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage.',
+  },
+  exportCsv: { id: 'restore.verify.exportCsv', defaultMessage: 'Export CSV' },
+  exportCorrupt: { id: 'restore.verify.exportCorrupt', defaultMessage: 'Export corrupt images' },
+  continueVerified: { id: 'restore.verify.continue', defaultMessage: 'Continue with verified only' },
+  trashBackup: { id: 'restore.verify.trash', defaultMessage: 'Trash backup and quit' },
+  trashConfirmLabel: { id: 'restore.verify.trashConfirm', defaultMessage: 'Type Permanently Delete Backup to confirm' },
+  trashConfirmPlaceholder: { id: 'restore.verify.trashPlaceholder', defaultMessage: 'Permanently Delete Backup' },
+  details: { id: 'restore.error.details', defaultMessage: 'Details' },
+  copyError: { id: 'restore.error.copy', defaultMessage: 'Copy error' },
 });
 
 function fileName(path: string): string {
   return path.split(/[\\/]/u).at(-1) ?? path;
-}
-
-function stageLabel(stage: RestoreProgressContract['stage']): string {
-  switch (stage) {
-    case 'discovering':
-      return 'Validating cloud backup';
-    case 'downloading':
-      return 'Downloading and verifying originals';
-    case 'rebuilding':
-      return 'Rebuilding thumbnails and catalog';
-    case 'activating':
-      return 'Activating restored library';
-    case 'complete':
-      return 'Restore complete';
-  }
-}
-
-function LibraryCard({
-  library,
-  selected,
-  onSelect,
-}: {
-  readonly library: RestoreLibrarySummary;
-  readonly selected: boolean;
-  readonly onSelect: () => void;
-}): ReactElement {
-  const intl = useIntl();
-  const { formatBytes, formatCount } = useFormats();
-  const valid = library.validation === 'valid';
-  return (
-    <button
-      type="button"
-      className={`ovl-restore__library${selected ? ' ovl-restore__library--selected' : ''}`}
-      disabled={!valid}
-      aria-pressed={selected}
-      onClick={onSelect}
-      data-testid="restore-library-card"
-    >
-      <div className="ovl-restore__libraryHead">
-        <span className="ovl-restore__libraryId mono-data">{library.libraryId}</span>
-        <Badge tone={valid ? 'green' : library.validation === 'unsupported' ? 'amber' : 'red'}>
-          {valid ? 'Validated' : library.validation.replace('-', ' ')}
-        </Badge>
-      </div>
-      {valid ? (
-        <div className="ovl-restore__meta mono-data">
-          Gen {String(library.generation)} · {formatCount(library.photos ?? 0)} photos · {formatBytes(library.totalBytes ?? 0)} ·{' '}
-          {formatCount(library.albums ?? 0)} albums
-        </div>
-      ) : (
-        <div className="ovl-restore__meta">Metadata is unavailable until this backup validates.</div>
-      )}
-      {library.generatedAt === null ? null : (
-        <div className="ovl-restore__date">
-          Backed up {intl.formatDate(library.generatedAt, { dateStyle: 'medium', timeStyle: 'short' })}
-        </div>
-      )}
-      {library.fallbackGenerations > 0 ? (
-        <div className="ovl-restore__notice">{formatCount(library.fallbackGenerations)} retained fallback generation available</div>
-      ) : null}
-      {library.resumable ? <div className="ovl-restore__notice">Verified staged work is ready to resume</div> : null}
-    </button>
-  );
 }
 
 export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): ReactElement {
@@ -156,6 +132,20 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [progress, setProgress] = useState<RestoreProgressContract | null>(null);
   const [error, setError] = useState<{ reason: string; message: string } | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [missing, setMissing] = useState<readonly RestoreMissingObject[]>([]);
+  const [restoredPhotoCount, setRestoredPhotoCount] = useState<number | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{
+    verificationId: string;
+    missing: readonly RestoreMissingObject[];
+    missingCount: number;
+    corruptCount: number;
+    verifiedCount: number;
+    photos: number;
+  } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [trashConfirm, setTrashConfirm] = useState('');
+  const [showTrashConfirm, setShowTrashConfirm] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const descriptor = providers.find((provider) => provider.id === providerId) ?? null;
   const selected = useMemo(() => libraries.find((library) => library.libraryId === selectedId) ?? null, [libraries, selectedId]);
@@ -179,6 +169,46 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
 
   useEffect(() => window.overlook.restore.onProgress(setProgress), []);
 
+  const applyRestoreStatus = (status: RestoreStatusSnapshot): void => {
+    if (status.providerId !== null) setProviderId(status.providerId);
+    if (status.sessionId !== null) setSessionId(status.sessionId);
+    if (status.libraries.length > 0) setLibraries(status.libraries);
+    if (status.libraryId !== null) setSelectedId(status.libraryId);
+    if (status.progress !== null) setProgress(status.progress);
+    if (status.verification !== null) {
+      setVerifyResult({
+        verificationId: status.verification.verificationId,
+        missing: status.verification.missing,
+        missingCount: status.verification.missingCount,
+        corruptCount: status.verification.corruptCount,
+        verifiedCount: status.verification.verifiedCount,
+        photos: status.verification.photos,
+      });
+    }
+    if (status.lastError !== null) setError(status.lastError);
+    if (status.lastResult !== null) {
+      setMissing(status.lastResult.missing);
+      setRestoredPhotoCount(status.lastResult.photos);
+    }
+    setVerifying(status.phase === 'verify-scan');
+    const next = restoreStepFromStatus(status);
+    if (next !== null) setStep(next);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.overlook.restore.status().then((status) => {
+      if (!cancelled) applyRestoreStatus(status);
+    });
+    const stopStatus = window.overlook.restore.onStatusChanged((status) => {
+      if (!cancelled) applyRestoreStatus(status);
+    });
+    return () => {
+      cancelled = true;
+      stopStatus();
+    };
+  }, []);
+
   // Every result on screen belongs to exactly one discovery (#748): a
   // provider change or a return to setup invalidates the previous attempt's
   // session, library list, selection, error, and fallback notice — a stale
@@ -197,6 +227,12 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setLibraries([]);
     setSelectedId(null);
     setFallbackNotice(null);
+    setMissing([]);
+    setRestoredPhotoCount(null);
+    setVerifyResult(null);
+    setShowTrashConfirm(false);
+    setTrashConfirm('');
+    setActionNotice(null);
   };
 
   const runDiscovery = (request: Parameters<typeof window.overlook.restore.discover>[0], noMatch: string): void => {
@@ -242,23 +278,63 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     );
   };
 
+  const verify = (): void => {
+    if (sessionId === null || selectedId === null) return;
+    setError(null);
+    setVerifying(true);
+    setActionNotice(null);
+    setStep('verify');
+    void window.overlook.restore
+      .verify({ sessionId, libraryId: selectedId })
+      .then((response) => {
+        setVerifying(false);
+        if (response.error !== null) {
+          setError(response.error);
+          return;
+        }
+        if (response.result !== null) {
+          setVerifyResult({
+            verificationId: response.result.verificationId,
+            missing: response.result.missing,
+            missingCount: response.result.missingCount,
+            corruptCount: response.result.corruptCount,
+            verifiedCount: response.result.verifiedCount,
+            photos: response.result.photos,
+          });
+          if (response.result.missingCount === 0 && response.result.corruptCount === 0) setStep('confirm');
+        }
+      })
+      .catch(() => {
+        setVerifying(false);
+        setError({ reason: 'io', message: 'Verification failed. Check your connection and try again.' });
+      });
+  };
   const run = (): void => {
-    if (sessionId === null || selectedId === null || !authorized) return;
+    if (sessionId === null || selectedId === null || verifyResult === null || !authorized) return;
     setError(null);
     setStep('running');
-    void window.overlook.restore.run({ sessionId, libraryId: selectedId, allowReplace: context === 'settings' }).then((response) => {
-      if (response.error !== null) {
-        setError(response.error);
-        setStep('confirm');
-        return;
-      }
-      if (response.result?.fallbackFromGeneration !== null && response.result?.fallbackFromGeneration !== undefined) {
-        setFallbackNotice(
-          `Generation ${String(response.result.fallbackFromGeneration)} failed validation; restored generation ${String(response.result.generation)}.`,
-        );
-      }
-      setStep('complete');
-    });
+    void window.overlook.restore
+      .run({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId, allowReplace: context === 'settings' })
+      .then((response) => {
+        if (response.error !== null) {
+          setError(response.error);
+          if (response.error.reason === 'cancelled') {
+            setVerifyResult(null);
+            setStep('choose');
+          } else {
+            setStep('confirm');
+          }
+          return;
+        }
+        if (response.result?.fallbackFromGeneration !== null && response.result?.fallbackFromGeneration !== undefined) {
+          setFallbackNotice(
+            `Generation ${String(response.result.fallbackFromGeneration)} failed validation; restored generation ${String(response.result.generation)}.`,
+          );
+        }
+        setMissing(response.result?.missing ?? []);
+        setRestoredPhotoCount(response.result?.photos ?? null);
+        setStep('complete');
+      });
   };
 
   const openExisting = (): void => {
@@ -431,7 +507,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           <div className="ovl-restore__libraries">
             {libraries.length === 0 && error === null ? <div className="ovl-restore__empty">Validating cloud libraries…</div> : null}
             {libraries.map((library) => (
-              <LibraryCard
+              <RestoreLibraryCard
                 key={library.libraryId}
                 library={library}
                 selected={library.libraryId === selectedId}
@@ -449,10 +525,153 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             >
               Back
             </Button>
-            <Button variant="primary" disabled={selectedId === null} onClick={() => setStep('confirm')}>
-              Review restore
+            <Button variant="primary" disabled={selectedId === null} onClick={verify}>
+              Verify backup
             </Button>
           </div>
+        </>
+      ) : step === 'verify' ? (
+        <>
+          <div className="ovl-restore__sectionTitle">{intl.formatMessage(messages.verifyHeading)}</div>
+          {verifying ? (
+            <div className="ovl-restore__running" aria-live="polite">
+              <div className="ovl-restore__sectionTitle">
+                {progress === null ? 'Scanning cloud backup' : restoreStageLabel(progress.stage, true)}
+              </div>
+              <ProgressBar
+                value={progress?.done ?? 0}
+                max={Math.max(progress?.total ?? 1, 1)}
+                label={progress === null ? 'Starting' : restoreStageLabel(progress.stage, true)}
+                {...(progress === null ? {} : { detail: restoreProgressDetail(progress) })}
+              />
+            </div>
+          ) : verifyResult === null ? (
+            <div className="ovl-restore__empty">Preparing verification…</div>
+          ) : (
+            <>
+              <div className="ovl-restore__warnings" data-testid="restore-verify">
+                <strong>
+                  {intl.formatMessage(messages.verifyCounts, {
+                    missing: verifyResult.missingCount,
+                    corrupt: verifyResult.corruptCount,
+                    verified: verifyResult.verifiedCount,
+                  })}
+                </strong>
+                <span>{intl.formatMessage(messages.verifyHelp)}</span>
+                {verifyResult.missing.length === 0 ? null : (
+                  <ul className="mono-data ovl-restore__verifyList">
+                    {verifyResult.missing.map((o) => (
+                      <li key={o.path}>
+                        {o.path} — {o.kind} — {o.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="ovl-restore__actions ovl-restore__verifyActions">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (sessionId === null || selectedId === null) return;
+                      setActionNotice(null);
+                      void window.overlook.restore
+                        .exportCsv({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId })
+                        .then((result) => {
+                          setActionNotice(
+                            result.error ??
+                              (result.exported ? `CSV exported to ${result.path ?? 'the selected file'}.` : 'CSV export cancelled.'),
+                          );
+                        });
+                    }}
+                  >
+                    {intl.formatMessage(messages.exportCsv)}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (sessionId === null || selectedId === null) return;
+                      setActionNotice(null);
+                      void window.overlook.restore
+                        .exportCorrupt({ sessionId, libraryId: selectedId, verificationId: verifyResult.verificationId })
+                        .then((result) => {
+                          setActionNotice(
+                            result.error ??
+                              (result.exported
+                                ? `${formatCount(result.count)} corrupt images exported.`
+                                : 'Corrupt-image export cancelled.'),
+                          );
+                        });
+                    }}
+                  >
+                    {intl.formatMessage(messages.exportCorrupt)}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      // Continue with verified only — heal and proceed to confirm with verified count
+                      setStep('confirm');
+                    }}
+                  >
+                    {intl.formatMessage(messages.continueVerified)} ({formatCount(verifyResult.verifiedCount)} photos)
+                  </Button>
+                  <Button variant="danger" onClick={() => setShowTrashConfirm(true)}>
+                    {intl.formatMessage(messages.trashBackup)}
+                  </Button>
+                </div>
+                {actionNotice === null ? null : (
+                  <div className="ovl-restore__notice" role="status">
+                    {actionNotice}
+                  </div>
+                )}
+                {showTrashConfirm ? (
+                  <div className="ovl-restore__warnings ovl-restore__trashWarning">
+                    <strong>
+                      Trash backup and quit — this moves the scoped cloud backup to the provider's Trash or Recently Deleted area. Recovery
+                      remains subject to the provider's retention window.
+                    </strong>
+                    <label className="ovl-restore__field">
+                      <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
+                      <input
+                        value={trashConfirm}
+                        onChange={(e) => setTrashConfirm(e.target.value)}
+                        placeholder={intl.formatMessage(messages.trashConfirmPlaceholder)}
+                      />
+                    </label>
+                    <div className="ovl-restore__actions">
+                      <Button variant="ghost" onClick={() => setShowTrashConfirm(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="danger"
+                        disabled={trashConfirm !== 'Permanently Delete Backup'}
+                        onClick={() => {
+                          if (sessionId === null || selectedId === null) return;
+                          void window.overlook.restore
+                            .trash({
+                              sessionId,
+                              libraryId: selectedId,
+                              verificationId: verifyResult.verificationId,
+                              confirmation: trashConfirm,
+                            })
+                            .then((res) => {
+                              if (res.trashed) {
+                                window.close();
+                                return;
+                              }
+                              setError(res.error ?? { reason: 'io', message: 'The backup was not fully moved to Trash.' });
+                            });
+                        }}
+                      >
+                        Confirm trash
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                <Button variant="ghost" onClick={() => setStep('choose')}>
+                  Back
+                </Button>
+              </div>
+            </>
+          )}
         </>
       ) : step === 'confirm' && selected !== null ? (
         <>
@@ -464,6 +683,13 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
               <li>The current library remains active unless the complete staged restore validates.</li>
               <li>Activation uses rollback-safe replacement, then Overlook relaunches.</li>
             </ul>
+            {verifyResult !== null ? (
+              <span>
+                Verified {formatCount(verifyResult.verifiedCount)} of {formatCount(verifyResult.photos)} photos will be restored;{' '}
+                {formatCount(verifyResult.missingCount + verifyResult.corruptCount)} unverified objects will be excluded and recorded in the
+                restore report.
+              </span>
+            ) : null}
           </div>
           {context === 'settings' ? (
             <Checkbox
@@ -473,22 +699,27 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             />
           ) : null}
           <div className="ovl-restore__actions">
-            <Button variant="ghost" onClick={() => setStep('choose')}>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                setStep(verifyResult !== null && verifyResult.missingCount + verifyResult.corruptCount > 0 ? 'verify' : 'choose')
+              }
+            >
               Back
             </Button>
             <Button variant={context === 'settings' ? 'danger' : 'primary'} disabled={!authorized} onClick={run}>
-              Restore {formatCount(selected.photos ?? 0)} photos
+              Restore {formatCount(verifyResult?.verifiedCount ?? selected.photos ?? 0)} photos
             </Button>
           </div>
         </>
       ) : step === 'running' ? (
         <div className="ovl-restore__running" aria-live="polite">
-          <div className="ovl-restore__sectionTitle">{progress === null ? 'Preparing restore' : stageLabel(progress.stage)}</div>
+          <div className="ovl-restore__sectionTitle">{progress === null ? 'Preparing restore' : restoreStageLabel(progress.stage)}</div>
           <ProgressBar
             value={progress?.done ?? 0}
             max={Math.max(progress?.total ?? 1, 1)}
-            label={progress === null ? 'Starting' : stageLabel(progress.stage)}
-            {...(progress === null ? {} : { detail: `${String(progress.done)} / ${String(progress.total)}` })}
+            label={progress === null ? 'Starting' : restoreStageLabel(progress.stage)}
+            {...(progress === null ? {} : { detail: restoreProgressDetail(progress) })}
           />
           <Button
             variant="secondary"
@@ -500,9 +731,23 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         </div>
       ) : (
         <div className="ovl-restore__complete" aria-live="polite">
-          <Icon name="circle-check" size={28} color="var(--accent-green)" />
-          <strong>Restore complete</strong>
-          <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+          <Icon name="circle-check" size={28} color={missing.length === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'} />
+          <strong>{missing.length === 0 ? 'Restore complete' : intl.formatMessage(messages.missingHeading)}</strong>
+          <span className="ovl-restore__completeSummary">
+            {restoredPhotoCount === null ? null : <span>{intl.formatMessage(messages.restoredCount, { count: restoredPhotoCount })}</span>}
+            <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+          </span>
+          {missing.length === 0 ? null : (
+            <div className="ovl-restore__warnings ovl-restore__missing" data-testid="restore-missing">
+              <strong>{intl.formatMessage(messages.missingCount, { count: missing.length })}</strong>
+              <span>{intl.formatMessage(messages.missingHelp)}</span>
+              <ul className="mono-data">
+                {missing.map((object) => (
+                  <li key={object.path}>{object.path}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -520,6 +765,17 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     ? intl.formatMessage(messages.localKeyPasswordHelp)
                     : (ERROR_HELP[error.reason] ?? ERROR_HELP['io'])}
           </span>
+          <details className="ovl-restore__errorDetails">
+            <summary>{intl.formatMessage(messages.details)}</summary>
+            <pre className="mono-data ovl-restore__errorText">{`reason: ${error.reason}\nmessage: ${error.message}`}</pre>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void navigator.clipboard.writeText(`reason: ${error.reason}\nmessage: ${error.message}`)}
+            >
+              {intl.formatMessage(messages.copyError)}
+            </Button>
+          </details>
         </div>
       )}
     </div>

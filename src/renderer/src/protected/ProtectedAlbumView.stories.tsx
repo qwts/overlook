@@ -33,6 +33,13 @@ const PHOTOS: readonly ProtectedPhotoRecord[] = NAMES.map((fileName, index) => (
   importSource: 'storybook-real-photo',
   favorite: index === 0,
   deletedAt: null,
+  title: null,
+  description: null,
+  tags: [],
+  userTags: [],
+  importedKeywords: [],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 }));
 
 const SOURCES = [flower, street, square, summer] as const;

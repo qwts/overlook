@@ -2,6 +2,7 @@ import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import { createEphemeralRuntime } from './ephemeral-runtime.js';
+import type { CustodyHandleResolver } from './custody-handle.js';
 import type { EphemeralStage } from './ephemeral-originals.js';
 import { OffloadService } from './offload.js';
 import type { StorageProvider } from './provider.js';
@@ -11,6 +12,9 @@ import type { SyncStatus } from '../../shared/library/types.js';
 export interface OriginalCustodyRuntimeOptions {
   readonly provider: StorageProvider;
   readonly connected: () => boolean;
+  readonly offloadAuthority: (bytes: number) => Promise<number>;
+  readonly custodyChanged: () => void;
+  readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: SyncLedger;
   readonly repo: PhotosRepository;
   readonly blobs: BlobStore;
@@ -37,6 +41,9 @@ export function createOriginalCustodyRuntime(options: OriginalCustodyRuntimeOpti
   const offload = new OffloadService({
     provider: options.provider,
     providerConnected: options.connected,
+    offloadAuthority: options.offloadAuthority,
+    custodyChanged: options.custodyChanged,
+    custody: options.custody,
     ledger: options.ledger,
     repo: {
       get: (id) => options.repo.get(id),
@@ -55,8 +62,8 @@ export function createOriginalCustodyRuntime(options: OriginalCustodyRuntimeOpti
     audit: options.audit,
   });
   const ephemeral = createEphemeralRuntime({
-    provider: options.provider,
-    providerConnected: options.connected,
+    custody: options.custody,
+    custodyChanged: options.custodyChanged,
     ledger: options.ledger,
     repo: options.repo,
     blobs: options.blobs,

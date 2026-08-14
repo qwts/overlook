@@ -41,6 +41,13 @@ const PHOTO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'verified',
   syncState: 'local',
+  title: null,
+  description: null,
+  tags: [],
+  userTags: [],
+  importedKeywords: [],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 };
 
 type EphemeralStage = 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
@@ -216,6 +223,29 @@ export const LandscapeFillCoversWidescreenAndPans: Story = {
     await expect(viewport).toHaveAttribute('data-pan-y', '0.0');
     await fireEvent.wheel(image, { deltaX: -10000 });
     await waitFor(() => expect(Number(viewport.dataset['panX'])).toBeGreaterThan(0));
+  },
+};
+
+// #968: the canonical Fill case. A square has no long side, so it cannot be
+// fitted by accident and still look right — in a 960x540 viewport it must match
+// the width and overflow top and bottom. Bars on any side mean `min()` is back.
+export const SquareFillCoversWidescreen: Story = {
+  args: { photo: { ...PHOTO, width: 1280, height: 1280, fileName: 'SQUARE.JPG' } },
+  parameters: { lightboxHeight: 540 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const image = canvas.getByRole('img', { name: 'SQUARE.JPG' });
+    const viewport = canvas.getByTestId('lightbox-viewport');
+    await waitFor(() => expect(viewport).toHaveAttribute('data-load-state', 'decoded'));
+    await userEvent.dblClick(image);
+    await expect(viewport).toHaveAttribute('data-mode', 'fill');
+    // Poll the scale: until the ResizeObserver reports the viewport, Fill has a
+    // zero box to work from and reads back 1.000 alongside an already-'fill'
+    // mode. A bare assertion here caught that transient render and went red.
+    await waitFor(() => expect(viewport).toHaveAttribute('data-zoom', '1.778'));
+    await expect(viewport).toHaveAttribute('data-pan-x', '0.0');
+    await expect(viewport).toHaveAttribute('data-pan-y', '0.0');
+    await expectOneAxisOverflow(viewport, image, 'vertical');
   },
 };
 

@@ -114,6 +114,8 @@ test('pCloud disconnect clears real profile custody and persists across restart'
     accessToken: 'e2e-local-only-token',
     apiHost: 'api.pcloud.com',
     connectedAt: '2026-07-18T00:00:00.000Z',
+    accountId: '927001',
+    accountLabel: 'owner@pcloud.e2e',
   });
   mkdirSync(custodyDir, { recursive: true });
   writeFileSync(custodyFile, Buffer.from(Buffer.from(record, 'utf8').map((byte) => byte ^ 0x5f)));

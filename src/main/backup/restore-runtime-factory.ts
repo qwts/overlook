@@ -21,6 +21,7 @@ export interface RestoreRuntimeFactoryOptions {
   readonly sources: ConstructorParameters<typeof RestoreRuntime>[0]['sources'];
   readonly sessionId: () => string;
   readonly progress: ConstructorParameters<typeof RestoreRuntime>[0]['progress'];
+  readonly statusChanged?: ConstructorParameters<typeof RestoreRuntime>[0]['statusChanged'];
   readonly beforeActivate: () => Promise<void>;
   readonly harnessEnv: (name: string) => string | undefined;
   readonly workChanged: (delta: 1 | -1) => void;
@@ -52,6 +53,7 @@ export function createRestoreRuntime(options: RestoreRuntimeFactoryOptions): Res
     sources: options.sources,
     sessionId: options.sessionId,
     progress: options.progress,
+    statusChanged: options.statusChanged,
     beforeActivate: options.beforeActivate,
     activationOperations: activationOperationsForHarness(options.harnessEnv('OVERLOOK_RESTORE_FAULT')),
     // Mirrors buildAppLockController's store selection (#753): the anchor the

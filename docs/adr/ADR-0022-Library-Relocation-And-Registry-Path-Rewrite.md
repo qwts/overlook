@@ -12,6 +12,16 @@ staging-and-atomic-activation discipline of
 filesystem; it rewrites neither. §3 below is this ADR's one explicit amendment
 to ADR-0017 §2.
 
+**Amended 2026-07-30 (PR [#853](https://github.com/qwts/photos/pull/853)):** §5's
+inactive-library refusal set gains one entry: an inactive library whose
+`master.key` carries app-lock custody (the `OVLK` sealed form, ADR-0013)
+refuses renderer-initiated relocation with the designed `app-locked` reason
+until the user opens and unlocks it — this process holds no password
+authority for a sealed library, so moving its custody (and, in Move mode,
+deleting its source) must not proceed on advisory lock alone. An unreadable
+custody probe maps to the stable `source-unreadable` refusal, never an
+opaque failure. All other §4/§5 semantics stand.
+
 Section map for [#483](https://github.com/qwts/photos/issues/483): §1–§2 govern
 the relocation service and its journal, §3–§4 the staging identity rule and the
 copy/verify/commit protocol, §5 preflight and refusals, §6 external-volume
@@ -160,6 +170,9 @@ always copy.
 - An inactive library whose lock is live-held by another instance refuses to
   move; same-hostname dead-pid locks are stale and reclaimable per
   ADR-0017 §5.
+- An inactive library under app-lock custody (`OVLK` master key, ADR-0013)
+  refuses with `app-locked` until opened and unlocked (amendment above,
+  PR #853); an unreadable custody probe refuses `source-unreadable`.
 - **Cloud backup is advisory, never a gate.** The §4 guarantees hold with or
   without a backup: at every instant one verified authoritative copy exists,
   and the only destructive step runs after two copies verify. Requiring an

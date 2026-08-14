@@ -65,11 +65,32 @@ export function fitSize(image: LightboxSize, viewport: LightboxSize): LightboxSi
   return { width: image.width * scale, height: image.height * scale };
 }
 
-export function fillZoom(image: LightboxSize, viewport: LightboxSize): number {
-  const fitted = fitSize(image, viewport);
+/**
+ * `object-fit: cover` for a box already reduced by {@link fitSize}: the scale at
+ * which the rendered image reaches or exceeds the viewport on *both* axes.
+ * `max`, never `min` — `min` is `contain`, which leaves bars (#371, #501, #898,
+ * #968). Never below 1, because `fitSize` never returns a box larger than the
+ * viewport, so Fill only ever grows the image.
+ */
+function coverZoom(fitted: LightboxSize, viewport: LightboxSize): number {
   if (fitted.width <= 0 || fitted.height <= 0) return 1;
-  const zoom = image.height > image.width ? viewport.width / fitted.width : viewport.height / fitted.height;
-  return clamp(zoom, ZOOM_MIN, ZOOM_MAX);
+  return Math.max(viewport.width / fitted.width, viewport.height / fitted.height);
+}
+
+/**
+ * The one ceiling every transform obeys: `ZOOM_MAX`, raised to the cover scale
+ * for the rare photo that needs more (a 10:1 panorama in a portrait window
+ * wants ~23x). Clamping Fill at 8x would put back the bars Fill exists to
+ * remove; clamping only *some* paths at 8x is worse still, because zooming in
+ * from such a Fill would then shrink the image back to 8x and re-expose them.
+ * So the ceiling is a property of the geometry, not of the mode or the gesture.
+ */
+function maximumZoom(fitted: LightboxSize, viewport: LightboxSize): number {
+  return Math.max(ZOOM_MAX, coverZoom(fitted, viewport));
+}
+
+export function fillZoom(image: LightboxSize, viewport: LightboxSize): number {
+  return coverZoom(fitSize(image, viewport), viewport);
 }
 
 export function resizeTransform(
@@ -84,7 +105,7 @@ export function resizeTransform(
 }
 
 export function clampTransform(transform: LightboxTransform, fitted: LightboxSize, viewport: LightboxSize): LightboxTransform {
-  const zoom = clamp(transform.zoom, ZOOM_MIN, ZOOM_MAX);
+  const zoom = clamp(transform.zoom, ZOOM_MIN, maximumZoom(fitted, viewport));
   const maximumX = Math.max(0, (fitted.width * zoom - viewport.width) / 2);
   const maximumY = Math.max(0, (fitted.height * zoom - viewport.height) / 2);
   return {
@@ -139,7 +160,7 @@ export function zoomAround(
   viewport: LightboxSize,
 ): LightboxTransform {
   const current = clampTransform(transform, fitted, viewport);
-  const zoom = clamp(requestedZoom, ZOOM_MIN, ZOOM_MAX);
+  const zoom = clamp(requestedZoom, ZOOM_MIN, maximumZoom(fitted, viewport));
   const focalX = focal.x - viewport.width / 2;
   const focalY = focal.y - viewport.height / 2;
   const imageX = (focalX - current.x) / current.zoom;

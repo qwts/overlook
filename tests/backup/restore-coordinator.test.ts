@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,13 +12,17 @@ import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import { sealRecoveryBootstrap } from '../../src/main/backup/recovery-bootstrap.js';
 import { RestoreCoordinator, type RestoreRunner } from '../../src/main/backup/restore-coordinator.js';
+import { RestoreEngine, type RestoreEngineDeps, type RestoreVerifyResult } from '../../src/main/backup/restore-engine.js';
+import type { RestoreProgress } from '../../src/main/backup/restore-types.js';
 import { createEncryptStream } from '../../src/main/crypto/envelope.js';
 import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 import { sealRecoveryKey } from '../../src/main/crypto/recovery.js';
+import { sampleJpeg } from '../../src/main/library/seed.js';
 
 const LIBRARY_ID = '01JZZZZZZZZZZZZZZZZZZZZZZZ';
 const GENERATED_AT = '2026-07-15T01:00:00.000Z';
 const PASSWORD = 'correct horse battery staple';
+const OBJECT_SET_SHA256 = '0'.repeat(64);
 
 const safeStorage: SafeStorageLike = {
   isEncryptionAvailable: () => true,
@@ -29,7 +34,7 @@ async function put(provider: MockProvider, path: string, bytes: Buffer): Promise
   await provider.put(path, Readable.from([bytes]));
 }
 
-async function remoteWorld(libraryId = LIBRARY_ID) {
+async function remoteWorld(libraryId = LIBRARY_ID, corruptPhoto?: 'decryptable' | 'authentication') {
   const sourceDir = mkdtempSync(join(tmpdir(), 'restore-coordinator-source-'));
   const keys = KeyStore.open({ safeStorage, dataDir: sourceDir });
   const masterKey = keys.masterKeyBytes();
@@ -39,14 +44,51 @@ async function remoteWorld(libraryId = LIBRARY_ID) {
     'recovery/bootstrap.ovrb',
     sealRecoveryBootstrap({ schema: 1, libraryId, generatedAt: GENERATED_AT, keys: keys.exportWrappedKeys() }, masterKey),
   );
+  const expectedImage = sampleJpeg(41);
+  const corruptImage = sampleJpeg(42);
+  const contentHash = createHash('sha256').update(expectedImage).digest('hex');
+  const photo = {
+    id: 'P1',
+    fileName: 'IMG_1.JPG',
+    fileKind: 'jpeg' as const,
+    mediaInfo: null,
+    width: 1,
+    height: 1,
+    bytes: expectedImage.length,
+    contentHash,
+    blobPath: `blobs/${contentHash.slice(0, 2)}/${contentHash}`,
+    camera: null,
+    lens: null,
+    iso: null,
+    aperture: null,
+    shutter: null,
+    focalLength: null,
+    takenAt: null,
+    gpsLat: null,
+    gpsLon: null,
+    place: null,
+    importedAt: GENERATED_AT,
+    importSource: 'cloud-restore',
+    favorite: false,
+    keyId: 1,
+    deletedAt: null,
+  };
+  const photos = corruptPhoto === undefined ? [] : [photo];
+  if (corruptPhoto !== undefined) {
+    const bytes =
+      corruptPhoto === 'authentication'
+        ? Buffer.from('not an authenticated envelope')
+        : await buffer(Readable.from([corruptImage]).pipe(createEncryptStream(keys.currentKey(), { photoId: photo.id })));
+    await put(provider, photo.blobPath, bytes);
+  }
   const manifest = buildBackupManifestV2({
     libraryId,
     generatedAt: GENERATED_AT,
     snapshot: {
       databaseSchema: 3,
       keyIds: [1],
-      totals: { photos: 0, bytes: 0, albums: 0 },
-      photos: [],
+      totals: { photos: photos.length, bytes: photos.reduce((total, item) => total + item.bytes, 0), albums: 0 },
+      photos,
       albums: [],
     },
   });
@@ -54,18 +96,58 @@ async function remoteWorld(libraryId = LIBRARY_ID) {
     Readable.from([Buffer.from(JSON.stringify(manifest))]).pipe(createEncryptStream(keys.currentKey(), { photoId: 'manifest' })),
   );
   await put(provider, 'manifest/gen-2.ovlk', sealed);
-  return { provider, masterKey, recoveryFile: sealRecoveryKey(masterKey, PASSWORD) };
+  return { provider, masterKey, recoveryFile: sealRecoveryKey(masterKey, PASSWORD), corruptImage };
+}
+
+function engineRunner(provider: MockProvider): RestoreRunner {
+  const deps: RestoreEngineDeps = {
+    provider,
+    targetDir: join(mkdtempSync(join(tmpdir(), 'restore-coordinator-target-')), 'library'),
+    safeStorage,
+    availableBytes: () => Promise.resolve(Number.MAX_SAFE_INTEGER),
+    thumbnails: () => ({ generateFor: () => Promise.resolve({ generated: true, width: 1, height: 1 }) }),
+    events: { progress: () => undefined },
+  };
+  const engine = new RestoreEngine(deps);
+  return { run: (request) => engine.run(request), verify: (request) => engine.verify(request) };
+}
+
+function completeVerification(): RestoreVerifyResult {
+  return {
+    libraryId: LIBRARY_ID,
+    generation: 2,
+    manifestPath: 'manifest/gen-2.ovlk',
+    sealedManifestSha256: '1'.repeat(64),
+    objectSetSha256: OBJECT_SET_SHA256,
+    photos: 0,
+    missing: [],
+    missingCount: 0,
+    corruptCount: 0,
+    verifiedCount: 0,
+  };
+}
+
+function verifiedRunner(run: RestoreRunner['run']): RestoreRunner {
+  return { run, verify: () => Promise.resolve(completeVerification()) };
+}
+
+async function verificationId(coordinator: RestoreCoordinator, sessionId: string): Promise<string> {
+  const response = await coordinator.verify(sessionId, LIBRARY_ID);
+  assert.equal(response.error, null);
+  assert.ok(response.result);
+  return response.result.verificationId;
 }
 
 test('restore coordinator discovers validated metadata and runs through an opaque session (#290)', async () => {
   const world = await remoteWorld();
-  const progress = [];
+  const progress: RestoreProgress[] = [];
   let activated = false;
   const runner: RestoreRunner = {
     run: ({ signal }) => {
       assert.equal(signal?.aborted, false);
-      return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
+      return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
     },
+    verify: () => Promise.resolve(completeVerification()),
   };
   const coordinator = new RestoreCoordinator({
     readRecoveryKey: () => Promise.resolve(world.recoveryFile),
@@ -98,12 +180,16 @@ test('restore coordinator discovers validated metadata and runs through an opaqu
       resumable: true,
     },
   ]);
-  const run = await coordinator.run('session-1', LIBRARY_ID, false);
+  const run = await coordinator.run('session-1', LIBRARY_ID, await verificationId(coordinator, 'session-1'), false);
   assert.equal(run.error, null);
   assert.equal(run.result?.relaunching, true);
   assert.equal(activated, true);
-  assert.equal(progress.length, 1);
-  assert.equal((await coordinator.run('session-1', LIBRARY_ID, false)).error?.message.includes('expired'), true);
+  assert.deepEqual(
+    progress.map(({ stage }) => stage),
+    ['discovering', 'discovering'],
+    'verification and the bound restore each report their runner lifecycle',
+  );
+  assert.equal((await coordinator.run('session-1', LIBRARY_ID, 'expired-plan', false)).error?.message.includes('expired'), true);
 });
 
 test('wrong recovery password fails before provider discovery', async () => {
@@ -124,30 +210,48 @@ test('wrong recovery password fails before provider discovery', async () => {
   assert.equal(sourceCalls, 0);
 });
 
-test('cancelled runs preserve the discovery session for resumable retry', async () => {
+test('discovery reports an authenticated provider scope with no cloud libraries', async () => {
+  const world = await remoteWorld();
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([]),
+    createRunner: () => ({ run: () => Promise.reject(new Error('unused')) }),
+    sessionId: () => 'unused',
+    progress: () => undefined,
+  });
+
+  const result = await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  assert.equal(result.sessionId, null);
+  assert.deepEqual(result.libraries, []);
+  assert.deepEqual(result.error, { reason: 'corrupt', message: 'No Overlook cloud libraries were found.' });
+});
+
+test('cancelled runs preserve discovery but require a fresh verification for resumable retry', async () => {
   const world = await remoteWorld();
   let attempt = 0;
   const coordinator = new RestoreCoordinator({
     readRecoveryKey: () => Promise.resolve(world.recoveryFile),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({
-      run: async ({ signal }) => {
+    createRunner: () =>
+      verifiedRunner(async ({ signal }) => {
         attempt += 1;
-        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: true };
+        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: true, missing: [] };
         await new Promise<void>((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
         });
         throw new Error('unreachable');
-      },
-    }),
+      }),
     sessionId: () => 'session-resume',
     progress: () => undefined,
   });
   await coordinator.discover('mock', '/recovery.key', PASSWORD);
-  const first = coordinator.run('session-resume', LIBRARY_ID, false);
+  const firstPlan = await verificationId(coordinator, 'session-resume');
+  const first = coordinator.run('session-resume', LIBRARY_ID, firstPlan, false);
   coordinator.cancel();
   assert.equal((await first).error?.reason, 'cancelled');
-  assert.equal((await coordinator.run('session-resume', LIBRARY_ID, false)).result?.resumed, true);
+  assert.match((await coordinator.run('session-resume', LIBRARY_ID, firstPlan, false)).error?.message ?? '', /verification expired/u);
+  const retryPlan = await verificationId(coordinator, 'session-resume');
+  assert.equal((await coordinator.run('session-resume', LIBRARY_ID, retryPlan, false)).result?.resumed, true);
 });
 
 test('close drains an active discovery and destroys its recovered session', async () => {
@@ -183,7 +287,7 @@ test('close drains an active discovery and destroys its recovered session', asyn
   assert.equal((await discovery).sessionId, 'session-close');
   await closing;
   assert.equal(closed, true);
-  assert.equal((await coordinator.run('session-close', LIBRARY_ID, false)).error?.message.includes('expired'), true);
+  assert.equal((await coordinator.run('session-close', LIBRARY_ID, 'expired-plan', false)).error?.message.includes('expired'), true);
 });
 
 test("this Mac's stored master key discovers and restores without a recovery-key file (#741)", async () => {
@@ -192,7 +296,8 @@ test("this Mac's stored master key discovers and restores without a recovery-key
     readRecoveryKey: () => Promise.reject(new Error('the key file must not be read')),
     localMasterKey: () => Buffer.from(world.masterKey),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({ run: () => Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false }) }),
+    createRunner: () =>
+      verifiedRunner(() => Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] })),
     sessionId: () => 'session-local-key',
     progress: () => undefined,
   });
@@ -200,7 +305,7 @@ test("this Mac's stored master key discovers and restores without a recovery-key
   assert.equal(discovery.error, null);
   assert.equal(discovery.sessionId, 'session-local-key');
   assert.equal(discovery.libraries[0]?.validation, 'valid');
-  const run = await coordinator.run('session-local-key', LIBRARY_ID, false);
+  const run = await coordinator.run('session-local-key', LIBRARY_ID, await verificationId(coordinator, 'session-local-key'), false);
   assert.equal(run.error, null);
   assert.equal(run.result?.generation, 2);
 });
@@ -226,26 +331,26 @@ test('expireSession makes a discovered session unrunnable but never disturbs an 
   const coordinator = new RestoreCoordinator({
     readRecoveryKey: () => Promise.resolve(world.recoveryFile),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({
-      run: async ({ signal }) => {
+    createRunner: () =>
+      verifiedRunner(async ({ signal }) => {
         attempt += 1;
-        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false };
+        if (attempt > 1) return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] };
         await new Promise<void>((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
         });
         throw new Error('unreachable');
-      },
-    }),
+      }),
     sessionId: () => 'session-expire',
     progress: () => undefined,
   });
   await coordinator.discover('mock', '/recovery.key', PASSWORD);
-  const running = coordinator.run('session-expire', LIBRARY_ID, false);
+  const firstPlan = await verificationId(coordinator, 'session-expire');
+  const running = coordinator.run('session-expire', LIBRARY_ID, firstPlan, false);
   coordinator.expireSession();
   coordinator.cancel();
   assert.equal((await running).error?.reason, 'cancelled', 'the active run kept its session key');
   assert.equal(
-    (await coordinator.run('session-expire', LIBRARY_ID, false)).result?.resumed,
+    (await coordinator.run('session-expire', LIBRARY_ID, await verificationId(coordinator, 'session-expire'), false)).result?.resumed,
     false,
     'the mid-run expire was a no-op: the cancelled session stayed retryable',
   );
@@ -253,7 +358,7 @@ test('expireSession makes a discovered session unrunnable but never disturbs an 
   await coordinator.discover('mock', '/recovery.key', PASSWORD);
   coordinator.expireSession();
   assert.equal(
-    (await coordinator.run('session-expire', LIBRARY_ID, false)).error?.message.includes('expired'),
+    (await coordinator.run('session-expire', LIBRARY_ID, 'expired-plan', false)).error?.message.includes('expired'),
     true,
     'an idle expire drops the session',
   );
@@ -266,18 +371,17 @@ test('the verified custody password rides the session into the runner request (#
     readRecoveryKey: () => Promise.reject(new Error('the key file must not be read')),
     localMasterKey: () => Buffer.from(world.masterKey),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({
-      run: (request) => {
+    createRunner: () =>
+      verifiedRunner((request) => {
         requests.push(request);
-        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
-      },
-    }),
+        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
+      }),
     sessionId: () => 'session-custody',
     progress: () => undefined,
   });
   const discovery = await coordinator.discoverFrom('mock', { kind: 'local-master', custodyPassword: 'app pw' });
   assert.equal(discovery.error, null);
-  await coordinator.run('session-custody', LIBRARY_ID, false);
+  await coordinator.run('session-custody', LIBRARY_ID, await verificationId(coordinator, 'session-custody'), false);
   assert.equal(requests[0]?.custodyPassword, 'app pw');
 });
 
@@ -287,17 +391,16 @@ test('recovery-key sessions never carry a custody password (#754)', async () => 
   const coordinator = new RestoreCoordinator({
     readRecoveryKey: () => Promise.resolve(world.recoveryFile),
     sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-    createRunner: () => ({
-      run: (request) => {
+    createRunner: () =>
+      verifiedRunner((request) => {
         requests.push(request);
-        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false });
-      },
-    }),
+        return Promise.resolve({ libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] });
+      }),
     sessionId: () => 'session-rk',
     progress: () => undefined,
   });
   await coordinator.discover('mock', '/recovery.key', PASSWORD);
-  await coordinator.run('session-rk', LIBRARY_ID, false);
+  await coordinator.run('session-rk', LIBRARY_ID, await verificationId(coordinator, 'session-rk'), false);
   assert.equal('custodyPassword' in (requests[0] ?? {}), false);
 });
 
@@ -313,7 +416,7 @@ test("a foreign library's local key surfaces per-library wrong-key validation, n
   });
   const discovery = await coordinator.discoverFrom('mock', { kind: 'local-master' });
   assert.notEqual(discovery.libraries[0]?.validation, 'valid');
-  const run = await coordinator.run('session-wrong-local', LIBRARY_ID, false);
+  const run = await coordinator.run('session-wrong-local', LIBRARY_ID, 'no-plan', false);
   assert.notEqual(run.error, null, 'an unvalidated library can never run');
 });
 
@@ -377,6 +480,217 @@ test('a matching restore stops before unrelated delayed namespaces (#751)', asyn
   assert.equal(delayedReads, 0);
 });
 
+test('corrupt-image export writes only decryptable image plaintext and reports authentication failures', async () => {
+  for (const mode of ['decryptable', 'authentication'] as const) {
+    const world = await remoteWorld(LIBRARY_ID, mode);
+    const coordinator = new RestoreCoordinator({
+      readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+      sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+      createRunner: (provider) => engineRunner(provider as MockProvider),
+      sessionId: () => `session-export-${mode}`,
+      progress: () => undefined,
+    });
+    const sessionId = `session-export-${mode}`;
+    assert.equal((await coordinator.discover('mock', '/recovery.key', PASSWORD)).sessionId, sessionId);
+    const plan = await verificationId(coordinator, sessionId);
+    const written: Buffer[] = [];
+    const result = await coordinator.exportCorrupt(sessionId, LIBRARY_ID, plan, (_name, bytes) => {
+      written.push(Buffer.from(bytes));
+      return Promise.resolve();
+    });
+    if (mode === 'decryptable') {
+      assert.deepEqual(result, { exported: true, count: 1, unavailable: 0, error: null });
+      assert.deepEqual(written, [world.corruptImage]);
+    } else {
+      assert.equal(result.exported, false);
+      assert.equal(result.count, 0);
+      assert.equal(result.unavailable, 1);
+      assert.match(result.error ?? '', /0 decryptable images exported; 1 corrupt objects were unavailable/u);
+      assert.deepEqual(written, []);
+    }
+    await coordinator.close();
+  }
+});
+
+test('restore actions stay serialized while corrupt-image export rechecks its verification plan', async () => {
+  const world = await remoteWorld();
+  const runner = engineRunner(world.provider);
+  const runVerify = runner.verify?.bind(runner);
+  assert.ok(runVerify);
+  let blockRecheck = false;
+  let entered: (() => void) | undefined;
+  const recheckStarted = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => ({
+      run: runner.run.bind(runner),
+      verify: async (request) => {
+        const result = await runVerify(request);
+        if (blockRecheck) {
+          entered?.();
+          await gate;
+        }
+        return result;
+      },
+    }),
+    sessionId: () => 'session-export-serialized',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-export-serialized');
+  blockRecheck = true;
+  const exporting = coordinator.exportCorrupt('session-export-serialized', LIBRARY_ID, plan, () => Promise.resolve());
+  await recheckStarted;
+
+  assert.match((await coordinator.discover('mock', '/recovery.key', PASSWORD)).error?.message ?? '', /already running/u);
+  assert.match((await coordinator.run('session-export-serialized', LIBRARY_ID, plan, false)).error?.message ?? '', /already running/u);
+  assert.match((await coordinator.verify('session-export-serialized', LIBRARY_ID)).error?.message ?? '', /already running/u);
+  assert.match(
+    (await coordinator.exportCorrupt('session-export-serialized', LIBRARY_ID, plan, () => Promise.resolve())).error ?? '',
+    /already running/u,
+  );
+
+  assert.ok(release);
+  release();
+  assert.deepEqual(await exporting, { exported: true, count: 0, unavailable: 0, error: null });
+  await coordinator.close();
+});
+
+test('corrupt-image export refuses stale, changed, and unavailable verification plans', async () => {
+  for (const mode of ['stale-manifest', 'changed-scan', 'unavailable-scan'] as const) {
+    const world = await remoteWorld();
+    const runner = engineRunner(world.provider);
+    const runVerify = runner.verify?.bind(runner);
+    assert.ok(runVerify);
+    let scans = 0;
+    const coordinator = new RestoreCoordinator({
+      readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+      sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+      createRunner: () => ({
+        run: runner.run.bind(runner),
+        verify: async (request) => {
+          const current = await runVerify(request);
+          scans += 1;
+          if (mode === 'stale-manifest') return { ...current, sealedManifestSha256: 'f'.repeat(64) };
+          if (scans > 1 && mode === 'changed-scan') return { ...current, objectSetSha256: 'f'.repeat(64) };
+          if (scans > 1 && mode === 'unavailable-scan') throw new ProviderError('verification recheck unavailable', 'transient');
+          return current;
+        },
+      }),
+      sessionId: () => `session-export-${mode}`,
+      progress: () => undefined,
+    });
+    const sessionId = `session-export-${mode}`;
+    await coordinator.discover('mock', '/recovery.key', PASSWORD);
+    const plan = await verificationId(coordinator, sessionId);
+    const result = await coordinator.exportCorrupt(sessionId, LIBRARY_ID, plan, () => Promise.resolve());
+    assert.equal(result.exported, false);
+    assert.equal(result.count, 0);
+    assert.equal(result.unavailable, 0);
+    assert.match(result.error ?? '', mode === 'changed-scan' ? /changed after verification/u : /expired|unavailable/u);
+    await coordinator.close();
+  }
+});
+
+test('failed sidecars are reported unavailable and never exported as images', async () => {
+  const world = await remoteWorld();
+  const runner = engineRunner(world.provider);
+  const runVerify = runner.verify?.bind(runner);
+  assert.ok(runVerify);
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => ({
+      run: runner.run.bind(runner),
+      verify: async (request) => {
+        const current = await runVerify(request);
+        return {
+          ...current,
+          missing: [{ path: 'sidecars/P1.xmp', kind: 'sidecar', photoId: 'P1', reason: 'failed-verification' }],
+          missingCount: 1,
+          corruptCount: 1,
+        };
+      },
+    }),
+    sessionId: () => 'session-export-sidecar',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-export-sidecar');
+  let writes = 0;
+  const result = await coordinator.exportCorrupt('session-export-sidecar', LIBRARY_ID, plan, () => {
+    writes += 1;
+    return Promise.resolve();
+  });
+  assert.equal(writes, 0);
+  assert.deepEqual(result, {
+    exported: false,
+    count: 0,
+    unavailable: 1,
+    error: '0 decryptable images exported; 1 corrupt objects were unavailable.',
+  });
+  await coordinator.close();
+});
+
+test('trash reports incomplete deletion honestly, retains the session, and invalidates the plan', async () => {
+  const world = await remoteWorld();
+  world.provider.delete = () => Promise.resolve();
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => verifiedRunner(() => Promise.reject(new Error('unused'))),
+    sessionId: () => 'session-trash',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-trash');
+  const failed = await coordinator.trash('session-trash', LIBRARY_ID, plan, 'Permanently Delete Backup');
+  assert.equal(failed.trashed, false);
+  assert.match(failed.error?.message ?? '', /objects remain/u);
+  assert.equal(coordinator.providerFor('session-trash', LIBRARY_ID), world.provider);
+  assert.equal(coordinator.verificationFor('session-trash', LIBRARY_ID, plan), null);
+});
+
+test('trash reports success only after every scoped object is gone and clears the session', async () => {
+  const world = await remoteWorld();
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => verifiedRunner(() => Promise.reject(new Error('unused'))),
+    sessionId: () => 'session-trash-success',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-trash-success');
+  const succeeded = await coordinator.trash('session-trash-success', LIBRARY_ID, plan, 'Permanently Delete Backup');
+  assert.deepEqual(succeeded, { trashed: true, error: null });
+  assert.equal(coordinator.providerFor('session-trash-success', LIBRARY_ID), null);
+});
+
+test('rediscovery invalidates verification plans from the prior session', async () => {
+  const world = await remoteWorld();
+  let sequence = 0;
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => verifiedRunner(() => Promise.reject(new Error('unused'))),
+    sessionId: () => `session-${String(++sequence)}`,
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const oldPlan = await verificationId(coordinator, 'session-1');
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  assert.equal(coordinator.verificationFor('session-1', LIBRARY_ID, oldPlan), null);
+  assert.match((await coordinator.run('session-2', LIBRARY_ID, oldPlan, false)).error?.message ?? '', /verification expired/u);
+});
+
 test('provider-wide connectivity failures remain global restore errors (#751)', async () => {
   const world = await remoteWorld();
   world.provider.getStream = () => Promise.reject(new ProviderError('provider is offline', 'transient'));
@@ -392,4 +706,39 @@ test('provider-wide connectivity failures remain global restore errors (#751)', 
   assert.equal(discovery.sessionId, null);
   assert.deepEqual(discovery.libraries, []);
   assert.equal(discovery.error?.reason, 'offline');
+});
+
+test('status snapshot survives after the renderer unmounts and reports a running job', async () => {
+  const world = await remoteWorld();
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () =>
+      verifiedRunner(async ({ signal }) => {
+        await gate;
+        assert.equal(signal?.aborted, false);
+        return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] };
+      }),
+    sessionId: () => 'session-status',
+    progress: () => undefined,
+  });
+  assert.equal(coordinator.status().phase, 'idle');
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  assert.equal(coordinator.status().phase, 'session');
+  assert.equal(coordinator.status().sessionId, 'session-status');
+  const plan = await verificationId(coordinator, 'session-status');
+  const running = coordinator.run('session-status', LIBRARY_ID, plan, false);
+  assert.equal(coordinator.status().phase, 'running');
+  assert.equal(coordinator.status().libraryId, LIBRARY_ID);
+  assert.match((await coordinator.discover('mock', '/recovery.key', PASSWORD)).error?.message ?? '', /already running/u);
+  assert.ok(release);
+  release();
+  assert.equal((await running).error, null);
+  assert.equal(coordinator.status().phase, 'complete');
+  assert.equal(coordinator.status().lastResult?.libraryId, LIBRARY_ID);
+  await coordinator.close();
 });

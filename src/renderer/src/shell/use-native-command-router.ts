@@ -20,9 +20,11 @@ export interface NativeCommandRouterDeps {
   readonly nativeCommand: { readonly id: CommandId; readonly sequence: number } | null;
   readonly state: AppState;
   readonly dispatch: Dispatch<AppAction>;
+  readonly onSelectAll: () => void;
   readonly setShortcutSurface: (surface: CommandSurface | null) => void;
   readonly setSettingsSection: (section: SettingsSection | undefined) => void;
   readonly setExportPhotoIds: (ids: readonly string[] | null) => void;
+  readonly setExportAllPhotos: (allPhotos: boolean) => void;
   readonly setAlbumPickerIds: (ids: readonly string[] | null) => void;
   readonly setLibrariesCreating: (creating: boolean) => void;
   readonly resetInteropEntry: () => void;
@@ -37,9 +39,11 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     nativeCommand,
     state,
     dispatch,
+    onSelectAll,
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
+    setExportAllPhotos,
     setAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry,
@@ -61,6 +65,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         closeOffload();
         resetDropped();
         setExportPhotoIds(null);
+        setExportAllPhotos(false);
         dispatch({ type: 'lightbox/closed' });
         dispatch({ type: 'dialog/set', dialog: 'import', open: false });
         dispatch({ type: 'dialog/set', dialog: 'export', open: false });
@@ -104,6 +109,12 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           closeOverlays();
           dispatch({ type: 'dialog/set', dialog: 'import', open: true });
           return;
+        case 'library.exportAll':
+          if (state.protectedAlbum !== null) return;
+          closeOverlays();
+          setExportAllPhotos(true);
+          dispatch({ type: 'dialog/set', dialog: 'export', open: true });
+          return;
         case 'library.source.all':
         case 'library.source.favorites':
         case 'library.source.recent':
@@ -122,7 +133,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           });
           return;
         case 'selection.selectAll':
-          dispatch({ type: 'selection/all', photoIds: state.photos.map(({ id }) => id) });
+          onSelectAll();
           return;
         case 'selection.clear':
           dispatch({ type: 'selection/cleared' });
@@ -166,11 +177,14 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           dispatch({ type: 'lightbox/closed' });
           return;
         case 'photo.favorite.toggle':
-          for (const id of targetIds) {
-            void window.overlook.library.toggleFavorite({ id }).then(({ pendingCount }) => {
-              dispatch({ type: 'pendingCount/set', count: pendingCount });
-            });
-          }
+          if (targetIds[0] === undefined) return;
+          void (
+            targetIds.length === 1
+              ? window.overlook.library.toggleFavorite({ id: targetIds[0] })
+              : window.overlook.library.toggleFavorites({ photoIds: targetIds })
+          ).then(({ pendingCount }) => {
+            dispatch({ type: 'pendingCount/set', count: pendingCount });
+          });
           return;
         case 'photo.trash': {
           if (state.lightboxId !== null) {
@@ -194,6 +208,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         }
         case 'photo.export':
+          setExportAllPhotos(false);
           setExportPhotoIds(targetIds);
           dispatch({ type: 'dialog/set', dialog: 'export', open: true });
           return;
@@ -272,9 +287,11 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     [
       dispatch,
       state,
+      onSelectAll,
       setShortcutSurface,
       setSettingsSection,
       setExportPhotoIds,
+      setExportAllPhotos,
       setAlbumPickerIds,
       setLibrariesCreating,
       resetInteropEntry,

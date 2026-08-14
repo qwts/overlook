@@ -107,3 +107,12 @@
   font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
+
+.ovl-metadata-row__value--copyable {
+  overflow: visible;
+  white-space: normal;
+}
+
+.ovl-metadata-row__value--copyable .ovl-copyable-value {
+  width: 100%;
+}

@@ -13,12 +13,19 @@ const IDS = ['A', 'B', 'C'];
 function installStub(): void {
   const exportApi: OverlookApi['export'] = {
     pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports' }),
+    runAll: async () => {
+      for (let done = 1; done <= IDS.length; done += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        listener?.({ done, total: IDS.length });
+      }
+      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] };
+    },
     run: async () => {
       for (let done = 1; done <= IDS.length; done += 1) {
         await new Promise((resolve) => setTimeout(resolve, 40));
         listener?.({ done, total: IDS.length });
       }
-      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1 };
+      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, failures: [] };
     },
     cancel: () => Promise.resolve({}),
     onProgress: (next) => {
@@ -56,6 +63,12 @@ export const Options: Story = {
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeEnabled();
+    await expect(body.getByText('/Users/demo/Exports')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Copy export destination' })).toBeVisible();
+    await userEvent.click(body.getByRole('radio', { name: 'Edits' }));
+    await expect(body.getByText('Write title, description, and effective tags to a new XMP sidecar.')).toBeVisible();
+    await userEvent.click(body.getByRole('radio', { name: 'None' }));
+    await expect(body.getByText('Write no metadata sidecars.')).toBeVisible();
     // Switch OFF: the button disables and the verbatim warning appears.
     await userEvent.click(body.getByRole('switch', { name: 'Decrypt originals' }));
     await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();
@@ -80,5 +93,18 @@ export const PhasesOnEngineEvents: Story = {
       },
     );
     await expect(body.getByRole('button', { name: 'Done' })).toBeVisible();
+  },
+};
+
+export const AllUnencrypted: Story = {
+  args: { allPhotos: true },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(body.getByText('Every photo in this library')).toBeVisible();
+    await expect(body.getByText('Unencrypted originals')).toBeVisible();
+    await expect(body.queryByRole('switch', { name: 'Decrypt originals' })).toBeNull();
+    await expect(body.queryByRole('group', { name: 'Format' })).toBeNull();
+    await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
+    await expect(body.getByRole('button', { name: 'Export all photos' })).toBeEnabled();
   },
 };

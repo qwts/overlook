@@ -1,4 +1,5 @@
 import { useEffect, useState, type DragEvent, type ReactElement } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -7,6 +8,7 @@ import { Dialog } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
 import { PasswordField } from '../components/PasswordField';
 import { strengthOf } from '../../../shared/crypto/password-strength.js';
+import { CopyableValue } from '../components/CopyableValue';
 
 import './settings.css';
 
@@ -19,12 +21,18 @@ import './settings.css';
 
 export type KeyDialogMode = 'backup' | 'import';
 
+const messages = defineMessages({
+  copyFingerprint: { id: 'settings.keys.copyFingerprint', defaultMessage: 'library key fingerprint' },
+  copyFileName: { id: 'settings.keys.copyFileName', defaultMessage: 'recovery key filename' },
+});
+
 export interface KeyDialogProps {
   readonly open: boolean;
   readonly mode: KeyDialogMode;
   readonly onClose: () => void;
   /** Green completion toasts ride the shell's toast host when wired. */
   readonly onToast?: ((title: string) => void) | undefined;
+  readonly onExported?: (() => void) | undefined;
 }
 
 function baseName(path: string): string {
@@ -54,19 +62,25 @@ function Note({
 }
 
 function FingerprintRow({ fingerprint }: { fingerprint: string | null }): ReactElement {
+  const intl = useIntl();
   return (
     <div className="ovl-keyfp" data-testid="key-fingerprint">
       <Icon name="fingerprint" size={16} color="var(--text-faint)" />
       <div className="ovl-keyfp__body">
         <div className="ovl-keyfp__label mono-data">Library key</div>
-        <div className="ovl-keyfp__value mono-data">{fingerprint ?? '—'}</div>
+        {fingerprint === null ? (
+          <div className="ovl-keyfp__value mono-data">—</div>
+        ) : (
+          <CopyableValue value={fingerprint} label={intl.formatMessage(messages.copyFingerprint)} textClassName="ovl-keyfp__value" />
+        )}
       </div>
       <Badge tone="green">Active</Badge>
     </div>
   );
 }
 
-export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): ReactElement | null {
+export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialogProps): ReactElement | null {
+  const intl = useIntl();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [ack, setAck] = useState(false);
@@ -116,6 +130,7 @@ export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): Rea
         }
         setSavedPath(path);
         onToast?.('Key backup saved');
+        onExported?.();
       })
       .catch(() => {
         setBusy(false);
@@ -218,7 +233,12 @@ export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): Rea
             <div className="ovl-key__filecard">
               <Icon name="file-key" size={16} color="var(--accent-cyan)" />
               <div className="ovl-key__filebody">
-                <div className="ovl-key__filename mono-data">{baseName(savedPath)}</div>
+                <CopyableValue
+                  value={baseName(savedPath)}
+                  label={intl.formatMessage(messages.copyFileName)}
+                  className="ovl-key__fileCopy"
+                  textClassName="ovl-key__filename"
+                />
                 <div className="ovl-key__filemeta mono-data">AES-256 · password-protected</div>
               </div>
             </div>
@@ -303,7 +323,12 @@ export function KeyDialog({ open, mode, onClose, onToast }: KeyDialogProps): Rea
               <div className="ovl-key__filecard" data-testid="key-file-card">
                 <Icon name="file-key" size={16} color="var(--accent-cyan)" />
                 <div className="ovl-key__filebody">
-                  <div className="ovl-key__filename mono-data">{baseName(file)}</div>
+                  <CopyableValue
+                    value={baseName(file)}
+                    label={intl.formatMessage(messages.copyFileName)}
+                    className="ovl-key__fileCopy"
+                    textClassName="ovl-key__filename"
+                  />
                   <div className="ovl-key__filemeta mono-data">AES-256 · password-protected</div>
                 </div>
                 <button

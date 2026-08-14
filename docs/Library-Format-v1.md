@@ -54,6 +54,7 @@ than self-healing.
   blobs/<h0:2>/<h2:4>/<hash>    originals, OVLK envelopes (§6, §7)
   thumbs/<h0:2>/<hash>.thumb    derivative, OVLK envelope   ← ONE level of fan-out
   thumbs/<h0:2>/<hash>.mid      derivative, OVLK envelope
+  sidecars/<id0:2>/<photoId>/<hash>  companion files (#484), OVLK envelopes, PER PHOTO
   tmp/                          staging for atomic publish; safe to delete when idle
   ephemeral/                    decrypted-view custody; WIPED on every init()
   protected-blobs/              §10
@@ -66,6 +67,16 @@ than self-healing.
 Note the asymmetry: **originals use a two-level hex fan-out, thumbnails use
 one.** This is easy to get wrong and produces a store that looks fine until a
 lookup misses.
+
+Sidecar companions (#484) are custody **per photo**, not content-addressed
+across the library: the path keys on the owning photo's ULID and the envelope
+AAD context is `sidecar:<photoId>`, so a companion moved between photos (or
+into the originals namespace) fails authentication. Identical companion bytes
+owned by two photos are stored twice — sidecars are metadata-sized, and the
+duplication buys purge-with-the-photo semantics with no shared-hash guard.
+Rows live in `photo_sidecars` (schema v23) and CASCADE with the photo;
+backup manifests (schema 6) list each companion at
+`sidecars/<photoId>/<hash>` with its ciphertext digest.
 
 `ephemeral/` is deleted and recreated on every `BlobStore.init()`. It holds
 provider-fetched originals for viewing only and must never be treated as

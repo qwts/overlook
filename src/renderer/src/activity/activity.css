@@ -66,6 +66,17 @@
   font-size: var(--font-size-xs);
 }
 
+.ovl-activity__machineData {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.ovl-activity__copyValue .ovl-icon-button {
+  min-width: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+}
+
 .ovl-activity__partial {
   color: var(--accent-amber);
 }

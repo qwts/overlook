@@ -4,6 +4,7 @@ test('keyboard-only browse, search, selection, help, and lightbox tour (#399)', 
   const { page } = await launchOverlook({ prefix: 'overlook-e2e-keyboard-', env: { OVERLOOK_SEED: '12' } });
   await page.locator('.ovl-tile__img').first().waitFor();
   {
+    await expect(page.locator('.ovl-search__hint')).toHaveText(process.platform === 'darwin' ? '⌘K' : 'Ctrl+K');
     const skipLink = page.getByRole('link', { name: 'Skip to photos' });
     await skipLink.focus();
     await expect(skipLink).toBeVisible();

@@ -148,6 +148,7 @@ export const FolderFlow: Story = {
     await waitFor(async () => {
       await expect(body.getByText('/Users/ansel/Pictures/Lightroom Exports')).toBeVisible();
     });
+    await expect(body.getByRole('button', { name: 'Copy import source path' })).toBeVisible();
     await expect(body.getByText('486 new · 12.4 GB · 0 RAW / 486 JPG')).toBeVisible();
     await expect(body.getByRole('button', { name: /Import 486 photos/u })).toBeVisible();
     await expect(body.getByRole('radio', { name: 'Move' })).toBeEnabled();
@@ -164,6 +165,7 @@ export const FolderFlow: Story = {
     await waitFor(async () => {
       await expect(body.getByText('/Users/ansel/Pictures/Family')).toBeVisible();
     });
+    await expect(body.getByRole('button', { name: 'Copy import source path' })).toBeVisible();
     await expect(body.getByRole('button', { name: /Import 486 photos/u })).toBeDisabled();
   },
 };

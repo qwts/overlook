@@ -47,7 +47,13 @@
   min-width: 0;
 }
 
+.ovl-inspector__copyName {
+  width: 100%;
+}
+
 .ovl-inspector__name {
+  display: block;
+  flex: 1;
   font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-body);
@@ -80,4 +86,103 @@
   display: flex;
   gap: calc(var(--space-1) * 1.5);
   flex-wrap: wrap;
+}
+
+.ovl-inspector__metadataEditor {
+  padding: calc(var(--space-2) + var(--space-1) / 2) calc(var(--space-3) + var(--space-1) / 2);
+  border-bottom: 1px solid var(--border-1);
+}
+
+.ovl-inspector__metadataLabel,
+.ovl-inspector__tagGroupLabel {
+  display: block;
+  margin-block: var(--space-3) var(--space-2);
+  color: var(--text-muted);
+  font: var(--type-label);
+}
+
+.ovl-inspector__tagGroupLabel {
+  color: var(--text-faint);
+  font: var(--type-meta);
+}
+
+.ovl-inspector__metadataInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--control-h-sm);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-1);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font: var(--type-body);
+}
+
+.ovl-inspector__metadataInput:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ovl-inspector__metadataTextarea {
+  min-height: calc(var(--space-9) + var(--space-6));
+  resize: vertical;
+}
+
+.ovl-inspector__tags,
+.ovl-inspector__tagManagerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ovl-inspector__tag {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font: var(--type-meta);
+  cursor: pointer;
+}
+
+.ovl-inspector__tag--mixed {
+  border-style: dashed;
+}
+
+.ovl-inspector__tag--added {
+  border-color: var(--accent-green);
+  background: var(--accent-green-dim);
+  color: var(--text-body);
+}
+
+.ovl-inspector__tagEntry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ovl-inspector__metadataSave {
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+.ovl-inspector__tagManager {
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font: var(--type-label);
+}
+
+.ovl-inspector__tagManager > summary {
+  cursor: pointer;
+}
+
+.ovl-inspector__tagManagerActions {
+  margin-top: var(--space-3);
+}
+
+.ovl-inspector__metadataStatus {
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+  font: var(--type-meta);
 }

@@ -86,24 +86,19 @@ async function exerciseOrientationControls(page: Page, viewport: Locator): Promi
 async function exerciseFillPersistence(page: Page, viewport: Locator, image: Locator): Promise<void> {
   await image.dblclick();
   await expect(viewport).toHaveAttribute('data-mode', 'fill');
-  await expectLandscapeHeightFill(viewport, image);
+  await expectFillCoversViewport(viewport, image);
 
+  // The Inspector narrows the viewport; Fill re-covers the new box (#968).
   await page.keyboard.press('i');
   await expect(viewport).toHaveAttribute('data-mode', 'fill');
-  await expect
-    .poll(async () => {
-      const viewportBounds = await viewport.boundingBox();
-      const imageBounds = await image.boundingBox();
-      return Math.abs((imageBounds?.height ?? 0) - (viewportBounds?.height ?? 0));
-    })
-    .toBeLessThanOrEqual(1);
+  await expectFillCoversViewport(viewport, image);
   await page.keyboard.press('i');
 
   await page.getByRole('button', { name: 'Next (→)' }).click();
   await page.getByRole('button', { name: 'Next (→)' }).click();
   await expect(page.getByTestId('lightbox')).toContainText('IMG_4035.JPG');
   await expect(viewport).toHaveAttribute('data-mode', 'fill');
-  await expectLandscapeHeightFill(viewport, image);
+  await expectFillCoversViewport(viewport, image);
   await page.getByRole('button', { name: 'Previous (←)' }).click();
   await page.getByRole('button', { name: 'Previous (←)' }).click();
   await expect(page.getByTestId('lightbox')).toContainText('IMG_4021.RAF');
@@ -111,12 +106,20 @@ async function exerciseFillPersistence(page: Page, viewport: Locator, image: Loc
   await expect(viewport).toHaveAttribute('data-mode', 'fit');
 }
 
-async function expectLandscapeHeightFill(viewport: Locator, image: Locator): Promise<void> {
+/**
+ * Fill is `cover`, not `contain` (#968): whatever the window aspect, the image
+ * reaches every edge, so neither axis may fall short of the viewport. Matching
+ * one named axis instead would pass while bars sit on the other one.
+ */
+async function expectFillCoversViewport(viewport: Locator, image: Locator): Promise<void> {
   await expect
     .poll(async () => {
       const viewportBounds = await viewport.boundingBox();
       const imageBounds = await image.boundingBox();
-      return Math.abs((imageBounds?.height ?? 0) - (viewportBounds?.height ?? 0));
+      // Missing bounds mean layout is not settled: report an unmet shortfall
+      // rather than letting 0 - 0 read as a covered viewport.
+      if (viewportBounds === null || imageBounds === null) return Number.POSITIVE_INFINITY;
+      return Math.max(viewportBounds.width - imageBounds.width, viewportBounds.height - imageBounds.height);
     })
     .toBeLessThanOrEqual(1);
 }

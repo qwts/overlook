@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 
 import { ProviderError, type ProviderAuthState, type StorageProvider } from './provider.js';
+import { CustodyResolutionError, type CustodyHandle, type CustodyHandleResolver } from './custody-handle.js';
 import type { SyncLedger } from './sync-ledger.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 
@@ -59,7 +60,7 @@ export interface OffloadSummary {
 }
 
 export type RestoreOriginalFailureReason =
-  'not-offloaded' | 'provider-disconnected' | 'provider-expired' | 'provider-offline' | 'download-failed' | 'verify-failed';
+  'not-offloaded' | 'custody-disconnected' | 'custody-wrong-account' | 'custody-unavailable' | 'download-failed' | 'verify-failed';
 
 export interface RestoreOriginalResultItem {
   readonly photoId: string;
@@ -90,6 +91,11 @@ export interface OffloadDeps {
   /** Settings/provider-registry truth. The active-provider facade has a
    * fallback target while disconnected, so authState alone is insufficient. */
   readonly providerConnected: () => boolean;
+  /** Captures the verified backup target before local custody is removed. */
+  readonly offloadAuthority: (bytes: number) => Promise<number>;
+  readonly custodyChanged: () => void;
+  /** Sole-remote reads resolve from row provenance, never provider selection. */
+  readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: SyncLedger;
   readonly repo: {
     readonly get: (id: string) => { contentHash: string; bytes: number; deletedAt: string | null } | undefined;
@@ -157,15 +163,40 @@ export class OffloadService {
         results.push({ photoId, outcome: 'skipped', reason: current.reason ?? 'missing-photo' });
         continue;
       }
+      let authorityId: number;
+      try {
+        authorityId = await this.deps.offloadAuthority(photo.bytes);
+        // The authority may have become provider-required after identity was
+        // captured. Keep the prospective hint conservative, then let the
+        // ledger's transactional state check refuse the binding.
+        this.deps.ledger.markOffloaded(photoId, authorityId);
+      } catch (error) {
+        this.deps.custodyChanged();
+        failed += 1;
+        results.push({ photoId, outcome: 'failed', reason: 'remote-unverified' });
+        this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=binding reason=${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+      // Persist the sole-remote state and exact authority before removing
+      // local bytes. A crash can leave a harmless extra local copy, never an
+      // unbound cloud-only row that startup repair cannot recover.
       try {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
       } catch (error) {
+        try {
+          this.deps.ledger.setStatus(photoId, 'synced');
+          this.deps.custodyChanged();
+        } catch (rollbackError) {
+          this.deps.audit(
+            `OFFLOAD-FAIL photo=${photoId} stage=rollback reason=${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
         failed += 1;
         results.push({ photoId, outcome: 'failed', reason: 'delete-failed' });
         this.deps.audit(`OFFLOAD-FAIL photo=${photoId} stage=delete reason=${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
-      this.deps.ledger.setStatus(photoId, 'offloaded');
+      this.deps.custodyChanged();
       this.deps.audit(`OFFLOAD photo=${photoId} bytes=${String(photo.bytes)}`);
       offloaded += 1;
       freedBytes += photo.bytes;
@@ -275,11 +306,19 @@ export class OffloadService {
     if (photo === undefined || this.deps.ledger.status(photoId) !== 'offloaded') {
       throw new RehydrateError(`photo ${photoId} is not offloaded`, 'not-offloaded');
     }
-    await this.assertProviderAvailable();
+    let custody: CustodyHandle;
+    try {
+      custody = await this.deps.custody.resolve(photoId);
+    } catch (error) {
+      if (error instanceof CustodyResolutionError) {
+        throw new RehydrateError(error.message, error.reason);
+      }
+      throw new RehydrateError('custody is unavailable', 'custody-unavailable');
+    }
     if (!this.deps.blobs.hasOriginal(photo.contentHash)) {
       let ciphertext: Readable;
       try {
-        ciphertext = await this.deps.provider.getStream(blobPath(photo.contentHash));
+        ciphertext = await custody.provider.getStream(blobPath(photo.contentHash));
       } catch (error) {
         this.deps.audit(`REHYDRATE-FAIL photo=${photoId} stage=download`);
         throw new RehydrateError(error instanceof ProviderError ? error.message : 'download failed', 'download-failed');
@@ -293,6 +332,7 @@ export class OffloadService {
       });
     }
     this.deps.ledger.setStatus(photoId, 'synced');
+    this.deps.custodyChanged();
     this.deps.audit(`REHYDRATE-OK photo=${photoId}`);
   }
 
@@ -330,12 +370,5 @@ export class OffloadService {
     if (photoIds.length === 0) return;
     this.deps.syncStateChanged(photoIds.map((id) => ({ id, syncState: 'synced' })));
     this.deps.storageChanged();
-  }
-
-  private async assertProviderAvailable(): Promise<void> {
-    const state = await this.providerState();
-    if (state === 'connected') return;
-    const reason = state === 'expired' ? 'provider-expired' : state === 'offline' ? 'provider-offline' : 'provider-disconnected';
-    throw new RehydrateError(`cannot restore ${reason.replace('provider-', '')}`, reason);
   }
 }

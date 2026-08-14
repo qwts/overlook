@@ -10,6 +10,6 @@ test('native command bridge accepts only registered command ids (#531)', () => {
 
 test('native command context is bounded and contains no content metadata (#531)', () => {
   assert.deepEqual(commandMenuContextSchema.parse(EMPTY_COMMAND_MENU_CONTEXT), EMPTY_COMMAND_MENU_CONTEXT);
-  assert.throws(() => commandMenuContextSchema.parse({ ...EMPTY_COMMAND_MENU_CONTEXT, selectionCount: 100_001 }));
+  assert.equal(commandMenuContextSchema.parse({ ...EMPTY_COMMAND_MENU_CONTEXT, selectionCount: 200_000 }).selectionCount, 200_000);
   assert.throws(() => commandMenuContextSchema.parse({ ...EMPTY_COMMAND_MENU_CONTEXT, fileName: 'private.jpg' }));
 });

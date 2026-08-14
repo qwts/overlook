@@ -1,51 +1,49 @@
 # Overlook — Claude Code guide
 
-Start with **`AGENTS.md`**. It is the shared agent-context file and holds the
-communication rules, pre-edit checkpoints, working agreement (draft PR first,
-frequent commits, status footers only during validation or paired manual
-testing), GitHub hygiene, and validation workflow. This file only adds
-Claude-specific orientation; do not duplicate `AGENTS.md` here.
+Start with **[`AGENTS.md`](AGENTS.md)**. It is the canonical agent-context file
+and holds everything shared: communication rules, pre-edit checkpoints, the
+working agreement, architecture and design-token invariants, GitHub hygiene, the
+validation gates, and the memory guard. Do not restate any of it here — a
+shared fact in two agent files is a bug
+([ENG-0006](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)).
 
-## Architecture
+This file carries only what is specific to Claude Code.
 
-Electron process layout (ADR-0003), enforced with `no-restricted-imports` in
-`eslint.config.js`:
+## Checked-in Claude configuration
 
-- `src/main/` — main process (lifecycle, windows, IPC handlers). May import
-  `src/shared/`, never `src/renderer/`.
-- `src/preload/` — contextBridge only; builds the typed `window.overlook`
-  surface. May import `src/shared/`, never `src/main/`.
-- `src/renderer/` — sandboxed React app. May import `src/shared/` (types +
-  pure logic), never `src/main/` or `src/preload/`.
-- `src/shared/` — pure, process-free modules (IPC contract registry in
-  `shared/ipc/`, domain logic). Imports nothing process-specific.
+`.claude/settings.json` registers two hooks, both load-bearing:
 
-All renderer↔main traffic goes through the zod-validated channel/event
-registry in `src/shared/ipc/channels.ts` (#49) — never raw `ipcRenderer`.
+- **`PreToolUse` on `Bash`** runs the shared guard with `--protocol=claude`,
+  denying direct `electron --test`, `node --test`, `.test-dist`/`.test-dist-dom`
+  execution, `playwright test`, `test-storybook`, `c8`, and `:run`/`:inner`
+  scripts, and steering you to the guarded entrypoints. Because project settings
+  are checked in, this applies to terminal, IDE, and headless runs alike.
+- **`WorktreeCreate`** mints the per-worktree bot identity from
+  `qwts/playbook-engineering`.
 
-## Design tokens
+The guard itself lives in `tools/agent-guard/`, which is governance-owned and
+arrives by harness sync — never edit it from here.
+`tools/agent-guard/tests/conformance.test.mjs` locks the hook wiring and
+`tests/tooling/agent-primitives.test.ts` locks the rest of the primitives. They
+exist because a governance sync once replaced `.claude/settings.json` wholesale
+and silently removed the guard hook — if you are editing that file, expect both
+tests to have an opinion.
 
-`src/renderer/src/styles/tokens/*.css` (ported verbatim from
-`design/handoff/tokens/` — the committed design handoff package) is the single
-styling source of truth. **No magic values** in renderer styles — color, type, spacing, radii,
-elevation, and motion always reference a token (`var(--…)`). Machine data
-(EXIF, counts, sync states) renders with the `.mono-data` utility.
+## Slash commands
 
-## Before "done"
+**`/check`** (`.claude/commands/check.md`) runs the locally-runnable gates in
+order, reports each result explicitly, and restarts the sequence if a fix edits a
+tracked file. Prefer it over running gates ad hoc when you want a clean,
+reportable pass. It deliberately stops short of the CI-owned heavy lanes.
 
-```sh
-npm run ci              # lint chain, format:check, docs:gov, test:cov (coverage floor), build
-npm run test:e2e        # additionally, for E2E-relevant changes
-npm run test:stories:ci # additionally, for renderer/story-relevant changes
-```
+Commands are reviewed like source: a new one lands by PR with the same scrutiny
+as code.
 
-`npm run ci` includes the `docs:gov` documentation-governance gate, which needs
-`DOCS_GOV_TOOLING_ROOT` set to a `qwts/playbook-engineering` checkout at the
-`v1` tag (see `AGENTS.md` → Documentation And Validation); CI runs the same
-check via the reusable workflow, reported as the required `Docs governance /
-docs-gov` context. The `/check` command wraps this and reports each gate explicitly. Floors
-(c8 lines 90 / branches 80, type-coverage 99.8, 800-line file budget) are
-ratchets — only ever raise them. The a11y violation budget
-(`tests/a11y/violation-budget.json`, #398) is the same policy inverted: its
-counts only ever **shrink**, and coming in under budget fails until the entry
-is tightened or deleted. Unlisted surfaces are budgeted at zero.
+## Working in a bot worktree
+
+Commits made with `git commit` here cannot be Verified — the worktree sets
+`commit.gpgsign=false` deliberately, since signing a bot's commit with the
+human's key shows Unverified. Replay commits through the Git Data API with the
+`signed-commit` skill before opening the PR; GitHub signs them server-side. The
+identity and token rules behind this are in
+[CI Identity And Tokens](docs/CI-Identity-And-Tokens.md).

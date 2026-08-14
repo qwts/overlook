@@ -1,4 +1,10 @@
 {
+  "activity.copy.eventId": {
+    "defaultMessage": "activity event ID"
+  },
+  "activity.copy.timestamp": {
+    "defaultMessage": "activity timestamp"
+  },
   "activity.empty": {
     "defaultMessage": "Library activity will appear here."
   },
@@ -19,9 +25,6 @@
   },
   "activity.redo": {
     "defaultMessage": "Redo"
-  },
-  "activity.timestamp": {
-    "defaultMessage": "{date} · {time}"
   },
   "activity.title": {
     "defaultMessage": "Activity"
@@ -79,6 +82,21 @@
   },
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
+  },
+  "appLock.anchorPolicy.harden.ack": {
+    "defaultMessage": "I saved the new recovery-key export and understand that losing it can make this library inaccessible."
+  },
+  "appLock.anchorPolicy.harden.note": {
+    "defaultMessage": "A missing or changed local credential anchor will require the recovery-key file you just exported. This can happen after migration, restore, or OS credential-store loss."
+  },
+  "appLock.anchorPolicy.harden.title": {
+    "defaultMessage": "Enable hardened protection"
+  },
+  "appLock.anchorPolicy.usability.note": {
+    "defaultMessage": "After a valid password or Touch ID, Overlook will repair this Mac’s missing or changed local credential anchor. Malformed credential records still fail closed."
+  },
+  "appLock.anchorPolicy.usability.title": {
+    "defaultMessage": "Use automatic anchor repair"
   },
   "appLock.password": {
     "defaultMessage": "App password"
@@ -175,6 +193,9 @@
   },
   "commands.history.undo": {
     "defaultMessage": "Undo"
+  },
+  "commands.library.exportAll": {
+    "defaultMessage": "Export All Unencrypted…"
   },
   "commands.library.import": {
     "defaultMessage": "Import Photos…"
@@ -299,6 +320,81 @@
   "common.cancel": {
     "defaultMessage": "Cancel"
   },
+  "copyableValue.copied": {
+    "defaultMessage": "Copied {label}."
+  },
+  "copyableValue.copy": {
+    "defaultMessage": "Copy {label}"
+  },
+  "copyableValue.failed": {
+    "defaultMessage": "Could not copy {label}."
+  },
+  "export.allPhotos": {
+    "defaultMessage": "Export all photos"
+  },
+  "export.allPhotosHint": {
+    "defaultMessage": "Every original will be written as a plain, openable file to the folder you choose."
+  },
+  "export.copy.destination": {
+    "defaultMessage": "export destination"
+  },
+  "export.copy.failure": {
+    "defaultMessage": "export failure"
+  },
+  "export.destination.applePhotos": {
+    "defaultMessage": "Apple Photos"
+  },
+  "export.destination.folder": {
+    "defaultMessage": "Folder"
+  },
+  "export.destination.kind": {
+    "defaultMessage": "Export to"
+  },
+  "export.destination.label": {
+    "defaultMessage": "Export destination"
+  },
+  "export.everyPhoto": {
+    "defaultMessage": "Every photo in this library"
+  },
+  "export.itemFailures": {
+    "defaultMessage": "View item failures"
+  },
+  "export.metadata.edits": {
+    "defaultMessage": "Edits"
+  },
+  "export.metadata.editsHint": {
+    "defaultMessage": "Write title, description, and effective tags to a new XMP sidecar."
+  },
+  "export.metadata.label": {
+    "defaultMessage": "Metadata"
+  },
+  "export.metadata.none": {
+    "defaultMessage": "None"
+  },
+  "export.metadata.noneHint": {
+    "defaultMessage": "Write no metadata sidecars."
+  },
+  "export.metadata.source": {
+    "defaultMessage": "Source"
+  },
+  "export.metadata.sourceHint": {
+    "defaultMessage": "Copy retained source sidecars when originals are exported."
+  },
+  "export.photoKit.accessHint": {
+    "defaultMessage": "Export requests add-only Photos access. It cannot read or synchronize your Photos library."
+  },
+  "export.photoKit.decryptHint": {
+    "defaultMessage": "Apple Photos receives plain originals and may retain them after Overlook locks. Only this reviewed selection is sent."
+  },
+  "export.photoKit.done": {
+    "defaultMessage": "{count} {count, plural, one {photo} other {photos}} exported and decrypted to Apple Photos."
+  },
+  "export.photoKit.metadataHint": {
+    "defaultMessage": "The original bytes, embedded metadata, creation date, and location are preserved where PhotoKit supports them."
+  },
+  "export.unencryptedOriginals": {
+    "defaultMessage": "Unencrypted originals"
+  },
   "favorite.add": {
     "defaultMessage": "Add to Favorites"
   },
@@ -307,6 +403,9 @@
   },
   "grid.regionLabel": {
     "defaultMessage": "Photos"
+  },
+  "import.copy.sourcePath": {
+    "defaultMessage": "import source path"
   },
   "import.move.complete": {
     "defaultMessage": "{moved} moved · {retained} retained after encrypted custody verification."
@@ -323,11 +422,137 @@
   "import.move.warning.sd": {
     "defaultMessage": "Each imported original will be deleted from the card only after encrypted custody and decrypt/hash verification."
   },
+  "import.photoKit.asset": {
+    "defaultMessage": "{fileName} · {mediaType}{dimensions}"
+  },
+  "import.photoKit.availableItems": {
+    "defaultMessage": "Apple Photos items available to import"
+  },
+  "import.photoKit.cancelled": {
+    "defaultMessage": "Apple Photos selection was cancelled"
+  },
+  "import.photoKit.denied": {
+    "defaultMessage": "Apple Photos access was denied"
+  },
+  "import.photoKit.requestHint": {
+    "defaultMessage": "Requests read access in the foreground"
+  },
+  "import.photoKit.restricted": {
+    "defaultMessage": "Apple Photos access is restricted on this Mac"
+  },
+  "import.photoKit.reviewAction": {
+    "defaultMessage": "Review photos from Apple Photos"
+  },
+  "import.photoKit.reviewNote": {
+    "defaultMessage": "Only checked originals leave Apple Photos. Embedded metadata is preserved when supported."
+  },
+  "import.photoKit.reviewTitle": {
+    "defaultMessage": "Review Apple Photos items"
+  },
+  "import.photoKit.selected": {
+    "defaultMessage": "{selected} of {total} selected"
+  },
+  "import.photoKit.selectedLimited": {
+    "defaultMessage": "{selected} of {total} selected · Limited Photos access"
+  },
+  "import.photoKit.tryAgain": {
+    "defaultMessage": "Try again"
+  },
+  "import.photoKit.unavailable": {
+    "defaultMessage": "Apple Photos import requires a signed macOS build"
+  },
+  "import.photoKit.waiting": {
+    "defaultMessage": "Waiting for Apple Photos authorization…"
+  },
+  "inspector.copy.cipher": {
+    "defaultMessage": "cipher identity"
+  },
+  "inspector.copy.fileName": {
+    "defaultMessage": "filename"
+  },
   "inspector.file.dimensionMismatch": {
     "defaultMessage": "DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA"
   },
   "inspector.file.metadata": {
     "defaultMessage": "Metadata"
+  },
+  "inspector.metadata.addTag": {
+    "defaultMessage": "Add tag"
+  },
+  "inspector.metadata.common": {
+    "defaultMessage": "On every selected photo"
+  },
+  "inspector.metadata.description": {
+    "defaultMessage": "Description"
+  },
+  "inspector.metadata.failed": {
+    "defaultMessage": "Metadata could not be updated."
+  },
+  "inspector.metadata.heading": {
+    "defaultMessage": "Descriptive metadata"
+  },
+  "inspector.metadata.imported": {
+    "defaultMessage": "Imported keyword"
+  },
+  "inspector.metadata.importedTagChip": {
+    "defaultMessage": "{tag} · {imported} ×"
+  },
+  "inspector.metadata.invalidTag": {
+    "defaultMessage": "Enter a tag up to 64 characters without commas or semicolons."
+  },
+  "inspector.metadata.manage": {
+    "defaultMessage": "Manage a tag across this library"
+  },
+  "inspector.metadata.manageResult": {
+    "defaultMessage": "Updated {count} photos{merged, select, yes { and merged tags} other {}}."
+  },
+  "inspector.metadata.mixed": {
+    "defaultMessage": "Mixed values — unchanged until edited"
+  },
+  "inspector.metadata.removeEverywhere": {
+    "defaultMessage": "Remove from {count} photos"
+  },
+  "inspector.metadata.removeTag": {
+    "defaultMessage": "Remove {tag}"
+  },
+  "inspector.metadata.rename": {
+    "defaultMessage": "Rename or merge on {count} photos"
+  },
+  "inspector.metadata.result": {
+    "defaultMessage": "Updated {updated}; {unchanged} unchanged; {missing} unavailable."
+  },
+  "inspector.metadata.saveMany": {
+    "defaultMessage": "Apply to {count} photos"
+  },
+  "inspector.metadata.saveOne": {
+    "defaultMessage": "Save metadata"
+  },
+  "inspector.metadata.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "inspector.metadata.sourceTag": {
+    "defaultMessage": "Existing tag"
+  },
+  "inspector.metadata.tagChip": {
+    "defaultMessage": "{tag} ×"
+  },
+  "inspector.metadata.tagPlaceholder": {
+    "defaultMessage": "Type a tag and press Enter"
+  },
+  "inspector.metadata.tags": {
+    "defaultMessage": "Tags and keywords"
+  },
+  "inspector.metadata.targetTag": {
+    "defaultMessage": "New tag"
+  },
+  "inspector.metadata.title": {
+    "defaultMessage": "Title"
+  },
+  "inspector.metadata.tooMany": {
+    "defaultMessage": "Edit at most 10,000 selected photos at a time."
+  },
+  "inspector.metadata.varying": {
+    "defaultMessage": "On some selected photos"
   },
   "inspector.selection.next": {
     "defaultMessage": "Next selected photo"
@@ -620,6 +845,135 @@
   "library.trash.retentionPolicy.off": {
     "defaultMessage": "Items in Trash are kept until you delete them permanently."
   },
+  "librename.assurance": {
+    "defaultMessage": "Only the folder name changes. The library ID, keys, albums, backups, and display name stay exactly as they are."
+  },
+  "librename.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "librename.didNotReport": {
+    "defaultMessage": "The rename did not report back."
+  },
+  "librename.done": {
+    "defaultMessage": "Done"
+  },
+  "librename.nameLabel": {
+    "defaultMessage": "Folder name"
+  },
+  "librename.objection.dotName": {
+    "defaultMessage": "“.” and “..” are not folder names."
+  },
+  "librename.objection.empty": {
+    "defaultMessage": "Enter a folder name."
+  },
+  "librename.objection.forbiddenCharacter": {
+    "defaultMessage": "Some platforms refuse < > : \" | ? * and control characters in folder names."
+  },
+  "librename.objection.leadingSpace": {
+    "defaultMessage": "Folder names cannot start with a space."
+  },
+  "librename.objection.reservedName": {
+    "defaultMessage": "Windows reserves this name (CON, PRN, AUX, NUL, COM1–9, LPT1–9)."
+  },
+  "librename.objection.separator": {
+    "defaultMessage": "Folder names cannot contain / or \\."
+  },
+  "librename.objection.tooLong": {
+    "defaultMessage": "This name is too long for some filesystems."
+  },
+  "librename.objection.trailingDotOrSpace": {
+    "defaultMessage": "Folder names cannot end with a dot or a space."
+  },
+  "librename.openNote": {
+    "defaultMessage": "This library is open now: Overlook closes it, renames the folder, and reopens it."
+  },
+  "librename.pathArrow": {
+    "defaultMessage": "{from} → {to}"
+  },
+  "librename.reason.appLocked": {
+    "defaultMessage": "Unlock Overlook before renaming the open library."
+  },
+  "librename.reason.cancelled": {
+    "defaultMessage": "Cancelled — the folder was not renamed."
+  },
+  "librename.reason.destinationNotEmpty": {
+    "defaultMessage": "A folder with this name already exists here — Overlook never overwrites or merges."
+  },
+  "librename.reason.destinationNotWritable": {
+    "defaultMessage": "This location is not writable."
+  },
+  "librename.reason.destinationRegistered": {
+    "defaultMessage": "A registered library already uses this name here."
+  },
+  "librename.reason.fallback": {
+    "defaultMessage": "The rename could not be completed — the library is untouched."
+  },
+  "librename.reason.invalidDestination": {
+    "defaultMessage": "That name is not usable for this folder."
+  },
+  "librename.reason.locked": {
+    "defaultMessage": "The library is open in another Overlook instance."
+  },
+  "librename.reason.moveInProgress": {
+    "defaultMessage": "Another move is already running."
+  },
+  "librename.reason.providerBusy": {
+    "defaultMessage": "Finish or wait for the current backup or restore first."
+  },
+  "librename.rename": {
+    "defaultMessage": "Rename folder"
+  },
+  "librename.renamed": {
+    "defaultMessage": "The folder now appears with its new name in Finder or Explorer."
+  },
+  "librename.renaming": {
+    "defaultMessage": "Renaming…"
+  },
+  "librename.title": {
+    "defaultMessage": "Rename library folder"
+  },
+  "libswitch.displayName.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "libswitch.displayName.changed": {
+    "defaultMessage": "Display name changed to {name}"
+  },
+  "libswitch.displayName.duplicateHint": {
+    "defaultMessage": "Location: {location} · ID ending {id}"
+  },
+  "libswitch.displayName.failed": {
+    "defaultMessage": "The display name could not be updated. Try again."
+  },
+  "libswitch.displayName.folder": {
+    "defaultMessage": "Library folder"
+  },
+  "libswitch.displayName.help": {
+    "defaultMessage": "Only the name shown in Overlook changes. The folder, library ID, keys, and backups stay unchanged."
+  },
+  "libswitch.displayName.invalid": {
+    "defaultMessage": "Enter a name without path separators or control characters, up to 120 characters."
+  },
+  "libswitch.displayName.label": {
+    "defaultMessage": "Display name"
+  },
+  "libswitch.displayName.one": {
+    "defaultMessage": "Edit display name of {name}…"
+  },
+  "libswitch.displayName.reset": {
+    "defaultMessage": "Reset to folder name"
+  },
+  "libswitch.displayName.resetting": {
+    "defaultMessage": "Resetting…"
+  },
+  "libswitch.displayName.save": {
+    "defaultMessage": "Save"
+  },
+  "libswitch.displayName.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "libswitch.displayName.title": {
+    "defaultMessage": "Edit display name"
+  },
   "libswitch.move.one": {
     "defaultMessage": "Move {name}…"
   },
@@ -628,6 +982,9 @@
   },
   "libswitch.move.selected": {
     "defaultMessage": "Move {count} selected…"
+  },
+  "libswitch.rename.one": {
+    "defaultMessage": "Rename folder of {name}…"
   },
   "lightbox.animation.play": {
     "defaultMessage": "Play animation"
@@ -709,6 +1066,9 @@
   },
   "lightbox.video.volume": {
     "defaultMessage": "Volume"
+  },
+  "lock.attemptsRemaining": {
+    "defaultMessage": "{count, plural, one {# attempt} other {# attempts}} remaining before recovery"
   },
   "lock.retryCountdown": {
     "defaultMessage": "Try again in {seconds}s"
@@ -899,6 +1259,18 @@
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
   },
+  "restore.chrome.complete": {
+    "defaultMessage": "Restore complete"
+  },
+  "restore.chrome.show": {
+    "defaultMessage": "Show restore"
+  },
+  "restore.error.copy": {
+    "defaultMessage": "Copy error"
+  },
+  "restore.error.details": {
+    "defaultMessage": "Details"
+  },
   "restore.local.error.alreadyRegistered": {
     "defaultMessage": "That library is already registered."
   },
@@ -941,6 +1313,45 @@
   "restore.localKey.passwordLabel": {
     "defaultMessage": "App password"
   },
+  "restore.missing.count": {
+    "defaultMessage": "{count, plural, one {# object was} other {# objects were}} not found or failed verification in the cloud backup"
+  },
+  "restore.missing.heading": {
+    "defaultMessage": "Restore complete — some items were NOT FOUND"
+  },
+  "restore.missing.help": {
+    "defaultMessage": "Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder."
+  },
+  "restore.restored.count": {
+    "defaultMessage": "{count, plural, one {# photo restored.} other {# photos restored.}}"
+  },
+  "restore.verify.continue": {
+    "defaultMessage": "Continue with verified only"
+  },
+  "restore.verify.counts": {
+    "defaultMessage": "{missing} missing, {corrupt} corrupt (failed verification) — {verified} verified"
+  },
+  "restore.verify.exportCorrupt": {
+    "defaultMessage": "Export corrupt images"
+  },
+  "restore.verify.exportCsv": {
+    "defaultMessage": "Export CSV"
+  },
+  "restore.verify.heading": {
+    "defaultMessage": "Verify backup before restore"
+  },
+  "restore.verify.help": {
+    "defaultMessage": "A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage."
+  },
+  "restore.verify.trash": {
+    "defaultMessage": "Trash backup and quit"
+  },
+  "restore.verify.trashConfirm": {
+    "defaultMessage": "Type Permanently Delete Backup to confirm"
+  },
+  "restore.verify.trashPlaceholder": {
+    "defaultMessage": "Permanently Delete Backup"
+  },
   "settings.diagnostics.alreadyGone": {
     "defaultMessage": "That report was already gone."
   },
@@ -979,6 +1390,12 @@
   },
   "settings.diagnostics.clearedMany": {
     "defaultMessage": "{count, plural, one {# diagnostic report cleared.} other {# diagnostic reports cleared.}}"
+  },
+  "settings.diagnostics.copyEventId": {
+    "defaultMessage": "diagnostic event ID"
+  },
+  "settings.diagnostics.copyPayload": {
+    "defaultMessage": "diagnostic payload"
   },
   "settings.diagnostics.done": {
     "defaultMessage": "Done"
@@ -1141,6 +1558,12 @@
   },
   "settings.general.trashRetention.off": {
     "defaultMessage": "Off"
+  },
+  "settings.keys.copyFileName": {
+    "defaultMessage": "recovery key filename"
+  },
+  "settings.keys.copyFingerprint": {
+    "defaultMessage": "library key fingerprint"
   },
   "settings.nav.general": {
     "defaultMessage": "General"

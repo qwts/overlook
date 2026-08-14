@@ -90,6 +90,13 @@ export class SyncLedger {
     run(this.db, 'UPDATE sync_ledger SET status = ? WHERE photo_id = ?', to, photoId);
   }
 
+  /** A verified remote-only integrity error re-enters its custody state. */
+  healIntegrityError(photoId: string): boolean {
+    if (this.status(photoId) !== 'error') return false;
+    this.repairStatus(photoId, 'offloaded');
+    return true;
+  }
+
   /** Completed, VERIFIED backup: syncing → synced, dirty clears, stamp set
    * (feeds "ALL BACKED UP · 2H AGO" / "JUST NOW"). */
   markBackedUp(photoId: string, at: string): void {

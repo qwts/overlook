@@ -3,7 +3,8 @@
 Issues: [#501](https://github.com/qwts/photos/issues/501),
 [#513](https://github.com/qwts/photos/issues/513),
 [#499](https://github.com/qwts/photos/issues/499),
-[#449](https://github.com/qwts/photos/issues/449)
+[#449](https://github.com/qwts/photos/issues/449), and
+[overlook#898](https://github.com/qwts/overlook/issues/898)
 
 ## Purpose
 
@@ -14,8 +15,8 @@ Electron coverage, including the keyboard-pan contract from #449.
 
 ## Setup
 
-1. Open a library containing adjacent landscape and portrait photos, plus one
-   unavailable or corrupt item.
+1. Open a library containing adjacent landscape, portrait, square, and
+   near-square photos, plus one unavailable or corrupt item.
 2. Open the first photo in full view at the normal window size.
 3. Repeat the matrix at the minimum supported window size and with Inspector
    both closed and docked.
@@ -52,16 +53,23 @@ reference at its native 924×540 viewport. Confirm the orientation toolbar:
    stale frame.
 4. Double-click a portrait photo to activate Fill, then navigate with the arrow
    keys. Confirm every next photo inherits **Fill behavior**, not the prior
-   photo's numeric zoom percentage:
-   - a portrait fills edge to edge horizontally and scrolls only vertically;
-   - a landscape fills edge to edge vertically and scrolls only horizontally.
+   photo's numeric zoom percentage. Fill is `cover`, never `contain`: whatever
+   the photo and whatever the window, the image reaches all four edges, so
+   **there are never bars on any side** — it overflows on the axis where the
+   photo is proportionally longer than the window, and that axis scrolls.
 5. Pan to an edge and navigate again. Confirm Fill recomputes for each aspect
-   ratio while retaining a useful normalized focal direction. A photo close to
-   the window's aspect ratio may need no scrolling; it must never require both
-   axes.
-6. Dock and undock Inspector, then resize the window. Confirm the transform
+   ratio while retaining a useful normalized focal direction. Only a photo whose
+   aspect ratio exactly matches the window scrolls on neither axis; nothing ever
+   requires both.
+6. Open the square photo in a wide display area, then in a tall one. Confirm it
+   matches the longer window axis each time — width edge to edge with top and
+   bottom overflowing when the window is wide, height edge to edge with the
+   sides overflowing when it is tall — and confirm only the overflowing axis
+   scrolls. A square has no long side to fit by accident, so bars here mean Fill
+   has regressed to `contain` (#968).
+7. Dock and undock Inspector, then resize the window. Confirm the transform
    reclamps and every image continues to cover the required viewport axes.
-7. Rotate or flip one photo, then navigate. Confirm orientation resets for the
+8. Rotate or flip one photo, then navigate. Confirm orientation resets for the
    next photo while zoom/fill/pan persist.
 
 ## Reset and failure boundaries
@@ -95,7 +103,8 @@ reference at its native 924×540 viewport. Confirm the orientation toolbar:
 - `src/renderer/src/lightbox/Lightbox.stories.tsx`
 - `tests/e2e/lightbox.spec.ts`
 - `design/handoff/references/06-lightbox-default-contain.png`
-- Acceptance ledger entry `m06-lightbox-transform`
+- Acceptance ledger entries `m06-lightbox-transform` and
+  `m06-lightbox-fill-cover`
 
 ## Required gates
 

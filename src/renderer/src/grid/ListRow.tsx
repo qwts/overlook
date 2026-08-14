@@ -19,7 +19,7 @@ export interface ListRowProps {
   /** Opens the photo (row body). */
   readonly onOpen: () => void;
   /** Toggles selection (circle only) — never opens. */
-  readonly onToggleSelect: () => void;
+  readonly onToggleSelect: (extend: boolean) => void;
   /** Toggles Favorite (star only) — never opens or selects. */
   readonly onToggleFavorite: () => void;
   readonly favoritePending?: boolean;
@@ -103,7 +103,7 @@ export function ListRow({
         className={`ovl-listrow__select${selected ? ' ovl-listrow__select--selected' : ''}`}
         onClick={(event) => {
           event.stopPropagation();
-          onToggleSelect();
+          onToggleSelect(event.shiftKey);
         }}
         onKeyDown={(event) => {
           if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() !== 'i') event.stopPropagation();

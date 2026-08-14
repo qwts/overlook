@@ -27,6 +27,17 @@ When these secrets are absent, the Windows legs still build — the workflow
 passes `-c.win.azureSignOptions=null` to force an unsigned build rather than
 failing (mirrors the mac `-c.mac.identity=null` unsigned path).
 
+## Secret scope
+
+Signing secrets (the Azure service principal above, and the mac
+`CSC_LINK`/`CSC_KEY_PASSWORD`/`APPLE_API_*` set) are exposed only to the
+workflow's **Package** step, which packages an already-built app via the
+build-free `dist*` npm scripts. The build (`npm run build`, electron-vite plus
+every build-time dependency) runs in a separate step with no signing material
+in its environment, so a compromised build dependency cannot read the
+certificate or the service-principal credentials (#855). The invariant is
+pinned by `tests/tooling/signing-secret-scope.test.ts`.
+
 ## Configuration values
 
 `electron-builder.yml`'s `win.azureSignOptions` block holds the non-secret
@@ -47,6 +58,16 @@ rather than passed as secrets:
 interactive and idempotent — run it from a shell where `az login` and
 `gh auth login` have already succeeded. This section documents what it does
 and, more usefully, the non-obvious parts that are easy to get stuck on.
+
+On the first run, the script creates a dedicated service principal. On a rerun,
+pass its application (client) ID explicitly as `SP_APP_ID=<client-id>`; Entra
+display names are not unique and are never used to select an existing identity.
+The rerun rotates that principal's password only after the role assignment
+succeeds (a failure part-way never strands CI on an invalidated secret) and
+then updates the repository secret. The signer role is scoped to the selected
+Certificate Profile, not its parent Trusted Signing Account; a legacy
+account-wide grant left by earlier runs is removed once the profile-scoped
+grant exists.
 
 **The CLI surface.** Account-level verbs are `az trustedsigning list|show` —
 there is no `az trustedsigning account ...` subgroup, and asking for one

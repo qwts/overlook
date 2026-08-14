@@ -116,8 +116,8 @@ async function gatherInputs() {
   }
 
   if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' && process.env.GITHUB_REPOSITORY) {
-    // Dispatched runs supply the required contexts for branches whose pull_request
-    // runs were suppressed by a GITHUB_TOKEN push (version-cut, auto-update-prs).
+    // Manual complete-suite runs may validate the exact head before a draft is
+    // promoted. Resolve its PR so the reviewed acceptance opt-out still applies.
     // Resolve the branch's open PR live so the no-acceptance-impact opt-out keeps
     // working on auto-rebased heads (PR #541 review); a branch with no open PR —
     // or an API outage — falls through to the local diff, as before.

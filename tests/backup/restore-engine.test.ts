@@ -63,6 +63,10 @@ class CountingProvider implements StorageProvider {
     return this.inner.authState();
   }
 
+  accountIdentity(signal?: AbortSignal) {
+    return this.inner.accountIdentity(signal);
+  }
+
   put(path: string, bytes: Readable): Promise<{ bytes: number }> {
     return this.inner.put(path, bytes);
   }
@@ -221,7 +225,7 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
   const world = await restoreWorld(2);
   const sourceHighWater = BigInt(world.keyStore.exportWrappedKeys().find((key) => key.status === 'active')?.nonceHighWater ?? '0');
   const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
-  assert.deepEqual(result, { libraryId: LIBRARY_ID, generation: 1, photos: 2, resumed: false });
+  assert.deepEqual(result, { libraryId: LIBRARY_ID, generation: 1, photos: 2, resumed: false, missing: [] });
   assert.equal(existsSync(`${world.targetDir}.restore-staging`), false);
   assert.equal(existsSync(`${world.targetDir}.restore-previous`), false);
   assert.equal((await readFile(join(world.targetDir, 'library-id'), 'utf8')).trim(), LIBRARY_ID);
@@ -458,13 +462,14 @@ test('restore engine: activation reconciles the app-lock anchor exactly once; fa
   assert.equal(result.photos, 1);
   assert.equal(resets, 1, 'the stale anchor cleared as part of activation');
 
+  // A failure before activation must not touch the anchor. A missing blob no
+  // longer qualifies (#915 partial-restores it), so fail the transport instead.
   const broken = await restoreWorld();
-  const lost = broken.photos[0];
-  assert.ok(lost !== undefined);
-  await broken.provider.delete(lost.blobPath);
+  const faulty = new FaultInjectingProvider(broken.counting);
+  faulty.arm('transient-get');
   let brokenResets = 0;
   await assert.rejects(
-    new RestoreEngine({ ...broken.deps, resetLockAnchor: () => (brokenResets += 1) }).run({
+    new RestoreEngine({ ...broken.deps, provider: faulty, resetLockAnchor: () => (brokenResets += 1) }).run({
       masterKey: broken.masterKey,
       allowReplace: false,
     }),
@@ -530,4 +535,98 @@ test('restore engine: a custody write failure never undoes a committed activatio
   const result = await engine.run({ masterKey: world.masterKey, allowReplace: false, custodyPassword: 'pw' });
   assert.equal(result.libraryId, LIBRARY_ID);
   assert.equal(existsSync(join(world.targetDir, 'library.db')), true, 'the restored library stays activated');
+});
+
+function ledgerStatus(targetDir: string, photoId: string): { status: string; lastBackupAt: string | null } | undefined {
+  const keys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: targetDir });
+  const dbKey = keys.resolver()(1);
+  assert.ok(dbKey !== undefined);
+  const db = openLibraryDatabase({ path: join(targetDir, 'library.db'), dbKey });
+  try {
+    return queryGet<{ status: string; lastBackupAt: string | null }>(
+      db,
+      `SELECT status, last_backup_at AS lastBackupAt FROM sync_ledger WHERE photo_id = ?`,
+      photoId,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+test('restore engine: when every generation misses the same blobs, the newest restores only verified photos and reports every NOT FOUND object (#915/#947)', async () => {
+  const world = await restoreWorld(3);
+  const [kept, lostA, lostB] = world.photos;
+  assert.ok(kept !== undefined && lostA !== undefined && lostB !== undefined);
+  await world.provider.delete(lostA.blobPath);
+  await world.provider.delete(lostB.blobPath);
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(result.generation, 1);
+  assert.equal(result.photos, 1, 'the healed catalog counts only the verified photo');
+  assert.deepEqual(
+    [...result.missing].sort((a, b) => a.path.localeCompare(b.path)),
+    [
+      { path: lostA.blobPath, kind: 'original', photoId: lostA.id, reason: 'not-found' },
+      { path: lostB.blobPath, kind: 'original', photoId: lostB.id, reason: 'not-found' },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+    'every missing object is reported, not just the first',
+  );
+
+  const restoredKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  const restoredStore = new BlobStore({ dataDir: world.targetDir });
+  await restoredStore.init();
+  assert.equal(await restoredStore.verifyOriginal(kept.contentHash, restoredKeys.resolver(), kept.id), true);
+  assert.equal(restoredStore.hasOriginal(lostA.contentHash), false, 'nothing fabricated for a NOT FOUND original');
+
+  assert.deepEqual(ledgerStatus(world.targetDir, kept.id), { status: 'synced', lastBackupAt: GENERATED_AT });
+  assert.equal(ledgerStatus(world.targetDir, lostA.id), undefined, 'a missing original cannot leave an unrestorable photo row');
+  assert.equal(ledgerStatus(world.targetDir, lostB.id), undefined, 'every failed photo is absent from the healed catalog');
+
+  const report = JSON.parse(await readFile(join(world.targetDir, 'restore-report.json'), 'utf8')) as {
+    version: number;
+    generation: number;
+    missing: readonly { path: string }[];
+  };
+  assert.equal(report.version, 1);
+  assert.equal(report.generation, 1);
+  assert.equal(report.missing.length, 2, 'the NOT FOUND report survives the post-activation relaunch');
+  assert.equal(world.progress.at(-1)?.stage, 'complete');
+});
+
+test('restore engine: a present-but-unverifiable blob is reported and omitted from the healed catalog (#915/#947)', async () => {
+  const world = await restoreWorld(2);
+  const [kept, damaged] = world.photos;
+  assert.ok(kept !== undefined && damaged !== undefined);
+  await put(world.provider, damaged.blobPath, Buffer.from('not an envelope'));
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.deepEqual(result.missing, [{ path: damaged.blobPath, kind: 'original', photoId: damaged.id, reason: 'failed-verification' }]);
+  const restoredKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  const restoredStore = new BlobStore({ dataDir: world.targetDir });
+  await restoredStore.init();
+  assert.equal(await restoredStore.verifyOriginal(kept.contentHash, restoredKeys.resolver(), kept.id), true);
+  assert.equal(restoredStore.hasOriginal(damaged.contentHash), false, 'the unverifiable download never enters the store');
+  assert.equal(result.photos, 1, 'the restored count excludes the unverifiable photo');
+  assert.equal(ledgerStatus(world.targetDir, damaged.id), undefined, 'the unverifiable photo has no catalog or ledger row');
+});
+
+test('restore engine: re-running after the missing object is recovered fills the gap (#915)', async () => {
+  const world = await restoreWorld(2);
+  const [, lost] = world.photos;
+  assert.ok(lost !== undefined);
+  const ciphertext = await buffer(await world.provider.getStream(lost.blobPath));
+  await world.provider.delete(lost.blobPath);
+
+  const partial = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(partial.missing.length, 1);
+
+  await put(world.provider, lost.blobPath, ciphertext);
+  const filled = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: true });
+  assert.deepEqual(filled.missing, [], 'a complete generation restores strictly on the re-run');
+  const restoredKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  const restoredStore = new BlobStore({ dataDir: world.targetDir });
+  await restoredStore.init();
+  assert.equal(await restoredStore.verifyOriginal(lost.contentHash, restoredKeys.resolver(), lost.id), true);
+  assert.deepEqual(ledgerStatus(world.targetDir, lost.id), { status: 'synced', lastBackupAt: GENERATED_AT });
+  assert.equal(existsSync(join(world.targetDir, 'restore-report.json')), false, 'a complete re-run leaves no stale NOT FOUND report');
 });

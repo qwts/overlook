@@ -48,6 +48,13 @@ function photo(index: number): PhotoRecord {
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState: 'synced',
+    title: null,
+    description: null,
+    tags: [],
+    userTags: [],
+    importedKeywords: [],
+    suppressedKeywords: [],
+    metadataVersion: 1,
   };
 }
 
@@ -117,9 +124,9 @@ export const TileClickVsSelectCircle: Story = {
     await userEvent.keyboard('{Shift>}{ArrowRight}{/Shift}');
     const third = canvas.getByRole('button', { name: 'Open IMG_2.JPG' });
     await waitFor(() => expect(third).toHaveFocus());
-    await expect(onKeyboardSelection).toHaveBeenCalledWith(['P1', 'P2'], 'replace');
+    await expect(onKeyboardSelection).toHaveBeenCalledWith('P2', true);
     await userEvent.keyboard('{Shift>}{ArrowRight}{/Shift}');
-    await expect(onKeyboardSelection).toHaveBeenCalledWith(['P1', 'P2', 'P3'], 'replace');
+    await expect(onKeyboardSelection).toHaveBeenCalledWith('P3', true);
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Open IMG_3.JPG' })).toHaveFocus());
     await userEvent.keyboard('{Enter}');
     await expect(onKeyboardOpen).toHaveBeenCalledWith('P3');

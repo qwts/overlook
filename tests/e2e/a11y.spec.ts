@@ -54,10 +54,10 @@ declare function getComputedStyle(element: ProbeElement): { readonly position: s
 
 // Flows this run actually audited. playwright.config.ts sets fullyParallel: false, so the
 // tests in this file run serially — but not necessarily in one PROCESS: a test failure
-// restarts the worker (and CI retries make that routine), wiping module state recorded
-// before the failure. The set is therefore mirrored to a file under test-results/ (cleared
-// by Playwright at run start) and the closure test at the bottom reads the union, so a
-// flaky-then-green test cannot silently downgrade closure enforcement to a skip.
+// followed by an explicitly retried diagnostic run can restart the worker, wiping module
+// state recorded before the failure. The set is therefore mirrored to a file under
+// test-results/ (cleared by Playwright at run start) and the closure test at the bottom
+// reads the union, so a diagnostic retry cannot silently downgrade closure enforcement.
 const visitedFlows = new Set<string>();
 const visitedFlowsFile = join(process.cwd(), 'test-results', 'a11y-visited-flows.txt');
 

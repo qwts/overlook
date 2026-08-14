@@ -9,7 +9,12 @@ import { LibraryRegistry, LibraryRegistryError, ensureDefaultEntry } from '../..
 import { LibraryRegistryRuntime } from '../../src/main/library/library-registry-runtime.js';
 import { channels } from '../../src/shared/ipc/channels.js';
 import { wrapHandler } from '../../src/shared/ipc/registry.js';
-import { libraryRegistryFileSchema, selectStartupLibrary, type LibraryEntry } from '../../src/shared/library/registry.js';
+import {
+  libraryDisplayNameSchema,
+  libraryRegistryFileSchema,
+  selectStartupLibrary,
+  type LibraryEntry,
+} from '../../src/shared/library/registry.js';
 
 // #384 / ADR-0017 §1/§7: standalone fail-loud registry with atomic writes,
 // registry-only removal, and the register-in-place legacy migration.
@@ -58,9 +63,13 @@ describe('library registry (#384)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'overlook-registry-'));
     const registry = registryIn(dir);
     registry.register(entry());
-    registry.updateCustodyHints(ULID_A, [{ providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 }]);
+    registry.updateCustodyHints(ULID_A, [
+      { providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 },
+      { legacyUnbound: true, soleCustodyItems: 1, soleCustodyBytes: 12 },
+    ]);
     assert.deepEqual(registryIn(dir).get(ULID_A)?.custodyHints, [
       { providerId: 'pcloud', accountId: '42', soleCustodyItems: 2, soleCustodyBytes: 30 },
+      { legacyUnbound: true, soleCustodyItems: 1, soleCustodyBytes: 12 },
     ]);
   });
 
@@ -87,6 +96,58 @@ describe('library registry (#384)', () => {
       LibraryRegistryError,
       'path clash detected through normalization',
     );
+  });
+
+  test('display-name validation trims aliases and rejects empty, control, path-shaped, and excessive values (#685)', () => {
+    assert.equal(libraryDisplayNameSchema.parse('  Family archive  '), 'Family archive');
+    assert.equal(
+      libraryDisplayNameSchema.parse('📷'.repeat(120)),
+      '📷'.repeat(120),
+      'the limit counts Unicode characters, not UTF-16 units',
+    );
+    for (const invalid of ['', '   ', 'Archive/2026', String.raw`Archive\2026`, 'C:Archive', '.', '..', 'Bad\u0000Name', 'x'.repeat(121)]) {
+      assert.equal(libraryDisplayNameSchema.safeParse(invalid).success, false, JSON.stringify(invalid));
+    }
+  });
+
+  test('display-name edit/reset changes only registry metadata, refreshes active state, permits duplicates, and survives restart (#685)', () => {
+    const userData = mkdtempSync(join(tmpdir(), 'overlook-display-name-'));
+    const firstDir = join(userData, 'first-folder');
+    const secondDir = join(userData, 'second-folder');
+    mkdirSync(firstDir, { recursive: true });
+    mkdirSync(secondDir, { recursive: true });
+    writeFileSync(join(firstDir, 'library.db'), 'database-bytes', 'utf8');
+    writeFileSync(join(firstDir, 'master.key'), 'wrapped-key', 'utf8');
+    const runtime = new LibraryRegistryRuntime({ userDataDir: () => userData });
+    runtime.getRegistry().register(entry({ path: firstDir, lastOpenedAt: '2026-07-17T00:00:00.000Z' }));
+    runtime.getRegistry().register(entry({ id: ULID_B, name: 'Second', path: secondDir }));
+    runtime.resolveActive();
+
+    const renamed = runtime.setDisplayName(ULID_A, '  Shared alias  ', ULID_A);
+    assert.equal(renamed.name, 'Shared alias');
+    assert.equal(runtime.current(ULID_A).name, 'Shared alias', 'active cache refreshes immediately');
+    assert.equal(runtime.setDisplayName(ULID_B, 'Shared alias', ULID_A).name, 'Shared alias', 'duplicate aliases are allowed');
+    assert.equal(runtime.getRegistry().get(ULID_A)?.path, firstDir);
+    assert.equal(readFileSync(join(firstDir, 'library.db'), 'utf8'), 'database-bytes');
+    assert.equal(readFileSync(join(firstDir, 'master.key'), 'utf8'), 'wrapped-key');
+
+    const reset = runtime.resetDisplayName(ULID_A, ULID_A);
+    assert.equal(reset.name, 'first-folder');
+    assert.equal(registryIn(userData).get(ULID_A)?.name, 'first-folder', 'reset persists across restart');
+    assert.equal(registryIn(userData).get(ULID_B)?.name, 'Shared alias', 'inactive alias persists independently');
+  });
+
+  test('reset truncates a filesystem basename to the display-name character limit (#685 review)', () => {
+    const userData = mkdtempSync(join(tmpdir(), 'overlook-display-name-long-folder-'));
+    const basename = `archive-${'x'.repeat(130)}`;
+    const libraryDir = join(userData, basename);
+    mkdirSync(libraryDir, { recursive: true });
+    const runtime = new LibraryRegistryRuntime({ userDataDir: () => userData });
+    runtime.getRegistry().register(entry({ path: libraryDir }));
+
+    const reset = runtime.resetDisplayName(ULID_A, ULID_A);
+    assert.equal(Array.from(reset.name).length, 120);
+    assert.equal(reset.name, basename.slice(0, 120));
   });
 
   test('EXIT CRITERIA: remove forgets the entry and touches nothing on disk', () => {
@@ -301,6 +362,16 @@ describe('library registry (#384)', () => {
       throw new Error('handler must not run');
     });
     assert.deepEqual(await handler({ id: 'not-a-ulid' }), {
+      __overlookIpcFailure: true,
+      error: { code: 'IPC_INVALID_REQUEST' },
+    });
+  });
+
+  test('IPC boundary: display-name edits reject path-shaped aliases before the handler runs (#685)', async () => {
+    const handler = wrapHandler(channels.libraryRegistrySetDisplayName, () => {
+      throw new Error('handler must not run');
+    });
+    assert.deepEqual(await handler({ id: ULID_A, name: '../Archive' }), {
       __overlookIpcFailure: true,
       error: { code: 'IPC_INVALID_REQUEST' },
     });

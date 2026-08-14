@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { link, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
@@ -71,12 +71,14 @@ async function fsyncDir(path: string): Promise<void> {
 export class BlobStore {
   private readonly blobsDir: string;
   private readonly thumbsDir: string;
+  private readonly sidecarsDir: string;
   private readonly tmpDir: string;
   private readonly viewCacheDir: string;
 
   constructor(options: BlobStoreOptions) {
     this.blobsDir = join(options.dataDir, 'blobs');
     this.thumbsDir = join(options.dataDir, 'thumbs');
+    this.sidecarsDir = join(options.dataDir, 'sidecars');
     this.tmpDir = join(options.dataDir, 'tmp');
     this.viewCacheDir = join(options.dataDir, 'ephemeral');
   }
@@ -84,6 +86,7 @@ export class BlobStore {
   async init(): Promise<void> {
     await mkdir(this.blobsDir, { recursive: true });
     await mkdir(this.thumbsDir, { recursive: true });
+    await mkdir(this.sidecarsDir, { recursive: true });
     await mkdir(this.tmpDir, { recursive: true });
     // Ephemeral viewing custody never survives a process lifetime. Clearing
     // first also recovers crashes during fetch, verify, or promotion.
@@ -146,6 +149,110 @@ export class BlobStore {
 
   private thumbPath(contentHash: string, size: ThumbSize): string {
     return join(this.thumbsDir, contentHash.slice(0, 2), `${contentHash}.${size}`);
+  }
+
+  // Sidecar custody (#484, ADR-0031 §4) is PER PHOTO: companions live under
+  // sidecars/<id:2>/<photoId>/<hash> and their envelope AAD binds
+  // `sidecar:<photoId>` — a companion moved between photos or namespaces
+  // fails authentication, which is the association guarantee the issue asks
+  // for. Duplicated bytes across photos are accepted (sidecars are KBs) in
+  // exchange for purge = remove the photo's directory, no shared-hash guard.
+  private sidecarDir(photoId: string): string {
+    return join(this.sidecarsDir, photoId.slice(0, 2), photoId);
+  }
+
+  private sidecarPath(photoId: string, contentHash: string): string {
+    return join(this.sidecarDir(photoId), contentHash);
+  }
+
+  private static sidecarContext(photoId: string): string {
+    return `sidecar:${photoId}`;
+  }
+
+  /** Streams sidecar plaintext into the photo's encrypted companion set. */
+  async putSidecar(plaintext: Readable, key: EnvelopeKey, photoId: string): Promise<BlobRef> {
+    return this.put(plaintext, key, BlobStore.sidecarContext(photoId), (hash) => this.sidecarPath(photoId, hash));
+  }
+
+  hasSidecar(photoId: string, contentHash: string): boolean {
+    assertHash(contentHash);
+    return existsSync(this.sidecarPath(photoId, contentHash));
+  }
+
+  /** Decrypting read stream for one companion. */
+  getSidecarStream(photoId: string, contentHash: string, resolveKey: KeyResolver): Readable {
+    assertHash(contentHash);
+    const path = this.sidecarPath(photoId, contentHash);
+    if (!existsSync(path)) throw new BlobStoreError(`sidecar ${contentHash} of ${photoId} is not in the store`);
+    return createReadStream(path).pipe(createDecryptStream(resolveKey, { photoId: BlobStore.sidecarContext(photoId) }));
+  }
+
+  /** RAW ciphertext for backup upload (ADR-0007 encrypt-once). */
+  getEncryptedSidecarStream(photoId: string, contentHash: string): Readable {
+    assertHash(contentHash);
+    const path = this.sidecarPath(photoId, contentHash);
+    if (!existsSync(path)) throw new BlobStoreError(`sidecar ${contentHash} of ${photoId} is not in the store`);
+    return createReadStream(path);
+  }
+
+  /** Full integrity walk of a companion: every auth tag + content address. */
+  async verifySidecar(photoId: string, contentHash: string, resolveKey: KeyResolver): Promise<boolean> {
+    assertHash(contentHash);
+    const path = this.sidecarPath(photoId, contentHash);
+    if (!existsSync(path)) return false;
+    return this.verifyEnvelopePath(path, contentHash, resolveKey, BlobStore.sidecarContext(photoId));
+  }
+
+  /** Restore a companion from provider ciphertext: stage → fsync → link →
+   * verify-before-count, mirroring restoreOriginal. */
+  async restoreSidecar(photoId: string, contentHash: string, ciphertext: Readable, resolveKey: KeyResolver): Promise<void> {
+    assertHash(contentHash);
+    const stagePath = join(this.tmpDir, `restore-${randomBytes(8).toString('hex')}`);
+    try {
+      await pipeline(ciphertext, createWriteStream(stagePath, { flags: 'wx' }));
+      const handle = await open(stagePath, 'r');
+      try {
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      const finalPath = this.sidecarPath(photoId, contentHash);
+      await mkdir(dirname(finalPath), { recursive: true });
+      try {
+        await link(stagePath, finalPath);
+      } catch (error) {
+        if (!isErrno(error, 'EEXIST')) throw error;
+      }
+      await rm(stagePath, { force: true });
+      if (!(await this.verifySidecar(photoId, contentHash, resolveKey))) {
+        await rm(finalPath, { force: true });
+        throw new BlobStoreError(`restored sidecar ${contentHash} of ${photoId} failed verification`);
+      }
+      await fsyncDir(dirname(finalPath));
+    } catch (error) {
+      await rm(stagePath, { force: true });
+      throw error;
+    }
+  }
+
+  /** Removes the photo's entire companion set — purge travels with the
+   * owning photo (#484). */
+  async deleteSidecars(photoId: string): Promise<void> {
+    await rm(this.sidecarDir(photoId), { recursive: true, force: true });
+  }
+
+  /** Consistency-scan surface: every (photoId, hash) companion on disk with
+   * its age — same age-gating contract as listOriginalHashes. */
+  async listSidecarEntries(): Promise<{ photoId: string; hash: string; ageMs: number }[]> {
+    const now = Date.now();
+    const out: { photoId: string; hash: string; ageMs: number }[] = [];
+    for (const entry of await readdir(this.sidecarsDir, { recursive: true, withFileTypes: true })) {
+      if (entry.isFile()) {
+        const info = await stat(join(entry.parentPath, entry.name));
+        out.push({ photoId: basename(entry.parentPath), hash: entry.name, ageMs: now - info.mtimeMs });
+      }
+    }
+    return out;
   }
 
   /** Streams plaintext into an encrypted, content-addressed original. */

@@ -111,6 +111,15 @@ describe('sync ledger machine (#104)', () => {
     assert.equal(ledger.pendingCount(), 1, 'an errored row STAYS dirty (will retry)');
   });
 
+  test('integrity healing reports only the error to offloaded transition', () => {
+    const { ledger, insert } = world();
+    insert('A');
+    ledger.repairStatus('A', 'error');
+    assert.equal(ledger.healIntegrityError('A'), true);
+    assert.equal(ledger.status('A'), 'offloaded');
+    assert.equal(ledger.healIntegrityError('A'), false, 'an already-healed row emits no duplicate update');
+  });
+
   test('setStatus on a missing row throws — a bug, not a state', () => {
     const { ledger } = world();
     assert.throws(() => {

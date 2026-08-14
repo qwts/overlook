@@ -9,7 +9,7 @@ import type { SyncStatus } from '../../shared/library/types.js';
 export interface BackupIntegrityItem {
   readonly id: string;
   readonly contentHash: string;
-  readonly syncState: Extract<SyncStatus, 'synced' | 'offloaded'>;
+  readonly syncState: Extract<SyncStatus, 'synced' | 'offloaded' | 'error'>;
 }
 
 export interface BackupIntegrityCursor {
@@ -38,6 +38,7 @@ export interface BackupIntegrityScrubberDeps {
   readonly encryptedStream: (contentHash: string) => Readable;
   readonly verifyRemoteCiphertext: (item: BackupIntegrityItem, ciphertext: Readable) => Promise<boolean>;
   readonly markUnrecoverable: (photoId: string) => void;
+  readonly markVerified?: ((photoId: string) => void) | undefined;
   readonly cursor: BackupIntegrityCursorStore;
   readonly audit: (line: string) => void;
   readonly now: () => Date;
@@ -126,6 +127,7 @@ export class BackupIntegrityScrubber {
     }
 
     if (!damaged) {
+      this.deps.markVerified?.(item.id);
       return 0;
     }
 
@@ -135,6 +137,7 @@ export class BackupIntegrityScrubber {
       throw new ProviderError(`integrity repair verification failed for ${item.id}`, 'corrupt');
     }
     this.deps.audit(`INTEGRITY-REPAIRED photo=${item.id} hash=${item.contentHash}`);
+    this.deps.markVerified?.(item.id);
     return 1;
   }
 
@@ -149,6 +152,7 @@ export class BackupIntegrityScrubber {
       }
     }
     if (valid) {
+      this.deps.markVerified?.(item.id);
       return 0;
     }
     this.deps.markUnrecoverable(item.id);

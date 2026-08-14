@@ -24,6 +24,9 @@ export interface OverlookApi {
   readonly getPlatform: () => Promise<string>;
   /** Active UI locale resolved in main (setting → OS → en; ADR-0020 §2). */
   readonly getLocale: () => Promise<string>;
+  readonly clipboard: {
+    readonly writeText: (text: string) => Promise<void>;
+  };
   readonly minimizeWindow: () => Promise<void>;
   readonly toggleMaximizeWindow: () => Promise<boolean>;
   readonly closeWindow: () => Promise<void>;
@@ -43,6 +46,10 @@ export interface OverlookApi {
     readonly configure: (request: Req<typeof channels.appLockConfigure>) => Promise<Res<typeof channels.appLockConfigure>>;
     readonly lockNow: () => Promise<Res<typeof channels.appLockNow>>;
     readonly changePassword: (request: Req<typeof channels.appLockChangePassword>) => Promise<Res<typeof channels.appLockChangePassword>>;
+    readonly anchorPolicyStatus: () => Promise<Res<typeof channels.appLockAnchorPolicyStatus>>;
+    readonly setAnchorPolicy: (
+      request: Req<typeof channels.appLockSetAnchorPolicy>,
+    ) => Promise<Res<typeof channels.appLockSetAnchorPolicy>>;
     readonly remove: (request: Req<typeof channels.appLockRemove>) => Promise<Res<typeof channels.appLockRemove>>;
     readonly pickRecovery: () => Promise<Res<typeof channels.appLockPickRecovery>>;
     readonly recover: (request: Req<typeof channels.appLockRecover>) => Promise<Res<typeof channels.appLockRecover>>;
@@ -73,11 +80,22 @@ export interface OverlookApi {
   };
   readonly library: {
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;
+    readonly selectAll: (request: Req<typeof channels.librarySelectAll>) => Promise<Res<typeof channels.librarySelectAll>>;
+    readonly selectionRange: (request: Req<typeof channels.librarySelectionRange>) => Promise<Res<typeof channels.librarySelectionRange>>;
     readonly get: (request: Req<typeof channels.libraryGet>) => Promise<Res<typeof channels.libraryGet>>;
+    readonly updateMetadata: (request: Req<typeof channels.libraryMetadataUpdate>) => Promise<Res<typeof channels.libraryMetadataUpdate>>;
+    readonly metadataSummary: (
+      request: Req<typeof channels.libraryMetadataSummary>,
+    ) => Promise<Res<typeof channels.libraryMetadataSummary>>;
+    readonly manageTag: (request: Req<typeof channels.libraryTagManage>) => Promise<Res<typeof channels.libraryTagManage>>;
+    readonly tagSuggestions: (request: Req<typeof channels.libraryTagSuggestions>) => Promise<Res<typeof channels.libraryTagSuggestions>>;
     readonly repairDimensions: (
       request: Req<typeof channels.libraryRepairDimensions>,
     ) => Promise<Res<typeof channels.libraryRepairDimensions>>;
     readonly toggleFavorite: (request: Req<typeof channels.libraryToggleFavorite>) => Promise<Res<typeof channels.libraryToggleFavorite>>;
+    readonly toggleFavorites: (
+      request: Req<typeof channels.libraryToggleFavorites>,
+    ) => Promise<Res<typeof channels.libraryToggleFavorites>>;
     readonly setOriginal: (request: Req<typeof channels.librarySetOriginal>) => Promise<Res<typeof channels.librarySetOriginal>>;
     readonly counts: (request: Req<typeof channels.libraryCounts>) => Promise<Res<typeof channels.libraryCounts>>;
     readonly stats: () => Promise<Res<typeof channels.libraryStats>>;
@@ -102,6 +120,18 @@ export interface OverlookApi {
     ) => () => void;
     readonly onStorageChanged: (listener: () => void) => () => void;
     readonly onPendingCountChanged: (listener: (payload: { count: number }) => void) => () => void;
+  };
+  readonly nativeDrag: {
+    readonly status: () => Promise<Res<typeof channels.nativeDragStatus>>;
+    readonly start: (request: Req<typeof channels.nativeDragStart>) => Promise<Res<typeof channels.nativeDragStart>>;
+  };
+  readonly photoKit: {
+    readonly status: () => Promise<Res<typeof channels.photoKitStatus>>;
+    readonly reviewImport: () => Promise<Res<typeof channels.photoKitImportReview>>;
+    readonly import: (request: Req<typeof channels.photoKitImportRun>) => Promise<Res<typeof channels.photoKitImportRun>>;
+    readonly export: (request: Req<typeof channels.photoKitExportRun>) => Promise<Res<typeof channels.photoKitExportRun>>;
+    readonly cancel: () => Promise<void>;
+    readonly onProgress: (listener: (payload: z.output<typeof events.photoKitProgress.payload>) => void) => () => void;
   };
   readonly activity: {
     readonly page: (request: Req<typeof channels.activityPage>) => Promise<Res<typeof channels.activityPage>>;
@@ -179,6 +209,9 @@ export interface OverlookApi {
     readonly providerStorage: (request: Req<typeof channels.backupProviderStorage>) => Promise<Res<typeof channels.backupProviderStorage>>;
     readonly connect: (request: Req<typeof channels.backupConnect>) => Promise<Res<typeof channels.backupConnect>>;
     readonly disconnect: (request: Req<typeof channels.backupDisconnect>) => Promise<Res<typeof channels.backupDisconnect>>;
+    readonly removeAuthorizationAnyway: (
+      request: Req<typeof channels.backupRemoveAuthorizationAnyway>,
+    ) => Promise<Res<typeof channels.backupRemoveAuthorizationAnyway>>;
     readonly openCapacitySettings: (
       request: Req<typeof channels.backupOpenCapacitySettings>,
     ) => Promise<Res<typeof channels.backupOpenCapacitySettings>>;
@@ -186,6 +219,7 @@ export interface OverlookApi {
   readonly export: {
     readonly pickDestination: (request: Req<typeof channels.exportPickDestination>) => Promise<Res<typeof channels.exportPickDestination>>;
     readonly run: (request: Req<typeof channels.exportRun>) => Promise<Res<typeof channels.exportRun>>;
+    readonly runAll: (request: Req<typeof channels.exportRunAll>) => Promise<Res<typeof channels.exportRunAll>>;
     readonly cancel: (request: Req<typeof channels.exportCancel>) => Promise<Res<typeof channels.exportCancel>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.exportProgress.payload>) => void) => () => void;
   };
@@ -200,8 +234,14 @@ export interface OverlookApi {
     readonly pickKey: () => Promise<Res<typeof channels.restorePickKey>>;
     readonly discover: (request: Req<typeof channels.restoreDiscover>) => Promise<Res<typeof channels.restoreDiscover>>;
     readonly run: (request: Req<typeof channels.restoreRun>) => Promise<Res<typeof channels.restoreRun>>;
+    readonly verify: (request: Req<typeof channels.restoreVerify>) => Promise<Res<typeof channels.restoreVerify>>;
+    readonly trash: (request: Req<typeof channels.restoreTrash>) => Promise<Res<typeof channels.restoreTrash>>;
+    readonly exportCsv: (request: Req<typeof channels.restoreExportCsv>) => Promise<Res<typeof channels.restoreExportCsv>>;
+    readonly exportCorrupt: (request: Req<typeof channels.restoreExportCorrupt>) => Promise<Res<typeof channels.restoreExportCorrupt>>;
     readonly cancel: (request: Req<typeof channels.restoreCancel>) => Promise<Res<typeof channels.restoreCancel>>;
+    readonly status: () => Promise<Res<typeof channels.restoreStatus>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.restoreProgress.payload>) => void) => () => void;
+    readonly onStatusChanged: (listener: (payload: z.output<typeof events.restoreStatusChanged.payload>) => void) => () => void;
   };
   readonly settings: {
     readonly get: () => Promise<Res<typeof channels.settingsGet>>;
@@ -235,10 +275,17 @@ export interface OverlookApi {
     readonly open: (request: Req<typeof channels.libraryRegistryOpen>) => Promise<Res<typeof channels.libraryRegistryOpen>>;
     readonly remove: (request: Req<typeof channels.libraryRegistryRemove>) => Promise<Res<typeof channels.libraryRegistryRemove>>;
     readonly current: () => Promise<Res<typeof channels.libraryRegistryCurrent>>;
+    readonly setDisplayName: (
+      request: Req<typeof channels.libraryRegistrySetDisplayName>,
+    ) => Promise<Res<typeof channels.libraryRegistrySetDisplayName>>;
+    readonly resetDisplayName: (
+      request: Req<typeof channels.libraryRegistryResetDisplayName>,
+    ) => Promise<Res<typeof channels.libraryRegistryResetDisplayName>>;
     readonly add: (request: Req<typeof channels.libraryRegistryAdd>) => Promise<Res<typeof channels.libraryRegistryAdd>>;
     readonly pickLocation: () => Promise<Res<typeof channels.libraryRegistryPickLocation>>;
     // Relocation (#483, ADR-0022)
     readonly move: (request: Req<typeof channels.libraryRelocationMove>) => Promise<Res<typeof channels.libraryRelocationMove>>;
+    readonly renameFolder: (request: Req<typeof channels.libraryRelocationRename>) => Promise<Res<typeof channels.libraryRelocationRename>>;
     readonly probeMove: (
       request: Req<typeof channels.libraryRelocationPreflight>,
     ) => Promise<Res<typeof channels.libraryRelocationPreflight>>;
