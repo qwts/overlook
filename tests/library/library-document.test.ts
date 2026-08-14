@@ -185,6 +185,6 @@ describe('Finder library document failures (#799)', () => {
     });
     await conflictingRouter.open(registryFailure);
     assert.equal(registryFailures.length, 1);
-    assert.match(registryFailures[0] ?? '', /path is already registered/u);
+    assert.match(registryFailures[0] ?? '', /path already registered to library/u);
   });
 });
