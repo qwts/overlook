@@ -258,7 +258,8 @@ const overlook: OverlookApi = {
     toggleFavorite: createInvoker(channels.protectedAlbumToggleFavorite, invokeTransport),
     delete: createInvoker(channels.protectedAlbumDelete, invokeTransport),
     restore: createInvoker(channels.protectedAlbumRestore, invokeTransport),
-    pickExportDestination: async () => protectedAlbumExportPickDestination({}),
+    pickExportDestination: protectedAlbumExportPickDestination,
+    revokeExportDestination: createInvoker(channels.protectedAlbumExportRevokeDestination, invokeTransport),
     export: createInvoker(channels.protectedAlbumExportRun, invokeTransport),
     cancelExport: async () => protectedAlbumExportCancel({}),
     onChanged: createSubscriber(events.protectedAlbumsChanged, subscribeTransport),
@@ -287,6 +288,7 @@ const overlook: OverlookApi = {
   }),
   export: Object.freeze({
     pickDestination: createInvoker(channels.exportPickDestination, invokeTransport),
+    revokeDestination: createInvoker(channels.exportRevokeDestination, invokeTransport),
     run: createInvoker(channels.exportRun, invokeTransport),
     runAll: createInvoker(channels.exportRunAll, invokeTransport),
     runBoard: createInvoker(channels.exportRunBoard, invokeTransport),

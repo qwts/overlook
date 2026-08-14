@@ -25,8 +25,9 @@ Lane B. The counterpart to encrypted storage: exporting writes real, openable fi
 | Acceptance: select→export→files on disk (sha256-vs-contentHash byte fidelity) + full-circle RAF import → JPEG export                         | ✅ #101 (PR #199) | `tests/e2e/export-flow.spec.ts`                                                                                     |
 | Offloaded export reads verified encrypted temporary custody and releases it without silently changing the ledger to synced                   | ✅ #306           | `tests/export/export-engine.test.ts` + `tests/e2e/offload-ui.spec.ts` — ledger id `m08-ephemeral-offloaded-viewing` |
 | Export All Unencrypted resolves every ordinary, non-trashed library photo in main, retains original formats, and reports individual failures | 🚧 #885           | `tests/db/library-db.test.ts` + `tests/export/export-runtime.test.ts` + `ExportDialog.stories.tsx`                  |
+| Every filesystem export consumes one short-lived, sender- and exact-request-bound destination grant issued by the native folder picker       | ✅ #992           | `tests/export/export-destination-authority.test.ts` + `tests/tooling/export-destination-authority.test.ts`          |
 
-Recorded decisions: v1 ships no encrypted-export format (decrypt-off just disables Export); transcode quality 90; EXIF/GPS stripped on transcode — metadata travels only with Original exports.
+Recorded decisions: v1 ships no encrypted-export format (decrypt-off just disables Export); transcode quality 90; EXIF/GPS stripped on transcode — metadata travels only with Original exports. Renderer-supplied paths never authorize a filesystem export: selected, all, moodboard, and protected-album writes require a one-use native-picker grant; changing the request requires reselection.
 
 ## Definition of done
 
