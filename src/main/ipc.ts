@@ -1,4 +1,6 @@
 /* eslint-disable max-lines -- IPC registration is intentionally large */
+import { isAbsolute } from 'node:path';
+
 import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
@@ -54,7 +56,12 @@ export async function requireMoveImportConfirmation(
   source: { path?: string | undefined; files?: readonly string[] | undefined },
   confirmMove?: (source: { path?: string | undefined; files?: readonly string[] | undefined }) => Promise<boolean>,
 ): Promise<boolean> {
-  return mode !== 'move' || (await confirmMove?.(source)) === true;
+  if (mode !== 'move') return true;
+  const paths = source.files ?? (source.path === undefined ? [] : [source.path]);
+  if (paths.length === 0 || paths.some((candidate) => !isAbsolute(candidate))) {
+    throw new Error('Move import sources must use absolute paths');
+  }
+  return (await confirmMove?.(source)) === true;
 }
 
 const reportIpcError = ({ channelName, code, error }: HandlerErrorReport): void => {

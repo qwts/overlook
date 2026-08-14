@@ -28,4 +28,16 @@ describe('Move import confirmation boundary', () => {
     assert.deepEqual(confirmedSource, source);
     assert.equal(await requireMoveImportConfirmation('move', source, () => Promise.resolve(true)), true);
   });
+
+  test('rejects relative Move sources before prompting', async () => {
+    let prompted = false;
+    await assert.rejects(
+      requireMoveImportConfirmation('move', { files: ['/drop/a.jpg', '../outside.jpg'] }, () => {
+        prompted = true;
+        return Promise.resolve(true);
+      }),
+      /absolute paths/u,
+    );
+    assert.equal(prompted, false);
+  });
 });
