@@ -213,18 +213,48 @@ test('verify with all blobs present reports zero missing/corrupt', async () => {
   assert.match(result.objectSetSha256, /^[a-f0-9]{64}$/u);
 });
 
-test('a verification plan refuses activation when any classified remote object changes', async () => {
+test('a bound plan still activates when extra objects fail after the scan', async () => {
   const world = await verifyWorld(2);
   const engine = new RestoreEngine(world.deps);
   const plan = await engine.verify({ masterKey: world.masterKey, allowReplace: false });
-  const changed = world.photos[0];
-  assert.ok(changed);
+  const [changed, kept] = world.photos;
+  assert.ok(changed && kept);
   await put(world.provider, changed.blobPath, Buffer.from('changed after scan'));
+  const result = await engine.run({ masterKey: world.masterKey, allowReplace: false, verification: plan });
+  assert.equal(result.photos, 1);
+  assert.equal(result.missing.length, 1);
+  assert.equal(result.missing[0]?.path, changed.blobPath);
+  assert.equal(result.missing[0]?.reason, 'failed-verification');
+  assert.equal(existsSync(join(world.targetDir, 'library.db')), true);
+});
+
+test('a verification plan refuses activation when the sealed manifest changes', async () => {
+  const world = await verifyWorld(2);
+  const engine = new RestoreEngine(world.deps);
+  const plan = await engine.verify({ masterKey: world.masterKey, allowReplace: false });
   await assert.rejects(
-    () => engine.run({ masterKey: world.masterKey, allowReplace: false, verification: plan }),
+    () =>
+      engine.run({
+        masterKey: world.masterKey,
+        allowReplace: false,
+        verification: { ...plan, sealedManifestSha256: 'f'.repeat(64) },
+      }),
     (error: unknown) => error instanceof RestoreError && error.reason === 'corrupt' && /changed after verification/u.test(error.message),
   );
   assert.equal(existsSync(join(world.targetDir, 'library.db')), false);
+});
+
+test('verify emits per-object discovering/verifying progress', async () => {
+  const world = await verifyWorld(3);
+  const progress: RestoreProgress[] = [];
+  const engine = new RestoreEngine({ ...world.deps, events: { progress: (value) => progress.push(value) } });
+  await engine.verify({ masterKey: world.masterKey, allowReplace: false });
+  const verifying = progress.filter((item) => item.stage === 'verifying');
+  assert.ok(verifying.length >= 4);
+  assert.equal(verifying[0]?.done, 0);
+  assert.equal(verifying[0]?.total, 3);
+  assert.equal(verifying.at(-1)?.done, 3);
+  assert.equal(verifying.at(-1)?.total, 3);
 });
 
 test('a transient provider read remains retryable and is never classified as corrupt', async () => {

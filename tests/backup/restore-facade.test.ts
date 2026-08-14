@@ -47,6 +47,17 @@ function harness(options?: {
       calls.expired += 1;
     },
     cancel: () => undefined,
+    status: () => ({
+      phase: 'idle' as const,
+      sessionId: null,
+      libraryId: null,
+      providerId: null,
+      progress: null,
+      lastError: null,
+      lastResult: null,
+      verification: null,
+      libraries: [],
+    }),
   } as unknown as RestoreCoordinator;
   const facade = createRestoreFacade({
     coordinator: () => coordinator,
@@ -200,4 +211,9 @@ test('restore diagnostics use the injected recorder, actual stage, and bounded m
       phase: 'verify-scan',
     },
   ]);
+});
+
+test('status is the coordinator snapshot', () => {
+  const { facade } = harness();
+  assert.equal(facade.status().phase, 'idle');
 });

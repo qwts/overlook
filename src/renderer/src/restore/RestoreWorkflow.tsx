@@ -2,13 +2,20 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
-import type { RestoreLibrarySummary, RestoreMissingObject, RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
+import type {
+  RestoreLibrarySummary,
+  RestoreMissingObject,
+  RestoreProgressContract,
+  RestoreStatusSnapshot,
+} from '../../../shared/backup/restore-contract.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { Badge } from '../components/Badge.js';
 import { Button } from '../components/Button.js';
 import { Checkbox } from '../components/Checkbox.js';
 import { Icon } from '../components/Icon.js';
 import { ProgressBar } from '../components/ProgressBar.js';
+import { RestoreLibraryCard } from './restore-library-card.js';
+import { restoreProgressDetail, restoreStageLabel, restoreStepFromStatus, type RestoreWorkflowStep } from './restore-progress.js';
 
 import './restore.css';
 
@@ -17,7 +24,7 @@ export interface RestoreWorkflowProps {
   readonly onStartNew?: (() => void) | undefined;
 }
 
-type Step = 'setup' | 'choose' | 'verify' | 'confirm' | 'running' | 'complete';
+type Step = RestoreWorkflowStep;
 
 const ERROR_HELP: Record<string, string> = {
   auth: 'Reconnect the provider, then try discovery again.',
@@ -102,69 +109,6 @@ function fileName(path: string): string {
   return path.split(/[\\/]/u).at(-1) ?? path;
 }
 
-function stageLabel(stage: RestoreProgressContract['stage']): string {
-  switch (stage) {
-    case 'discovering':
-      return 'Validating cloud backup';
-    case 'downloading':
-      return 'Downloading and verifying originals';
-    case 'rebuilding':
-      return 'Rebuilding thumbnails and catalog';
-    case 'activating':
-      return 'Activating restored library';
-    case 'complete':
-      return 'Restore complete';
-  }
-}
-
-function LibraryCard({
-  library,
-  selected,
-  onSelect,
-}: {
-  readonly library: RestoreLibrarySummary;
-  readonly selected: boolean;
-  readonly onSelect: () => void;
-}): ReactElement {
-  const intl = useIntl();
-  const { formatBytes, formatCount } = useFormats();
-  const valid = library.validation === 'valid';
-  return (
-    <button
-      type="button"
-      className={`ovl-restore__library${selected ? ' ovl-restore__library--selected' : ''}`}
-      disabled={!valid}
-      aria-pressed={selected}
-      onClick={onSelect}
-      data-testid="restore-library-card"
-    >
-      <div className="ovl-restore__libraryHead">
-        <span className="ovl-restore__libraryId mono-data">{library.libraryId}</span>
-        <Badge tone={valid ? 'green' : library.validation === 'unsupported' ? 'amber' : 'red'}>
-          {valid ? 'Validated' : library.validation.replace('-', ' ')}
-        </Badge>
-      </div>
-      {valid ? (
-        <div className="ovl-restore__meta mono-data">
-          Gen {String(library.generation)} · {formatCount(library.photos ?? 0)} photos · {formatBytes(library.totalBytes ?? 0)} ·{' '}
-          {formatCount(library.albums ?? 0)} albums
-        </div>
-      ) : (
-        <div className="ovl-restore__meta">Metadata is unavailable until this backup validates.</div>
-      )}
-      {library.generatedAt === null ? null : (
-        <div className="ovl-restore__date">
-          Backed up {intl.formatDate(library.generatedAt, { dateStyle: 'medium', timeStyle: 'short' })}
-        </div>
-      )}
-      {library.fallbackGenerations > 0 ? (
-        <div className="ovl-restore__notice">{formatCount(library.fallbackGenerations)} retained fallback generation available</div>
-      ) : null}
-      {library.resumable ? <div className="ovl-restore__notice">Verified staged work is ready to resume</div> : null}
-    </button>
-  );
-}
-
 export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): ReactElement {
   const intl = useIntl();
   const { formatCount } = useFormats();
@@ -224,6 +168,46 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   }, [providerId]);
 
   useEffect(() => window.overlook.restore.onProgress(setProgress), []);
+
+  const applyRestoreStatus = (status: RestoreStatusSnapshot): void => {
+    if (status.providerId !== null) setProviderId(status.providerId);
+    if (status.sessionId !== null) setSessionId(status.sessionId);
+    if (status.libraries.length > 0) setLibraries(status.libraries);
+    if (status.libraryId !== null) setSelectedId(status.libraryId);
+    if (status.progress !== null) setProgress(status.progress);
+    if (status.verification !== null) {
+      setVerifyResult({
+        verificationId: status.verification.verificationId,
+        missing: status.verification.missing,
+        missingCount: status.verification.missingCount,
+        corruptCount: status.verification.corruptCount,
+        verifiedCount: status.verification.verifiedCount,
+        photos: status.verification.photos,
+      });
+    }
+    if (status.lastError !== null) setError(status.lastError);
+    if (status.lastResult !== null) {
+      setMissing(status.lastResult.missing);
+      setRestoredPhotoCount(status.lastResult.photos);
+    }
+    setVerifying(status.phase === 'verify-scan');
+    const next = restoreStepFromStatus(status);
+    if (next !== null) setStep(next);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.overlook.restore.status().then((status) => {
+      if (!cancelled) applyRestoreStatus(status);
+    });
+    const stopStatus = window.overlook.restore.onStatusChanged((status) => {
+      if (!cancelled) applyRestoreStatus(status);
+    });
+    return () => {
+      cancelled = true;
+      stopStatus();
+    };
+  }, []);
 
   // Every result on screen belongs to exactly one discovery (#748): a
   // provider change or a return to setup invalidates the previous attempt's
@@ -523,7 +507,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           <div className="ovl-restore__libraries">
             {libraries.length === 0 && error === null ? <div className="ovl-restore__empty">Validating cloud libraries…</div> : null}
             {libraries.map((library) => (
-              <LibraryCard
+              <RestoreLibraryCard
                 key={library.libraryId}
                 library={library}
                 selected={library.libraryId === selectedId}
@@ -550,7 +534,17 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         <>
           <div className="ovl-restore__sectionTitle">{intl.formatMessage(messages.verifyHeading)}</div>
           {verifying ? (
-            <div className="ovl-restore__empty">Scanning cloud backup — classifying verified vs missing vs corrupt…</div>
+            <div className="ovl-restore__running" aria-live="polite">
+              <div className="ovl-restore__sectionTitle">
+                {progress === null ? 'Scanning cloud backup' : restoreStageLabel(progress.stage, true)}
+              </div>
+              <ProgressBar
+                value={progress?.done ?? 0}
+                max={Math.max(progress?.total ?? 1, 1)}
+                label={progress === null ? 'Starting' : restoreStageLabel(progress.stage, true)}
+                {...(progress === null ? {} : { detail: restoreProgressDetail(progress) })}
+              />
+            </div>
           ) : verifyResult === null ? (
             <div className="ovl-restore__empty">Preparing verification…</div>
           ) : (
@@ -720,12 +714,12 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         </>
       ) : step === 'running' ? (
         <div className="ovl-restore__running" aria-live="polite">
-          <div className="ovl-restore__sectionTitle">{progress === null ? 'Preparing restore' : stageLabel(progress.stage)}</div>
+          <div className="ovl-restore__sectionTitle">{progress === null ? 'Preparing restore' : restoreStageLabel(progress.stage)}</div>
           <ProgressBar
             value={progress?.done ?? 0}
             max={Math.max(progress?.total ?? 1, 1)}
-            label={progress === null ? 'Starting' : stageLabel(progress.stage)}
-            {...(progress === null ? {} : { detail: `${String(progress.done)} / ${String(progress.total)}` })}
+            label={progress === null ? 'Starting' : restoreStageLabel(progress.stage)}
+            {...(progress === null ? {} : { detail: restoreProgressDetail(progress) })}
           />
           <Button
             variant="secondary"

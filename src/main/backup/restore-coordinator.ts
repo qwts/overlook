@@ -12,6 +12,7 @@ import type {
   RestoreDiscoverResponse,
   RestoreLibrarySummary,
   RestoreRunResponse,
+  RestoreStatusSnapshot,
   RestoreTrashResponse,
   RestoreVerifyResponse,
 } from '../../shared/backup/restore-contract.js';
@@ -61,6 +62,7 @@ export interface RestoreCoordinatorDeps {
   readonly sessionId: () => string;
   readonly resumeAvailable?: ((libraryId: string, candidate: RestoreCandidate) => Promise<boolean>) | undefined;
   readonly progress: (value: RestoreProgress) => void;
+  readonly statusChanged?: ((status: RestoreStatusSnapshot) => void) | undefined;
   readonly workStarted?: (() => void) | undefined;
   readonly workFinished?: (() => void) | undefined;
   readonly activated?: ((result: RestoreRunResult) => void) | undefined;
@@ -111,12 +113,63 @@ export class RestoreCoordinator {
   private session: RestoreSession | null = null;
   private controller: AbortController | null = null;
   private readonly active = new Set<Promise<unknown>>();
+  private phase: RestoreStatusSnapshot['phase'] = 'idle';
+  private lastProgress: RestoreProgress | null = null;
+  private lastError: RestoreStatusSnapshot['lastError'] = null;
+  private lastResult: RestoreStatusSnapshot['lastResult'] = null;
+  private lastLibraries: readonly RestoreLibrarySummary[] = [];
+  private lastLibraryId: string | null = null;
 
   constructor(private readonly deps: RestoreCoordinatorDeps) {}
 
   private clearSession(): void {
     this.session?.masterKey.fill(0);
     this.session = null;
+  }
+
+  private emitStatus(): void {
+    this.deps.statusChanged?.(this.status());
+  }
+
+  private setPhase(phase: RestoreStatusSnapshot['phase']): void {
+    this.phase = phase;
+    this.emitStatus();
+  }
+
+  private recordProgress(progress: RestoreProgress): void {
+    this.lastProgress = progress;
+    this.deps.progress(progress);
+    this.emitStatus();
+  }
+
+  status(): RestoreStatusSnapshot {
+    const session = this.session;
+    const verificationEntry = session === null ? undefined : [...session.verifications.entries()][0];
+    const verification = verificationEntry?.[1];
+    const singleSource = session !== null && session.sources.size === 1 ? [...session.sources.keys()][0] : undefined;
+    return {
+      phase: this.phase,
+      sessionId: session?.id ?? null,
+      libraryId: this.lastLibraryId ?? singleSource ?? null,
+      providerId: session?.providerId ?? null,
+      progress: this.lastProgress,
+      lastError: this.lastError,
+      lastResult: this.lastResult,
+      verification:
+        verificationEntry === undefined || verification === undefined
+          ? null
+          : {
+              verificationId: verificationEntry[0],
+              libraryId: verification.libraryId,
+              generation: verification.generation,
+              photos: verification.photos,
+              verifiedCount: verification.verifiedCount,
+              missingCount: verification.missingCount,
+              corruptCount: verification.corruptCount,
+              missing: [...verification.missing],
+            },
+      libraries: this.lastLibraries,
+    };
   }
 
   discover(providerId: string, keyPath: string, password: string): Promise<RestoreDiscoverResponse> {
@@ -130,6 +183,7 @@ export class RestoreCoordinator {
   expireSession(): void {
     if (this.controller !== null) return;
     this.clearSession();
+    if (this.phase === 'session' || this.phase === 'failed') this.setPhase('idle');
   }
 
   discoverFrom(providerId: string, source: RestoreKeySource): Promise<RestoreDiscoverResponse> {
@@ -152,6 +206,12 @@ export class RestoreCoordinator {
       return { sessionId: null, libraries: [], error: { reason: 'io', message: 'A restore is already running.' } };
     }
     this.clearSession();
+    this.lastError = null;
+    this.lastResult = null;
+    this.lastProgress = null;
+    this.lastLibraries = [];
+    this.lastLibraryId = null;
+    this.setPhase('idle');
     let masterKey: Buffer;
     try {
       masterKey = await this.openMasterKey(source);
@@ -199,6 +259,9 @@ export class RestoreCoordinator {
       const id = this.deps.sessionId();
       const custodyPassword = source.kind === 'local-master' ? (source.custodyPassword ?? null) : null;
       this.session = { id, providerId, masterKey, custodyPassword, sources: valid, verifications: new Map() };
+      this.lastLibraries = libraries;
+      this.lastLibraryId = libraries.find((library) => library.validation === 'valid')?.libraryId ?? null;
+      this.setPhase('session');
       return { sessionId: id, libraries, error: null };
     } catch (error) {
       masterKey.fill(0);
@@ -239,13 +302,17 @@ export class RestoreCoordinator {
     session.verifications.delete(verificationId);
     const controller = new AbortController();
     this.controller = controller;
+    this.lastLibraryId = libraryId;
+    this.lastError = null;
+    this.lastResult = null;
+    this.setPhase('running');
     this.deps.workStarted?.();
     let failurePhase: FailurePhase = 'discovering';
     try {
       const expectedGeneration = source.discovery.newestGeneration;
       const runner = this.deps.createRunner(source.provider, (progress) => {
-        if (progress.stage !== 'complete') failurePhase = progress.stage;
-        this.deps.progress(progress);
+        if (progress.stage !== 'complete') failurePhase = progress.stage === 'verifying' ? 'discovering' : progress.stage;
+        this.recordProgress(progress);
       });
       const result = await runner.run({
         masterKey: session.masterKey,
@@ -255,7 +322,15 @@ export class RestoreCoordinator {
         ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
       });
       this.deps.activated?.(result);
+      this.lastResult = {
+        libraryId: result.libraryId,
+        generation: result.generation,
+        photos: result.photos,
+        resumed: result.resumed,
+        missing: result.missing,
+      };
       this.clearSession();
+      this.setPhase('complete');
       return {
         result: {
           ...result,
@@ -265,7 +340,10 @@ export class RestoreCoordinator {
         error: null,
       };
     } catch (error) {
-      return { result: null, error: errorResult(error, failurePhase) };
+      const mapped = errorResult(error, failurePhase);
+      this.lastError = mapped;
+      this.setPhase('failed');
+      return { result: null, error: mapped };
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
@@ -283,10 +361,16 @@ export class RestoreCoordinator {
     }
     const controller = new AbortController();
     this.controller = controller;
+    this.lastLibraryId = libraryId;
+    this.lastError = null;
+    this.setPhase('verify-scan');
     this.deps.workStarted?.();
     try {
-      const runner = this.deps.createRunner(source.provider, this.deps.progress);
+      const runner = this.deps.createRunner(source.provider, (progress) => {
+        this.recordProgress(progress);
+      });
       if (runner.verify === undefined) {
+        this.setPhase('session');
         return { result: null, error: { reason: 'io', message: 'Verify is not available in this runner.' } };
       }
       const result = await runner.verify({
@@ -298,6 +382,7 @@ export class RestoreCoordinator {
       const verificationId = randomUUID();
       session.verifications.clear();
       session.verifications.set(verificationId, result);
+      this.setPhase('session');
       return {
         result: {
           verificationId,
@@ -312,7 +397,10 @@ export class RestoreCoordinator {
         error: null,
       };
     } catch (error) {
-      return { result: null, error: errorResult(error, 'verify-scan') };
+      const mapped = errorResult(error, 'verify-scan');
+      this.lastError = mapped;
+      this.setPhase('failed');
+      return { result: null, error: mapped };
     } finally {
       this.controller = null;
       this.deps.workFinished?.();
@@ -469,12 +557,14 @@ export class RestoreCoordinator {
   dispose(): void {
     this.cancel();
     this.clearSession();
+    this.setPhase('idle');
   }
 
   async close(): Promise<void> {
     this.cancel();
     await Promise.allSettled([...this.active]);
     this.clearSession();
+    this.setPhase('idle');
   }
 
   private track<T>(operation: () => Promise<T>): Promise<T> {

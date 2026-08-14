@@ -76,6 +76,7 @@ const keysStatus = createInvoker(channels.keysStatus, invokeTransport);
 const keysPickFile = createInvoker(channels.keysPickFile, invokeTransport);
 const restoreProfileStatus = createInvoker(channels.restoreProfileStatus, invokeTransport);
 const restorePickKey = createInvoker(channels.restorePickKey, invokeTransport);
+const restoreStatus = createInvoker(channels.restoreStatus, invokeTransport);
 const appLockStatus = createInvoker(channels.appLockStatus, invokeTransport);
 const appLockNow = createInvoker(channels.appLockNow, invokeTransport);
 const appLockPickRecovery = createInvoker(channels.appLockPickRecovery, invokeTransport);
@@ -299,7 +300,9 @@ const overlook: OverlookApi = {
     exportCsv: createInvoker(channels.restoreExportCsv, invokeTransport),
     exportCorrupt: createInvoker(channels.restoreExportCorrupt, invokeTransport),
     cancel: createInvoker(channels.restoreCancel, invokeTransport),
+    status: async () => restoreStatus({}),
     onProgress: createSubscriber(events.restoreProgress, subscribeTransport),
+    onStatusChanged: createSubscriber(events.restoreStatusChanged, subscribeTransport),
   }),
   settings: Object.freeze({
     get: async () => settingsGet({}),

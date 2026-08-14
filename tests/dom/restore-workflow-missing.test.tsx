@@ -50,7 +50,20 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): RestoreMock
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {
+      status: () =>
+        Promise.resolve({
+          phase: 'idle',
+          sessionId: null,
+          libraryId: null,
+          providerId: null,
+          progress: null,
+          lastError: null,
+          lastResult: null,
+          verification: null,
+          libraries: [],
+        }),
       onProgress: () => () => undefined,
+      onStatusChanged: () => () => undefined,
       pickKey: () => Promise.resolve({ path: null }),
       discover: () =>
         Promise.resolve({

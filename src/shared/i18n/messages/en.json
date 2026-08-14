@@ -1259,6 +1259,12 @@
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
   },
+  "restore.chrome.complete": {
+    "defaultMessage": "Restore complete"
+  },
+  "restore.chrome.show": {
+    "defaultMessage": "Show restore"
+  },
   "restore.error.copy": {
     "defaultMessage": "Copy error"
   },

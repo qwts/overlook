@@ -2,7 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 /* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import { SettingsDialog } from './SettingsDialog';
+import { useState, type ReactElement } from 'react';
+
+import { Dialog } from '../components/Dialog';
+import { RestoreWorkflow } from '../restore/RestoreWorkflow';
+import { SettingsDialog, type SettingsDialogProps } from './SettingsDialog';
 import { defaultSettings, mergeSettings, type AppSettings } from '../../../shared/settings/settings.js';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import { AppStateProvider } from '../state/app-state-context';
@@ -277,7 +281,20 @@ function installStub(options?: {
     exportCsv: () => Promise.resolve({ exported: false, path: null, error: null }),
     exportCorrupt: () => Promise.resolve({ exported: false, count: 0, unavailable: 0, error: null }),
     cancel: () => Promise.resolve({}),
+    status: () =>
+      Promise.resolve({
+        phase: 'idle',
+        sessionId: null,
+        libraryId: null,
+        providerId: null,
+        progress: null,
+        lastError: null,
+        lastResult: null,
+        verification: null,
+        libraries: [],
+      }),
     onProgress: () => () => undefined,
+    onStatusChanged: () => () => undefined,
   };
   const appLockListeners = new Set<Parameters<OverlookApi['appLock']['onChanged']>[0]>();
   const appLockApi: OverlookApi['appLock'] = {
@@ -442,10 +459,25 @@ function installStub(options?: {
   };
 }
 
+function SettingsRestoreHost(props: SettingsDialogProps): ReactElement {
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  return (
+    <>
+      <SettingsDialog {...props} onRestore={() => setRestoreOpen(true)} />
+      {restoreOpen ? (
+        <Dialog open title="Restore from cloud backup" icon="cloud-download" width={640} onClose={() => setRestoreOpen(false)}>
+          <RestoreWorkflow context="settings" />
+        </Dialog>
+      ) : null}
+    </>
+  );
+}
+
 const meta: Meta<typeof SettingsDialog> = {
   title: 'App/SettingsDialog',
   component: SettingsDialog,
   args: { open: true, onClose: fn(), selectedPhotoIds: ['offloaded-1', 'offloaded-2'] },
+  render: (args) => <SettingsRestoreHost {...args} />,
   decorators: [
     (Story) => {
       installStub();

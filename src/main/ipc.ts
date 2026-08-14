@@ -19,6 +19,7 @@ import type {
 import type {
   RestoreDiscoverResponse,
   RestoreRunResponse,
+  RestoreStatusSnapshot,
   RestoreTrashResponse,
   RestoreVerifyResponse,
 } from '../shared/backup/restore-contract.js';
@@ -701,6 +702,7 @@ export interface RestoreFacade {
     verificationId: string,
   ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }>;
   cancel(): void;
+  status(): RestoreStatusSnapshot;
 }
 
 export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
@@ -746,6 +748,9 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
       getFacade().cancel();
       return {};
     })(request),
+  );
+  ipcMain.handle(channels.restoreStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreStatus, () => getFacade().status())(request),
   );
 }
 

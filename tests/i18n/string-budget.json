@@ -127,6 +127,11 @@
       "issues": [403]
     },
     {
+      "file": "src/renderer/src/restore/restore-library-card.tsx",
+      "count": 11,
+      "issues": [403]
+    },
+    {
       "file": "src/renderer/src/restore/RestoreOnboarding.tsx",
       "count": 1,
       "issues": [403]
