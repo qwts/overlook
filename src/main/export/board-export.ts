@@ -4,7 +4,7 @@ import { buffer as bufferStream } from 'node:stream/consumers';
 
 import sharp from 'sharp';
 
-import { embeddedJpegFromRaf } from '../import/raf-preview.js';
+import { embeddedJpegFromRaf, looksLikeJpeg } from '../import/raf-preview.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 import type { BoardExportRequest, BoardExportResult } from '../../shared/moodboard/export-contract.js';
 import { composeExportLayout, type ExportItem } from '../../shared/moodboard/export-layout.js';
@@ -41,7 +41,7 @@ export interface BoardExportDeps {
 
 function sourceBytes(bytes: Buffer, fileKind: PhotoRecord['fileKind']): Buffer {
   if (fileKind !== 'raw') return bytes;
-  const preview = embeddedJpegFromRaf(bytes);
+  const preview = embeddedJpegFromRaf(bytes) ?? (looksLikeJpeg(bytes) ? bytes : null);
   if (preview === null) throw new Error('RAW has no compositable preview');
   return preview;
 }

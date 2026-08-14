@@ -121,6 +121,27 @@ async function rgbAt(path: string, x: number, y: number): Promise<readonly [numb
   return [data[offset] ?? 0, data[offset + 1] ?? 0, data[offset + 2] ?? 0];
 }
 
+async function composeRawTaggedJpeg(): Promise<void> {
+  const destination = await mkdtemp(join(tmpdir(), 'overlook-board-raw-preview-'));
+  const { deps } = await harness();
+  const jpeg = await sharp(await halfRedHalfBlue())
+    .jpeg()
+    .toBuffer();
+  const rawMetadata: PhotoRecord = { ...PHOTO, fileName: 'visible.RAF', fileKind: 'raw' };
+  const result = await exportBoardPng(
+    { ...REQUEST, destination },
+    {
+      ...deps,
+      getPhoto: (photoId) => (photoId === PHOTO.id ? rawMetadata : undefined),
+      openOriginal: () => Promise.resolve({ stream: Readable.from([jpeg]) }),
+    },
+    new AbortController().signal,
+  );
+
+  assert.equal(result.rendered, 1);
+  assert.equal((await sharp(result.path ?? '').metadata()).format, 'png');
+}
+
 describe('moodboard color-managed raster export (#696)', () => {
   test('writes declared geometry with an ICC profile and never opens skipped pixels', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'overlook-board-export-'));
@@ -170,6 +191,8 @@ describe('moodboard color-managed raster export (#696)', () => {
     assert.equal(result.fileName, 'Color board (2).png');
     assert.equal(result.path, join(destination, 'Color board (2).png'));
   });
+
+  test('composes a valid JPEG payload identified as RAW by library metadata', composeRawTaggedJpeg);
 
   test('fails corrupt source composition without writing an incomplete board', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'overlook-board-corrupt-'));
