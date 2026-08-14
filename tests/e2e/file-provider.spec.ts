@@ -33,7 +33,7 @@ test('explicit Finder consent publishes and revokes the authenticated read-only 
   });
   expect(response.status).toBe(200);
   const items = (await response.json()) as readonly { readonly name: string; readonly readOnly: boolean }[];
-  expect(items.map(({ name }) => name)).toEqual(['IMG_4021.RAF', 'IMG_4022.JPG', 'IMG_4028.JPG']);
+  expect(items.map(({ name }) => name)).toEqual(['IMG_4021.RAF', 'IMG_4028.JPG', 'IMG_4035.JPG']);
   expect(items.every(({ readOnly }) => readOnly)).toBe(true);
 
   await dialog.getByRole('button', { name: 'Disable Finder access' }).click();

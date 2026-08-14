@@ -348,6 +348,17 @@ function installStub(options?: {
     },
     export: () => Promise.resolve({ exported: true, count: diagnosticReports.length }),
   };
+  const fileProviderSnapshot: Awaited<ReturnType<OverlookApi['fileProvider']['status']>> = {
+    available: false,
+    reason: 'unsigned-build',
+    config: { version: 1, enabled: false, consentVersion: 1, scope: { kind: 'library' } },
+    albums: [],
+  };
+  const fileProviderApi: OverlookApi['fileProvider'] = {
+    status: () => Promise.resolve(fileProviderSnapshot),
+    enable: () => Promise.resolve(fileProviderSnapshot),
+    disable: () => Promise.resolve(fileProviderSnapshot),
+  };
   let interopStatus: Awaited<ReturnType<OverlookApi['interop']['status']>> = {
     provider: { provider: 'pcloud', status: 'not-connected', busy: false },
     pairing: { status: 'not-configured', pairingId: null, keyId: null, createdAt: null },
@@ -444,6 +455,7 @@ function installStub(options?: {
     restore: restoreApi,
     appLock: appLockApi,
     diagnostics: diagnosticsApi,
+    fileProvider: fileProviderApi,
     interop: interopApi,
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
