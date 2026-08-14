@@ -13,6 +13,9 @@ export interface RestoreFacadeOptions {
   readonly lockState: () => AppLockState;
   readonly authorizePassword: (password: string) => Promise<AppAuthorizationResult>;
   readonly recordDiagnostic?: ((occurrence: DiagnosticOccurrence) => boolean) | undefined;
+  /** Unit tests inject these — `electron.dialog` is undefined under ELECTRON_RUN_AS_NODE. */
+  readonly chooseSavePath?: ((defaultPath: string) => Promise<string | null>) | undefined;
+  readonly chooseDirectory?: (() => Promise<string | null>) | undefined;
 }
 
 type DiscoverKey = { keyPath: string; password: string } | { localKey: true; password?: string | undefined };
@@ -78,6 +81,23 @@ async function authorizeLocalKey(options: RestoreFacadeOptions, password: string
     return { refused: { reason: 'destructive-authorization', message: 'That app password is incorrect.' } };
   }
   return { refused: { reason: 'destructive-authorization', message: 'App lock recovery is required before this key can be used.' } };
+}
+
+async function chooseSavePath(defaultPath: string): Promise<string | null> {
+  const { dialog } = await import('electron');
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath,
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+  });
+  if (canceled || !filePath) return null;
+  return filePath;
+}
+
+async function chooseDirectory(): Promise<string | null> {
+  const { dialog } = await import('electron');
+  const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+  if (canceled || filePaths.length === 0 || !filePaths[0]) return null;
+  return filePaths[0];
 }
 
 export function createRestoreFacade(options: RestoreFacadeOptions) {
@@ -169,12 +189,8 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       if (verification === null) {
         return { exported: false, path: null, error: 'Restore verification expired; verify the backup again.' };
       }
-      const { dialog } = await import('electron');
-      const { canceled, filePath } = await dialog.showSaveDialog({
-        defaultPath: `restore-missing-${libraryId}.csv`,
-        filters: [{ name: 'CSV', extensions: ['csv'] }],
-      });
-      if (canceled || !filePath) return { exported: false, path: null, error: null };
+      const filePath = await (options.chooseSavePath ?? chooseSavePath)(`restore-missing-${libraryId}.csv`);
+      if (filePath === null) return { exported: false, path: null, error: null };
       const { writeFile } = await import('node:fs/promises');
       await writeFile(filePath, formatRestoreCsv(verification.missing), 'utf8');
       return { exported: true, path: filePath, error: null };
@@ -186,10 +202,8 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
       }
       const corrupt = verification.missing.filter((object) => object.reason === 'failed-verification');
       if (corrupt.length === 0) return { exported: true, count: 0, unavailable: 0, error: null };
-      const { dialog } = await import('electron');
-      const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
-      if (canceled || filePaths.length === 0 || !filePaths[0]) return { exported: false, count: 0, unavailable: 0, error: null };
-      const destDir = filePaths[0];
+      const destDir = await (options.chooseDirectory ?? chooseDirectory)();
+      if (destDir === null) return { exported: false, count: 0, unavailable: 0, error: null };
       const { writeFile } = await import('node:fs/promises');
       return options.coordinator().exportCorrupt(sessionId, libraryId, verificationId, async (fileName, bytes) => {
         const safeName = fileName.replace(/[^a-zA-Z0-9._-]/gu, '_');

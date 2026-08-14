@@ -41,6 +41,8 @@ function harness(options?: {
   verifyError?: { reason: 'io' | 'corrupt'; message: string; phase?: 'verify-scan' };
   verifyResult?: { missingCount: number; corruptCount: number };
   verification?: RestoreVerifyResult | null;
+  chooseSavePath?: (defaultPath: string) => Promise<string | null>;
+  chooseDirectory?: () => Promise<string | null>;
 }) {
   const calls: {
     discovered: [string, RestoreKeySource][];
@@ -146,6 +148,8 @@ function harness(options?: {
       calls.diagnostics.push(occurrence);
       return true;
     },
+    ...(options?.chooseSavePath === undefined ? {} : { chooseSavePath: options.chooseSavePath }),
+    ...(options?.chooseDirectory === undefined ? {} : { chooseDirectory: options.chooseDirectory }),
   });
   return { facade, calls };
 }
@@ -349,76 +353,44 @@ test('exportCorrupt with no failed-verification objects is a no-op', async () =>
   assert.deepEqual(calls.exportedCorrupt, []);
 });
 
-async function withElectronDialogs(
-  stubs: {
-    showSaveDialog?: () => Promise<{ canceled: boolean; filePath?: string }>;
-    showOpenDialog?: () => Promise<{ canceled: boolean; filePaths: string[] }>;
-  },
-  run: () => Promise<void>,
-): Promise<void> {
-  const { dialog } = await import('electron');
-  const showSaveDialog = dialog.showSaveDialog.bind(dialog);
-  const showOpenDialog = dialog.showOpenDialog.bind(dialog);
-  if (stubs.showSaveDialog !== undefined) {
-    dialog.showSaveDialog = stubs.showSaveDialog as typeof dialog.showSaveDialog;
-  }
-  if (stubs.showOpenDialog !== undefined) {
-    dialog.showOpenDialog = stubs.showOpenDialog;
-  }
-  try {
-    await run();
-  } finally {
-    dialog.showSaveDialog = showSaveDialog;
-    dialog.showOpenDialog = showOpenDialog;
-  }
-}
-
 test('exportCsv writes the missing-object list when the save dialog returns a path', async () => {
   const dest = join(mkdtempSync(join(tmpdir(), 'overlook-restore-csv-')), 'gaps.csv');
-  await withElectronDialogs({ showSaveDialog: () => Promise.resolve({ canceled: false, filePath: dest }) }, async () => {
-    const { facade } = harness({
-      verification: plan({
-        missing: [{ path: 'blobs/aa/gone', kind: 'original', photoId: 'P1', reason: 'not-found' }],
-        missingCount: 1,
-      }),
-    });
-    const result = await facade.exportCsv('s1', 'L1', 'v1');
-    assert.deepEqual(result, { exported: true, path: dest, error: null });
-    assert.match(readFileSync(dest, 'utf8'), /blobs\/aa\/gone/);
+  const { facade } = harness({
+    verification: plan({
+      missing: [{ path: 'blobs/aa/gone', kind: 'original', photoId: 'P1', reason: 'not-found' }],
+      missingCount: 1,
+    }),
+    chooseSavePath: () => Promise.resolve(dest),
   });
+  const result = await facade.exportCsv('s1', 'L1', 'v1');
+  assert.deepEqual(result, { exported: true, path: dest, error: null });
+  assert.match(readFileSync(dest, 'utf8'), /blobs\/aa\/gone/);
 });
 
 test('exportCsv and exportCorrupt treat a canceled dialog as a no-op', async () => {
-  await withElectronDialogs(
-    {
-      showSaveDialog: () => Promise.resolve({ canceled: true }),
-      showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }),
-    },
-    async () => {
-      const { facade } = harness({
-        verification: plan({
-          missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }],
-          corruptCount: 1,
-        }),
-      });
-      assert.deepEqual(await facade.exportCsv('s1', 'L1', 'v1'), { exported: false, path: null, error: null });
-      assert.deepEqual(await facade.exportCorrupt('s1', 'L1', 'v1'), { exported: false, count: 0, unavailable: 0, error: null });
-    },
-  );
+  const { facade } = harness({
+    verification: plan({
+      missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }],
+      corruptCount: 1,
+    }),
+    chooseSavePath: () => Promise.resolve(null),
+    chooseDirectory: () => Promise.resolve(null),
+  });
+  assert.deepEqual(await facade.exportCsv('s1', 'L1', 'v1'), { exported: false, path: null, error: null });
+  assert.deepEqual(await facade.exportCorrupt('s1', 'L1', 'v1'), { exported: false, count: 0, unavailable: 0, error: null });
 });
 
 test('exportCorrupt writes decryptable images into the chosen directory', async () => {
   const destDir = mkdtempSync(join(tmpdir(), 'overlook-restore-corrupt-'));
-  await withElectronDialogs({ showOpenDialog: () => Promise.resolve({ canceled: false, filePaths: [destDir] }) }, async () => {
-    const { facade, calls } = harness({
-      verification: plan({
-        missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }],
-        corruptCount: 1,
-      }),
-    });
-    const result = await facade.exportCorrupt('s1', 'L1', 'v1');
-    assert.deepEqual(result, { exported: true, count: 1, unavailable: 0, error: null });
-    assert.deepEqual(calls.exportedCorrupt, [['s1', 'L1', 'v1']]);
-    assert.equal(readFileSync(join(destDir, 'P1-IMG_1.JPG')).toString(), 'jpeg');
+  const { facade, calls } = harness({
+    verification: plan({
+      missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }],
+      corruptCount: 1,
+    }),
+    chooseDirectory: () => Promise.resolve(destDir),
   });
+  const result = await facade.exportCorrupt('s1', 'L1', 'v1');
+  assert.deepEqual(result, { exported: true, count: 1, unavailable: 0, error: null });
+  assert.deepEqual(calls.exportedCorrupt, [['s1', 'L1', 'v1']]);
+  assert.equal(readFileSync(join(destDir, 'P1-IMG_1.JPG')).toString(), 'jpeg');
 });
