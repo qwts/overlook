@@ -77,6 +77,9 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(packager, /com\.zts1\.overlook/u);
     assert.match(packageJson.scripts?.['dist:signed:provisioned'] ?? '', /package-signed-provisioned\.mjs/u);
     assert.match(packager, /OVERLOOK_MAC_PROVISIONING_PROFILE/u);
+    assert.match(packager, /OVERLOOK_FILE_PROVIDER_PROVISIONING_PROFILE/u);
+    assert.match(packager, /com\.zts1\.overlook\.file-provider/u);
+    assert.match(packager, /appGroupId/u);
     assert.match(packager, /provisioningProfile/u);
     assert.match(packager, /--validate-only/u);
     assert.match(builder, /NSFaceIDUsageDescription/u);
@@ -91,6 +94,7 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(workflow, /verify-macos-provisioned-app\.mjs/u);
     assert.match(workflow, /verify-macos-app-launch\.mjs/u);
     assert.match(workflow, /OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: \$\{\{ vars\.IMAGE_TRAIL_EXTENSION_ID \}\}/u);
+    assert.match(workflow, /FILE_PROVIDER_PROVISIONING_PROFILE/u);
     assert.match(workflow, /\*-mac\.zip/u);
     for (const contract of [
       'embedded.provisionprofile',
@@ -101,6 +105,10 @@ describe('macOS release signing safety (#357)', () => {
       'com.apple.developer.icloud-container-identifiers',
       'com.apple.developer.ubiquity-container-identifiers',
       'Overlook Helper (Renderer)',
+      'OverlookFileProvider.appex',
+      'com.apple.security.application-groups',
+      'com.apple.security.app-sandbox',
+      'com.apple.security.network.client',
     ]) {
       assert.ok(provisionedVerifier.includes(contract), `verifier must enforce ${contract}`);
     }
@@ -109,6 +117,38 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(provisionedVerifier, /codesign/u);
     for (const binary of ['ditto', 'plutil']) assert.match(launchVerifier, new RegExp(binary, 'u'));
     for (const binary of ['plutil', 'security']) assert.match(provisioningProfile, new RegExp(binary, 'u'));
+  });
+
+  test('builds and signs the nested File Provider extension with its own identity', () => {
+    const builder = source('electron-builder.yml');
+    const buildExtension = source('scripts/build-file-provider-extension.mjs');
+    const signer = source('scripts/sign-macos-app.mjs');
+    const extensionInfo = source('native/file-provider-extension/Info.plist');
+    const extensionEntitlements = source('native/file-provider-extension/entitlements.plist');
+    assert.match(builder, /sign: scripts\/sign-macos-app\.mjs/u);
+    assert.match(buildExtension, /OVERLOOK_FILE_PROVIDER_PROVISIONING_PROFILE/u);
+    assert.match(buildExtension, /OVERLOOK_MAC_PROVISIONING_PROFILE/u);
+    assert.match(buildExtension, /embedded\.provisionprofile/u);
+    assert.match(buildExtension, /ElectronTeamID/u);
+    assert.match(buildExtension, /xcrun/u);
+    assert.match(signer, /optionsForFile/u);
+    assert.match(signer, /binaries/u);
+    assert.match(signer, /Contents.*PlugIns.*OverlookFileProvider\.appex/u);
+    assert.match(signer, /ignore:/u);
+    assert.match(signer, /isFileProviderExtension\(filePath\) \? false/u);
+    assert.match(signer, /preEmbedProvisioningProfile: false/u);
+    assert.match(signer, /preAutoEntitlements: false/u);
+    assert.match(signer, /OverlookFileProvider\.appex/u);
+    assert.match(signer, /file-provider-extension\/entitlements\.plist/u);
+    assert.match(extensionInfo, /com\.apple\.fileprovider-nonui/u);
+    for (const contract of [
+      'Z5DM34QS5U.com.zts1.overlook.file-provider',
+      'com.apple.security.app-sandbox',
+      'com.apple.security.application-groups',
+      'com.apple.security.network.client',
+    ]) {
+      assert.match(extensionEntitlements, new RegExp(contract.replaceAll('.', '\\.')));
+    }
   });
 
   test('the signed app executable is the native messaging host and registration is build-identity gated', () => {
@@ -275,5 +315,30 @@ describe('provisioning profile validation (#360)', () => {
         /does not authorize/u,
       );
     }
+  });
+
+  test('fails closed unless the profile authorizes the exact File Provider app group (#797)', async () => {
+    const { validateProvisioningProfile } = await provisioningProfileModule();
+    const appGroupId = `${OVERLOOK_TEAM_ID}.com.zts1.overlook.file-provider`;
+    const metadata = {
+      entitlements: {
+        'com.apple.application-identifier': OVERLOOK_MAC_APPLICATION_ID,
+        'com.apple.developer.team-identifier': OVERLOOK_TEAM_ID,
+        'com.apple.security.application-groups': [appGroupId],
+      },
+      teams: [OVERLOOK_TEAM_ID],
+      expiresAt: Date.parse('2044-07-12T01:24:19Z'),
+    };
+    const expected = { applicationId: OVERLOOK_MAC_APPLICATION_ID, teamId: OVERLOOK_TEAM_ID, appGroupId };
+    validateProvisioningProfile(metadata, expected, 0);
+    assert.throws(
+      () =>
+        validateProvisioningProfile(
+          { ...metadata, entitlements: { ...metadata.entitlements, 'com.apple.security.application-groups': [] } },
+          expected,
+          0,
+        ),
+      /does not authorize app group/u,
+    );
   });
 });

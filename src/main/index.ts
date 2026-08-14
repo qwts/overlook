@@ -755,7 +755,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
       const authorized = Buffer.from(masterKey);
       releasedMaster = authorized;
       try {
-        getLibraryService();
+        egressRuntime.activateLibrary(getLibraryService);
       } finally {
         authorized.fill(0);
         releasedMaster = undefined;

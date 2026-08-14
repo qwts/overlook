@@ -28,6 +28,12 @@ export interface FileProviderServiceDeps {
   readonly isMigrating: (photoId: string) => boolean;
   readonly openOriginal: (photo: PhotoRecord) => Promise<OpenedProviderOriginal>;
   readonly admit: () => boolean;
+  readonly transport?:
+    | {
+        readonly start: () => Promise<void>;
+        readonly stop: () => Promise<void>;
+      }
+    | undefined;
 }
 
 export interface FileProviderStatus {
@@ -122,13 +128,21 @@ export class FileProviderService {
     this.validateScope(scope);
     const previous = this.deps.store.load();
     const config: FileProviderConfig = { version: 1, enabled: true, consentVersion: FILE_PROVIDER_CONSENT_VERSION, scope };
-    await this.deps.bridge.register(this.domain());
+    this.deps.store.save(config);
     try {
-      this.deps.store.save(config);
+      await this.deps.transport?.start();
+      await this.deps.bridge.register(this.domain());
       await this.deps.bridge.changed(this.domain().id);
     } catch (error) {
       this.deps.store.save(previous);
-      await this.deps.bridge.remove(this.domain().id).catch(() => undefined);
+      if (previous.enabled) {
+        await this.deps.transport?.start().catch(() => undefined);
+        await this.deps.bridge.changed(this.domain().id).catch(() => undefined);
+      } else {
+        await this.deps.transport?.stop().catch(() => undefined);
+        await this.deps.bridge.evict(this.domain().id).catch(() => undefined);
+        await this.deps.bridge.remove(this.domain().id).catch(() => undefined);
+      }
       throw error;
     }
     return this.status();
@@ -137,16 +151,32 @@ export class FileProviderService {
   async disable(): Promise<FileProviderStatus> {
     this.requireAdmitted();
     this.deps.store.save(disabledFileProviderConfig);
-    await this.deps.bridge.evict(this.domain().id);
-    await this.deps.bridge.remove(this.domain().id);
+    await this.deps.transport?.stop();
+    let failure: unknown;
+    await this.deps.bridge.evict(this.domain().id).catch((error: unknown) => {
+      failure = error;
+    });
+    await this.deps.bridge.remove(this.domain().id).catch((error: unknown) => {
+      failure ??= error;
+    });
+    if (failure !== undefined) throw failure instanceof Error ? failure : new Error('File Provider cleanup failed');
     return this.status();
   }
 
   async reconcile(): Promise<void> {
     const config = this.deps.store.load();
     if (!config.enabled || !this.deps.admit() || !this.deps.bridge.status().available) return;
-    this.validateScope(config.scope);
-    await this.deps.bridge.register(this.domain());
+    try {
+      this.validateScope(config.scope);
+      await this.deps.transport?.start();
+      await this.deps.bridge.register(this.domain());
+    } catch (error) {
+      this.deps.store.save(disabledFileProviderConfig);
+      await this.deps.transport?.stop().catch(() => undefined);
+      await this.deps.bridge.evict(this.domain().id).catch(() => undefined);
+      await this.deps.bridge.remove(this.domain().id).catch(() => undefined);
+      throw error;
+    }
   }
 
   enumerate(parentId: string): readonly FileProviderItem[] {
@@ -157,6 +187,28 @@ export class FileProviderService {
     const albumId = parseAlbumItemId(parentId);
     if (albumId === null || config.scope.kind !== 'albums' || !config.scope.albumIds.includes(albumId)) return [];
     return this.photoItems(albumId);
+  }
+
+  item(itemId: string): FileProviderItem | undefined {
+    if (itemId === ROOT_ID) {
+      this.requireEnabled();
+      return {
+        id: ROOT_ID,
+        parentId: ROOT_ID,
+        name: safeName(this.deps.library.name),
+        kind: 'folder',
+        size: 0,
+        contentType: 'public.folder',
+        modifiedAt: '1970-01-01T00:00:00.000Z',
+        dataless: false,
+        readOnly: true,
+      };
+    }
+    const albumId = parseAlbumItemId(itemId);
+    if (albumId !== null) return this.enumerate(ROOT_ID).find((item) => item.id === itemId);
+    const photo = parsePhotoItemId(itemId);
+    if (photo === null) return undefined;
+    return this.enumerate(photo.albumId === undefined ? ROOT_ID : albumItemId(photo.albumId)).find((item) => item.id === itemId);
   }
 
   async materialize(itemId: string): Promise<OpenedProviderOriginal> {
@@ -183,6 +235,7 @@ export class FileProviderService {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    await this.deps.transport?.stop().catch(() => undefined);
     if (this.deps.store.load().enabled) await this.deps.bridge.evict(this.domain().id).catch(() => undefined);
     this.deps.bridge.close();
   }

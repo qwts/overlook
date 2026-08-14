@@ -61,6 +61,10 @@ class FakeBridge implements FileProviderBridge {
     return { available: true, reason: null } as const;
   }
 
+  stateDirectory(): string {
+    return '/group/file-provider';
+  }
+
   register(domain: FileProviderDomain): Promise<void> {
     this.domains.push(domain);
     return Promise.resolve();
@@ -97,6 +101,7 @@ function fixture() {
   ]);
   let admitted = true;
   let releases = 0;
+  const transportCalls: string[] = [];
   let openOriginal = (): Promise<OpenedProviderOriginal> =>
     Promise.resolve({
       stream: Readable.from(['bytes']),
@@ -118,6 +123,16 @@ function fixture() {
     isMigrating: (id) => id === 'P3',
     openOriginal: () => openOriginal(),
     admit: () => admitted,
+    transport: {
+      start: () => {
+        transportCalls.push('start');
+        return Promise.resolve();
+      },
+      stop: () => {
+        transportCalls.push('stop');
+        return Promise.resolve();
+      },
+    },
   });
   return {
     bridge,
@@ -128,6 +143,7 @@ function fixture() {
       admitted = false;
     },
     releases: () => releases,
+    transportCalls,
     setOpenOriginal: (next: () => Promise<OpenedProviderOriginal>) => {
       openOriginal = next;
     },
@@ -159,12 +175,22 @@ describe('read-only macOS File Provider (#797)', () => {
     });
   });
 
+  test('restores a persisted enabled domain and endpoint on unlock', async () => {
+    const { bridge, service, store, transportCalls } = fixture();
+    store.save({ version: 1, enabled: true, consentVersion: 1, scope: { kind: 'library' } });
+    await service.reconcile();
+    assert.deepEqual(transportCalls, ['start']);
+    assert.deepEqual(bridge.domains, [{ id: 'com.zts1.overlook.library.LIB1', displayName: 'Family' }]);
+  });
+
   test('rolls persisted consent back when activation signalling fails', async () => {
-    const { bridge, service, store } = fixture();
+    const { bridge, service, store, transportCalls } = fixture();
     bridge.failChanged = true;
     await assert.rejects(service.enable({ kind: 'library' }, 1), /signal failed/u);
     assert.equal(store.load().enabled, false);
     assert.deepEqual(bridge.removed, ['com.zts1.overlook.library.LIB1']);
+    assert.deepEqual(bridge.evicted, ['com.zts1.overlook.library.LIB1']);
+    assert.deepEqual(transportCalls, ['start', 'stop']);
   });
 
   test('projects stable read-only identifiers and truthful offloaded state', async () => {
@@ -183,6 +209,8 @@ describe('read-only macOS File Provider (#797)', () => {
         { name: 'shared (2).JPG', dataless: true, readOnly: true },
       ],
     );
+    assert.deepEqual(service.item(files[0]?.id ?? 'missing'), files[0]);
+    assert.equal(service.item('photo.library.invalid'), undefined);
     assert.deepEqual(service.enumerate(albums[0]?.id ?? 'missing'), files, 'identifiers must be stable across enumerations');
   });
 
@@ -238,12 +266,13 @@ describe('read-only macOS File Provider (#797)', () => {
   });
 
   test('disable persists denial before eviction and removes the domain', async () => {
-    const { bridge, service, store } = fixture();
+    const { bridge, service, store, transportCalls } = fixture();
     await service.enable({ kind: 'library' }, 1);
     const result = await service.disable();
     assert.equal(result.config.enabled, false);
     assert.equal(store.load().enabled, false);
     assert.deepEqual(bridge.evicted, ['com.zts1.overlook.library.LIB1']);
     assert.deepEqual(bridge.removed, ['com.zts1.overlook.library.LIB1']);
+    assert.deepEqual(transportCalls, ['start', 'stop']);
   });
 });

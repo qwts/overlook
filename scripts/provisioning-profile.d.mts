@@ -9,6 +9,7 @@ export interface ExpectedProvisioningIdentity {
   readonly teamId: string;
   readonly iCloudContainerId?: string;
   readonly ubiquityContainerId?: string;
+  readonly appGroupId?: string;
 }
 
 export type ProvisioningCommandRunner = (

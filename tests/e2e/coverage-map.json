@@ -2203,6 +2203,28 @@
       ]
     },
     {
+      "id": "797-read-only-file-provider",
+      "wiki": "Acceptance-Test-Read-Only-File-Provider",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/file-provider.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/file-provider/file-provider-service.test.ts",
+            "tests/file-provider/file-provider-bridge.test.ts",
+            "tests/file-provider/file-provider-transport.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged check exercises the real macOS File Provider domain in Finder and Open dialogs, signed-extension isolation, on-demand/offloaded materialization, lock eviction, install/upgrade/disable/uninstall cleanup, and OS-owned cache disclosure; automated tests cover explicit consent, authenticated loopback transport, stable read-only projection, authorization races, custody release, and native/signing source policy."
+        }
+      ]
+    },
+    {
       "id": "798-apple-photos-bridge",
       "wiki": "Acceptance-Test-Apple-Photos-Bridge",
       "coverage": [

@@ -57,6 +57,12 @@ export function validateProvisioningProfile(metadata, expected, now = Date.now()
       throw new Error('profile does not authorize iCloud Documents');
     }
   }
+  if (expected.appGroupId !== undefined) {
+    const groups = metadata.entitlements?.['com.apple.security.application-groups'];
+    if (!Array.isArray(groups) || !groups.some((authorized) => authorizesIdentifier(authorized, expected.appGroupId))) {
+      throw new Error(`profile does not authorize app group ${expected.appGroupId}`);
+    }
+  }
   if (!Number.isFinite(metadata.expiresAt) || metadata.expiresAt <= now) {
     throw new Error('provisioning profile is expired or has no valid expiry');
   }

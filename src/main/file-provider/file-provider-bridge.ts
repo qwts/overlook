@@ -8,6 +8,7 @@ export interface FileProviderDomain {
 /** Narrow main-process boundary. The extension never receives database or key access. */
 export interface FileProviderBridge {
   status(): { readonly available: boolean; readonly reason: FileProviderUnavailableReason | null };
+  stateDirectory(): string | null;
   register(domain: FileProviderDomain): Promise<void>;
   remove(domainId: string): Promise<void>;
   evict(domainId: string): Promise<void>;
@@ -17,6 +18,7 @@ export interface FileProviderBridge {
 
 interface NativeBinding {
   readonly status: (bundleId: string, extensionId: string) => boolean;
+  readonly stateDirectory: () => unknown;
   readonly register: (domain: FileProviderDomain, callback: (error?: unknown) => void) => void;
   readonly remove: (domainId: string, callback: (error?: unknown) => void) => void;
   readonly evict: (domainId: string, callback: (error?: unknown) => void) => void;
@@ -26,7 +28,9 @@ interface NativeBinding {
 function validBinding(value: unknown): value is NativeBinding {
   if (typeof value !== 'object' || value === null) return false;
   const binding = value as Partial<NativeBinding>;
-  return ['status', 'register', 'remove', 'evict', 'changed'].every((name) => typeof binding[name as keyof NativeBinding] === 'function');
+  return ['status', 'stateDirectory', 'register', 'remove', 'evict', 'changed'].every(
+    (name) => typeof binding[name as keyof NativeBinding] === 'function',
+  );
 }
 
 function invokeNative(start: (callback: (error?: unknown) => void) => void): Promise<void> {
@@ -50,6 +54,7 @@ export function createFileProviderBridge(options: {
   readonly loadBinding?: (() => unknown) | undefined;
 }): FileProviderBridge {
   let binding: NativeBinding | null | undefined;
+  let stateDirectory: string | undefined;
   let unavailable: FileProviderUnavailableReason = 'native-unavailable';
   let closed = false;
   const resolve = (): NativeBinding | null => {
@@ -68,7 +73,11 @@ export function createFileProviderBridge(options: {
       if (!validBinding(loaded)) throw new Error('invalid File Provider binding');
       const bundleId = options.bundleId ?? 'com.zts1.overlook';
       const extensionId = options.extensionId ?? 'com.zts1.overlook.file-provider';
-      binding = loaded.status(bundleId, extensionId) ? loaded : null;
+      const directory = loaded.stateDirectory();
+      if (loaded.status(bundleId, extensionId) && typeof directory === 'string' && directory !== '') {
+        binding = loaded;
+        stateDirectory = directory;
+      } else binding = null;
       if (binding === null) unavailable = 'unsigned-build';
     } catch {
       binding = null;
@@ -86,6 +95,10 @@ export function createFileProviderBridge(options: {
       const available = resolve() !== null;
       return { available, reason: available ? null : unavailable };
     },
+    stateDirectory: () => {
+      required();
+      return stateDirectory ?? null;
+    },
     register: (domain) => invokeNative((callback) => required().register(domain, callback)),
     remove: (domainId) => invokeNative((callback) => required().remove(domainId, callback)),
     evict: (domainId) => invokeNative((callback) => required().evict(domainId, callback)),
@@ -93,6 +106,7 @@ export function createFileProviderBridge(options: {
     close: () => {
       closed = true;
       binding = null;
+      stateDirectory = undefined;
     },
   };
 }

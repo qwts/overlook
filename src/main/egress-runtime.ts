@@ -17,6 +17,8 @@ import { applicationEvents } from './application-events.js';
 import { createFileProviderBridge } from './file-provider/file-provider-bridge.js';
 import { FileProviderService } from './file-provider/file-provider-service.js';
 import { FileProviderStore } from './file-provider/file-provider-store.js';
+import { FileProviderTransport } from './file-provider/file-provider-transport.js';
+import { TestFileProviderBridge } from './file-provider/test-file-provider-bridge.js';
 import path from 'node:path';
 
 export interface EgressRuntimeOptions {
@@ -37,6 +39,11 @@ export class EgressRuntime {
   private fileProviderClose: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: EgressRuntimeOptions) {}
+
+  activateLibrary(openLibrary: () => unknown): void {
+    openLibrary();
+    this.fileProvider();
+  }
 
   exports(): DrainableExportFacade {
     const parts = this.options.parts();
@@ -106,8 +113,27 @@ export class EgressRuntime {
     if (this.fileProviderService !== undefined) return this.fileProviderService;
     const parts = this.options.parts();
     const repo = new PhotosRepository(parts.db);
+    const fixtureDirectory = this.options.harnessEnv('OVERLOOK_FILE_PROVIDER_STATE_DIRECTORY');
+    const bridge =
+      fixtureDirectory === undefined
+        ? createFileProviderBridge({ platform: process.platform, packaged: app.isPackaged })
+        : new TestFileProviderBridge(fixtureDirectory);
+    const stateDirectory = bridge.status().available ? bridge.stateDirectory() : null;
+    const serviceReference: { current?: FileProviderService } = {};
+    const currentService = (): FileProviderService => {
+      if (serviceReference.current === undefined) throw new Error('File Provider service is unavailable');
+      return serviceReference.current;
+    };
+    const transport =
+      stateDirectory === null
+        ? undefined
+        : new FileProviderTransport(stateDirectory, {
+            enumerate: (parentId) => currentService().enumerate(parentId),
+            item: (itemId) => currentService().item(itemId),
+            materialize: (itemId) => currentService().materialize(itemId),
+          });
     const service = new FileProviderService({
-      bridge: createFileProviderBridge({ platform: process.platform, packaged: app.isPackaged }),
+      bridge,
       store: new FileProviderStore(path.join(this.options.dataDir(), 'file-provider.json')),
       library: this.options.library(),
       albums: () => repo.albums(),
@@ -123,7 +149,9 @@ export class EgressRuntime {
         };
       },
       admit: () => this.options.unlocked() && this.options.parts() === parts,
+      transport,
     });
+    serviceReference.current = service;
     this.fileProviderService = service;
     void service.reconcile().catch(() => undefined);
     return service;
