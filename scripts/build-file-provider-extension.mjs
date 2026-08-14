@@ -23,7 +23,8 @@ export function buildFileProviderExtension(appOutDir, productName = 'Overlook', 
       '-fobjc-arc',
       '-fmodules',
       `-fmodules-cache-path=${moduleCache}`,
-      '-bundle',
+      '-fapplication-extension',
+      '-Wl,-e,_NSExtensionMain',
       '-mmacosx-version-min=12.0',
       '-framework',
       'FileProvider',
@@ -37,6 +38,10 @@ export function buildFileProviderExtension(appOutDir, productName = 'Overlook', 
     ],
     { stdio: 'inherit' },
   );
+  const machHeader = execFileSync('otool', ['-hv', executable], { encoding: 'utf8' });
+  if (!/\bEXECUTE\b/u.test(machHeader)) {
+    throw new Error('File Provider extension must be a Mach-O executable');
+  }
   copyFileSync('native/file-provider-extension/Info.plist', path.join(contents, 'Info.plist'));
   execFileSync('plutil', ['-replace', 'CFBundleShortVersionString', '-string', version, path.join(contents, 'Info.plist')]);
   execFileSync('plutil', ['-replace', 'CFBundleVersion', '-string', buildVersion, path.join(contents, 'Info.plist')]);

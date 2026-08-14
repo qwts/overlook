@@ -154,6 +154,11 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(buildExtension, /embedded\.provisionprofile/u);
     assert.match(buildExtension, /ElectronTeamID/u);
     assert.match(buildExtension, /xcrun/u);
+    assert.doesNotMatch(buildExtension, /'-bundle'/u);
+    assert.match(buildExtension, /'-fapplication-extension'/u);
+    assert.match(buildExtension, /'-Wl,-e,_NSExtensionMain'/u);
+    assert.match(buildExtension, /otool/u);
+    assert.match(buildExtension, /\\bEXECUTE\\b/u);
     assert.match(signer, /signNestedBundle/u);
     assert.match(signer, /nestedCodeSignArguments/u);
     assert.match(signer, /verifyFileProviderIdentity/u);
