@@ -22,6 +22,10 @@ function assertClose(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${String(actual)} should be close to ${String(expected)}`);
 }
 
+function round(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
 describe('lightbox transform geometry (#307)', () => {
   test('fit keeps landscape and portrait images wholly visible', () => {
     const landscape = fitSize({ width: 600, height: 400 }, { width: 400, height: 400 });
@@ -32,9 +36,9 @@ describe('lightbox transform geometry (#307)', () => {
     assert.equal(portrait.height, 400);
   });
 
-  test('Fill uses the shorter image axis for landscape and portrait orientation (#371, #501, #898)', () => {
+  test('Fill covers the viewport on both axes for every aspect ratio (#371, #501, #898, #968)', () => {
     const widescreen = { width: 1600, height: 900 };
-    assertClose(fillZoom({ width: 700, height: 525 }, widescreen), 900 / 525);
+    assertClose(fillZoom({ width: 700, height: 525 }, widescreen), 1600 / 700);
     assertClose(fillZoom({ width: 525, height: 700 }, widescreen), 1600 / 525);
     assertClose(fillZoom({ width: 1600, height: 700 }, widescreen), 900 / 700);
     assertClose(fillZoom({ width: 700, height: 1600 }, widescreen), 1600 / (700 * (900 / 1600)));
@@ -44,11 +48,50 @@ describe('lightbox transform geometry (#307)', () => {
     assert.equal(fillZoom({ width: 0, height: 0 }, widescreen), 1);
   });
 
-  test('Fill avoids unnecessary overflow for square and sub-pixel near-square images (#898)', () => {
-    assert.equal(fillZoom({ width: 1000, height: 1000 }, { width: 700, height: 1600 }), 1);
-    assertClose(fillZoom({ width: 320, height: 320 }, { width: 1600, height: 900 }), 900 / 320);
-    assert.equal(fillZoom({ width: 801, height: 800 }, { width: 800, height: 800 }), 1);
-    assert.ok(fillZoom({ width: 810, height: 800 }, { width: 800, height: 800 }) > 1);
+  test('Fill matches a square image to the larger viewport axis, never the smaller (#898, #968)', () => {
+    // `min()` here is `contain`: it leaves bars on the long axis. A square has no
+    // long side to fit by accident, so it is the canonical regression case.
+    assertClose(fillZoom({ width: 1000, height: 1000 }, { width: 700, height: 1600 }), 1600 / 700);
+    assertClose(fillZoom({ width: 320, height: 320 }, { width: 1600, height: 900 }), 1600 / 320);
+    assert.equal(fillZoom({ width: 800, height: 800 }, { width: 800, height: 800 }), 1);
+    assert.ok(fillZoom({ width: 801, height: 800 }, { width: 800, height: 800 }) > 1);
+  });
+
+  test('Fill never leaves a bar on any side, for any image against any viewport (#968)', () => {
+    const images = [
+      { width: 1, height: 1 },
+      { width: 800, height: 800 },
+      { width: 801, height: 800 },
+      { width: 4032, height: 4032 },
+      { width: 1600, height: 900 },
+      { width: 900, height: 1600 },
+      { width: 6000, height: 4000 },
+      { width: 4000, height: 6000 },
+      { width: 320, height: 180 },
+      { width: 12000, height: 1200 },
+      { width: 1200, height: 12000 },
+    ];
+    const viewports = [
+      { width: 1600, height: 900 },
+      { width: 900, height: 1600 },
+      { width: 800, height: 800 },
+      { width: 3840, height: 2160 },
+      { width: 420, height: 380 },
+      { width: 1024, height: 768 },
+      { width: 300, height: 1400 },
+    ];
+
+    for (const image of images) {
+      for (const viewport of viewports) {
+        const fitted = fitSize(image, viewport);
+        const zoom = viewIntentToTransform({ ...DEFAULT_VIEW_INTENT, mode: 'fill' }, image, viewport).zoom;
+        const label = `${String(image.width)}x${String(image.height)} in ${String(viewport.width)}x${String(viewport.height)}`;
+        // Rounded to the nearest micrometre of a pixel: the cover scale is a
+        // division, so the product can land an ULP under the viewport.
+        assert.ok(round(fitted.width * zoom) >= viewport.width, `${label} leaves a vertical bar`);
+        assert.ok(round(fitted.height * zoom) >= viewport.height, `${label} leaves a horizontal bar`);
+      }
+    }
   });
 
   test('pan clamps both axes without exposing space beyond an edge', () => {
@@ -79,9 +122,9 @@ describe('lightbox transform geometry (#307)', () => {
       y: 50,
     });
     const resizedFill = resizeTransform({ zoom: 1, x: 90, y: -999 }, 'fill', { width: 700, height: 525 }, { width: 1600, height: 900 });
-    assertClose(resizedFill.zoom, 900 / 525);
+    assertClose(resizedFill.zoom, 1600 / 700);
     assertClose(resizedFill.x, 0);
-    assertClose(resizedFill.y, 0);
+    assertClose(resizedFill.y, -(525 * (1600 / 700) - 900) / 2);
   });
 });
 
@@ -118,14 +161,29 @@ describe('lightbox navigation view intent (#501)', () => {
     assertClose(landscape.y, 0);
   });
 
-  test('Fill intent keeps square images wholly visible in non-square viewports (#898)', () => {
+  test('Fill intent matches a square image to the taller viewport axis (#898, #968)', () => {
     const square = viewIntentToTransform(
       { ...DEFAULT_VIEW_INTENT, mode: 'fill' },
       { width: 1000, height: 1000 },
       { width: 700, height: 1600 },
     );
 
-    assert.deepEqual(square, { zoom: 1, x: 0, y: 0 });
+    // Fitted 700x700, covered at 1600/700: the height fills top to bottom and
+    // the sides overflow, so this one scrolls horizontally.
+    assertClose(square.zoom, 1600 / 700);
+    assert.equal(square.x, 0, 'centred until panned');
+    assert.equal(square.y, 0, 'the vertical axis is exactly filled');
+  });
+
+  test('Fill exceeds the manual zoom ceiling when covering demands it (#968)', () => {
+    const panorama = viewIntentToTransform(
+      { ...DEFAULT_VIEW_INTENT, mode: 'fill' },
+      { width: 12000, height: 1200 },
+      { width: 700, height: 1600 },
+    );
+
+    assert.ok(panorama.zoom > ZOOM_MAX, `${String(panorama.zoom)} should clear the ${String(ZOOM_MAX)}x manual ceiling`);
+    assertClose(panorama.zoom, 1600 / (1200 * (700 / 12000)));
   });
 });
 

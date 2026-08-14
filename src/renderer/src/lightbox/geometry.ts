@@ -65,17 +65,30 @@ export function fitSize(image: LightboxSize, viewport: LightboxSize): LightboxSi
   return { width: image.width * scale, height: image.height * scale };
 }
 
-export function fillZoom(image: LightboxSize, viewport: LightboxSize): number {
-  const fitted = fitSize(image, viewport);
+/**
+ * `object-fit: cover` for a box already reduced by {@link fitSize}: the scale at
+ * which the rendered image reaches or exceeds the viewport on *both* axes.
+ * `max`, never `min` — `min` is `contain`, which leaves bars (#371, #501, #898,
+ * #968). Never below 1, because `fitSize` never returns a box larger than the
+ * viewport, so Fill only ever grows the image.
+ */
+function coverZoom(fitted: LightboxSize, viewport: LightboxSize): number {
   if (fitted.width <= 0 || fitted.height <= 0) return 1;
-  if (image.width === image.height) {
-    return clamp(Math.min(viewport.width / fitted.width, viewport.height / fitted.height), ZOOM_MIN, ZOOM_MAX);
-  }
-  const zoom = image.height > image.width ? viewport.width / fitted.width : viewport.height / fitted.height;
-  const growthX = Math.max(0, fitted.width * (zoom - 1));
-  const growthY = Math.max(0, fitted.height * (zoom - 1));
-  if (growthX <= 1 && growthY <= 1) return 1;
-  return clamp(zoom, ZOOM_MIN, ZOOM_MAX);
+  return Math.max(viewport.width / fitted.width, viewport.height / fitted.height);
+}
+
+/**
+ * The ceiling for a transform. `ZOOM_MAX` bounds what a person can reach by
+ * zooming, but Fill is a single edge-to-edge assertion: a 10:1 panorama in a
+ * portrait window needs more than 8x to cover, and clamping there would put
+ * back the bars Fill exists to remove.
+ */
+function maximumZoom(fitted: LightboxSize, viewport: LightboxSize): number {
+  return Math.max(ZOOM_MAX, coverZoom(fitted, viewport));
+}
+
+export function fillZoom(image: LightboxSize, viewport: LightboxSize): number {
+  return coverZoom(fitSize(image, viewport), viewport);
 }
 
 export function resizeTransform(
@@ -90,7 +103,7 @@ export function resizeTransform(
 }
 
 export function clampTransform(transform: LightboxTransform, fitted: LightboxSize, viewport: LightboxSize): LightboxTransform {
-  const zoom = clamp(transform.zoom, ZOOM_MIN, ZOOM_MAX);
+  const zoom = clamp(transform.zoom, ZOOM_MIN, maximumZoom(fitted, viewport));
   const maximumX = Math.max(0, (fitted.width * zoom - viewport.width) / 2);
   const maximumY = Math.max(0, (fitted.height * zoom - viewport.height) / 2);
   return {

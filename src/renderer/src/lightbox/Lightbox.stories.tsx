@@ -226,7 +226,10 @@ export const LandscapeFillCoversWidescreenAndPans: Story = {
   },
 };
 
-export const SquareFillAvoidsUnnecessaryScrolling: Story = {
+// #968: the canonical Fill case. A square has no long side, so it cannot be
+// fitted by accident and still look right — in a 960x540 viewport it must match
+// the width and overflow top and bottom. Bars on any side mean `min()` is back.
+export const SquareFillCoversWidescreen: Story = {
   args: { photo: { ...PHOTO, width: 1280, height: 1280, fileName: 'SQUARE.JPG' } },
   parameters: { lightboxHeight: 540 },
   play: async ({ canvasElement }) => {
@@ -236,9 +239,10 @@ export const SquareFillAvoidsUnnecessaryScrolling: Story = {
     await waitFor(() => expect(viewport).toHaveAttribute('data-load-state', 'decoded'));
     await userEvent.dblClick(image);
     await expect(viewport).toHaveAttribute('data-mode', 'fill');
-    await expect(viewport).toHaveAttribute('data-zoom', '1.000');
+    await expect(viewport).toHaveAttribute('data-zoom', '1.778');
     await expect(viewport).toHaveAttribute('data-pan-x', '0.0');
     await expect(viewport).toHaveAttribute('data-pan-y', '0.0');
+    await expectOneAxisOverflow(viewport, image, 'vertical');
   },
 };
 
