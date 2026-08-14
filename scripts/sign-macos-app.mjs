@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -5,6 +6,7 @@ import { signAsync } from '@electron/osx-sign';
 
 const EXTENSION_BUNDLE = `${path.sep}OverlookFileProvider.appex${path.sep}`;
 const QUICK_LOOK_BUNDLE = `${path.sep}OverlookQuickLook.appex${path.sep}`;
+const FILE_PROVIDER_APPLICATION_ID = 'Z5DM34QS5U.com.zts1.overlook.file-provider';
 
 function isFileProviderExtension(filePath) {
   return filePath.includes(EXTENSION_BUNDLE) || filePath.endsWith(`${path.sep}OverlookFileProvider.appex`);
@@ -20,29 +22,90 @@ function extensionEntitlements(filePath) {
   return null;
 }
 
+function requiredEntitlements(configuration, filePath) {
+  const entitlements = configuration.optionsForFile?.(filePath)?.entitlements;
+  if (typeof entitlements !== 'string' || entitlements === '') {
+    throw new Error(`entitlements are missing for ${path.basename(filePath)}`);
+  }
+  return entitlements;
+}
+
+export function nestedCodeSignArguments(configuration, bundlePath, entitlements) {
+  if (configuration.identity === undefined || configuration.identity === '') {
+    throw new Error(`signing identity is required for ${path.basename(bundlePath)}`);
+  }
+  const options = configuration.optionsForFile?.(bundlePath) ?? {};
+  const args = ['--sign', configuration.identity, '--force'];
+  if (configuration.keychain !== undefined) args.push('--keychain', configuration.keychain);
+  args.push(options.timestamp === undefined ? '--timestamp' : `--timestamp=${options.timestamp}`);
+
+  const signatureFlags = Array.isArray(options.signatureFlags)
+    ? [...options.signatureFlags]
+    : (options.signatureFlags?.split(',').map((flag) => flag.trim()) ?? []);
+  if (options.hardenedRuntime === true && !signatureFlags.includes('runtime')) signatureFlags.push('runtime');
+  if (signatureFlags.length > 0) args.push('--options', [...new Set(signatureFlags)].join(','));
+  if (options.requirements !== undefined) {
+    if (options.requirements.startsWith('=')) args.push(`-r${options.requirements}`);
+    else args.push('--requirements', options.requirements);
+  }
+  if (options.additionalArguments !== undefined) args.push(...options.additionalArguments);
+  args.push('--entitlements', entitlements, bundlePath);
+  return args;
+}
+
+export function signNestedBundle(configuration, bundlePath, entitlements, run = execFileSync) {
+  run('codesign', nestedCodeSignArguments(configuration, bundlePath, entitlements), { stdio: 'inherit' });
+}
+
+export function abstractStringEntitlement(source, key) {
+  const marker = `[Key] ${key}`;
+  const start = source.indexOf(marker);
+  if (start < 0) return null;
+  const next = source.indexOf('\n\t[Key] ', start + marker.length);
+  const block = source.slice(start, next < 0 ? undefined : next);
+  return /\[String\] ([^\n]+)/u.exec(block)?.[1]?.trim() ?? null;
+}
+
+function verifyFileProviderIdentity(bundlePath, run = execFileSync) {
+  const entitlements = String(run('codesign', ['-d', '--entitlements', '-', bundlePath], { encoding: 'utf8' }));
+  if (abstractStringEntitlement(entitlements, 'com.apple.application-identifier') !== FILE_PROVIDER_APPLICATION_ID) {
+    throw new Error(`signed File Provider extension lacks application identifier ${FILE_PROVIDER_APPLICATION_ID}`);
+  }
+}
+
 export default async function signMacApp(configuration) {
-  const inherited = configuration.optionsForFile;
-  const inheritedIgnore = configuration.ignore;
   const extension = path.join(configuration.app, 'Contents', 'PlugIns', 'OverlookFileProvider.appex');
   const quickLook = path.join(configuration.app, 'Contents', 'PlugIns', 'OverlookQuickLook.appex');
   const nestedExtensions = [extension, quickLook].filter(existsSync);
-  const binaries = nestedExtensions.length > 0 ? [...(configuration.binaries ?? []), ...nestedExtensions] : configuration.binaries;
+  for (const bundlePath of nestedExtensions) {
+    const entitlements = extensionEntitlements(bundlePath);
+    if (entitlements === null) throw new Error(`entitlements are missing for ${path.basename(bundlePath)}`);
+    // An appex is a code bundle, not an additional binary. Sign it explicitly
+    // before the containing app so its profile-bound identity survives the
+    // outer seal and notarization.
+    signNestedBundle(configuration, bundlePath, entitlements);
+    if (bundlePath === extension) verifyFileProviderIdentity(extension);
+  }
   await signAsync({
     ...configuration,
-    binaries,
     // Profiles are embedded and validated by our provisioned packaging path.
     // osx-sign has only one profile input and would otherwise apply the main
     // app profile while auto-processing the separately identified extension.
     ...(nestedExtensions.length > 0
       ? { provisioningProfile: undefined, preEmbedProvisioningProfile: false, preAutoEntitlements: false }
       : {}),
-    // electron-builder skips Contents/PlugIns by default. These extensions
-    // are built by our afterPack hook, so opt only their reviewed bundles in.
-    ignore: (filePath) => (extensionEntitlements(filePath) !== null ? false : (inheritedIgnore?.(filePath) ?? false)),
-    optionsForFile: (filePath) => {
-      const defaults = inherited?.(filePath) ?? {};
-      const entitlements = extensionEntitlements(filePath);
-      return entitlements === null ? defaults : { ...defaults, entitlements };
-    },
   });
+  if (nestedExtensions.length > 0) {
+    // electron-builder's signer owns every other nested code item. Re-apply
+    // these separately identified bundles after that pass, then re-seal only
+    // the containing app so the final signature is deterministically inside-out.
+    for (const bundlePath of nestedExtensions) {
+      const entitlements = extensionEntitlements(bundlePath);
+      if (entitlements === null) throw new Error(`entitlements are missing for ${path.basename(bundlePath)}`);
+      signNestedBundle(configuration, bundlePath, entitlements);
+    }
+    signNestedBundle(configuration, configuration.app, requiredEntitlements(configuration, configuration.app));
+    execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', configuration.app], { stdio: 'inherit' });
+    if (existsSync(extension)) verifyFileProviderIdentity(extension);
+  }
 }

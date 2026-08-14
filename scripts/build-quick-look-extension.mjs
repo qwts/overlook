@@ -19,7 +19,8 @@ export function buildQuickLookExtension(appOutDir, productName = 'Overlook', ver
       '-fobjc-arc',
       '-fmodules',
       `-fmodules-cache-path=${moduleCache}`,
-      '-bundle',
+      '-fapplication-extension',
+      '-Wl,-e,_NSExtensionMain',
       '-mmacosx-version-min=12.0',
       '-framework',
       'AppKit',
@@ -31,6 +32,10 @@ export function buildQuickLookExtension(appOutDir, productName = 'Overlook', ver
     ],
     { stdio: 'inherit' },
   );
+  const machHeader = execFileSync('otool', ['-hv', executable], { encoding: 'utf8' });
+  if (!/\bEXECUTE\b/u.test(machHeader)) {
+    throw new Error('Quick Look extension must be a Mach-O executable');
+  }
   copyFileSync('native/quick-look-extension/Info.plist', path.join(contents, 'Info.plist'));
   execFileSync('plutil', ['-replace', 'CFBundleShortVersionString', '-string', version, path.join(contents, 'Info.plist')]);
   execFileSync('plutil', ['-replace', 'CFBundleVersion', '-string', buildVersion, path.join(contents, 'Info.plist')]);
