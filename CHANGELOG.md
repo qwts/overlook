@@ -1,5 +1,12 @@
 # photos
 
+## 0.68.0
+
+### Minor Changes
+
+- 7384d0c: Follow the operating system's high-contrast preference with reviewed dark and light palettes, and map Windows forced colors to native system colors.
+- 9d174d3: Export Moodboards as color-managed PNGs at declared dimensions.
+
 ## 0.67.6
 
 ### Patch Changes
