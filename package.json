@@ -50,7 +50,7 @@
     "test:dom:inner": "npm run test:dom:compile && npm run test:dom:run",
     "test:dom": "node tools/agent-guard/run-guarded.mjs --label test:dom -- npm run test:dom:inner",
     "test:guard:conformance": "node --test tools/agent-guard/tests/conformance.test.mjs",
-    "test:run": "npm run test:unit:run && npm run test:dom:run && npm run test:guard:conformance",
+    "test:run": "node scripts/run-test-lanes.mjs test:unit:run test:dom:run test:guard:conformance",
     "test:inner": "npm run typecheck && npm run test:compile && npm run test:dom:compile && npm run test:run",
     "test": "node tools/agent-guard/run-guarded.mjs --label test -- npm run test:inner",
     "test:cov:inner": "npm run typecheck && npm run test:compile && npm run test:dom:compile && c8 npm run test:run",
