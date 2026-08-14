@@ -616,7 +616,7 @@ export function registerImportHandlers(
   );
   ipcMain.handle(channels.importRun.name, (_event, request: unknown) =>
     wrapHandler(channels.importRun, async ({ path, files, mode }) => {
-      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmMove))) {
+      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmMove, contentAdmission))) {
         return {
           imported: 0,
           moved: 0,

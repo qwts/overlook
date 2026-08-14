@@ -33,6 +33,23 @@ describe('Move import confirmation boundary', () => {
     assert.equal(await requireMoveImportConfirmation('move', source, () => Promise.resolve(true)), true);
   });
 
+  test('rechecks content admission after a successful native confirmation', async () => {
+    let admitted = false;
+    await assert.rejects(
+      requireMoveImportConfirmation(
+        'move',
+        { path: '/card' },
+        () => Promise.resolve(true),
+        () => {
+          admitted = true;
+          throw new Error('content is locked');
+        },
+      ),
+      /content is locked/u,
+    );
+    assert.equal(admitted, true);
+  });
+
   test('rejects relative Move sources before prompting', async () => {
     let prompted = false;
     await assert.rejects(
