@@ -169,7 +169,7 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
         if (
           mapped.reason === 'auth' ||
           mapped.reason === 'offline' ||
-          mapped.reason === 'wrong-key' ||
+          (mapped.reason === 'wrong-key' && candidates.length === 0) ||
           (error instanceof ProviderError && error.kind === 'transient' && error.scope === 'object') ||
           mapped.reason === 'cancelled'
         ) {

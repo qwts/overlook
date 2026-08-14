@@ -180,3 +180,16 @@ test('a manifest encrypted after key rotation makes a stale bootstrap fail close
     (error: unknown) => error instanceof RestoreError && error.reason === 'wrong-key' && error.message === 'manifest key 2 is unavailable',
   );
 });
+
+test('an unavailable key in an older generation does not override a newer valid candidate', async () => {
+  const w = await world();
+  await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(1), w.keyStore));
+  const rotatedKey = w.keyStore.rotate();
+  await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(rotatedKey.id), w.keyStore));
+
+  const found = await discoverRestore(w.provider, w.masterKey);
+  assert.deepEqual(
+    found.candidates.map((candidate) => candidate.generation),
+    [2],
+  );
+});
