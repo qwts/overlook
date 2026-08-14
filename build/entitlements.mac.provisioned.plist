@@ -23,6 +23,10 @@
     <array>
       <string>iCloud.com.zts1.overlook</string>
     </array>
+    <key>com.apple.security.application-groups</key>
+    <array>
+      <string>Z5DM34QS5U.com.zts1.overlook.file-provider</string>
+    </array>
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>

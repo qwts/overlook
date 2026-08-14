@@ -1,5 +1,5 @@
-import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { app } from 'electron';
+import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { PhotosRepository } from './db/photos-repository.js';
 import { createExportFacade } from './export/export-facade-factory.js';
 import type { DrainableExportFacade } from './export/export-runtime.js';
@@ -14,6 +14,8 @@ import { TestPhotoKitBridge } from './photo-kit/test-photo-kit-bridge.js';
 import { cleanupPhotoKitStage } from './photo-kit/photo-kit-staging.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { applicationEvents } from './application-events.js';
+import type { FileProviderService } from './file-provider/file-provider-service.js';
+import { createFileProviderService } from './file-provider/file-provider-runtime-factory.js';
 
 export interface EgressRuntimeOptions {
   readonly parts: () => LibraryParts;
@@ -22,14 +24,22 @@ export interface EgressRuntimeOptions {
   readonly dataDir: () => string;
   readonly harnessEnv: (name: string) => string | undefined;
   readonly unlocked: () => boolean;
+  readonly library: () => { readonly id: string; readonly name: string };
 }
 
 export class EgressRuntime {
   private exportFacade: DrainableExportFacade | undefined;
   private dragOut: NativeDragOutService | undefined;
   private photoKitService: PhotoKitService | undefined;
+  private fileProviderService: FileProviderService | undefined;
+  private fileProviderClose: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: EgressRuntimeOptions) {}
+
+  activateLibrary(openLibrary: () => unknown): void {
+    openLibrary();
+    this.fileProvider();
+  }
 
   exports(): DrainableExportFacade {
     const parts = this.options.parts();
@@ -95,10 +105,31 @@ export class EgressRuntime {
     return this.photoKitService;
   }
 
+  fileProvider(): FileProviderService {
+    if (this.fileProviderService !== undefined) return this.fileProviderService;
+    const parts = this.options.parts();
+    const service = createFileProviderService({
+      parts,
+      currentParts: this.options.parts,
+      ephemeral: this.options.ephemeral,
+      dataDir: this.options.dataDir(),
+      harnessEnv: this.options.harnessEnv,
+      unlocked: this.options.unlocked,
+      library: this.options.library(),
+      platform: process.platform,
+      packaged: app.isPackaged,
+      onLibraryChanged: applicationEvents.onLibraryChanged,
+    });
+    this.fileProviderService = service;
+    void service.reconcile().catch(() => undefined);
+    return service;
+  }
+
   close(): void {
     this.exportFacade?.close();
     this.dragOut?.close();
     this.photoKitService?.close();
+    this.fileProviderClose = this.fileProviderService?.close() ?? Promise.resolve();
   }
 
   drain(): Promise<void> {
@@ -106,6 +137,7 @@ export class EgressRuntime {
       this.exportFacade?.drain() ?? Promise.resolve(),
       this.dragOut?.drain() ?? Promise.resolve(),
       this.photoKitService?.drain() ?? Promise.resolve(),
+      this.fileProviderClose,
     ]).then(() => undefined);
   }
 
@@ -113,5 +145,7 @@ export class EgressRuntime {
     this.exportFacade = undefined;
     this.dragOut = undefined;
     this.photoKitService = undefined;
+    this.fileProviderService = undefined;
+    this.fileProviderClose = Promise.resolve();
   }
 }

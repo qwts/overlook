@@ -133,6 +133,11 @@ export interface OverlookApi {
     readonly cancel: () => Promise<void>;
     readonly onProgress: (listener: (payload: z.output<typeof events.photoKitProgress.payload>) => void) => () => void;
   };
+  readonly fileProvider: {
+    readonly status: () => Promise<Res<typeof channels.fileProviderStatus>>;
+    readonly enable: (request: Req<typeof channels.fileProviderEnable>) => Promise<Res<typeof channels.fileProviderEnable>>;
+    readonly disable: () => Promise<Res<typeof channels.fileProviderDisable>>;
+  };
   readonly activity: {
     readonly page: (request: Req<typeof channels.activityPage>) => Promise<Res<typeof channels.activityPage>>;
   };

@@ -22,6 +22,7 @@
 
 import { readdir, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
+import { buildFileProviderExtension } from './build-file-provider-extension.mjs';
 
 // Package-relative roots whose immediate layout is <platform>/<arch>/.
 export const BUNDLED_MULTI_PLATFORM_ROOTS = ['node_modules/onnxruntime-node/bin/napi-v6'];
@@ -111,4 +112,13 @@ export default async function afterPack(context) {
       : `prune-foreign-binaries: removed ${removed.length} foreign binary director${removed.length === 1 ? 'y' : 'ies'} for ${targetPlatform}/${targetArch}.`,
   );
   for (const path of removed) console.log(`  - ${path}`);
+  if (targetPlatform === 'darwin') {
+    const extension = buildFileProviderExtension(
+      context.appOutDir,
+      context.packager.appInfo.productFilename,
+      context.packager.appInfo.version,
+      context.packager.appInfo.buildVersion,
+    );
+    if (extension !== null) console.log(`file-provider-extension: built ${extension}`);
+  }
 }

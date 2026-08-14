@@ -9,6 +9,9 @@ const BUNDLE_ID = 'com.zts1.overlook';
 const APPLICATION_ID = `${TEAM_ID}.${BUNDLE_ID}`;
 const ICLOUD_CONTAINER_ID = `iCloud.${BUNDLE_ID}`;
 const UBIQUITY_CONTAINER_ID = ICLOUD_CONTAINER_ID;
+const FILE_PROVIDER_BUNDLE_ID = `${BUNDLE_ID}.file-provider`;
+const FILE_PROVIDER_APPLICATION_ID = `${APPLICATION_ID}.file-provider`;
+const FILE_PROVIDER_GROUP_ID = `${TEAM_ID}.${FILE_PROVIDER_BUNDLE_ID}`;
 const BIOMETRIC_REASON = 'Unlock Overlook with Touch ID.';
 
 function fail(message) {
@@ -45,6 +48,16 @@ function stringEntitlement(source, key) {
   return /\[String\] ([^\n]+)/u.exec(block)?.[1]?.trim() ?? null;
 }
 
+function containsEntitlement(source, key, value) {
+  return source.includes(`[Key] ${key}`) && source.includes(`[String] ${value}`);
+}
+
+function verifySignature(path) {
+  const result = spawnSync('codesign', ['--verify', '--strict', '--verbose=2', path], { encoding: 'utf8' });
+  if (result.error !== undefined) fail(`codesign could not verify ${path}: ${result.error.message}`);
+  if (result.status !== 0) fail(`code signature is invalid for ${path}`);
+}
+
 if (process.platform !== 'darwin') fail('verification is supported only on macOS');
 const argument = process.argv[2];
 if (argument === undefined || argument === '') fail('pass the packaged .app path');
@@ -66,6 +79,7 @@ try {
     teamId: TEAM_ID,
     iCloudContainerId: ICLOUD_CONTAINER_ID,
     ubiquityContainerId: UBIQUITY_CONTAINER_ID,
+    appGroupId: FILE_PROVIDER_GROUP_ID,
   });
 } catch (error) {
   fail(`embedded profile is invalid: ${error instanceof Error ? error.message : 'unknown error'}`);
@@ -88,6 +102,44 @@ if (!mainEntitlements.includes(`[Key] ${iCloudContainerKey}`) || !mainEntitlemen
 }
 if (!mainEntitlements.includes('[Key] com.apple.developer.icloud-services') || !mainEntitlements.includes('[String] CloudDocuments')) {
   fail('main executable lacks CloudDocuments authorization');
+}
+if (!containsEntitlement(mainEntitlements, 'com.apple.security.application-groups', FILE_PROVIDER_GROUP_ID)) {
+  fail(`main executable lacks app group ${FILE_PROVIDER_GROUP_ID}`);
+}
+
+const extensionPath = join(appPath, 'Contents', 'PlugIns', 'OverlookFileProvider.appex');
+if (!existsSync(extensionPath)) fail('OverlookFileProvider.appex is missing');
+verifySignature(extensionPath);
+const extensionInfoPath = join(extensionPath, 'Contents', 'Info.plist');
+if (plistValue(extensionInfoPath, 'CFBundleIdentifier') !== FILE_PROVIDER_BUNDLE_ID) {
+  fail(`File Provider bundle identifier is not ${FILE_PROVIDER_BUNDLE_ID}`);
+}
+const extensionProfilePath = join(extensionPath, 'Contents', 'embedded.provisionprofile');
+if (!existsSync(extensionProfilePath)) fail('File Provider embedded.provisionprofile is missing');
+try {
+  const profile = readProvisioningProfile(extensionProfilePath);
+  validateProvisioningProfile(profile, {
+    applicationId: FILE_PROVIDER_APPLICATION_ID,
+    teamId: TEAM_ID,
+    appGroupId: FILE_PROVIDER_GROUP_ID,
+  });
+} catch (error) {
+  fail(`File Provider embedded profile is invalid: ${error instanceof Error ? error.message : 'unknown error'}`);
+}
+const extensionEntitlements = signedEntitlements(extensionPath);
+if (stringEntitlement(extensionEntitlements, 'com.apple.application-identifier') !== FILE_PROVIDER_APPLICATION_ID) {
+  fail(`File Provider extension lacks application identifier ${FILE_PROVIDER_APPLICATION_ID}`);
+}
+if (stringEntitlement(extensionEntitlements, 'com.apple.developer.team-identifier') !== TEAM_ID) {
+  fail(`File Provider extension lacks team identifier ${TEAM_ID}`);
+}
+if (!containsEntitlement(extensionEntitlements, 'com.apple.security.application-groups', FILE_PROVIDER_GROUP_ID)) {
+  fail(`File Provider extension lacks app group ${FILE_PROVIDER_GROUP_ID}`);
+}
+for (const key of ['com.apple.security.app-sandbox', 'com.apple.security.network.client']) {
+  if (!extensionEntitlements.includes(`[Key] ${key}`) || !extensionEntitlements.includes('[Bool] true')) {
+    fail(`File Provider extension lacks ${key}`);
+  }
 }
 
 const rendererHelper = join(appPath, 'Contents', 'Frameworks', 'Overlook Helper (Renderer).app');
