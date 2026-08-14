@@ -107,7 +107,8 @@ async function confirmImportMove(
   // Browser tests cannot operate native dialogs; this switch is fixed by the
   // main-process test harness environment and is unavailable to the renderer.
   if (!app.isPackaged && options.harnessEnv('OVERLOOK_E2E') !== undefined) return true;
-  const sourceDescription = source.path ?? source.files?.join('\n') ?? '';
+  const lineBreak = String.fromCharCode(10);
+  const sourceDescription = source.path ?? source.files?.join(lineBreak) ?? '';
   const result = await dialog.showMessageBox({
     type: 'warning',
     buttons: ['Cancel', 'Move originals'],
@@ -116,7 +117,12 @@ async function confirmImportMove(
     noLink: true,
     title: 'Confirm Move import',
     message: 'Move these originals into Overlook?',
-    detail: `Requested source paths:\n${sourceDescription}\n\nThe originals will be deleted only after their encrypted copies are verified.`,
+    detail: [
+      'Requested source paths:',
+      sourceDescription,
+      '',
+      'The originals will be deleted only after their encrypted copies are verified.',
+    ].join(lineBreak),
   });
   return result.response === 1;
 }
