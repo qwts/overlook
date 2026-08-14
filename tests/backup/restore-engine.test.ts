@@ -614,6 +614,30 @@ test('restore engine: a present-but-unverifiable blob is reported and omitted fr
   assert.equal(ledgerStatus(world.targetDir, damaged.id), undefined, 'the unverifiable photo has no catalog or ledger row');
 });
 
+test('restore engine: a failed app-lock anchor reset never undoes activation (#754)', async () => {
+  const world = await restoreWorld();
+  const result = await new RestoreEngine({
+    ...world.deps,
+    resetLockAnchor: () => {
+      throw new Error('anchor unavailable');
+    },
+  }).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(result.libraryId, LIBRARY_ID);
+  assert.equal(existsSync(join(world.targetDir, 'library.db')), true);
+});
+
+test('verify refuses when the OS keychain cannot protect the recovered master', async () => {
+  const world = await restoreWorld();
+  await assert.rejects(
+    () =>
+      new RestoreEngine({
+        ...world.deps,
+        safeStorage: { ...fakeSafeStorage, isEncryptionAvailable: () => false },
+      }).verify({ masterKey: world.masterKey, allowReplace: false }),
+    isReason('io'),
+  );
+});
+
 test('restore engine: re-running after the missing object is recovered fills the gap (#915)', async () => {
   const world = await restoreWorld(2);
   const [, lost] = world.photos;

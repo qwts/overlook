@@ -38,8 +38,10 @@ test('heal is a no-op when every object verified', async () => {
 test('heal still writes the gap list when a corrupt object cannot be copied or deleted', async () => {
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-heal-fail-')) });
   await provider.put('blobs/bb/bad', Readable.from([Buffer.from('corrupt')]));
-  provider.getStream = () => Promise.reject(new Error('unreadable'));
-  provider.delete = () => Promise.reject(new Error('busy'));
+  const getStream = provider.getStream.bind(provider);
+  const remove = provider.delete.bind(provider);
+  provider.getStream = (path) => (path === 'blobs/bb/bad' ? Promise.reject(new Error('unreadable')) : getStream(path));
+  provider.delete = (path) => (path === 'blobs/bb/bad' ? Promise.reject(new Error('busy')) : remove(path));
   await healRemoteGaps(provider, 3, [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }]);
   const report = JSON.parse((await buffer(await provider.getStream('quarantine/gen-3/gaps.json'))).toString('utf8')) as {
     missing: readonly { path: string }[];
