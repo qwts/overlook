@@ -32,6 +32,21 @@
 | 6b  | Acceptance    | Playwright specs per canonical flow + a coverage-map ledger                                                                                    | End-to-end user flows                                                                                                                                                                                                   | **Deferred** until user-facing surfaces exist                                                |
 | 7   | Accessibility | `check:a11y-budget` (static, in `npm run ci`) + axe in `test:stories:ci` (per story) and `test:e2e` (`tests/e2e/a11y.spec.ts`, composed flows) | WCAG 2.2 AA violations against a shrink-only budget                                                                                                                                                                     | Active (#398 — baseline 103)                                                                 |
 
+### Every lane runs, every run
+
+`npm test` and `npm run test:cov` dispatch the unit, renderer DOM, and
+guard-conformance lanes through `scripts/run-test-lanes.mjs`: all three run to
+completion and the runner fails once at the end, naming every failed lane. It
+replaced an `&&` chain that let the first red lane skip the rest — which under
+c8 also moved the numbers, since the DOM lane is what covers the renderer files
+`.c8rc.json` admits, and a lane that never runs reports them at 0% (PR #995: a
+single broken test file read as a coverage-floor breach for ten runs while three
+real DOM failures sat in the skipped lane). A lane killed by a signal — the
+guard's `rss-limit` kill, a timeout, the kernel OOM killer, Ctrl-C — still stops
+the run; the lanes after it are reported as not-run, never as passed. That holds
+even when a compound lane script's shell outlives its killed child and reports
+the death as exit 128+N instead of a signal.
+
 ### Compile-then-run model
 
 Unit tests run against compiled JS: `tsconfig.test.json` emits unit-testable
