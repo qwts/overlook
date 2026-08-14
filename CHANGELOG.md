@@ -1,5 +1,11 @@
 # photos
 
+## 0.70.2
+
+### Patch Changes
+
+- 5940372: Preserve the File Provider application identity in signed macOS packages.
+
 ## 0.70.1
 
 ### Patch Changes
