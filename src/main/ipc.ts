@@ -551,7 +551,7 @@ export function registerImportHandlers(
   onImported?: () => void,
   onExternalReady?: () => void,
   getActivity?: () => ActivityFacade,
-  confirmMove?: (source: ImportMoveSource) => Promise<boolean>,
+  confirmMove?: (source: ImportMoveSource, parent: BrowserWindow | null) => Promise<boolean>,
 ): void {
   ipcMain.handle(channels.importListSources.name, (_event, request: unknown) =>
     wrapHandler(channels.importListSources, async () => ({ sources: await getService().listSources() }))(request),
@@ -614,9 +614,13 @@ export function registerImportHandlers(
       return {};
     })(request),
   );
-  ipcMain.handle(channels.importRun.name, (_event, request: unknown) =>
+  ipcMain.handle(channels.importRun.name, (event, request: unknown) =>
     wrapHandler(channels.importRun, async ({ path, files, mode }) => {
-      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmMove, contentAdmission))) {
+      const confirmForSender =
+        confirmMove === undefined
+          ? undefined
+          : (source: ImportMoveSource) => confirmMove(source, BrowserWindow.fromWebContents(event.sender));
+      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmForSender, contentAdmission))) {
         return {
           imported: 0,
           moved: 0,
