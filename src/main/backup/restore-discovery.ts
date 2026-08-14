@@ -102,11 +102,25 @@ async function openCandidate(
 ): Promise<RestoreCandidate> {
   assertNotAborted(signal);
   const sealed = await readLimited(await provider.getStream(entry.path), MAX_MANIFEST_BYTES, signal);
-  const plaintext = await readLimited(
-    Readable.from([sealed]).pipe(createDecryptStream(resolveKey, { photoId: 'manifest' })),
-    MAX_MANIFEST_BYTES,
-    signal,
-  );
+  let unavailableKeyId: number | null = null;
+  const trackedResolver: KeyResolver = (keyId) => {
+    const key = resolveKey(keyId);
+    if (key === undefined) unavailableKeyId = keyId;
+    return key;
+  };
+  let plaintext: Buffer;
+  try {
+    plaintext = await readLimited(
+      Readable.from([sealed]).pipe(createDecryptStream(trackedResolver, { photoId: 'manifest' })),
+      MAX_MANIFEST_BYTES,
+      signal,
+    );
+  } catch (error) {
+    if (unavailableKeyId !== null) {
+      throw new RestoreError('wrong-key', `manifest key ${String(unavailableKeyId)} is unavailable`);
+    }
+    throw error;
+  }
   let json: unknown;
   try {
     json = JSON.parse(plaintext.toString('utf8')) as unknown;
@@ -155,6 +169,7 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
         if (
           mapped.reason === 'auth' ||
           mapped.reason === 'offline' ||
+          mapped.reason === 'wrong-key' ||
           (error instanceof ProviderError && error.kind === 'transient' && error.scope === 'object') ||
           mapped.reason === 'cancelled'
         ) {

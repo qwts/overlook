@@ -168,3 +168,15 @@ describe('restore discovery (#288)', () => {
     );
   });
 });
+
+test('a manifest encrypted after key rotation makes a stale bootstrap fail closed', async () => {
+  const w = await world();
+  await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+  const rotatedKey = w.keyStore.rotate();
+  await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(rotatedKey.id), w.keyStore));
+
+  await assert.rejects(
+    discoverRestore(w.provider, w.masterKey),
+    (error: unknown) => error instanceof RestoreError && error.reason === 'wrong-key' && error.message === 'manifest key 2 is unavailable',
+  );
+});
