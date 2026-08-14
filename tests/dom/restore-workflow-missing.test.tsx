@@ -191,18 +191,19 @@ async function renderToVerified(): Promise<HTMLElement> {
 
 async function runToComplete(expectGaps: boolean): Promise<HTMLElement> {
   const host = await renderToVerified();
-  const continueBtn = [...host.querySelectorAll('button')].find((button) =>
-    (button.textContent ?? '').includes('Continue with verified only'),
+  // #994: verify always lands on the results screen. A clean scan no longer
+  // auto-advances, so Heal is an explicit choice whether or not there are gaps.
+  const healBtn = [...host.querySelectorAll('button')].find((button) => (button.textContent ?? '').startsWith('Heal'));
+  assert.ok(healBtn, 'the results screen offers Heal');
+  assert.equal(
+    host.querySelector('.ovl-restore__verifyList') !== null,
+    expectGaps,
+    expectGaps ? 'the gap list is on screen before healing' : 'a clean verification lists no gaps',
   );
-  if (expectGaps) {
-    assert.ok(continueBtn, 'gap verification requires an explicit verified-only choice');
-    act(() => {
-      continueBtn.click();
-    });
-    await flush();
-  } else {
-    assert.equal(continueBtn, undefined, 'a clean verification advances directly to confirmation');
-  }
+  act(() => {
+    healBtn.click();
+  });
+  await flush();
 
   const authorize = host.querySelector('input[type="checkbox"]');
   assert.ok(authorize instanceof HTMLInputElement, 'the settings context requires replacement authorization');
@@ -231,8 +232,9 @@ test('a reduced restore lists every excluded object and explains the new cloud t
     for (const object of MISSING) {
       assert.ok(text.includes(object.path), `${object.path} is listed`);
     }
-    assert.match(text, /next normal backup publishes this reduced catalog/u, 'guidance explains how reduced truth is published');
+    assert.match(text, /moved to the provider Trash when present/u, 'guidance explains what happened to the gap objects');
     assert.match(text, /restore-report\.json/u, 'the durable report file is named');
+    assert.match(text, /quarantine\/gen-N\/gaps\.json/u, 'the quarantine gap list is named (#994)');
     assert.match(host.textContent ?? '', /NOT FOUND/u, 'the heading says the restore is incomplete');
     assert.match(host.textContent ?? '', /2 photos restored/u, 'the complete screen reports the reduced restored count');
     assert.deepEqual(restoreMock.calls.runs, [
@@ -261,7 +263,7 @@ test('a complete restore renders no NOT FOUND report (#915)', async () => {
   }
 });
 
-test('gap triage exposes all four truthful actions and retains failures on screen', async () => {
+test('gap triage exposes all five truthful actions and retains failures on screen (#994)', async () => {
   const restoreMock = mockOverlook([...MISSING]);
   const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
   let copied = '';
@@ -277,14 +279,18 @@ test('gap triage exposes all four truthful actions and retains failures on scree
   try {
     const host = await renderToVerified();
     const buttons = [...host.querySelectorAll('button')];
-    const csv = buttons.find((button) => button.textContent?.includes('Export CSV'));
-    const corrupt = buttons.find((button) => button.textContent?.includes('Export corrupt images'));
-    const proceed = buttons.find((button) => button.textContent?.includes('Continue with verified only'));
-    const trash = buttons.find((button) => button.textContent?.includes('Trash backup'));
+    const csv = buttons.find((button) => button.textContent?.includes('Export missing/corrupt list'));
+    const corrupt = buttons.find((button) => button.textContent?.includes('Save corrupt copies'));
+    const proceed = buttons.find((button) => button.textContent?.startsWith('Heal'));
+    const trash = buttons.find((button) => button.textContent?.includes('Discard this backup'));
+    // #994: Do nothing is a first-class exit — cancelling must not require
+    // picking one of the mutating actions.
+    const doNothing = buttons.find((button) => button.textContent?.includes('Do nothing'));
     assert.ok(csv);
     assert.ok(corrupt);
     assert.ok(proceed);
     assert.ok(trash);
+    assert.ok(doNothing);
 
     act(() => csv.click());
     await flush();
