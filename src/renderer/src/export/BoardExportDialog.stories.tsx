@@ -44,7 +44,8 @@ const runBoard = fn<OverlookApi['export']['runBoard']>();
 function installStub(): void {
   let listener: ((payload: { done: number; total: number }) => void) | null = null;
   const exportApi: OverlookApi['export'] = {
-    pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports' }),
+    pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
+    revokeDestination: () => Promise.resolve({ revoked: true }),
     run: () => Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] }),
     runAll: () => Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] }),
     runBoard: (request) => {

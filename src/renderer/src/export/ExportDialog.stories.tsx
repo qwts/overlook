@@ -12,7 +12,8 @@ const IDS = ['A', 'B', 'C'];
 
 function installStub(): void {
   const exportApi: OverlookApi['export'] = {
-    pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports' }),
+    pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
+    revokeDestination: () => Promise.resolve({ revoked: true }),
     runAll: async () => {
       for (let done = 1; done <= IDS.length; done += 1) {
         await new Promise((resolve) => setTimeout(resolve, 40));

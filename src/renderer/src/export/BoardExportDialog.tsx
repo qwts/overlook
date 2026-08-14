@@ -47,6 +47,11 @@ const messages = defineMessages({
 
 type Phase = 'options' | 'running' | 'done';
 
+interface DestinationSelection {
+  readonly path: string;
+  readonly authorization: string;
+}
+
 export interface BoardExportDialogProps {
   readonly board: Board;
   readonly availability: Readonly<Record<string, PlacementAvailability>>;
@@ -65,23 +70,36 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
   const [width, setWidth] = useState(board.size.width);
   const [height, setHeight] = useState(board.size.height);
   const [colorSpace, setColorSpace] = useState<BoardExportColorSpace>('srgb');
-  const [destination, setDestination] = useState<string | null>(null);
+  const [destination, setDestination] = useState<DestinationSelection | null>(null);
   const [phase, setPhase] = useState<Phase>('options');
   const [progress, setProgress] = useState({ done: 0, total: board.placements.length });
   const [result, setResult] = useState<BoardExportResult | null>(null);
   const [failed, setFailed] = useState(false);
   const validSize = width > 0 && height > 0 && width <= 8192 && height <= 8192 && width * height <= 32 * 1024 * 1024;
+  const request = { board, availability: { ...availability }, output: { width, height }, colorSpace };
 
   useEffect(() => {
     if (phase !== 'running') return;
     return window.overlook.export.onProgress(setProgress);
   }, [phase]);
 
+  const discardDestination = (): void => {
+    if (destination !== null) {
+      void window.overlook.export.revokeDestination({ authorization: destination.authorization });
+      setDestination(null);
+    }
+  };
+
+  const close = (): void => {
+    discardDestination();
+    onClose();
+  };
+
   const start = (): void => {
     if (destination === null || !validSize) return;
     setPhase('running');
     void window.overlook.export
-      .runBoard({ board, availability: { ...availability }, output: { width, height }, colorSpace, destination })
+      .runBoard({ ...request, authorization: destination.authorization })
       .then((next) => {
         setResult(next);
         setPhase('done');
@@ -90,7 +108,8 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
       })
       .catch(() => {
         setFailed(true);
-        setPhase('done');
+        setDestination(null);
+        setPhase('options');
         announce(intl.formatMessage(messages.failed), 'assertive');
       });
   };
@@ -102,11 +121,11 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
       title={intl.formatMessage(messages.title)}
       icon="share"
       width={420}
-      onClose={phase === 'running' ? undefined : onClose}
+      onClose={phase === 'running' ? undefined : close}
       footer={
         phase === 'options' ? (
           <>
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={close}>
               {intl.formatMessage(messages.cancel)}
             </Button>
             <Button variant="primary" icon="share" disabled={destination === null || !validSize} onClick={start}>
@@ -118,7 +137,7 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
             {intl.formatMessage(messages.cancel)}
           </Button>
         ) : (
-          <Button variant="primary" onClick={onClose}>
+          <Button variant="primary" onClick={close}>
             {intl.formatMessage(messages.done)}
           </Button>
         )
@@ -140,7 +159,10 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
                 min={1}
                 max={8192}
                 value={width}
-                onChange={(event) => setWidth(parsedDimension(event))}
+                onChange={(event) => {
+                  discardDestination();
+                  setWidth(parsedDimension(event));
+                }}
               />
             </label>
             <span aria-hidden="true">{intl.formatMessage(messages.dimensionSeparator)}</span>
@@ -152,7 +174,10 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
                 min={1}
                 max={8192}
                 value={height}
-                onChange={(event) => setHeight(parsedDimension(event))}
+                onChange={(event) => {
+                  discardDestination();
+                  setHeight(parsedDimension(event));
+                }}
               />
             </label>
             <span>{intl.formatMessage(messages.pixels)}</span>
@@ -168,7 +193,10 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
             <Segmented
               label={intl.formatMessage(messages.colorSpace)}
               value={colorSpace}
-              onChange={setColorSpace}
+              onChange={(next) => {
+                if (next !== colorSpace) discardDestination();
+                setColorSpace(next);
+              }}
               options={[
                 { value: 'srgb', label: intl.formatMessage(messages.srgb) },
                 { value: 'display-p3', label: intl.formatMessage(messages.p3) },
@@ -182,17 +210,30 @@ export function BoardExportDialog({ board, availability, onClose }: BoardExportD
               icon="folder"
               size="sm"
               onClick={() => {
-                void window.overlook.export.pickDestination({}).then(({ path }) => {
-                  if (path !== null) setDestination(path);
+                void window.overlook.export.pickDestination({ intent: { operation: 'board', request } }).then(({ path, authorization }) => {
+                  if (path !== null && authorization !== null) {
+                    setFailed(false);
+                    setDestination({ path, authorization });
+                  }
                 });
               }}
             >
-              {destination === null ? intl.formatMessage(messages.chooseFolder) : (destination.split('/').at(-1) ?? destination)}
+              {destination === null ? intl.formatMessage(messages.chooseFolder) : (destination.path.split('/').at(-1) ?? destination.path)}
             </Button>
           </div>
           {destination === null ? null : (
-            <CopyableValue value={destination} label={intl.formatMessage(messages.destination)} className="ovl-export__destinationPath" />
+            <CopyableValue
+              value={destination.path}
+              label={intl.formatMessage(messages.destination)}
+              className="ovl-export__destinationPath"
+            />
           )}
+          {failed ? (
+            <div className="ovl-export__failed" role="alert">
+              <Icon name="triangle-alert" size={15} />
+              {intl.formatMessage(messages.failed)}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="ovl-export__running">
