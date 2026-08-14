@@ -4,7 +4,7 @@ import { events } from '../../shared/ipc/channels.js';
 import { createEmitter } from '../../shared/ipc/registry.js';
 import { createWindow } from '../app-window.js';
 import { requestNativeWindowAttention } from '../e2e-window-visibility.js';
-import { commandLineOpenPaths, ExternalOpenIntake } from './external-open-intake.js';
+import { commandLineOpenPaths, ExternalOpenIntake, openPathKey } from './external-open-intake.js';
 import { isLibraryDocumentPath } from '../../shared/library/library-document.js';
 
 const MAX_PENDING_LIBRARY_DOCUMENTS = 100_000;
@@ -100,7 +100,7 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
     for (const path of commandLineOpenPaths(['Overlook', ...paths], true, cwd)) {
       if (isLibraryDocumentPath(path)) {
         if (pendingDocuments.size < MAX_PENDING_LIBRARY_DOCUMENTS) {
-          pendingDocuments.set(path.toLocaleLowerCase('en-US'), path);
+          pendingDocuments.set(openPathKey(path), path);
         }
       } else imports.push(path);
     }

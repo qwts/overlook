@@ -167,6 +167,7 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(signer, /OverlookQuickLook\.appex/u);
     assert.match(signer, /quick-look-extension\/entitlements\.plist/u);
     assert.match(verifier, /OverlookQuickLook\.appex/u);
+    assert.match(verifier, /trueEntitlement\(quickLookEntitlements, 'com\.apple\.security\.app-sandbox'\)/u);
     assert.match(verifier, /Quick Look extension unexpectedly claims/u);
     assert.match(info, /com\.apple\.quicklook\.preview/u);
     assert.match(info, /com\.zts1\.overlook\.library/u);

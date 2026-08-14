@@ -39,13 +39,22 @@ function signedEntitlements(path) {
   return result.stdout;
 }
 
-function stringEntitlement(source, key) {
+function entitlementBlock(source, key) {
   const marker = `[Key] ${key}`;
   const start = source.indexOf(marker);
   if (start < 0) return null;
   const next = source.indexOf('\n\t[Key] ', start + marker.length);
-  const block = source.slice(start, next < 0 ? undefined : next);
+  return source.slice(start, next < 0 ? undefined : next);
+}
+
+function stringEntitlement(source, key) {
+  const block = entitlementBlock(source, key);
+  if (block === null) return null;
   return /\[String\] ([^\n]+)/u.exec(block)?.[1]?.trim() ?? null;
+}
+
+function trueEntitlement(source, key) {
+  return entitlementBlock(source, key)?.includes('[Bool] true') === true;
 }
 
 function containsEntitlement(source, key, value) {
@@ -137,9 +146,7 @@ if (!containsEntitlement(extensionEntitlements, 'com.apple.security.application-
   fail(`File Provider extension lacks app group ${FILE_PROVIDER_GROUP_ID}`);
 }
 for (const key of ['com.apple.security.app-sandbox', 'com.apple.security.network.client']) {
-  if (!extensionEntitlements.includes(`[Key] ${key}`) || !extensionEntitlements.includes('[Bool] true')) {
-    fail(`File Provider extension lacks ${key}`);
-  }
+  if (!trueEntitlement(extensionEntitlements, key)) fail(`File Provider extension lacks ${key}`);
 }
 
 const quickLookPath = join(appPath, 'Contents', 'PlugIns', 'OverlookQuickLook.appex');
@@ -150,7 +157,7 @@ if (plistValue(quickLookInfoPath, 'CFBundleIdentifier') !== 'com.zts1.overlook.q
   fail('Quick Look bundle identifier is not com.zts1.overlook.quick-look');
 }
 const quickLookEntitlements = signedEntitlements(quickLookPath);
-if (!quickLookEntitlements.includes('[Key] com.apple.security.app-sandbox') || !quickLookEntitlements.includes('[Bool] true')) {
+if (!trueEntitlement(quickLookEntitlements, 'com.apple.security.app-sandbox')) {
   fail('Quick Look extension lacks its sandbox entitlement');
 }
 for (const key of [
