@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { LibraryRegistryRuntime } from '../../src/main/library/library-registry-runtime.js';
 import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 import { LibraryDatabaseError, openLibraryDatabase } from '../../src/main/db/database.js';
+import { LIBRARY_SUMMARY_FILE, libraryDocumentSummarySchema } from '../../src/shared/library/library-document.js';
 
 // #384 acceptance 2 (ADR-0017 §2/§3): two provisioned libraries open with
 // distinct keys, and a cross-library key fails closed at the SQLCipher
@@ -75,5 +76,36 @@ describe('multi-library keying (#384)', () => {
       !existsSync(join(userData, 'libraries')) || readdirSync(join(userData, 'libraries')).length === 0,
       'no orphan directory left behind',
     );
+  });
+
+  test('refreshes and closes the bounded Finder summary subscription', () => {
+    const userData = mkdtempSync(join(tmpdir(), 'overlook-multi-summary-'));
+    const created = runtimeIn(userData).create({ name: 'Family', path: join(userData, 'Family'), safeStorage: fakeSafeStorage() });
+    const runtime = runtimeIn(userData);
+    let itemCount = 2;
+    let refresh = (): void => undefined;
+    let closed = 0;
+    runtime.followDocumentSummary(
+      () => itemCount,
+      (listener) => {
+        refresh = listener;
+        return () => {
+          closed += 1;
+        };
+      },
+    );
+    const summaryPath = join(created.path, LIBRARY_SUMMARY_FILE);
+    assert.equal(libraryDocumentSummarySchema.parse(JSON.parse(readFileSync(summaryPath, 'utf8')) as unknown).itemCount, 2);
+    itemCount = 3;
+    refresh();
+    assert.equal(libraryDocumentSummarySchema.parse(JSON.parse(readFileSync(summaryPath, 'utf8')) as unknown).itemCount, 3);
+
+    runtime.followDocumentSummary(
+      () => itemCount,
+      () => () => (closed += 1),
+    );
+    assert.equal(closed, 1, 'replacing a subscription closes the prior listener');
+    runtime.closeDocumentSummary();
+    assert.equal(closed, 2);
   });
 });

@@ -4,10 +4,8 @@ import { events } from '../../shared/ipc/channels.js';
 import { createEmitter } from '../../shared/ipc/registry.js';
 import { createWindow } from '../app-window.js';
 import { requestNativeWindowAttention } from '../e2e-window-visibility.js';
-import { commandLineOpenPaths, ExternalOpenIntake, openPathKey } from './external-open-intake.js';
-import { isLibraryDocumentPath } from '../../shared/library/library-document.js';
-
-const MAX_PENDING_LIBRARY_DOCUMENTS = 100_000;
+import { commandLineOpenPaths, ExternalOpenIntake } from './external-open-intake.js';
+import { LibraryDocumentIntake } from './library-document-intake.js';
 
 export interface ExternalOpenRuntime {
   readonly whenReady: () => Promise<void>;
@@ -53,9 +51,7 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send(name, payload);
   });
   let runtimeReady = false;
-  let documentHandler: ((path: string) => Promise<void>) | undefined;
-  const pendingDocuments = new Map<string, string>();
-  let documentDrain = Promise.resolve();
+  const documents = new LibraryDocumentIntake();
   const intake = new ExternalOpenIntake({
     deliver: (paths) => emit({ paths: [...paths] }),
     // BrowserWindow APIs are unavailable during macOS open-file cold start.
@@ -82,32 +78,12 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
       mode: process.env['OVERLOOK_E2E_WINDOW'],
     });
   };
-  const flushDocuments = (): Promise<void> => {
-    const handler = documentHandler;
-    if (handler === undefined || pendingDocuments.size === 0) return documentDrain;
-    const paths = [...pendingDocuments.values()];
-    pendingDocuments.clear();
-    documentDrain = documentDrain
-      .catch(() => undefined)
-      .then(async () => {
-        for (const path of paths) await handler(path);
-      });
-    void documentDrain.catch(() => undefined);
-    return documentDrain;
-  };
   const enqueue = (paths: readonly string[], cwd = process.cwd()): void => {
-    const imports: string[] = [];
-    for (const path of commandLineOpenPaths(['Overlook', ...paths], true, cwd)) {
-      if (isLibraryDocumentPath(path)) {
-        if (pendingDocuments.size < MAX_PENDING_LIBRARY_DOCUMENTS) {
-          pendingDocuments.set(openPathKey(path), path);
-        }
-      } else imports.push(path);
-    }
+    const imports = documents.enqueue(paths, cwd);
     intake.enqueue(imports, cwd);
-    if (pendingDocuments.size > 0) {
+    if (documents.hasPending()) {
       if (runtimeReady) focusPrimaryWindow();
-      void flushDocuments();
+      void documents.flush();
     }
   };
 
@@ -133,8 +109,7 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
       source.subscribe(update);
     },
     handleLibraryDocuments: (handler) => {
-      documentHandler = handler;
-      return flushDocuments();
+      return documents.handle(handler);
     },
     finishBootstrap: () => {
       runtimeReady = true;
@@ -142,8 +117,7 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
       app.on('activate', focusPrimaryWindow);
     },
     close: () => {
-      documentHandler = undefined;
-      pendingDocuments.clear();
+      documents.close();
       intake.close();
     },
   };
