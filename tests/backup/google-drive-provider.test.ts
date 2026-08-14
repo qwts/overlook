@@ -353,6 +353,7 @@ describe('Google Drive provider adapter (#277)', () => {
       { path: 'blobs/aa/one.ovlk', bytes: PAYLOAD.length },
       { path: 'blobs/bb/two.ovlk', bytes: large.length },
     ]);
+    assert.deepEqual(await provider.probe('blobs/aa/one.ovlk'), { bytes: PAYLOAD.length });
     assert.deepEqual(await buffer(await provider.getStream('blobs/aa/one.ovlk')), PAYLOAD);
     assert.deepEqual(await provider.verify('blobs/aa/one.ovlk'), {
       sha256: createHash('sha256').update(PAYLOAD).digest('hex'),
@@ -364,6 +365,10 @@ describe('Google Drive provider adapter (#277)', () => {
 
     await provider.delete('blobs/aa/one.ovlk');
     await provider.delete('blobs/aa/one.ovlk');
+    await assert.rejects(
+      provider.probe('blobs/aa/one.ovlk'),
+      (error: unknown) => error instanceof ProviderError && error.kind === 'not-found',
+    );
     await assert.rejects(
       provider.getStream('blobs/aa/one.ovlk'),
       (error: unknown) => error instanceof ProviderError && error.kind === 'not-found',

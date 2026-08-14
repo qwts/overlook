@@ -138,7 +138,7 @@
     },
     {
       "file": "src/renderer/src/restore/RestoreWorkflow.tsx",
-      "count": 56,
+      "count": 59,
       "issues": [403, 947]
     },
     {
