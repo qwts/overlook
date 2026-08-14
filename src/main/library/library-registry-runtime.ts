@@ -364,6 +364,7 @@ export class LibraryRegistryRuntime {
       dir: string | null,
     ) => Promise<{ ok: true; library: LibraryDescriptor } | { ok: false; reason: 'cancelled' | 'not-a-library' | 'already-registered' }>;
     pickLocation: () => Promise<{ path: string | null }>;
+    pickCreateLocation: () => Promise<{ path: string | null }>;
   } {
     return {
       list: () => this.list(deps.openLibraryId()),
@@ -378,7 +379,8 @@ export class LibraryRegistryRuntime {
         if (chosen === null) return { ok: false, reason: 'cancelled' };
         return this.addExisting(chosen, deps.openLibraryId());
       },
-      pickLocation: async () => ({ path: await deps.pickCreateLocation() }),
+      pickLocation: async () => ({ path: await deps.pickDirectory() }),
+      pickCreateLocation: async () => ({ path: await deps.pickCreateLocation() }),
     };
   }
 

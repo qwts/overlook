@@ -77,7 +77,9 @@ describe('multi-library keying (#384)', () => {
       'no orphan directory left behind',
     );
   });
+});
 
+describe('Finder library document runtime (#799)', () => {
   test('refreshes and closes the bounded Finder summary subscription', () => {
     const userData = mkdtempSync(join(tmpdir(), 'overlook-multi-summary-'));
     const created = runtimeIn(userData).create({ name: 'Family', path: join(userData, 'Family'), safeStorage: fakeSafeStorage() });
@@ -107,5 +109,17 @@ describe('multi-library keying (#384)', () => {
     assert.equal(closed, 1, 'replacing a subscription closes the prior listener');
     runtime.closeDocumentSummary();
     assert.equal(closed, 2);
+  });
+
+  test('keeps relocation and create-location pickers distinct', async () => {
+    const runtime = runtimeIn(mkdtempSync(join(tmpdir(), 'overlook-multi-pickers-')));
+    const facade = runtime.facade({
+      openLibraryId: () => null,
+      safeStorage: fakeSafeStorage,
+      pickDirectory: () => Promise.resolve('/move-root'),
+      pickCreateLocation: () => Promise.resolve('/Family.overlooklibrary'),
+    });
+    assert.deepEqual(await facade.pickLocation(), { path: '/move-root' });
+    assert.deepEqual(await facade.pickCreateLocation(), { path: '/Family.overlooklibrary' });
   });
 });

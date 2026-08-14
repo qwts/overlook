@@ -289,6 +289,7 @@ export interface OverlookApi {
     ) => Promise<Res<typeof channels.libraryRegistryResetDisplayName>>;
     readonly add: (request: Req<typeof channels.libraryRegistryAdd>) => Promise<Res<typeof channels.libraryRegistryAdd>>;
     readonly pickLocation: () => Promise<Res<typeof channels.libraryRegistryPickLocation>>;
+    readonly pickCreateLocation: () => Promise<Res<typeof channels.libraryRegistryPickCreateLocation>>;
     // Relocation (#483, ADR-0022)
     readonly move: (request: Req<typeof channels.libraryRelocationMove>) => Promise<Res<typeof channels.libraryRelocationMove>>;
     readonly renameFolder: (request: Req<typeof channels.libraryRelocationRename>) => Promise<Res<typeof channels.libraryRelocationRename>>;
