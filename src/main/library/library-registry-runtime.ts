@@ -12,6 +12,10 @@ import {
   type LibraryDescriptor,
   type LibraryEntry,
 } from '../../shared/library/registry.js';
+import { ensureLibraryDocumentPath, isLibraryDocumentPath } from '../../shared/library/library-document.js';
+import { LibraryDocumentRouter } from './library-document-router.js';
+import { updateLibraryDocumentSummaryName, writeLibraryDocumentSummary } from './library-document-summary.js';
+import type { SwitchOutcome } from './switch-runtime.js';
 
 // Active-library resolution (ADR-0017 §1/§7, #384), extracted from the
 // composition root: the registry replaces the hardcoded userData/library.
@@ -33,6 +37,7 @@ function missingDirectoryError(dir: string): LibraryRegistryError {
 export class LibraryRegistryRuntime {
   private registry: LibraryRegistry | undefined;
   private active: LibraryEntry | undefined;
+  private closeSummary: (() => void) | undefined;
   /** Fresh-profile default (§7): held in memory only — registering it (and
    * creating its directory) waits for the first real open, because startup
    * must leave a fresh profile pristine. A restore into a fresh profile
@@ -90,6 +95,44 @@ export class LibraryRegistryRuntime {
 
   dataDir(): string {
     return this.resolveActive().path;
+  }
+
+  /** Maintains the bounded, derivative Finder projection for the open package.
+   * Projection failures never interrupt canonical encrypted-library work. */
+  followDocumentSummary(itemCount: () => number, subscribe: (listener: () => void) => () => void): void {
+    const refresh = (): void => {
+      const active = this.resolveActive();
+      try {
+        writeLibraryDocumentSummary(active.path, {
+          version: 1,
+          name: active.name,
+          itemCount: itemCount(),
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error('[overlook] library document summary refresh failed', error);
+      }
+    };
+    this.closeDocumentSummary();
+    refresh();
+    this.closeSummary = subscribe(refresh);
+  }
+
+  closeDocumentSummary(): void {
+    this.closeSummary?.();
+    this.closeSummary = undefined;
+  }
+
+  /** Creates one serialized Finder-document handler that can repair a moved
+   * startup target before the missing-path startup failure gate runs. */
+  documentHandler(open: (id: string) => Promise<SwitchOutcome>, failure: (message: string) => void): (directory: string) => Promise<void> {
+    return async (directory) => {
+      try {
+        await new LibraryDocumentRouter({ registry: this.getRegistry(), open, failure }).open(directory);
+      } catch {
+        failure('The library registry is unavailable.');
+      }
+    };
   }
 
   /** Fail loud, fail closed (§1): a corrupt registry must never be
@@ -180,11 +223,12 @@ export class LibraryRegistryRuntime {
       throw new LibraryRegistryError(parsedName.error.issues[0]?.message ?? 'invalid library display name');
     }
     const id = ulid();
-    const dir = options.path === null ? path.join(this.options.userDataDir(), 'libraries', id) : options.path;
+    const dir = options.path === null ? path.join(this.options.userDataDir(), 'libraries', id) : ensureLibraryDocumentPath(options.path);
     if (existsSync(dir) && readdirSync(dir).length > 0) {
       throw new LibraryRegistryError(`target directory is not empty: ${dir}`);
     }
     const createdDir = !existsSync(dir);
+    const createdAt = new Date().toISOString();
     mkdirSync(dir, { recursive: true });
     try {
       writeLibraryId(dir, id);
@@ -198,6 +242,7 @@ export class LibraryRegistryRuntime {
         const db = openLibraryDatabase({ path: path.join(dir, 'library.db'), dbKey });
         db.pragma('wal_checkpoint(TRUNCATE)');
         db.close();
+        writeLibraryDocumentSummary(dir, { version: 1, name: parsedName.data, itemCount: 0, updatedAt: createdAt });
       } finally {
         keyStore.close();
       }
@@ -205,7 +250,7 @@ export class LibraryRegistryRuntime {
         id,
         name: parsedName.data,
         path: dir,
-        createdAt: new Date().toISOString(),
+        createdAt,
         lastOpenedAt: null,
       });
     } catch (error) {
@@ -228,7 +273,7 @@ export class LibraryRegistryRuntime {
     try {
       const entry = this.getRegistry().register({
         id,
-        name: path.basename(dir),
+        name: truncateLibraryDisplayName(path.basename(dir, isLibraryDocumentPath(dir) ? path.extname(dir) : undefined)),
         path: dir,
         createdAt: new Date().toISOString(),
         lastOpenedAt: null,
@@ -286,6 +331,7 @@ export class LibraryRegistryRuntime {
    * restart; library contents and the directory path are never touched. */
   setDisplayName(id: string, name: string, openId: string | null): LibraryDescriptor {
     const renamed = this.getRegistry().rename(id, name);
+    updateLibraryDocumentSummaryName(renamed.path, renamed.name);
     if (this.active?.id === id) this.active = renamed;
     return this.describe(renamed, openId);
   }
@@ -293,7 +339,8 @@ export class LibraryRegistryRuntime {
   resetDisplayName(id: string, openId: string | null): LibraryDescriptor {
     const entry = this.getRegistry().get(id);
     if (entry === undefined) throw new LibraryRegistryError(`library ${id} is not registered`);
-    return this.setDisplayName(id, truncateLibraryDisplayName(path.basename(entry.path)), openId);
+    const suffix = isLibraryDocumentPath(entry.path) ? path.extname(entry.path) : undefined;
+    return this.setDisplayName(id, truncateLibraryDisplayName(path.basename(entry.path, suffix)), openId);
   }
 
   /** The IPC facade (structurally matches ipc.ts LibraryRegistryFacade).
@@ -303,6 +350,8 @@ export class LibraryRegistryRuntime {
     safeStorage: () => SafeStorageLike;
     /** Native directory picker (#386) — resolves null on cancel. */
     pickDirectory: () => Promise<string | null>;
+    /** Save-style package picker (#799) — resolves null on cancel. */
+    pickCreateLocation: () => Promise<string | null>;
   }): {
     list: () => LibraryDescriptor[];
     create: (name: string, dir: string | null) => LibraryDescriptor;
@@ -315,6 +364,7 @@ export class LibraryRegistryRuntime {
       dir: string | null,
     ) => Promise<{ ok: true; library: LibraryDescriptor } | { ok: false; reason: 'cancelled' | 'not-a-library' | 'already-registered' }>;
     pickLocation: () => Promise<{ path: string | null }>;
+    pickCreateLocation: () => Promise<{ path: string | null }>;
   } {
     return {
       list: () => this.list(deps.openLibraryId()),
@@ -330,6 +380,7 @@ export class LibraryRegistryRuntime {
         return this.addExisting(chosen, deps.openLibraryId());
       },
       pickLocation: async () => ({ path: await deps.pickDirectory() }),
+      pickCreateLocation: async () => ({ path: await deps.pickCreateLocation() }),
     };
   }
 

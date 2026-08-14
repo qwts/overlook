@@ -818,8 +818,14 @@ export const channels = {
       z.object({ ok: z.literal(false), reason: z.enum(['cancelled', 'not-a-library', 'already-registered']) }),
     ]),
   ),
-  /** Native directory picker for the create flow's location (#386). */
+  /** Native directory picker for relocation destinations (#386/#483). */
   libraryRegistryPickLocation: defineChannel('library-registry:pick-location', z.object({}), z.object({ path: z.string().nullable() })),
+  /** Save-style Finder package picker for new libraries (#799). */
+  libraryRegistryPickCreateLocation: defineChannel(
+    'library-registry:pick-create-location',
+    z.object({}),
+    z.object({ path: z.string().nullable() }),
+  ),
   // Library relocation (#483, ADR-0022 §1): journaled move with an atomic
   // registry path rewrite as the commit point. Designed refusals (the §5
   // preflight matrix, verification failure, cancellation) are RESPONSE

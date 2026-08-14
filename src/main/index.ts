@@ -61,7 +61,7 @@ import { LibraryService } from './library/library-service.js';
 import { LibraryRegistryRuntime } from './library/library-registry-runtime.js';
 import { acquireLibraryLock, readLockHolder } from './library/library-lock.js';
 import { createLibraryLifecycle } from './library/library-lifecycle-wiring.js';
-import { pickLibraryDirectory } from './library/library-picker.js';
+import { pickLibraryCreateLocation, pickLibraryDirectory } from './library/library-picker.js';
 import { AppLockHost } from './crypto/app-lock-host.js';
 import { registerQuitTeardown, registerSingleInstance } from './app-bootstrap.js';
 import { ProtectedRuntime } from './library/protected-runtime.js';
@@ -105,7 +105,6 @@ if (!productionInterop.nativeHostRequested) {
 
 // Lazy bootstrap: no keychain or database access before the renderer's first library call.
 let libraryService: LibraryService | undefined;
-
 const registryRuntime = new LibraryRegistryRuntime({
   userDataDir: () => app.getPath('userData'),
   lockHolder: (dir) => readLockHolder(dir, instanceId),
@@ -210,6 +209,7 @@ function getLibraryService(): LibraryService {
         }
       },
     });
+    registryRuntime.followDocumentSummary(() => new PhotosRepository(db).stats().photos, applicationEvents.onLibraryChanged);
     startupMaintenance.schedule();
     if (getSettingsStore().get().semanticSearchEnabled) getEmbeddingService();
   }
@@ -234,7 +234,8 @@ function getImportService(): ImportService {
       parts,
       harnessEnv,
       broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
-      imported: () => {
+      imported: (photoIds) => {
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         ensureMaintenanceServices();
         void posterCaptureService?.capture().catch(() => undefined);
         embeddingRuntime?.service.notifyWorkAvailable();
@@ -274,7 +275,7 @@ function ensureMaintenanceServices(): void {
   posterCaptureService = services.posterCapture;
 }
 
-let thumbService: ThumbService | undefined;
+let thumbService: ThumbService | undefined, fullService: FullService | undefined;
 
 function getThumbService(): ThumbService {
   if (thumbService === undefined) {
@@ -302,8 +303,6 @@ function getThumbService(): ThumbService {
   return thumbService;
 }
 
-let fullService: FullService | undefined;
-
 function getFullService(): FullService {
   if (fullService === undefined) {
     const parts = requireParts('full-res service');
@@ -319,15 +318,13 @@ function getFullService(): FullService {
   return fullService;
 }
 
-function getProtectedRuntime(): ProtectedRuntime {
-  return requireParts('protected runtime').protected;
-}
+const getProtectedRuntime = (): ProtectedRuntime => requireParts('protected runtime').protected;
 
 let backupEngine: BackupEngine | undefined, custodyRoutingLifecycle: ReturnType<typeof createCustodyRoutingRuntime> | undefined;
 let offloadService: OffloadService | undefined, ephemeralOriginalService: EphemeralOriginalService | undefined;
-const activeBackupControllers = new Set<AbortController>();
-const activeBackupRuns = new Set<Promise<BackupRunResult>>();
-let providerRuntime: ProviderRuntime | undefined;
+const activeBackupControllers = new Set<AbortController>(),
+  activeBackupRuns = new Set<Promise<BackupRunResult>>();
+let providerRuntime: ProviderRuntime | undefined, embeddingRuntime: EmbeddingRuntime | undefined;
 const providerWork = new WorkTracker(refreshApplicationMenu);
 
 const custodyWorkActive = (): boolean => providerWork.busy() || interopRuntimeBusy();
@@ -336,11 +333,7 @@ const changeProviderWork = (delta: 1 | -1): void => {
   embeddingRuntime?.service.notifyWorkAvailable();
 };
 
-let embeddingRuntime: EmbeddingRuntime | undefined;
-
-function notifyEmbeddingEligibilityChanged(photoIds: readonly string[]): void {
-  embeddingRuntime?.service.notifyEligibilityChanged(photoIds);
-}
+const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
 function getEmbeddingService(): EmbeddingService {
   embeddingRuntime ??= createEmbeddingApplicationRuntime({
@@ -383,7 +376,7 @@ function ensureRestoreProviderRegistry(): ProviderRuntime {
   }
   return runtime;
 }
-let autoBackupTrigger: (() => void) | undefined;
+let autoBackupTrigger: (() => void) | undefined, manifestSyncTrigger: (() => void) | undefined;
 
 /** Dirtying EDITS auto-backup like imports do (#267) — before this, an
  * album add or favorite left the provider progress standing until a
@@ -392,13 +385,13 @@ const scheduleAutoBackup = createAutoBackupScheduler(() => {
   getBackupEngine();
   autoBackupTrigger?.();
 });
-let manifestSyncTrigger: (() => void) | undefined;
 function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
-let purgeService: PurgeService | undefined, purgeRuntime: DrainablePurgeFacade | undefined;
-let consistencyChecker: ConsistencyChecker | undefined;
+let purgeService: PurgeService | undefined,
+  purgeRuntime: DrainablePurgeFacade | undefined,
+  consistencyChecker: ConsistencyChecker | undefined;
 const startupMaintenance = new StartupMaintenance({
   purge: () => getPurgeService().purgeExpired(),
   repair: () => consistencyChecker?.repair(),
@@ -665,6 +658,7 @@ const egressRuntime = new EgressRuntime({
 });
 
 async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
+  registryRuntime.closeDocumentSummary();
   [autoBackupTrigger, manifestSyncTrigger] = [undefined, undefined];
   importRuntime?.service.close();
   egressRuntime.close();
@@ -741,7 +735,7 @@ const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportSta
   reloadWindows: reloadContentWindowsForLock,
   harnessEnv,
 });
-let appLockHost: AppLockHost | undefined;
+let appLockHost: AppLockHost | undefined, restoreRuntime: RestoreRuntime | undefined;
 const recoveryExportReceipt = new RecoveryExportReceipt();
 function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
   return createAppLockRuntime({
@@ -771,8 +765,6 @@ function getAppLockController(): AppLockHost {
   return appLockHost;
 }
 
-let restoreRuntime: RestoreRuntime | undefined;
-
 function getRestoreRuntime(): RestoreRuntime {
   restoreRuntime ??= createRestoreRuntime({
     targetDir: libraryDataDir(),
@@ -800,6 +792,9 @@ void externalOpen.whenReady().then(async () => {
   // caches an entry and before anything opens or classifies libraries. A
   // corrupt registry falls through to resolveFailure()'s loud dialog below.
   await settleRelocationJournals();
+  await externalOpen.handleLibraryDocuments(
+    registryRuntime.documentHandler(switchLibrary, (message) => dialog.showErrorBox('Unable to open library', message)),
+  );
   if (!reportStartupFailures((title, message) => dialog.showErrorBox(title, message))) {
     app.exit(1);
     return;
@@ -839,6 +834,7 @@ void externalOpen.whenReady().then(async () => {
         openLibraryId: () => (libraryService === undefined ? null : registryRuntime.resolveActive().id),
         safeStorage: pickSafeStorage,
         pickDirectory: () => pickLibraryDirectory(harnessEnv('OVERLOOK_PICK_LIBRARY_DIR')),
+        pickCreateLocation: () => pickLibraryCreateLocation(harnessEnv('OVERLOOK_PICK_LIBRARY_CREATE_LOCATION')),
       }),
       open: switchLibrary,
     },

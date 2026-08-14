@@ -23,6 +23,7 @@
 import { readdir, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { buildFileProviderExtension } from './build-file-provider-extension.mjs';
+import { buildQuickLookExtension } from './build-quick-look-extension.mjs';
 
 // Package-relative roots whose immediate layout is <platform>/<arch>/.
 export const BUNDLED_MULTI_PLATFORM_ROOTS = ['node_modules/onnxruntime-node/bin/napi-v6'];
@@ -113,6 +114,13 @@ export default async function afterPack(context) {
   );
   for (const path of removed) console.log(`  - ${path}`);
   if (targetPlatform === 'darwin') {
+    const quickLook = buildQuickLookExtension(
+      context.appOutDir,
+      context.packager.appInfo.productFilename,
+      context.packager.appInfo.version,
+      context.packager.appInfo.buildVersion,
+    );
+    console.log(`quick-look-extension: built ${quickLook}`);
     const extension = buildFileProviderExtension(
       context.appOutDir,
       context.packager.appInfo.productFilename,
