@@ -49,6 +49,14 @@ import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
 
 let contentAdmission = (): void => undefined;
 
+export async function requireMoveImportConfirmation(
+  mode: 'copy' | 'move',
+  source: { path?: string | undefined; files?: readonly string[] | undefined },
+  confirmMove?: (source: { path?: string | undefined; files?: readonly string[] | undefined }) => Promise<boolean>,
+): Promise<boolean> {
+  return mode !== 'move' || (await confirmMove?.(source)) === true;
+}
+
 const reportIpcError = ({ channelName, code, error }: HandlerErrorReport): void => {
   console.error(`[overlook] ${code} on ${channelName}`, error);
 };
@@ -550,6 +558,7 @@ export function registerImportHandlers(
   onImported?: () => void,
   onExternalReady?: () => void,
   getActivity?: () => ActivityFacade,
+  confirmMove?: (source: { path?: string | undefined; files?: readonly string[] | undefined }) => Promise<boolean>,
 ): void {
   ipcMain.handle(channels.importListSources.name, (_event, request: unknown) =>
     wrapHandler(channels.importListSources, async () => ({ sources: await getService().listSources() }))(request),
@@ -614,6 +623,18 @@ export function registerImportHandlers(
   );
   ipcMain.handle(channels.importRun.name, (_event, request: unknown) =>
     wrapHandler(channels.importRun, async ({ path, files, mode }) => {
+      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmMove))) {
+        return {
+          imported: 0,
+          moved: 0,
+          retained: 0,
+          duplicates: 0,
+          failed: 0,
+          cancelled: 0,
+          sidecars: 0,
+          confirmationCancelled: true,
+        };
+      }
       // The zod refinement guarantees exactly one of path/files. Both paths
       // use the engine's verified per-file Move boundary (#489).
       const summary = files !== undefined ? await getService().runFiles(files, mode) : await getService().run(path ?? '', mode);

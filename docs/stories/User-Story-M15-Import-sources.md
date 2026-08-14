@@ -11,7 +11,8 @@ stories).
 
 - Copy remains the safe default. A saved Move preference may preselect Move,
   but every dialog requires fresh explicit consent before the import button is
-  enabled.
+  enabled. Main also presents a native confirmation for the exact source before
+  accepting a Move request; renderer state alone cannot authorize deletion.
 - Move is never a filesystem rename. Each admitted file is read, encrypted,
   recorded, given required derivatives, decrypted and SHA-256 verified, then
   its exact source path is unlinked. Cleanup is per-file and journaled.

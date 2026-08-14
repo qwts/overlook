@@ -464,6 +464,11 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
               });
     void run
       .then((summary) => {
+        if ('confirmationCancelled' in summary && summary.confirmationCancelled === true) {
+          setPhase('options');
+          announce('Move import cancelled. Source files were left untouched.');
+          return;
+        }
         setImported(summary.imported);
         setSidecars(summary.sidecars);
         setMoved(summary.moved);
