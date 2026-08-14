@@ -142,6 +142,26 @@ for (const key of ['com.apple.security.app-sandbox', 'com.apple.security.network
   }
 }
 
+const quickLookPath = join(appPath, 'Contents', 'PlugIns', 'OverlookQuickLook.appex');
+if (!existsSync(quickLookPath)) fail('OverlookQuickLook.appex is missing');
+verifySignature(quickLookPath);
+const quickLookInfoPath = join(quickLookPath, 'Contents', 'Info.plist');
+if (plistValue(quickLookInfoPath, 'CFBundleIdentifier') !== 'com.zts1.overlook.quick-look') {
+  fail('Quick Look bundle identifier is not com.zts1.overlook.quick-look');
+}
+const quickLookEntitlements = signedEntitlements(quickLookPath);
+if (!quickLookEntitlements.includes('[Key] com.apple.security.app-sandbox') || !quickLookEntitlements.includes('[Bool] true')) {
+  fail('Quick Look extension lacks its sandbox entitlement');
+}
+for (const key of [
+  'com.apple.security.application-groups',
+  'keychain-access-groups',
+  'com.apple.developer.icloud-container-identifiers',
+  'com.apple.developer.ubiquity-container-identifiers',
+]) {
+  if (quickLookEntitlements.includes(`[Key] ${key}`)) fail(`Quick Look extension unexpectedly claims ${key}`);
+}
+
 const rendererHelper = join(appPath, 'Contents', 'Frameworks', 'Overlook Helper (Renderer).app');
 const helperEntitlements = signedEntitlements(rendererHelper);
 for (const key of [

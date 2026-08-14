@@ -85,6 +85,22 @@ mac:
     NSFaceIDUsageDescription: Unlock Overlook with Touch ID.
     NSPhotoLibraryUsageDescription: Import only the Apple Photos items you explicitly review and select.
     NSPhotoLibraryAddUsageDescription: Export only the Overlook photos you explicitly select into Apple Photos.
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Overlook Library
+        CFBundleTypeRole: Viewer
+        CFBundleTypeIconFile: icon.icns
+        LSHandlerRank: Owner
+        LSTypeIsPackage: true
+        LSItemContentTypes:
+          - com.zts1.overlook.library
+    UTExportedTypeDeclarations:
+      - UTTypeIdentifier: com.zts1.overlook.library
+        UTTypeDescription: Overlook Library
+        UTTypeConformsTo:
+          - com.apple.package
+        UTTypeTagSpecification:
+          public.filename-extension:
+            - overlooklibrary
   target:
     - dmg
     - zip

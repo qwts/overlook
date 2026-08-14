@@ -5,11 +5,15 @@ import { createEmitter } from '../../shared/ipc/registry.js';
 import { createWindow } from '../app-window.js';
 import { requestNativeWindowAttention } from '../e2e-window-visibility.js';
 import { commandLineOpenPaths, ExternalOpenIntake } from './external-open-intake.js';
+import { isLibraryDocumentPath } from '../../shared/library/library-document.js';
+
+const MAX_PENDING_LIBRARY_DOCUMENTS = 100_000;
 
 export interface ExternalOpenRuntime {
   readonly whenReady: () => Promise<void>;
   readonly rendererReady: () => void;
   readonly followAuthorization: (source: ExternalOpenAuthorizationSource) => void;
+  readonly handleLibraryDocuments: (handler: (path: string) => Promise<void>) => Promise<void>;
   readonly finishBootstrap: () => void;
   readonly close: () => void;
 }
@@ -32,6 +36,7 @@ export function createHeadlessExternalOpenRuntime(): ExternalOpenRuntime {
     whenReady: () => app.whenReady(),
     rendererReady: () => undefined,
     followAuthorization: () => undefined,
+    handleLibraryDocuments: () => Promise.resolve(),
     finishBootstrap: () => undefined,
     close: () => undefined,
   };
@@ -48,6 +53,9 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send(name, payload);
   });
   let runtimeReady = false;
+  let documentHandler: ((path: string) => Promise<void>) | undefined;
+  const pendingDocuments = new Map<string, string>();
+  let documentDrain = Promise.resolve();
   const intake = new ExternalOpenIntake({
     deliver: (paths) => emit({ paths: [...paths] }),
     // BrowserWindow APIs are unavailable during macOS open-file cold start.
@@ -74,15 +82,43 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
       mode: process.env['OVERLOOK_E2E_WINDOW'],
     });
   };
+  const flushDocuments = (): Promise<void> => {
+    const handler = documentHandler;
+    if (handler === undefined || pendingDocuments.size === 0) return documentDrain;
+    const paths = [...pendingDocuments.values()];
+    pendingDocuments.clear();
+    documentDrain = documentDrain
+      .catch(() => undefined)
+      .then(async () => {
+        for (const path of paths) await handler(path);
+      });
+    void documentDrain.catch(() => undefined);
+    return documentDrain;
+  };
+  const enqueue = (paths: readonly string[], cwd = process.cwd()): void => {
+    const imports: string[] = [];
+    for (const path of commandLineOpenPaths(['Overlook', ...paths], true, cwd)) {
+      if (isLibraryDocumentPath(path)) {
+        if (pendingDocuments.size < MAX_PENDING_LIBRARY_DOCUMENTS) {
+          pendingDocuments.set(path.toLocaleLowerCase('en-US'), path);
+        }
+      } else imports.push(path);
+    }
+    intake.enqueue(imports, cwd);
+    if (pendingDocuments.size > 0) {
+      if (runtimeReady) focusPrimaryWindow();
+      void flushDocuments();
+    }
+  };
 
   if (primaryInstance) {
-    intake.enqueue(initialOpenPaths);
+    enqueue(initialOpenPaths);
     app.on('open-file', (event, filePath) => {
       event.preventDefault();
-      intake.enqueue([filePath]);
+      enqueue([filePath]);
     });
     app.on('second-instance', (_event, argv, workingDirectory) => {
-      intake.enqueue(commandLineOpenPaths(argv, app.isPackaged, workingDirectory), workingDirectory);
+      enqueue(commandLineOpenPaths(argv, app.isPackaged, workingDirectory), workingDirectory);
     });
   }
 
@@ -96,11 +132,19 @@ export function createExternalOpenRuntime(options: ExternalOpenRuntimeOptions = 
       update(source.snapshot());
       source.subscribe(update);
     },
+    handleLibraryDocuments: (handler) => {
+      documentHandler = handler;
+      return flushDocuments();
+    },
     finishBootstrap: () => {
       runtimeReady = true;
       openPrimaryWindow();
       app.on('activate', focusPrimaryWindow);
     },
-    close: () => intake.close(),
+    close: () => {
+      documentHandler = undefined;
+      pendingDocuments.clear();
+      intake.close();
+    },
   };
 }

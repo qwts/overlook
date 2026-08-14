@@ -45,6 +45,8 @@ describe('multi-library keying (#384)', () => {
     const a = runtime.create({ name: 'A', path: null, safeStorage });
     const b = runtime.create({ name: 'B', path: join(userData, 'custom-spot'), safeStorage });
 
+    assert.equal(b.path, join(userData, 'custom-spot.overlooklibrary'), 'explicit custom homes use the Finder package suffix');
+
     const keyA = KeyStore.open({ safeStorage, dataDir: a.path }).resolver()(1);
     const keyB = KeyStore.open({ safeStorage, dataDir: b.path }).resolver()(1);
     assert.ok(keyA !== undefined && keyB !== undefined);

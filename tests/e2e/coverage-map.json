@@ -2249,6 +2249,24 @@
           "reason": "The signed packaged pass exercises live PhotoKit permission states, limited and revoked access, iCloud-only assets, add-only export, supported metadata fidelity, and destination-owned retention; automated tests cover exact review scope, staging cleanup, lock refusal, native source policy, and the renderer/IPC flow."
         }
       ]
+    },
+    {
+      "id": "799-finder-library-document",
+      "wiki": "Acceptance-Test-Finder-Library-Document-And-Quick-Look",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/external-open.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-document.test.ts", "tests/tooling/macos-signing.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Finder-Library-Document-And-Quick-Look.md in a signed packaged macOS build to verify Launch Services package identity, real Finder double-click routing, Quick Look isolation, and install, upgrade, and uninstall behavior."
+        }
+      ]
     }
   ]
 }
