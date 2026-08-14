@@ -561,10 +561,18 @@ export const channels = {
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
   // Export engine (#97): decrypt-on-export to a chosen folder.
-  exportPickDestination: defineChannel('export:pick-destination', z.object({}), z.object({ path: z.string().nullable() })),
+  exportPickDestination: defineChannel(
+    'export:pick-destination',
+    z.object({}),
+    z.object({ path: z.string().nullable(), authorization: z.string().nullable() }),
+  ),
   exportRun: defineChannel(
     'export:run',
-    z.object({ photoIds: z.array(z.string()).min(1), destination: z.string(), format: z.enum(['original', 'jpeg']).optional() }),
+    z.object({
+      photoIds: z.array(z.string()).min(1),
+      authorization: z.string().min(1),
+      format: z.enum(['original', 'jpeg']).optional(),
+    }),
     z.object({
       exported: z.number().int().nonnegative(),
       failed: z.number().int().nonnegative(),

@@ -25,6 +25,7 @@ import type { ActivityFacade } from './activity/activity-publication.js';
 import { favoriteCommand, moveCompensationCommand, trashCommand } from './history/command-drafts.js';
 import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
+import { ExportDestinationAuthorization } from './export/export-destination-authorization.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -660,8 +661,10 @@ export interface ExportFacade {
 }
 
 export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
-  ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, destination, format }) => {
+  const destinations = new ExportDestinationAuthorization();
+  ipcMain.handle(channels.exportRun.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format }) => {
+      const destination = destinations.consume(event.sender.id, authorization);
       const result = await getFacade().run(photoIds, destination, format);
       getActivity?.().record({
         eventType: 'photo.exported',
@@ -678,8 +681,15 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
       return {};
     })(request),
   );
-  ipcMain.handle(channels.exportPickDestination.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportPickDestination, async () => ({ path: await getFacade().pickDestination() }))(request),
+  ipcMain.handle(channels.exportPickDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.exportPickDestination, async () => {
+      const path = await getFacade().pickDestination();
+      if (path === null) {
+        destinations.clear(event.sender.id);
+        return { path: null, authorization: null };
+      }
+      return { path, authorization: destinations.authorize(event.sender.id, path) };
+    })(request),
   );
 }
 

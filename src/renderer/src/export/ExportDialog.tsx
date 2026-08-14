@@ -31,6 +31,11 @@ interface Bar {
   readonly total: number;
 }
 
+interface DestinationSelection {
+  readonly path: string;
+  readonly authorization: string;
+}
+
 export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): ReactElement | null {
   const { formatCount } = useFormats();
   const { announce } = useAnnouncer();
@@ -39,7 +44,7 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
   const [phase, setPhase] = useState<Phase>('options');
   const [format, setFormat] = useState<'original' | 'jpeg'>('original');
   const [decrypt, setDecrypt] = useState(true);
-  const [destination, setDestination] = useState<string | null>(null);
+  const [destination, setDestination] = useState<DestinationSelection | null>(null);
   const [bar, setBar] = useState<Bar>({ done: 0, total: photoIds.length });
   const [exported, setExported] = useState(0);
   const [failed, setFailed] = useState(0);
@@ -81,7 +86,7 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
     }
     setPhase('running');
     void window.overlook.export
-      .run({ photoIds: [...photoIds], destination, format })
+      .run({ photoIds: [...photoIds], authorization: destination.authorization, format })
       .then((summary) => {
         setExported(summary.exported);
         setFailed(summary.failed);
@@ -180,14 +185,14 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
               icon="folder"
               size="sm"
               onClick={() => {
-                void window.overlook.export.pickDestination({}).then(({ path }) => {
-                  if (path !== null) {
-                    setDestination(path);
+                void window.overlook.export.pickDestination({}).then(({ path, authorization }) => {
+                  if (path !== null && authorization !== null) {
+                    setDestination({ path, authorization });
                   }
                 });
               }}
             >
-              {destination === null ? 'Choose folder…' : (destination.split('/').at(-1) ?? destination)}
+              {destination === null ? 'Choose folder…' : (destination.path.split('/').at(-1) ?? destination.path)}
             </Button>
           </div>
         </div>
