@@ -119,6 +119,11 @@ The complete product checklist and recovery procedure are in
    choose **Continue with verified only**. Restore must activate the verified
    subset and list the extra gaps on the complete screen / `restore-report.json`,
    not abort with “The backup changed after verification.”
+8. If verify reports a wall of NOT FOUND on a backup that just completed on
+   machine A, do not accept that as truth yet. A provider listing miss must
+   not hide objects `getStream` can still read. Retry once; a complete
+   backup should go straight to confirm (0 missing / 0 corrupt) and restore
+   the full photo count after relaunch.
 
 If the completed real library says **Wrong key**, compare the recovery-key
 fingerprint with machine A. If it says **Corrupt**, capture the library ID and
