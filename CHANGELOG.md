@@ -1,5 +1,11 @@
 # photos
 
+## 0.67.5
+
+### Patch Changes
+
+- 3e646b4: Treat cloud restore object presence as getStream, not a provider listing miss, so a complete backup is not restored as empty.
+
 ## 0.67.4
 
 ### Patch Changes
