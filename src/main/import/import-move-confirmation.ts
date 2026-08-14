@@ -11,6 +11,12 @@ export function isAbsoluteImportPath(candidate: string, platform: NodeJS.Platfor
   return win32.isAbsolute(candidate) && root !== '\\' && root !== '/';
 }
 
+export function isCanonicalImportPath(candidate: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (!isAbsoluteImportPath(candidate, platform)) return false;
+  const comparable = platform === 'win32' ? candidate.replaceAll('/', '\\') : candidate;
+  return (platform === 'win32' ? win32 : posix).normalize(comparable) === comparable;
+}
+
 export async function requireMoveImportConfirmation(
   mode: 'copy' | 'move',
   source: ImportMoveSource,
@@ -18,8 +24,8 @@ export async function requireMoveImportConfirmation(
 ): Promise<boolean> {
   if (mode !== 'move') return true;
   const paths = source.files ?? (source.path === undefined ? [] : [source.path]);
-  if (paths.length === 0 || paths.some((candidate) => !isAbsoluteImportPath(candidate))) {
-    throw new Error('Move import sources must use absolute paths');
+  if (paths.length === 0 || paths.some((candidate) => !isCanonicalImportPath(candidate))) {
+    throw new Error('Move import sources must use absolute paths without non-canonical segments');
   }
   return (await confirmMove?.(source)) === true;
 }

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { isAbsoluteImportPath, requireMoveImportConfirmation } from '../../src/main/import/import-move-confirmation.js';
+import {
+  isAbsoluteImportPath,
+  isCanonicalImportPath,
+  requireMoveImportConfirmation,
+} from '../../src/main/import/import-move-confirmation.js';
 
 describe('Move import confirmation boundary', () => {
   test('copy imports do not require destructive authorization', async () => {
@@ -47,5 +51,19 @@ describe('Move import confirmation boundary', () => {
     assert.equal(isAbsoluteImportPath('C:Pictures', 'win32'), false);
     assert.equal(isAbsoluteImportPath('C:\\Pictures', 'win32'), true);
     assert.equal(isAbsoluteImportPath('\\\\server\\share\\Pictures', 'win32'), true);
+    assert.equal(isCanonicalImportPath('C:/Pictures', 'win32'), true);
+    assert.equal(isCanonicalImportPath('C:/Card/../Pictures', 'win32'), false);
+  });
+
+  test('rejects non-canonical absolute Move sources before prompting', async () => {
+    let prompted = false;
+    await assert.rejects(
+      requireMoveImportConfirmation('move', { path: '/Volumes/Card/../Users/alice/Pictures/img.jpg' }, () => {
+        prompted = true;
+        return Promise.resolve(true);
+      }),
+      /non-canonical segments/u,
+    );
+    assert.equal(prompted, false);
   });
 });
