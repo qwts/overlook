@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { requireMoveImportConfirmation } from '../../src/main/import/import-move-confirmation.js';
+import { isAbsoluteImportPath, requireMoveImportConfirmation } from '../../src/main/import/import-move-confirmation.js';
 
 describe('Move import confirmation boundary', () => {
   test('copy imports do not require destructive authorization', async () => {
@@ -39,5 +39,13 @@ describe('Move import confirmation boundary', () => {
       /absolute paths/u,
     );
     assert.equal(prompted, false);
+  });
+
+  test('Windows Move sources require a drive or UNC root', () => {
+    assert.equal(isAbsoluteImportPath('/Pictures', 'win32'), false);
+    assert.equal(isAbsoluteImportPath('\\Pictures', 'win32'), false);
+    assert.equal(isAbsoluteImportPath('C:Pictures', 'win32'), false);
+    assert.equal(isAbsoluteImportPath('C:\\Pictures', 'win32'), true);
+    assert.equal(isAbsoluteImportPath('\\\\server\\share\\Pictures', 'win32'), true);
   });
 });
