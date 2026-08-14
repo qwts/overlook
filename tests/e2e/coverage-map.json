@@ -668,15 +668,19 @@
     {
       "id": "m07-export-dialog",
       "wiki": "User-Story-M07-Export",
-      "$note": "#885 adds library-wide unencrypted Original export. ExportDialog.stories.tsx covers the dialog variants; application-menu.spec.ts covers native File-menu parity and the Windows/Linux toolbar entry point.",
+      "$note": "#885 adds library-wide unencrypted Original export. #992 binds selected, library-wide, moodboard, and protected-album destinations to single-use native-picker grants. The stories cover dialog variants, export-flow.spec.ts and moodboard.spec.ts exercise the picker-to-export path, and the authority tests enforce exact renderer/request binding.",
       "coverage": [
         {
           "type": "storybook",
-          "path": "src/renderer/src/export/ExportDialog.stories.tsx"
+          "paths": ["src/renderer/src/export/ExportDialog.stories.tsx", "src/renderer/src/export/BoardExportDialog.stories.tsx"]
         },
         {
           "type": "playwright-e2e",
-          "paths": ["tests/e2e/export-flow.spec.ts", "tests/e2e/application-menu.spec.ts"]
+          "paths": ["tests/e2e/export-flow.spec.ts", "tests/e2e/moodboard.spec.ts", "tests/e2e/application-menu.spec.ts"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/export/export-destination-authority.test.ts", "tests/tooling/export-destination-authority.test.ts"]
         }
       ]
     },
