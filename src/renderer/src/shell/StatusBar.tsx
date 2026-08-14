@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactElement } from 'react';
 import { useFormats } from '../i18n/use-formats.js';
 import type { LibraryStats } from '../../../shared/library/types.js';
 import type { RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
+import { restoreChipLabel } from '../restore/restore-progress.js';
 import { Icon } from '../components/Icon';
 import { useAppState } from '../state/app-state-context';
 import { useAnnouncer } from '../components/LiveAnnouncer';
@@ -24,10 +25,7 @@ export function StatusBar({
   const { announce } = useAnnouncer();
   const syncing = state.pendingCount > 0;
   const provider = state.providerLabel;
-  const restoreLabel =
-    restore === null
-      ? null
-      : `${restore.stage === 'verifying' ? 'Verifying' : 'Restoring'} ${String(restore.done)} / ${String(Math.max(restore.total, 1))}`;
+  const restoreLabel = restore === null ? null : restoreChipLabel(restore);
   const announcement =
     restoreLabel !== null
       ? restoreLabel

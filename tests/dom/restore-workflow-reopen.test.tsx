@@ -55,8 +55,12 @@ const LIBRARY = {
   resumable: false,
 };
 
-function installOverlook(status: ReturnType<typeof idleRestoreStatus> extends infer T ? T : never): () => void {
+function installOverlook(status: RestoreStatusSnapshot): {
+  restore: () => void;
+  emitStatus: (next: RestoreStatusSnapshot) => void;
+} {
   const previous = (window as unknown as { overlook?: unknown }).overlook;
+  const listeners = new Set<(next: RestoreStatusSnapshot) => void>();
   const providers = [{ id: 'prov-a', label: 'Provider A', available: true, unavailableReason: null }];
   (window as unknown as { overlook: unknown }).overlook = {
     getLocale: () => Promise.resolve('en-US'),
@@ -69,18 +73,28 @@ function installOverlook(status: ReturnType<typeof idleRestoreStatus> extends in
     restore: {
       status: () => Promise.resolve(status),
       onProgress: () => () => undefined,
-      onStatusChanged: () => () => undefined,
+      onStatusChanged: (listener: (next: RestoreStatusSnapshot) => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
       pickKey: () => Promise.resolve({ path: null }),
       discover: () => Promise.resolve({ sessionId: null, libraries: [], error: null }),
     },
   };
-  return () => {
-    (window as unknown as { overlook?: unknown }).overlook = previous;
+  return {
+    restore: () => {
+      (window as unknown as { overlook?: unknown }).overlook = previous;
+    },
+    emitStatus: (next) => {
+      for (const listener of listeners) listener(next);
+    },
   };
 }
 
 test('reopening a running restore shows done/total progress instead of setup', async () => {
-  const restore = installOverlook({
+  const { restore } = installOverlook({
     ...idleRestoreStatus(),
     phase: 'running',
     sessionId: 'session-a',
@@ -111,7 +125,7 @@ test('reopening a running restore shows done/total progress instead of setup', a
 });
 
 test('verify scan shows a progress bar instead of a spinner-only empty state', async () => {
-  const restore = installOverlook({
+  const { restore } = installOverlook({
     ...idleRestoreStatus(),
     phase: 'verify-scan',
     sessionId: 'session-a',
@@ -136,6 +150,54 @@ test('verify scan shows a progress bar instead of a spinner-only empty state', a
     assert.match(container.textContent ?? '', /Scanning cloud backup/u);
     assert.match(container.textContent ?? '', /7 \/ 100 · 7%/u);
     assert.ok(container.querySelector('[role="progressbar"]'));
+  } finally {
+    restore();
+  }
+});
+
+test('a reopened running dialog follows status-changed to the complete screen', async () => {
+  const { restore, emitStatus } = installOverlook({
+    ...idleRestoreStatus(),
+    phase: 'running',
+    sessionId: 'session-a',
+    libraryId: LIBRARY.libraryId,
+    providerId: 'prov-a',
+    progress: { stage: 'downloading', done: 42, total: 100, photoId: 'P42' },
+    libraries: [LIBRARY],
+  });
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <RestoreWorkflow context="settings" />
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    act(() => {
+      emitStatus({
+        ...idleRestoreStatus(),
+        phase: 'complete',
+        libraryId: LIBRARY.libraryId,
+        providerId: 'prov-a',
+        progress: { stage: 'complete', done: 1, total: 1, photoId: null },
+        lastResult: {
+          libraryId: LIBRARY.libraryId,
+          generation: 3,
+          photos: 100,
+          resumed: false,
+          missing: [],
+        },
+        libraries: [LIBRARY],
+      });
+    });
+    assert.match(container.textContent ?? '', /Restore complete/u);
+    assert.match(container.textContent ?? '', /100 photos restored/u);
+    assert.doesNotMatch(container.textContent ?? '', /Downloading and verifying originals/u);
   } finally {
     restore();
   }

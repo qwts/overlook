@@ -21,6 +21,20 @@ export function restoreProgressDetail(progress: RestoreProgressContract): string
   return `${String(progress.done)} / ${String(progress.total)} · ${String(pct)}%`;
 }
 
+export function restoreChipLabel(progress: RestoreProgressContract): string {
+  const verb = progress.stage === 'verifying' ? 'Verifying' : 'Restoring';
+  return progress.total === 0 ? verb : `${verb} ${String(progress.done)} / ${String(progress.total)}`;
+}
+
+export function restoreFallbackProgress(phase: RestoreStatusSnapshot['phase']): RestoreProgressContract {
+  return {
+    stage: phase === 'verify-scan' ? 'verifying' : 'discovering',
+    done: 0,
+    total: 0,
+    photoId: null,
+  };
+}
+
 export type RestoreWorkflowStep = 'setup' | 'choose' | 'verify' | 'confirm' | 'running' | 'complete';
 
 export function restoreStepFromStatus(status: RestoreStatusSnapshot): RestoreWorkflowStep | null {

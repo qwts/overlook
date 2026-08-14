@@ -200,8 +200,12 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     void window.overlook.restore.status().then((status) => {
       if (!cancelled) applyRestoreStatus(status);
     });
+    const stopStatus = window.overlook.restore.onStatusChanged((status) => {
+      if (!cancelled) applyRestoreStatus(status);
+    });
     return () => {
       cancelled = true;
+      stopStatus();
     };
   }, []);
 

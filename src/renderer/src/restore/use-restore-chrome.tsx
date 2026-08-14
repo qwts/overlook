@@ -3,6 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import type { RestoreProgressContract, RestoreStatusSnapshot } from '../../../shared/backup/restore-contract.js';
 import type { ToastItem } from '../components/Toast.js';
+import { restoreFallbackProgress } from './restore-progress.js';
 
 const messages = defineMessages({
   showRestore: { id: 'restore.chrome.show', defaultMessage: 'Show restore' },
@@ -79,7 +80,7 @@ export function useRestoreChrome(): {
       setRestoreOpen(true);
     },
     closeRestore: () => setRestoreOpen(false),
-    restoreChip: restoreActive && !restoreOpen ? (status.progress ?? { stage: 'discovering', done: 0, total: 1, photoId: null }) : null,
+    restoreChip: restoreActive && !restoreOpen ? (status.progress ?? restoreFallbackProgress(status.phase)) : null,
     restoreToasts: toast === null ? [] : [toast],
     dismissRestoreToast: () => {
       if (status !== null) setDismissedKey(toastKey(status));
