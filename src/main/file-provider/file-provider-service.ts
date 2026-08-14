@@ -85,10 +85,10 @@ function safeName(name: string): string {
     : 'Untitled';
 }
 
-function uniqueNames(photos: readonly PhotoRecord[]): readonly string[] {
+function uniqueNames(values: readonly string[]): readonly string[] {
   const used = new Set<string>();
-  return photos.map((photo) => {
-    const original = safeName(photo.fileName);
+  return values.map((value) => {
+    const original = safeName(value);
     const dot = original.lastIndexOf('.');
     const stem = dot <= 0 ? original : original.slice(0, dot);
     const extension = dot <= 0 ? '' : original.slice(dot);
@@ -120,12 +120,14 @@ export class FileProviderService {
     const native = this.deps.bridge.status();
     if (!native.available) throw new Error('File Provider is unavailable');
     this.validateScope(scope);
+    const previous = this.deps.store.load();
     const config: FileProviderConfig = { version: 1, enabled: true, consentVersion: FILE_PROVIDER_CONSENT_VERSION, scope };
     await this.deps.bridge.register(this.domain());
     try {
       this.deps.store.save(config);
       await this.deps.bridge.changed(this.domain().id);
     } catch (error) {
+      this.deps.store.save(previous);
       await this.deps.bridge.remove(this.domain().id).catch(() => undefined);
       throw error;
     }
@@ -161,14 +163,13 @@ export class FileProviderService {
     const parsed = parsePhotoItemId(itemId);
     if (parsed === null) throw new Error('File Provider item is unavailable');
     const config = this.requireEnabled();
-    if (!this.scopeContains(config.scope, parsed)) throw new Error('File Provider item is unavailable');
+    if (!this.authorized(config, parsed)) throw new Error('File Provider item is unavailable');
     const photo = this.deps.getPhoto(parsed.photoId);
     if (photo === undefined || photo.deletedAt !== null || this.deps.isMigrating(photo.id))
       throw new Error('File Provider item is unavailable');
-    const selected = this.deps.selectPhotoIds(parsed.albumId);
-    if (!selected.includes(photo.id)) throw new Error('File Provider item is unavailable');
     const opened = await this.deps.openOriginal(photo);
-    if (!this.deps.admit() || !this.deps.store.load().enabled) {
+    const current = this.deps.store.load();
+    if (!this.deps.admit() || !current.enabled || !this.authorized(current, parsed)) {
       await opened.release?.();
       throw new Error('File Provider item is unavailable');
     }
@@ -191,7 +192,7 @@ export class FileProviderService {
       .selectPhotoIds(albumId)
       .map((id) => this.deps.getPhoto(id))
       .filter((photo): photo is PhotoRecord => photo !== undefined && photo.deletedAt === null && !this.deps.isMigrating(photo.id));
-    const names = uniqueNames(photos);
+    const names = uniqueNames(photos.map((photo) => photo.fileName));
     return photos.map((photo, index) => ({
       id: photoItemId(photo.id, albumId),
       parentId: albumId === undefined ? ROOT_ID : albumItemId(albumId),
@@ -206,20 +207,19 @@ export class FileProviderService {
   }
 
   private albumItems(enabledIds: readonly string[]): readonly FileProviderItem[] {
-    return this.deps
-      .albums()
-      .filter((album) => enabledIds.includes(album.id))
-      .map((album) => ({
-        id: albumItemId(album.id),
-        parentId: ROOT_ID,
-        name: safeName(album.name),
-        kind: 'folder',
-        size: 0,
-        contentType: 'public.folder',
-        modifiedAt: '1970-01-01T00:00:00.000Z',
-        dataless: false,
-        readOnly: true,
-      }));
+    const albums = this.deps.albums().filter((album) => enabledIds.includes(album.id));
+    const names = uniqueNames(albums.map((album) => album.name));
+    return albums.map((album, index) => ({
+      id: albumItemId(album.id),
+      parentId: ROOT_ID,
+      name: names[index] ?? 'Untitled',
+      kind: 'folder',
+      size: 0,
+      contentType: 'public.folder',
+      modifiedAt: '1970-01-01T00:00:00.000Z',
+      dataless: false,
+      readOnly: true,
+    }));
   }
 
   private validateScope(scope: FileProviderScope): void {
@@ -232,6 +232,10 @@ export class FileProviderService {
 
   private scopeContains(scope: FileProviderScope, item: { readonly albumId?: string }): boolean {
     return scope.kind === 'library' ? item.albumId === undefined : item.albumId !== undefined && scope.albumIds.includes(item.albumId);
+  }
+
+  private authorized(config: FileProviderConfig, item: { readonly photoId: string; readonly albumId?: string }): boolean {
+    return this.scopeContains(config.scope, item) && this.deps.selectPhotoIds(item.albumId).includes(item.photoId);
   }
 
   private requireEnabled(): FileProviderConfig {

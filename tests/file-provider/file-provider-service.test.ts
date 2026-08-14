@@ -7,7 +7,7 @@ import { describe, test } from 'node:test';
 
 import type { PhotoRecord } from '../../src/shared/library/types.js';
 import type { FileProviderDomain, FileProviderBridge } from '../../src/main/file-provider/file-provider-bridge.js';
-import { FileProviderService } from '../../src/main/file-provider/file-provider-service.js';
+import { FileProviderService, type OpenedProviderOriginal } from '../../src/main/file-provider/file-provider-service.js';
 import { FileProviderStore } from '../../src/main/file-provider/file-provider-store.js';
 
 function photo(id: string, fileName = `${id}.jpg`, syncState: PhotoRecord['syncState'] = 'local'): PhotoRecord {
@@ -55,6 +55,7 @@ class FakeBridge implements FileProviderBridge {
   evicted: string[] = [];
   changes = 0;
   closed = false;
+  failChanged = false;
 
   status() {
     return { available: true, reason: null } as const;
@@ -77,7 +78,7 @@ class FakeBridge implements FileProviderBridge {
 
   changed(): Promise<void> {
     this.changes += 1;
-    return Promise.resolve();
+    return this.failChanged ? Promise.reject(new Error('signal failed')) : Promise.resolve();
   }
 
   close(): void {
@@ -96,25 +97,26 @@ function fixture() {
   ]);
   let admitted = true;
   let releases = 0;
+  let openOriginal = (): Promise<OpenedProviderOriginal> =>
+    Promise.resolve({
+      stream: Readable.from(['bytes']),
+      release: () => {
+        releases += 1;
+        return Promise.resolve();
+      },
+    });
   const service = new FileProviderService({
     bridge,
     store,
     library: { id: 'LIB1', name: 'Family' },
     albums: () => [
       { id: 'A1', name: 'Travel', count: 2 },
-      { id: 'A2', name: 'Private', count: 1 },
+      { id: 'A2', name: 'travel', count: 1 },
     ],
     selectPhotoIds: (albumId) => (albumId === undefined ? ['P1', 'P2', 'P3'] : albumId === 'A1' ? ['P1', 'P2'] : ['P3']),
     getPhoto: (id) => photos.get(id),
     isMigrating: (id) => id === 'P3',
-    openOriginal: () =>
-      Promise.resolve({
-        stream: Readable.from(['bytes']),
-        release: () => {
-          releases += 1;
-          return Promise.resolve();
-        },
-      }),
+    openOriginal: () => openOriginal(),
     admit: () => admitted,
   });
   return {
@@ -126,6 +128,9 @@ function fixture() {
       admitted = false;
     },
     releases: () => releases,
+    setOpenOriginal: (next: () => Promise<OpenedProviderOriginal>) => {
+      openOriginal = next;
+    },
   };
 }
 
@@ -154,6 +159,14 @@ describe('read-only macOS File Provider (#797)', () => {
     });
   });
 
+  test('rolls persisted consent back when activation signalling fails', async () => {
+    const { bridge, service, store } = fixture();
+    bridge.failChanged = true;
+    await assert.rejects(service.enable({ kind: 'library' }, 1), /signal failed/u);
+    assert.equal(store.load().enabled, false);
+    assert.deepEqual(bridge.removed, ['com.zts1.overlook.library.LIB1']);
+  });
+
   test('projects stable read-only identifiers and truthful offloaded state', async () => {
     const { service } = fixture();
     await service.enable({ kind: 'albums', albumIds: ['A1'] }, 1);
@@ -171,6 +184,15 @@ describe('read-only macOS File Provider (#797)', () => {
       ],
     );
     assert.deepEqual(service.enumerate(albums[0]?.id ?? 'missing'), files, 'identifiers must be stable across enumerations');
+  });
+
+  test('disambiguates normalization and case-insensitive album names', async () => {
+    const { service } = fixture();
+    await service.enable({ kind: 'albums', albumIds: ['A1', 'A2'] }, 1);
+    assert.deepEqual(
+      service.enumerate('root').map(({ name }) => name),
+      ['Travel', 'travel (2)'],
+    );
   });
 
   test('never advertises protected-migration records and rejects mutation', async () => {
@@ -191,6 +213,28 @@ describe('read-only macOS File Provider (#797)', () => {
     lock();
     await assert.rejects(service.materialize(item.id), /unavailable/u);
     assert.equal(releases(), 0, 'locked requests must not open originals');
+  });
+
+  test('rechecks scope and membership after a pending original opens', async () => {
+    const { service, setOpenOriginal, store } = fixture();
+    await service.enable({ kind: 'library' }, 1);
+    const item = service.enumerate('root')[0];
+    assert.ok(item);
+    let resolveOpen: ((opened: OpenedProviderOriginal) => void) | undefined;
+    setOpenOriginal(() => new Promise((resolve) => (resolveOpen = resolve)));
+    const pending = service.materialize(item.id);
+    await new Promise((resolve) => setImmediate(resolve));
+    store.save({ version: 1, enabled: true, consentVersion: 1, scope: { kind: 'albums', albumIds: ['A1'] } });
+    let released = 0;
+    resolveOpen?.({
+      stream: Readable.from(['late bytes']),
+      release: () => {
+        released += 1;
+        return Promise.resolve();
+      },
+    });
+    await assert.rejects(pending, /unavailable/u);
+    assert.equal(released, 1);
   });
 
   test('disable persists denial before eviction and removes the domain', async () => {
