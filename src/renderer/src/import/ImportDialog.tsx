@@ -43,7 +43,7 @@ const messages = defineMessages({
 // folder, plus Dropped when the window drop opened the dialog — feeds the
 // same options → running (two aggregate bars) → done flow. Local sources may
 // Move through the verified per-file cleanup path, with a fresh confirmation
-// every time; Google Drive remains Copy-only (#489).
+// every time; renderer-supplied drops and Google Drive remain Copy-only.
 
 export type ImportSourceKind = 'sd' | 'folder' | 'drop' | 'google-drive';
 
@@ -352,7 +352,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
   }
 
   const usingSd = source === 'sd';
-  const moveAllowed = source !== 'google-drive';
+  const moveAllowed = source !== 'google-drive' && source !== 'drop';
   const importMode = moveAllowed ? mode : 'copy';
   const moveReady = importMode !== 'move' || moveConfirmed;
   const activeSummary =

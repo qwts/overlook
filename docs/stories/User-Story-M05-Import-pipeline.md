@@ -17,7 +17,7 @@ Lane B. Real import from an SD card or folder: volume detection with new-vs-tota
 | [#89](https://github.com/qwts/photos/issues/89)   | Recent-imports source + import completion toast                             | #87                     |
 | [#90](https://github.com/qwts/photos/issues/90)   | E2E: fixture SD-card import end-to-end                                      | #88, #89, #76           |
 | [#500](https://github.com/qwts/photos/issues/500) | Repair missing dimensions and orientation for every decodable format        | #85, #86, #87           |
-| [#489](https://github.com/qwts/photos/issues/489) | Allow verified Move for local-folder and dropped-file imports               | #87, #237               |
+| [#489](https://github.com/qwts/photos/issues/489) | Allow verified Move for approved local-folder imports                       | #87, #237               |
 
 ## Acceptance coverage
 
@@ -30,7 +30,7 @@ Lane B. Real import from an SD card or folder: volume detection with new-vs-tota
 | ImportDialog options/running/done, verbatim copy + Move warning                                                                            | ✅ #88 (PR #184) | `ImportDialog.stories.tsx` play tests + `tests/e2e/import-flow.spec.ts` — ledger id `m05-import-dialog`                             |
 | Completion toast (exact counts, Show action, 4s dismiss) + Recent imports jump                                                             | ✅ #89 (PR #185) | `tests/library/app-state.test.ts` + `tests/e2e/import-flow.spec.ts` — ledger id `m05-recent-imports-toast`                          |
 | Full path in CI: fixture card in → encrypted library out (no-plaintext scan, Move source emptied post-verification, Cancel semantics)      | ✅ #90 (PR #186) | `tests/e2e/import-flow.spec.ts`                                                                                                     |
-| Folder/drop Move: fresh consent, exact moved/retained counts, package/symlink exclusion, active-library refusal, verified per-file cleanup | ✅ #489          | `tests/import/import-engine.test.ts`, `tests/import/import-service.test.ts`, `tests/import/source-scanner.test.ts`, Storybook + E2E |
+| Approved-folder Move: main-side provenance, fresh consent, exact moved/retained counts, active-library refusal, verified per-file cleanup | ✅ #489          | `tests/import/import-engine.test.ts`, `tests/import/import-service.test.ts`, `tests/import/source-scanner.test.ts`, Storybook + E2E |
 | Format-neutral dimensions: orientation-normalized metadata, authoritative decoder values, one-time legacy repair, and mismatch diagnostic  | ✅ #500          | `tests/import/exif.test.ts`, `tests/import/thumbnail-pool.test.ts`, `tests/db/library-db.test.ts`, `tests/e2e/export-flow.spec.ts`  |
 
 Notable: the #90 E2E caught a real fresh-profile bug (photos.key_id FK row only written by the dev seed) — fixed in library bootstrap.

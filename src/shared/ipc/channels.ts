@@ -497,8 +497,8 @@ export const channels = {
   // Renderer readiness handshake for queued OS/Finder open-file batches.
   // Content admission keeps queued paths sealed behind app lock.
   importExternalReady: defineChannel('import:external-ready', z.object({}), z.object({})),
-  // Import engine (#87, extended by #237/#489): source paths and explicit
-  // dropped entries both use the journaled verify-before-delete Move path.
+  // Import engine (#87, extended by #237/#489): main-approved source paths
+  // may Move through verify-before-delete; renderer-supplied drops copy only.
   importRun: defineChannel(
     'import:run',
     z
@@ -509,6 +509,9 @@ export const channels = {
       })
       .refine((run) => (run.path === undefined) !== (run.files === undefined), {
         message: 'exactly one of path or files',
+      })
+      .refine((run) => run.files === undefined || run.mode === 'copy', {
+        message: 'dropped files are copy-only',
       }),
     importRunSummarySchema,
   ),

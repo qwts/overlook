@@ -196,7 +196,7 @@ describe('local folder and dropped Move policy (#489)', () => {
     files: [fresh, existing],
   };
 
-  test('a selected local folder reaches the verified Move engine without pretending to be removable', async () => {
+  test('a main-approved local folder reaches the verified Move engine', async () => {
     const calls: Array<{ mode: string; source: string; paths: readonly string[] }> = [];
     const engine = {
       importFiles: (files: readonly { path: string }[], mode: string, source: string) => {
@@ -209,6 +209,7 @@ describe('local folder and dropped Move policy (#489)', () => {
       files: () => Promise.resolve(scan),
     });
 
+    service.authorizeMoveSource('/source');
     const summary = await service.run('/source', 'move');
 
     assert.deepEqual(calls, [{ mode: 'move', source: '/source', paths: ['/source/a.jpg'] }]);
@@ -218,7 +219,7 @@ describe('local folder and dropped Move policy (#489)', () => {
     );
   });
 
-  test('mixed dropped paths preserve the requested mode and never pass enclosing folders to deletion', async () => {
+  test('mixed dropped paths are copy-only and never pass enclosing folders to deletion', async () => {
     const calls: Array<{ mode: string; source: string; paths: readonly string[] }> = [];
     const engine = {
       importFiles: (files: readonly { path: string }[], mode: string, source: string) => {
@@ -231,13 +232,23 @@ describe('local folder and dropped Move policy (#489)', () => {
       files: () => Promise.resolve(scan),
     });
 
-    const summary = await service.runFiles(['/source', '/other/b.jpg'], 'move');
+    const summary = await service.runFiles(['/source', '/other/b.jpg']);
 
-    assert.deepEqual(calls, [{ mode: 'move', source: 'dropped', paths: ['/source/a.jpg'] }]);
+    assert.deepEqual(calls, [{ mode: 'copy', source: 'dropped', paths: ['/source/a.jpg'] }]);
     assert.deepEqual(
       { moved: summary.moved, retained: summary.retained, duplicates: summary.duplicates },
       { moved: 1, retained: 1, duplicates: 1 },
     );
+  });
+
+  test('an arbitrary local folder cannot request Move without main-process approval', async () => {
+    const engine = { importFiles: () => assert.fail('engine must not run') } as unknown as ImportEngine;
+    const service = new ImportService(fakeRepo(), IDLE_EVENTS, engine, () => undefined, {
+      source: () => Promise.resolve(scan),
+      files: () => Promise.resolve(scan),
+    });
+
+    await assert.rejects(service.run('/source', 'move'), /approved by the main process/u);
   });
 
   test('Move rejects admitted files inside the active library before the engine runs', async () => {
@@ -259,6 +270,7 @@ describe('local folder and dropped Move policy (#489)', () => {
       '/library',
     );
 
+    service.authorizeMoveSource('/library/exports');
     await assert.rejects(service.run('/library/exports', 'move'), /inside the active library/u);
     assert.equal(calls, 0);
   });

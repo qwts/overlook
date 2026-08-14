@@ -55,6 +55,7 @@ export class ImportService {
   private readonly selectionCleanups = new Set<Promise<unknown>>();
   private googlePickEpoch = 0;
   private googlePickScanController: AbortController | null = null;
+  private readonly moveSources = new Set<string>();
   private closed = false;
 
   constructor(
@@ -81,6 +82,11 @@ export class ImportService {
     ) {
       throw new Error('Move sources cannot be inside the active library');
     }
+  }
+
+  /** Main-process provenance grant from a native folder picker. */
+  authorizeMoveSource(path: string): void {
+    this.moveSources.add(resolve(path));
   }
 
   private trackScan<T>(scan: (signal: AbortSignal) => Promise<T>, controller = new AbortController()): Promise<T> {
@@ -111,6 +117,7 @@ export class ImportService {
 
   async listSources(): Promise<ImportSource[]> {
     const sources = await listVolumes(defaultVolumeListerDeps());
+    for (const source of sources) this.moveSources.add(resolve(source.path));
     // Harness hook (#90, OVERLOOK_* family): surface a fixture folder as the
     // first source — the mock-file-dialog seam the import E2E drives. The
     // injector is unpackaged-only (#129 F1); it returns undefined otherwise.
@@ -118,6 +125,7 @@ export class ImportService {
     if (fixture !== undefined && fixture !== '') {
       // The fixture stands in for the mounted card, so it poses as a volume
       // — the dialog's SD segment surfaces it and Move stays testable (#237).
+      this.moveSources.add(resolve(fixture));
       return [{ ...folderSource(fixture), kind: 'volume' }, ...sources];
     }
     return sources;
@@ -145,6 +153,9 @@ export class ImportService {
   /** Runs a batch over the source's NEW files (fresh scan → engine). */
   async run(path: string, mode: ImportMode): Promise<ImportSummary> {
     return this.serialize(async () => {
+      if (mode === 'move' && !this.moveSources.has(resolve(path))) {
+        throw new Error('Move requires a source approved by the main process');
+      }
       const controller = new AbortController();
       this.controller = controller;
       try {
@@ -172,9 +183,8 @@ export class ImportService {
     });
   }
 
-  /** Dropped files/folders share the same verified per-file Move boundary as
-   * selected folders. Expansion never deletes a directory or sibling. */
-  async runFiles(paths: readonly string[], mode: ImportMode): Promise<ImportSummary> {
+  /** Renderer-supplied dropped paths are never granted destructive authority. */
+  async runFiles(paths: readonly string[]): Promise<ImportSummary> {
     return this.serialize(async () => {
       const controller = new AbortController();
       this.controller = controller;
@@ -186,9 +196,8 @@ export class ImportService {
           controller.signal,
         );
         const fresh = files.filter((file) => file.isNew).map(({ path: filePath, fileName, kind }) => ({ path: filePath, fileName, kind }));
-        this.assertMoveOutsideLibrary(fresh, mode);
         const existing = files.length - fresh.length;
-        const result = await this.engine.importFiles(fresh, mode, 'dropped', controller.signal);
+        const result = await this.engine.importFiles(fresh, 'copy', 'dropped', controller.signal);
         const summary = { ...result, duplicates: result.duplicates + existing, retained: result.retained + existing };
         if (summary.photoIds.length > 0) {
           this.events.imported(summary.photoIds);

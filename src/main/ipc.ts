@@ -482,7 +482,11 @@ export function registerImportHandlers(
     wrapHandler(channels.importScanSource, async ({ path }) => getService().scanSource(path))(request),
   );
   ipcMain.handle(channels.importPickFolder.name, (_event, request: unknown) =>
-    wrapHandler(channels.importPickFolder, async () => ({ path: await pickFolder() }))(request),
+    wrapHandler(channels.importPickFolder, async () => {
+      const path = await pickFolder();
+      if (path !== null) getService().authorizeMoveSource(path);
+      return { path };
+    })(request),
   );
   ipcMain.handle(channels.importScanFiles.name, (_event, request: unknown) =>
     wrapHandler(channels.importScanFiles, async ({ paths }) => getService().scanDropped(paths))(request),
@@ -537,9 +541,9 @@ export function registerImportHandlers(
   );
   ipcMain.handle(channels.importRun.name, (_event, request: unknown) =>
     wrapHandler(channels.importRun, async ({ path, files, mode }) => {
-      // The zod refinement guarantees exactly one of path/files. Both paths
-      // use the engine's verified per-file Move boundary (#489).
-      const summary = files !== undefined ? await getService().runFiles(files, mode) : await getService().run(path ?? '', mode);
+      // Dropped paths are renderer-controlled and therefore copy-only. Move
+      // sources must carry provenance established inside ImportService.
+      const summary = files !== undefined ? await getService().runFiles(files) : await getService().run(path ?? '', mode);
       // The auto-backup-on-import subscription seam (#105/#111): fires only
       // when the batch actually landed photos.
       if (summary.imported > 0) {

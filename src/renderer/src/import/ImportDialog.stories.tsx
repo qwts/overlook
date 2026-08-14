@@ -7,7 +7,7 @@ import type { OverlookApi } from '../../../shared/ipc/api.js';
 
 // #88 exit criteria (sources reworked by #237): pixel/copy match to the
 // mock + interaction coverage for the source picker — SD card / no-card
-// empty state / folder choose / Dropped — and explicit local Move consent.
+// empty state / folder choose / Dropped — and explicit trusted-source Move consent.
 // Phase transitions past "options" need the real engine (#90's E2E). The
 // decorator stubs window.overlook.settings + import discovery.
 
@@ -179,11 +179,8 @@ export const DroppedFiles: Story = {
     await expect(body.getByRole('radio', { name: 'Dropped' })).toBeChecked();
     await expect(body.getByText('2 new · 61 MB · 1 RAW / 1 JPG')).toBeVisible();
     await expect(body.getByRole('button', { name: /Import 2 photos/u })).toBeVisible();
-    await expect(body.getByRole('radio', { name: 'Move' })).toBeEnabled();
-    await userEvent.click(body.getByRole('radio', { name: 'Move' }));
-    await expect(body.getByRole('alert')).toHaveTextContent('Folders and unrelated files stay.');
-    await expect(body.getByRole('button', { name: /Import 2 photos/u })).toBeDisabled();
-    await userEvent.click(body.getByRole('checkbox', { name: /I understand verified source files/u }));
+    await expect(body.getByRole('radio', { name: 'Move' })).toBeDisabled();
+    await expect(body.getByText('Imported files are copied — source files are left untouched.')).toBeVisible();
     await expect(body.getByRole('button', { name: /Import 2 photos/u })).toBeEnabled();
   },
 };

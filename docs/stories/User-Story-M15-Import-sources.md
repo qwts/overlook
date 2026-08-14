@@ -3,7 +3,7 @@
 Epic [#237](https://github.com/qwts/photos/issues/237): SD card / Local
 folder / Dropped source picker and window drag-and-drop. Issue
 [#489](https://github.com/qwts/photos/issues/489) extends the journaled Move
-path to local folders and dropped entries. Coverage: ledger
+path to main-process-approved local folders. Coverage: ledger
 `m15-import-sources-picker-and-drop` (import-flow e2e + ImportDialog
 stories).
 
@@ -12,6 +12,10 @@ stories).
 - Copy remains the safe default. A saved Move preference may preselect Move,
   but every dialog requires fresh explicit consent before the import button is
   enabled.
+- Move is available only for removable volumes discovered by the main process
+  and folders returned by the native picker. Renderer-supplied dropped paths
+  are Copy-only, so renderer compromise cannot grant destructive filesystem
+  authority.
 - Move is never a filesystem rename. Each admitted file is read, encrypted,
   recorded, given required derivatives, decrypted and SHA-256 verified, then
   its exact source path is unlinked. Cleanup is per-file and journaled.
@@ -19,9 +23,8 @@ stories).
   source, permission failure, or cleanup failure may leave both copies. It can
   never leave neither copy. Results distinguish imported, moved, retained,
   duplicate, failed, and cancelled files.
-- Mixed drops expand only admitted media files. Enclosing directories and
-  unrelated siblings are never deletion targets. Unsupported files remain
-  untouched and outside the admitted import count.
+- Mixed drops expand and copy only admitted media files. Unsupported files
+  remain untouched and outside the admitted import count.
 - Symbolic links and package directories are not traversed. This avoids
   deleting through aliases or importing private application/library bundles.
 - Move refuses files inside the active Overlook library. Network volumes use

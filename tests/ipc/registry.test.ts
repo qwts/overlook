@@ -150,6 +150,12 @@ describe('channel registry', () => {
       authorization: PHOTO_PURGE_AUTHORIZATION,
     });
   });
+
+  test('renderer-supplied dropped paths cannot request destructive Move', () => {
+    assert.doesNotThrow(() => channels.importRun.request.parse({ files: ['/outside/photo.jpg'], mode: 'copy' }));
+    assert.throws(() => channels.importRun.request.parse({ files: ['/outside/photo.jpg'], mode: 'move' }), /copy-only/u);
+    assert.doesNotThrow(() => channels.importRun.request.parse({ path: '/approved/source', mode: 'move' }));
+  });
 });
 
 describe('createInvoker', () => {
