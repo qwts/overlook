@@ -13,6 +13,10 @@ const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
 const MANIFEST_PATH = /^manifest\/gen-(\d+)\.ovlk$/u;
 const CURRENT_DATABASE_SCHEMA = Math.max(...MIGRATIONS.map((migration) => migration.version));
 
+class StaleRecoveryBootstrapError extends Error {
+  override readonly name = 'StaleRecoveryBootstrapError';
+}
+
 export interface RestoreCandidate {
   readonly path: string;
   readonly generation: number;
@@ -58,6 +62,9 @@ function generationOf(entry: RemoteEntry): number | null {
 function validateManifest(manifest: RestorableBackupManifest, bootstrap: RecoveryBootstrap, resolveKey: KeyResolver): void {
   if (manifest.libraryId !== bootstrap.libraryId) {
     throw new RestoreError('corrupt', 'manifest library id does not match the recovery bootstrap');
+  }
+  if (Date.parse(bootstrap.generatedAt) < Date.parse(manifest.generatedAt)) {
+    throw new StaleRecoveryBootstrapError('manifest is newer than the recovery bootstrap');
   }
   if (manifest.databaseSchema > CURRENT_DATABASE_SCHEMA) {
     throw new RestoreError(
@@ -130,6 +137,9 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
       try {
         candidates.push(await openCandidate(provider, entry, generation, bootstrap, resolveKey, signal));
       } catch (error) {
+        if (error instanceof StaleRecoveryBootstrapError) {
+          throw new RestoreError('corrupt', error.message);
+        }
         const mapped = toRestoreError(error);
         if (
           mapped.reason === 'auth' ||
