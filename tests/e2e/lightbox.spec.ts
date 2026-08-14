@@ -116,9 +116,10 @@ async function expectFillCoversViewport(viewport: Locator, image: Locator): Prom
     .poll(async () => {
       const viewportBounds = await viewport.boundingBox();
       const imageBounds = await image.boundingBox();
-      const shortfallX = (viewportBounds?.width ?? 0) - (imageBounds?.width ?? 0);
-      const shortfallY = (viewportBounds?.height ?? 0) - (imageBounds?.height ?? 0);
-      return Math.max(shortfallX, shortfallY);
+      // Missing bounds mean layout is not settled: report an unmet shortfall
+      // rather than letting 0 - 0 read as a covered viewport.
+      if (viewportBounds === null || imageBounds === null) return Number.POSITIVE_INFINITY;
+      return Math.max(viewportBounds.width - imageBounds.width, viewportBounds.height - imageBounds.height);
     })
     .toBeLessThanOrEqual(1);
 }

@@ -78,10 +78,12 @@ function coverZoom(fitted: LightboxSize, viewport: LightboxSize): number {
 }
 
 /**
- * The ceiling for a transform. `ZOOM_MAX` bounds what a person can reach by
- * zooming, but Fill is a single edge-to-edge assertion: a 10:1 panorama in a
- * portrait window needs more than 8x to cover, and clamping there would put
- * back the bars Fill exists to remove.
+ * The one ceiling every transform obeys: `ZOOM_MAX`, raised to the cover scale
+ * for the rare photo that needs more (a 10:1 panorama in a portrait window
+ * wants ~23x). Clamping Fill at 8x would put back the bars Fill exists to
+ * remove; clamping only *some* paths at 8x is worse still, because zooming in
+ * from such a Fill would then shrink the image back to 8x and re-expose them.
+ * So the ceiling is a property of the geometry, not of the mode or the gesture.
  */
 function maximumZoom(fitted: LightboxSize, viewport: LightboxSize): number {
   return Math.max(ZOOM_MAX, coverZoom(fitted, viewport));
@@ -158,7 +160,7 @@ export function zoomAround(
   viewport: LightboxSize,
 ): LightboxTransform {
   const current = clampTransform(transform, fitted, viewport);
-  const zoom = clamp(requestedZoom, ZOOM_MIN, ZOOM_MAX);
+  const zoom = clamp(requestedZoom, ZOOM_MIN, maximumZoom(fitted, viewport));
   const focalX = focal.x - viewport.width / 2;
   const focalY = focal.y - viewport.height / 2;
   const imageX = (focalX - current.x) / current.zoom;

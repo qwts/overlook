@@ -18,12 +18,16 @@ import {
   zoomAround,
 } from '../../src/renderer/src/lightbox/geometry.js';
 
+/** `LightboxViewport.KEYBOARD_ZOOM_STEP` — what the +/- controls request. */
+const KEYBOARD_ZOOM_STEP = 1.25;
+
 function assertClose(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${String(actual)} should be close to ${String(expected)}`);
 }
 
-function round(value: number): number {
-  return Math.round(value * 1e6) / 1e6;
+/** The cover scale is a division, so the product can land an ULP under. */
+function assertCovers(rendered: number, viewport: number, message: string): void {
+  assert.ok(rendered >= viewport - 1e-6, `${message} (${String(rendered)} of ${String(viewport)})`);
 }
 
 describe('lightbox transform geometry (#307)', () => {
@@ -36,6 +40,41 @@ describe('lightbox transform geometry (#307)', () => {
     assert.equal(portrait.height, 400);
   });
 
+  test('pan clamps both axes without exposing space beyond an edge', () => {
+    const fitted = { width: 400, height: 400 / 1.5 };
+    assert.deepEqual(panBy({ zoom: 2, x: 0, y: 0 }, { x: 999, y: -999 }, fitted, { width: 400, height: 400 }), {
+      zoom: 2,
+      x: 200,
+      y: -(400 / 1.5 - 200),
+    });
+  });
+
+  test('zoom preserves the focal image point and stays within 0.25x-8x', () => {
+    const fitted = { width: 400, height: 400 / 1.5 };
+    const viewport = { width: 400, height: 400 };
+    assert.deepEqual(zoomAround({ zoom: 1, x: 0, y: 0 }, 2, { x: 100, y: 200 }, fitted, viewport), {
+      zoom: 2,
+      x: 100,
+      y: 0,
+    });
+    assert.equal(zoomAround({ zoom: 1, x: 0, y: 0 }, 99, { x: 200, y: 200 }, fitted, viewport).zoom, ZOOM_MAX);
+    assert.equal(zoomAround({ zoom: 1, x: 0, y: 0 }, 0, { x: 200, y: 200 }, fitted, viewport).zoom, ZOOM_MIN);
+  });
+
+  test('resize reclamps custom transforms and recomputes active Fill', () => {
+    assert.deepEqual(resizeTransform({ zoom: 2, x: 500, y: 500 }, 'custom', { width: 300, height: 200 }, { width: 400, height: 300 }), {
+      zoom: 2,
+      x: 100,
+      y: 50,
+    });
+    const resizedFill = resizeTransform({ zoom: 1, x: 90, y: -999 }, 'fill', { width: 700, height: 525 }, { width: 1600, height: 900 });
+    assertClose(resizedFill.zoom, 1600 / 700);
+    assertClose(resizedFill.x, 0);
+    assertClose(resizedFill.y, -(525 * (1600 / 700) - 900) / 2);
+  });
+});
+
+describe('lightbox Fill covers the viewport (#968)', () => {
   test('Fill covers the viewport on both axes for every aspect ratio (#371, #501, #898, #968)', () => {
     const widescreen = { width: 1600, height: 900 };
     assertClose(fillZoom({ width: 700, height: 525 }, widescreen), 1600 / 700);
@@ -86,33 +125,25 @@ describe('lightbox transform geometry (#307)', () => {
         const fitted = fitSize(image, viewport);
         const zoom = viewIntentToTransform({ ...DEFAULT_VIEW_INTENT, mode: 'fill' }, image, viewport).zoom;
         const label = `${String(image.width)}x${String(image.height)} in ${String(viewport.width)}x${String(viewport.height)}`;
-        // Rounded to the nearest micrometre of a pixel: the cover scale is a
-        // division, so the product can land an ULP under the viewport.
-        assert.ok(round(fitted.width * zoom) >= viewport.width, `${label} leaves a vertical bar`);
-        assert.ok(round(fitted.height * zoom) >= viewport.height, `${label} leaves a horizontal bar`);
+        assertCovers(fitted.width * zoom, viewport.width, `${label} leaves a vertical bar`);
+        assertCovers(fitted.height * zoom, viewport.height, `${label} leaves a horizontal bar`);
       }
     }
   });
 
-  test('pan clamps both axes without exposing space beyond an edge', () => {
-    const fitted = { width: 400, height: 400 / 1.5 };
-    assert.deepEqual(panBy({ zoom: 2, x: 0, y: 0 }, { x: 999, y: -999 }, fitted, { width: 400, height: 400 }), {
-      zoom: 2,
-      x: 200,
-      y: -(400 / 1.5 - 200),
-    });
-  });
+  test('zoom in from a Fill that needed more than 8x never shrinks the image (#968)', () => {
+    // The ceiling is per-geometry, so a manual zoom request cannot fall back to
+    // a flat 8x here — that would make "Zoom in" shrink a covered panorama to a
+    // sixth of the viewport height and hand back the bars Fill just removed.
+    const image = { width: 12000, height: 1200 };
+    const viewport = { width: 700, height: 1600 };
+    const fitted = fitSize(image, viewport);
+    const fill = fillZoom(image, viewport);
+    const zoomedIn = zoomAround({ zoom: fill, x: 0, y: 0 }, fill * KEYBOARD_ZOOM_STEP, { x: 350, y: 800 }, fitted, viewport);
 
-  test('zoom preserves the focal image point and stays within 0.25x-8x', () => {
-    const fitted = { width: 400, height: 400 / 1.5 };
-    const viewport = { width: 400, height: 400 };
-    assert.deepEqual(zoomAround({ zoom: 1, x: 0, y: 0 }, 2, { x: 100, y: 200 }, fitted, viewport), {
-      zoom: 2,
-      x: 100,
-      y: 0,
-    });
-    assert.equal(zoomAround({ zoom: 1, x: 0, y: 0 }, 99, { x: 200, y: 200 }, fitted, viewport).zoom, ZOOM_MAX);
-    assert.equal(zoomAround({ zoom: 1, x: 0, y: 0 }, 0, { x: 200, y: 200 }, fitted, viewport).zoom, ZOOM_MIN);
+    assert.ok(fill > ZOOM_MAX, 'this photo needs more than the manual ceiling to cover');
+    assert.ok(zoomedIn.zoom >= fill, `zoom in dropped to ${String(zoomedIn.zoom)} from ${String(fill)}`);
+    assertCovers(fitted.height * zoomedIn.zoom, viewport.height, 'zoom in re-exposed a horizontal bar');
   });
 
   test('resize reclamps custom transforms and recomputes active Fill', () => {
