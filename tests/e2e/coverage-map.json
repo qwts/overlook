@@ -2032,6 +2032,30 @@
       ]
     },
     {
+      "id": "965-restore-progress-reopen-verified-only",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verified-only restore binds to manifest identity (not an exact gap set), verify/run show 1/N progress, and closing Settings or the restore dialog leaves a status snapshot so the status-bar chip and Restore library… reopen the live job (#965).",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/backup/restore-verify.test.ts",
+            "tests/backup/restore-coordinator.test.ts",
+            "tests/backup/restore-facade.test.ts",
+            "tests/dom/restore-workflow-reopen.test.tsx"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Close-and-reopen during a live cloud restore, the status-bar chip, and extra-gap activation after verify are owner-verified on a real provider in docs/acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md steps 6–7."
+        }
+      ]
+    },
+    {
       "id": "391-semantic-embedding-index",
       "wiki": "Acceptance-Test-Semantic-Embedding-Index",
       "coverage": [

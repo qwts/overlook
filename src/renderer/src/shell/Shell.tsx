@@ -13,6 +13,9 @@ import { PrimaryLibraryView } from './PrimaryLibraryView';
 import { fullUrl } from '../../../shared/library/full-url.js';
 import { ExportDialog } from '../export/ExportDialog';
 import { SettingsDialog, type SettingsSection } from '../settings/SettingsDialog';
+import { Dialog } from '../components/Dialog';
+import { RestoreWorkflow } from '../restore/RestoreWorkflow';
+import { useRestoreChrome } from '../restore/use-restore-chrome.js';
 import { ImportDialog } from '../import/ImportDialog';
 import { Inspector } from '../inspector/Inspector';
 import { Lightbox } from '../lightbox/Lightbox';
@@ -55,6 +58,7 @@ const viewMessages = defineMessages({
   album: { id: 'shell.view.album', defaultMessage: 'Album' },
   protected: { id: 'shell.view.protected', defaultMessage: 'Protected album' },
   results: { id: 'shell.results.count', defaultMessage: '{count, plural, one {# result} other {# results}}' },
+  restoreTitle: { id: 'settings.restore.title', defaultMessage: 'Restore from cloud backup' },
 });
 
 function mergeDropPaths(current: readonly string[] | null, incoming: readonly string[]): readonly string[] {
@@ -82,6 +86,7 @@ export function Shell({
   const { announce } = useAnnouncer();
   const offload = useOffloadWorkflow();
   const emptyTrash = useEmptyTrash();
+  const restore = useRestoreChrome();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
@@ -466,8 +471,9 @@ export function Shell({
 
   const toast = state.toast;
   const toastItems = useMemo<readonly ToastItem[]>(
-    () =>
-      toast === null
+    () => [
+      ...restore.restoreToasts,
+      ...(toast === null
         ? []
         : [
             {
@@ -475,9 +481,10 @@ export function Shell({
               tone: toast.tone,
               title: toast.title,
               ...(toast.action === undefined ? {} : { action: <ToastAction toast={toast} /> }),
-            },
-          ],
-    [toast],
+            } satisfies ToastItem,
+          ]),
+    ],
+    [restore.restoreToasts, toast],
   );
   const activeAlbum = albums.find((album) => album.id === state.album);
   const activeProtectedAlbum = protectedAlbums.find((album) => album.id === state.protectedAlbum);
@@ -632,11 +639,17 @@ export function Shell({
             setSelectedProviderId(provider.id);
             dispatch({ type: 'provider/set', connected: false, label: provider.label });
           }}
+          onRestore={restore.openRestore}
           onClose={() => {
             setSettingsSection(undefined);
             dispatch({ type: 'dialog/set', dialog: 'settings', open: false });
           }}
         />
+      ) : null}
+      {restore.restoreOpen ? (
+        <Dialog open title={intl.formatMessage(viewMessages.restoreTitle)} icon="cloud-download" width={640} onClose={restore.closeRestore}>
+          <RestoreWorkflow context="settings" />
+        </Dialog>
       ) : null}
       {state.activityOpen ? (
         <ActivityDialog
@@ -806,8 +819,15 @@ export function Shell({
           </aside>
         ) : null}
       </div>
-      <ToastHost className="ovl-shell__toast" toasts={toastItems} onDismiss={() => dispatch({ type: 'toast/dismissed' })} />
-      <StatusBar stats={stats} />
+      <ToastHost
+        className="ovl-shell__toast"
+        toasts={toastItems}
+        onDismiss={(id) => {
+          if (id === 'restore-background') restore.dismissRestoreToast();
+          else dispatch({ type: 'toast/dismissed' });
+        }}
+      />
+      <StatusBar stats={stats} restore={restore.restoreChip} onRestoreClick={restore.openRestore} />
       <InteropEntryDialog entry={interopEntry} onClose={() => setInteropEntry(null)} />
     </div>
   );

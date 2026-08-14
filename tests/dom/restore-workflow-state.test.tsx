@@ -35,7 +35,20 @@ function mockOverlook(): { discovered: DiscoverRequest[]; restore: () => void } 
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {
+      status: () =>
+        Promise.resolve({
+          phase: 'idle',
+          sessionId: null,
+          libraryId: null,
+          providerId: null,
+          progress: null,
+          lastError: null,
+          lastResult: null,
+          verification: null,
+          libraries: [],
+        }),
       onProgress: () => () => undefined,
+      onStatusChanged: () => () => undefined,
       pickKey: () => Promise.resolve({ path: null }),
       discover: (request: DiscoverRequest) => {
         discovered.push(request);
@@ -147,7 +160,20 @@ test('a discovery that resolves AFTER the provider changes is ignored (#748 stal
       connect: () => Promise.resolve({ ok: true, reason: null }),
     },
     restore: {
+      status: () =>
+        Promise.resolve({
+          phase: 'idle',
+          sessionId: null,
+          libraryId: null,
+          providerId: null,
+          progress: null,
+          lastError: null,
+          lastResult: null,
+          verification: null,
+          libraries: [],
+        }),
       onProgress: () => () => undefined,
+      onStatusChanged: () => () => undefined,
       pickKey: () => Promise.resolve({ path: null }),
       // Provider A's discovery stays pending until we resolve it by hand, after
       // the user has already moved on to provider B.

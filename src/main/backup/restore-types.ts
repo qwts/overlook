@@ -14,7 +14,7 @@ export class RestoreError extends Error {
   }
 }
 
-export type RestoreStage = 'discovering' | 'downloading' | 'rebuilding' | 'activating' | 'complete';
+export type RestoreStage = 'discovering' | 'verifying' | 'downloading' | 'rebuilding' | 'activating' | 'complete';
 
 export interface RestoreProgress {
   readonly stage: RestoreStage;

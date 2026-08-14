@@ -8,7 +8,6 @@ import { GeneralPane } from './GeneralPane';
 import { KeyDialog, type KeyDialogMode } from './KeyDialog';
 import { PrivacyPane } from './PrivacyPane';
 import { StoragePane } from './StoragePane';
-import { RestoreWorkflow } from '../restore/RestoreWorkflow';
 import { AppPasswordDialog, type AppPasswordMode } from './AppPasswordDialog';
 import type { AppSettings, SettingsPatch } from '../../../shared/settings/settings.js';
 import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
@@ -32,6 +31,7 @@ export interface SettingsDialogProps {
   readonly requestedSection?: SettingsSection | undefined;
   readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
   readonly preferredProviderId?: string | null | undefined;
+  readonly onRestore?: (() => void) | undefined;
 }
 
 const messages = defineMessages({
@@ -41,7 +41,6 @@ const messages = defineMessages({
   storage: { id: 'settings.nav.storage', defaultMessage: 'Storage & Backup' },
   transfer: { id: 'settings.nav.transfer', defaultMessage: 'Transfer & Sync' },
   privacy: { id: 'settings.nav.privacy', defaultMessage: 'Privacy' },
-  restoreTitle: { id: 'settings.restore.title', defaultMessage: 'Restore from cloud backup' },
 });
 
 const SECTIONS: readonly { key: SettingsSection; icon: IconName; label: MessageDescriptor }[] = [
@@ -60,6 +59,7 @@ export function SettingsDialog({
   requestedSection,
   onProviderSelection,
   preferredProviderId,
+  onRestore,
 }: SettingsDialogProps): ReactElement | null {
   const intl = useIntl();
   const [section, setSection] = useState<SettingsSection>(
@@ -69,7 +69,6 @@ export function SettingsDialog({
   const [settings, setSettings] = useState<AppSettings | null>(null);
   // Recovery-key dialog (#240): layered over Settings, per the mock.
   const [keyMode, setKeyMode] = useState<KeyDialogMode | null>(null);
-  const [restoreOpen, setRestoreOpen] = useState(false);
   const [passwordMode, setPasswordMode] = useState<AppPasswordMode | null>(null);
   const [appLockConfigured, setAppLockConfigured] = useState(false);
   const [touchIdStatus, setTouchIdStatus] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
@@ -218,7 +217,7 @@ export function SettingsDialog({
               settings={settings}
               selectedPhotoIds={selectedPhotoIds}
               onPatch={patch}
-              onRestore={() => setRestoreOpen(true)}
+              onRestore={onRestore}
               onProviderSelection={onProviderSelection}
               preferredProviderId={preferredProviderId}
             />
@@ -274,17 +273,6 @@ export function SettingsDialog({
           }}
           onExported={() => setRecoveryExported(true)}
         />
-      ) : null}
-      {restoreOpen ? (
-        <Dialog
-          open
-          title={intl.formatMessage(messages.restoreTitle)}
-          icon="cloud-download"
-          width={640}
-          onClose={() => setRestoreOpen(false)}
-        >
-          <RestoreWorkflow context="settings" />
-        </Dialog>
       ) : null}
       {passwordMode === null ? null : (
         <AppPasswordDialog

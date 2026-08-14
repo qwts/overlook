@@ -781,9 +781,8 @@ function getRestoreRuntime(): RestoreRuntime {
     localMasterKey: () => requireParts('restore key').keyStore.masterKeyBytes(),
     sources: (providerId) => ensureRestoreProviderRegistry().restoreSources(providerId),
     sessionId: ulid,
-    progress: createEmitter(events.restoreProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    }),
+    progress: createEmitter(events.restoreProgress, (name, payload) => broadcast((win) => win.webContents.send(name, payload))),
+    statusChanged: createEmitter(events.restoreStatusChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload))),
     beforeActivate: () => closeLibrary('restore'),
     harnessEnv,
     workChanged: changeProviderWork,

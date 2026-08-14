@@ -36,6 +36,7 @@ import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgr
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
 import { projectVerifiedManifest } from './restore-projection.js';
+import { createScanTicker, verifyObjectCount, type ScanTicker } from './restore-verify-scan.js';
 
 const SCRATCH_BYTES = 16 * 1024 * 1024;
 
@@ -67,8 +68,9 @@ export interface RestoreRequest {
    * activation re-establishes the password-derived app-lock record instead of
    * leaving the restored library on downgraded keychain-form custody. */
   readonly custodyPassword?: string | undefined;
-  /** Exact non-activating scan accepted by the user. The engine refuses to
-   * restore a different generation or a different set of gaps. */
+  /** Non-activating scan accepted by the user. Bind is manifest identity
+   * (library / generation / path / sealed hash); extra download gaps are
+   * reported as NOT FOUND instead of aborting (#965). */
   readonly verification?: RestoreVerifyResult | undefined;
 }
 
@@ -103,14 +105,6 @@ export interface RestoreVerifyResult {
  * unverifiable object rejects the candidate (the #741 fallback contract). */
 type MissingObjects = RestoreMissingObject[] | null;
 
-function missingKey(object: RestoreMissingObject): string {
-  return `${object.kind}\u0000${object.photoId ?? ''}\u0000${object.path}\u0000${object.reason}`;
-}
-
-function sameMissing(left: readonly RestoreMissingObject[], right: readonly RestoreMissingObject[]): boolean {
-  return isDeepStrictEqual(left.map(missingKey).sort(), right.map(missingKey).sort());
-}
-
 function objectSetSha256(fingerprints: readonly string[]): string {
   return createHash('sha256')
     .update([...fingerprints].sort().join('\n'))
@@ -119,17 +113,6 @@ function objectSetSha256(fingerprints: readonly string[]): string {
 
 function addObjectFingerprint(fingerprints: string[], path: string, bytes: Buffer): void {
   fingerprints.push(`${path}\u0000${String(bytes.length)}\u0000${createHash('sha256').update(bytes).digest('hex')}`);
-}
-
-function sameVerification(left: RestoreVerifyResult, right: RestoreVerifyResult): boolean {
-  return (
-    left.libraryId === right.libraryId &&
-    left.generation === right.generation &&
-    left.manifestPath === right.manifestPath &&
-    left.sealedManifestSha256 === right.sealedManifestSha256 &&
-    left.objectSetSha256 === right.objectSetSha256 &&
-    sameMissing(left.missing, right.missing)
-  );
 }
 
 function missingOriginalIds(missing: MissingObjects): ReadonlySet<string> {
@@ -186,9 +169,12 @@ export class RestoreEngine {
     if (candidate === undefined) throw new RestoreError('corrupt', 'no manifest generation could be restored');
     const missing: RestoreMissingObject[] = [];
     const fingerprints: string[] = [];
-    await this.scanBlobs(discovery, candidate, missing, fingerprints, request.signal);
-    await this.scanSidecars(discovery, candidate, missing, fingerprints, request.signal);
-    await this.scanProtected(discovery, candidate, missing, fingerprints, request.signal);
+    const ticker = createScanTicker(verifyObjectCount(candidate), (stage, done, total, photoId) => {
+      this.emit(stage, done, total, photoId);
+    });
+    await this.scanBlobs(discovery, candidate, missing, fingerprints, request.signal, ticker);
+    await this.scanSidecars(discovery, candidate, missing, fingerprints, request.signal, ticker);
+    await this.scanProtected(discovery, candidate, missing, fingerprints, request.signal, ticker);
     const missingCount = missing.filter((o) => o.reason === 'not-found').length;
     const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
     const verifiedCount = candidate.manifest.photos.length - missing.filter((o) => o.kind === 'original').length;
@@ -211,42 +197,47 @@ export class RestoreEngine {
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
     fingerprints: string[],
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
   ): Promise<void> {
     const remote = new Map((await this.deps.provider.list('blobs')).map((e) => [e.path, e]));
     for (const photo of candidate.manifest.photos) {
       assertNotAborted(signal);
-      if (!remote.has(photo.blobPath)) {
-        missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
-        continue;
-      }
       try {
-        const stream = await this.deps.provider.getStream(photo.blobPath);
-        const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
-        addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
-        const hasher = createHash('sha256');
-        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
-        const readable = Readable.from([ciphertext]);
-        try {
-          for await (const chunk of readable.pipe(decrypt)) {
-            hasher.update(chunk as Buffer);
-          }
-        } catch {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+        if (!remote.has(photo.blobPath)) {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
           continue;
         }
-        if (hasher.digest('hex') !== photo.contentHash) {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+        try {
+          const stream = await this.deps.provider.getStream(photo.blobPath);
+          const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+          addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
+          const hasher = createHash('sha256');
+          const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
+          const readable = Readable.from([ciphertext]);
+          try {
+            for await (const chunk of readable.pipe(decrypt)) {
+              hasher.update(chunk as Buffer);
+            }
+          } catch {
+            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+            continue;
+          }
+          if (hasher.digest('hex') !== photo.contentHash) {
+            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+          }
+        } catch (error) {
+          if (error instanceof ProviderError && error.kind === 'not-found') {
+            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
+          } else if (error instanceof RestoreError) throw error;
+          else {
+            // Transient provider errors are not classified as corrupt — they
+            // remain retryable. Bubble as offline/transient.
+            throw error;
+          }
         }
-      } catch (error) {
-        if (error instanceof ProviderError && error.kind === 'not-found') {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
-        } else if (error instanceof RestoreError) throw error;
-        else {
-          // Transient provider errors are not classified as corrupt — they
-          // remain retryable. Bubble as offline/transient.
-          throw error;
-        }
+      } finally {
+        ticker.tick(photo.id);
       }
     }
   }
@@ -256,33 +247,38 @@ export class RestoreEngine {
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
     fingerprints: string[],
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
   ): Promise<void> {
     if (candidate.manifest.schema !== 6) return;
     const remote = new Map((await this.deps.provider.list('sidecars')).map((e) => [e.path, e]));
     for (const sidecar of candidate.manifest.sidecars) {
       assertNotAborted(signal);
-      if (!remote.has(sidecar.blobPath)) {
-        missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
-        continue;
-      }
       try {
-        const stream = await this.deps.provider.getStream(sidecar.blobPath);
-        const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
-        addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
-        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
-        const readable = Readable.from([buf]);
-        try {
-          for await (const _ of readable.pipe(decrypt)) {
-            // Drain every authenticated envelope chunk for verification
-          }
-        } catch {
-          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'failed-verification' });
-        }
-      } catch (error) {
-        if (error instanceof ProviderError && error.kind === 'not-found') {
+        if (!remote.has(sidecar.blobPath)) {
           missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
-        } else throw error;
+          continue;
+        }
+        try {
+          const stream = await this.deps.provider.getStream(sidecar.blobPath);
+          const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+          addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
+          const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
+          const readable = Readable.from([buf]);
+          try {
+            for await (const _ of readable.pipe(decrypt)) {
+              // Drain every authenticated envelope chunk for verification
+            }
+          } catch {
+            missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'failed-verification' });
+          }
+        } catch (error) {
+          if (error instanceof ProviderError && error.kind === 'not-found') {
+            missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
+          } else throw error;
+        }
+      } finally {
+        ticker.tick(sidecar.photoId);
       }
     }
   }
@@ -292,7 +288,8 @@ export class RestoreEngine {
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
     fingerprints: string[],
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
   ): Promise<void> {
     if (candidate.manifest.schema === 2) return;
     const entries = candidate.manifest.protectedPhotos.flatMap((photo) =>
@@ -315,6 +312,8 @@ export class RestoreEngine {
         else {
           missing.push({ path: entry.object.path, kind: 'protected', photoId: entry.photo.id, reason: 'failed-verification' });
         }
+      } finally {
+        ticker.tick(entry.photo.id);
       }
     }
   }
@@ -331,10 +330,7 @@ export class RestoreEngine {
       this.emit('discovering', 0, 0, null);
       const discovery = await discoverRestore(this.deps.provider, request.masterKey, request.signal);
       if (request.verification !== undefined) {
-        const currentVerification = await this.verify({ ...request, verification: undefined });
-        if (!sameVerification(currentVerification, request.verification)) {
-          throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
-        }
+        // #965: bind to manifest identity; extra download gaps are NOT FOUND.
         const candidate = discovery.candidates.find(
           (item) =>
             item.path === request.verification?.manifestPath &&
@@ -344,7 +340,7 @@ export class RestoreEngine {
         if (candidate === undefined || candidate.manifest.libraryId !== request.verification.libraryId) {
           throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
         }
-        return await this.restoreCandidate(paths, discovery, candidate, request, [], request.verification.missing);
+        return await this.restoreCandidate(paths, discovery, candidate, request, []);
       }
       let lastCandidateError: RestoreError | null = null;
       for (const candidate of discovery.candidates) {
@@ -382,7 +378,6 @@ export class RestoreEngine {
     candidate: RestoreCandidate,
     request: RestoreRequest,
     missing: MissingObjects,
-    expectedMissing?: readonly RestoreMissingObject[],
   ): Promise<RestoreRunResult> {
     const loaded = await loadCheckpoint(paths);
     let checkpoint: RestoreCheckpoint;
@@ -403,9 +398,6 @@ export class RestoreEngine {
     checkpoint = await this.restoreBlobs(paths, store, discovery, candidate, checkpoint, missing, request.signal);
     checkpoint = await this.restoreSidecars(paths, store, discovery, candidate, checkpoint, missing, request.signal);
     checkpoint = await this.restoreProtectedBlobs(paths, protectedStore, candidate, checkpoint, missing, request.signal);
-    if (missing !== null && expectedMissing !== undefined && !sameMissing(missing, expectedMissing)) {
-      throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
-    }
     const restoreCandidate =
       missing === null ? candidate : { ...candidate, manifest: projectVerifiedManifest(candidate.manifest, missing) };
     if (missing !== null) {

@@ -23,6 +23,7 @@ import {
   restoreDiscoverResponseSchema,
   restoreProgressSchema,
   restoreRunResponseSchema,
+  restoreStatusSchema,
   restoreTrashRequestSchema,
   restoreTrashResponseSchema,
   restoreVerifyResponseSchema,
@@ -648,6 +649,7 @@ export const channels = {
     }),
   ),
   restoreCancel: defineChannel('restore:cancel', z.object({}), z.object({})),
+  restoreStatus: defineChannel('restore:status', z.object({}), restoreStatusSchema),
   // Export engine (#97): decrypt-on-export to a chosen folder.
   ...exportChannels,
   // Backup engine (#105): the toolbar's manual trigger. 'disconnected'
@@ -971,6 +973,7 @@ export const events = {
     z.object({ done: z.number().int().nonnegative(), total: z.number().int().nonnegative(), photoId: z.string().nullable() }),
   ),
   restoreProgress: defineEvent('restore:progress', restoreProgressSchema),
+  restoreStatusChanged: defineEvent('restore:status-changed', restoreStatusSchema),
   protectedAlbumsChanged: defineEvent('protected-album:changed', z.object({})),
   protectedWorkflowProgress: defineEvent(
     'protected-album:workflow-progress',

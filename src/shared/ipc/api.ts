@@ -239,7 +239,9 @@ export interface OverlookApi {
     readonly exportCsv: (request: Req<typeof channels.restoreExportCsv>) => Promise<Res<typeof channels.restoreExportCsv>>;
     readonly exportCorrupt: (request: Req<typeof channels.restoreExportCorrupt>) => Promise<Res<typeof channels.restoreExportCorrupt>>;
     readonly cancel: (request: Req<typeof channels.restoreCancel>) => Promise<Res<typeof channels.restoreCancel>>;
+    readonly status: () => Promise<Res<typeof channels.restoreStatus>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.restoreProgress.payload>) => void) => () => void;
+    readonly onStatusChanged: (listener: (payload: z.output<typeof events.restoreStatusChanged.payload>) => void) => () => void;
   };
   readonly settings: {
     readonly get: () => Promise<Res<typeof channels.settingsGet>>;

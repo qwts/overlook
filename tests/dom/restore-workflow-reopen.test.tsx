@@ -1,0 +1,148 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, test } from 'node:test';
+
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+
+import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
+import type { RestoreStatusSnapshot } from '../../src/shared/backup/restore-contract.js';
+import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
+
+function idleRestoreStatus(): RestoreStatusSnapshot {
+  return {
+    phase: 'idle',
+    sessionId: null,
+    libraryId: null,
+    providerId: null,
+    progress: null,
+    lastError: null,
+    lastResult: null,
+    verification: null,
+    libraries: [],
+  };
+}
+
+let root: Root | undefined;
+let container: HTMLElement | undefined;
+
+afterEach(() => {
+  act(() => {
+    root?.unmount();
+    root = undefined;
+  });
+  container?.remove();
+  container = undefined;
+});
+
+async function flush(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+const LIBRARY = {
+  libraryId: '01KY000QE5PMZR2P66DX0CCR6D',
+  generation: 3,
+  generatedAt: '2026-07-22T19:32:00.000Z',
+  photos: 100,
+  totalBytes: 16_200_000,
+  albums: 1,
+  compatibility: 'compatible' as const,
+  validation: 'valid' as const,
+  fallbackGenerations: 0,
+  resumable: false,
+};
+
+function installOverlook(status: ReturnType<typeof idleRestoreStatus> extends infer T ? T : never): () => void {
+  const previous = (window as unknown as { overlook?: unknown }).overlook;
+  const providers = [{ id: 'prov-a', label: 'Provider A', available: true, unavailableReason: null }];
+  (window as unknown as { overlook: unknown }).overlook = {
+    getLocale: () => Promise.resolve('en-US'),
+    settings: { get: () => Promise.resolve({ settings: { providerId: 'prov-a' } }), onChanged: () => () => undefined },
+    backup: {
+      providers: () => Promise.resolve({ providers, defaultProviderId: 'prov-a' }),
+      providerStatus: () => Promise.resolve({ connected: true, provider: providers[0], accountLabel: null }),
+      connect: () => Promise.resolve({ ok: true, reason: null }),
+    },
+    restore: {
+      status: () => Promise.resolve(status),
+      onProgress: () => () => undefined,
+      onStatusChanged: () => () => undefined,
+      pickKey: () => Promise.resolve({ path: null }),
+      discover: () => Promise.resolve({ sessionId: null, libraries: [], error: null }),
+    },
+  };
+  return () => {
+    (window as unknown as { overlook?: unknown }).overlook = previous;
+  };
+}
+
+test('reopening a running restore shows done/total progress instead of setup', async () => {
+  const restore = installOverlook({
+    ...idleRestoreStatus(),
+    phase: 'running',
+    sessionId: 'session-a',
+    libraryId: LIBRARY.libraryId,
+    providerId: 'prov-a',
+    progress: { stage: 'downloading', done: 42, total: 100, photoId: 'P42' },
+    libraries: [LIBRARY],
+  });
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <RestoreWorkflow context="settings" />
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    assert.match(container.textContent ?? '', /Downloading and verifying originals/u);
+    assert.match(container.textContent ?? '', /42 \/ 100 · 42%/u);
+    assert.doesNotMatch(container.textContent ?? '', /Discover backups/u);
+  } finally {
+    restore();
+  }
+});
+
+test('verify scan shows a progress bar instead of a spinner-only empty state', async () => {
+  const restore = installOverlook({
+    ...idleRestoreStatus(),
+    phase: 'verify-scan',
+    sessionId: 'session-a',
+    libraryId: LIBRARY.libraryId,
+    providerId: 'prov-a',
+    progress: { stage: 'verifying', done: 7, total: 100, photoId: 'P7' },
+    libraries: [LIBRARY],
+  });
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <RestoreWorkflow context="settings" />
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    assert.match(container.textContent ?? '', /Scanning cloud backup/u);
+    assert.match(container.textContent ?? '', /7 \/ 100 · 7%/u);
+    assert.ok(container.querySelector('[role="progressbar"]'));
+  } finally {
+    restore();
+  }
+});
+
+test('SettingsDialog no longer nests RestoreWorkflow, so closing Settings cannot unmount a running job', () => {
+  const source = readFileSync(join(process.cwd(), 'src/renderer/src/settings/SettingsDialog.tsx'), 'utf8');
+  assert.doesNotMatch(source, /RestoreWorkflow/u);
+  assert.match(source, /onRestore\?:/u);
+});

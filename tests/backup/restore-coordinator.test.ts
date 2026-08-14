@@ -707,3 +707,38 @@ test('provider-wide connectivity failures remain global restore errors (#751)', 
   assert.deepEqual(discovery.libraries, []);
   assert.equal(discovery.error?.reason, 'offline');
 });
+
+test('status snapshot survives after the renderer unmounts and reports a running job', async () => {
+  const world = await remoteWorld();
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () =>
+      verifiedRunner(async ({ signal }) => {
+        await gate;
+        assert.equal(signal?.aborted, false);
+        return { libraryId: LIBRARY_ID, generation: 2, photos: 0, resumed: false, missing: [] };
+      }),
+    sessionId: () => 'session-status',
+    progress: () => undefined,
+  });
+  assert.equal(coordinator.status().phase, 'idle');
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  assert.equal(coordinator.status().phase, 'session');
+  assert.equal(coordinator.status().sessionId, 'session-status');
+  const plan = await verificationId(coordinator, 'session-status');
+  const running = coordinator.run('session-status', LIBRARY_ID, plan, false);
+  assert.equal(coordinator.status().phase, 'running');
+  assert.equal(coordinator.status().libraryId, LIBRARY_ID);
+  assert.match((await coordinator.discover('mock', '/recovery.key', PASSWORD)).error?.message ?? '', /already running/u);
+  assert.ok(release);
+  release();
+  assert.equal((await running).error, null);
+  assert.equal(coordinator.status().phase, 'complete');
+  assert.equal(coordinator.status().lastResult?.libraryId, LIBRARY_ID);
+  await coordinator.close();
+});

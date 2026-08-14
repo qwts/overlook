@@ -367,6 +367,15 @@
   color: var(--accent-amber);
 }
 
+.ovl-statusbar__restore {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
 .ovl-statusbar__item--green {
   color: var(--accent-green);
 }

@@ -424,6 +424,8 @@ export const en: Readonly<Record<string, string>> = {
   "preview.unavailable.corrupt": "PREVIEW UNAVAILABLE — FILE IS CORRUPT",
   "preview.unavailable.decodeFailed": "PREVIEW UNAVAILABLE — IMAGE DECODE FAILED",
   "preview.unavailable.unsupportedCodec": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED",
+  "restore.chrome.complete": "Restore complete",
+  "restore.chrome.show": "Show restore",
   "restore.error.copy": "Copy error",
   "restore.error.details": "Details",
   "restore.local.error.alreadyRegistered": "That library is already registered.",
