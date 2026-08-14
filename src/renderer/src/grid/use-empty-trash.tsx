@@ -1,6 +1,5 @@
 import { useState, type ReactElement } from 'react';
 
-import { PHOTO_PURGE_AUTHORIZATION } from '../../../shared/destructive-actions.js';
 import type { PageCursor } from '../../../shared/library/types.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAppDispatch } from '../state/app-state-context';
@@ -39,8 +38,9 @@ export function useEmptyTrash(): { readonly open: () => void; readonly dialog: R
           const confirmedIds = [...photoIds];
           setPhotoIds(null);
           void window.overlook.library
-            .purge({ photoIds: confirmedIds, authorization: PHOTO_PURGE_AUTHORIZATION })
+            .purge({ photoIds: confirmedIds })
             .then(({ purged, protected: protectedCount, remoteFailures }) => {
+              if (purged === 0 && protectedCount === 0 && remoteFailures === 0) return;
               dispatch({
                 type: 'toast/shown',
                 toast: {

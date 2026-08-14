@@ -18,7 +18,6 @@ import { SelectionPill } from './SelectionPill';
 import { OriginalDeleteDialog } from './OriginalDeleteDialog';
 import { VirtualGrid, type VirtualGridItemKeyboard } from './VirtualGrid';
 import { beginPhotoDrag, endPhotoDrag } from './photo-drag-session';
-import { PHOTO_PURGE_AUTHORIZATION } from '../../../shared/destructive-actions.js';
 import { DEFAULT_TRASH_RETENTION, trashRetentionDays, trashRetentionLabel, type TrashRetention } from '../../../shared/library/trash.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import {
@@ -698,8 +697,9 @@ export function LibraryGridView({
             const photoIds = [...purgeIds];
             setPurgeIds(null);
             void window.overlook.library
-              .purge({ photoIds, authorization: PHOTO_PURGE_AUTHORIZATION })
+              .purge({ photoIds })
               .then(({ purged, protected: protectedCount, remoteFailures }) => {
+                if (purged === 0 && protectedCount === 0 && remoteFailures === 0) return;
                 dispatch({
                   type: 'toast/shown',
                   toast:

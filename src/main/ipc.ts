@@ -328,19 +328,33 @@ export interface PurgeFacade {
   purge(photoIds: readonly string[]): Promise<{ purged: number; skipped: number; protected: number; remoteFailures: number }>;
 }
 
-export function registerPurgeHandlers(getFacade: () => PurgeFacade, getActivity?: () => ActivityFacade): void {
+export type PurgeAuthorizer = (photoIds: readonly string[]) => Promise<boolean>;
+
+export async function purgeAfterAuthorization(
+  photoIds: readonly string[],
+  getFacade: () => PurgeFacade,
+  authorize: PurgeAuthorizer,
+  getActivity?: () => ActivityFacade,
+): Promise<{ purged: number; skipped: number; protected: number; remoteFailures: number }> {
+  if (!(await authorize(photoIds))) return { purged: 0, skipped: 0, protected: 0, remoteFailures: 0 };
+  const result = await getFacade().purge(photoIds);
+  if (result.purged > 0 || result.remoteFailures > 0) {
+    getActivity?.().record({
+      eventType: 'photo.purged',
+      outcome: result.remoteFailures > 0 || result.skipped > 0 ? 'partial' : 'succeeded',
+      payload: { count: result.purged, skipped: result.skipped, remoteFailures: result.remoteFailures },
+    });
+  }
+  return result;
+}
+
+export function registerPurgeHandlers(
+  getFacade: () => PurgeFacade,
+  authorize: PurgeAuthorizer,
+  getActivity?: () => ActivityFacade,
+): void {
   ipcMain.handle(channels.libraryPurge.name, (_event, request: unknown) =>
-    wrapHandler(channels.libraryPurge, async ({ photoIds }) => {
-      const result = await getFacade().purge(photoIds);
-      if (result.purged > 0 || result.remoteFailures > 0) {
-        getActivity?.().record({
-          eventType: 'photo.purged',
-          outcome: result.remoteFailures > 0 || result.skipped > 0 ? 'partial' : 'succeeded',
-          payload: { count: result.purged, skipped: result.skipped, remoteFailures: result.remoteFailures },
-        });
-      }
-      return result;
-    })(request),
+    wrapHandler(channels.libraryPurge, ({ photoIds }) => purgeAfterAuthorization(photoIds, getFacade, authorize, getActivity))(request),
   );
 }
 

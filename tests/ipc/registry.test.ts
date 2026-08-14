@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import { channels, events } from '../../src/shared/ipc/channels.js';
 import { createEmitter, createInvoker, createSubscriber, IpcRemoteError, wrapHandler } from '../../src/shared/ipc/registry.js';
-import { PHOTO_PURGE_AUTHORIZATION } from '../../src/shared/destructive-actions.js';
 
 describe('channel registry', () => {
   test('channel and event names are unique', () => {
@@ -142,13 +141,9 @@ describe('channel registry', () => {
     assert.throws(() => channels.diagnosticsExport.request.parse({ eventIds: Array.from({ length: 51 }, () => eventId) }));
   });
 
-  test('permanent purge requires the ADR-0023 ceremony acknowledgement', () => {
-    assert.throws(() => channels.libraryPurge.request.parse({ photoIds: ['P1'] }));
+  test('permanent purge accepts only photo ids; main owns authorization', () => {
+    assert.deepEqual(channels.libraryPurge.request.parse({ photoIds: ['P1'] }), { photoIds: ['P1'] });
     assert.throws(() => channels.libraryPurge.request.parse({ photoIds: ['P1'], authorization: 'stale-confirmation' }));
-    assert.deepEqual(channels.libraryPurge.request.parse({ photoIds: ['P1'], authorization: PHOTO_PURGE_AUTHORIZATION }), {
-      photoIds: ['P1'],
-      authorization: PHOTO_PURGE_AUTHORIZATION,
-    });
   });
 });
 

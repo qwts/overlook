@@ -5,12 +5,11 @@ import { destructiveActions } from '../../src/shared/destructive-actions.js';
 import { DEFAULT_TRASH_RETENTION, trashDaysRemaining, trashRetentionDays, trashRetentionLabel } from '../../src/shared/library/trash.js';
 
 describe('ADR-0023 destructive action contract', () => {
-  test('registry identifiers are unique and irreversible actions carry authorization and side effects', () => {
+  test('registry identifiers are unique and irreversible actions describe their side effects', () => {
     const actions = Object.values(destructiveActions);
     assert.equal(new Set(actions.map((action) => action.id)).size, actions.length);
     for (const action of actions) {
       if (action.tier !== 'irreversible') continue;
-      assert.ok('authorization' in action && action.authorization.length > 0);
       assert.ok('sideEffects' in action && action.sideEffects.length > 0);
       assert.match(action.label, /permanently/u);
     }

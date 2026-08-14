@@ -172,13 +172,12 @@ library contents" becomes the pattern for the whole tier).
   confirm, but the copy must say restoration is possible. Protected Originals
   keep #482's stronger ceremony.
 - **Destructive authorization is enforced in the main process**, generalizing
-  ADR-0010's explicit destructive-authorization parameter: every Tier-D
-  channel carries an explicit authorization acknowledgment produced by the
-  ceremony flow, and main refuses the operation without it. This is a
-  process-trust guard, not cryptography (ADR-0017's honest-isolation-claim
-  standard applies — no overclaiming in copy): it exists so a stale renderer,
-  a replayed IPC call, or a UI bug cannot reach Tier D without a ceremony
-  having actually run.
+  ADR-0010's destructive-authorization boundary. A renderer-provided static
+  acknowledgment is request metadata, not authorization: renderer code and an
+  injected script can reproduce it. Every user-initiated Tier-D request is
+  therefore confirmed by a trusted main-process prompt bound to the exact
+  object snapshot, and main refuses the operation when that prompt is denied.
+  Automated retention remains the separately governed non-user-initiated path.
 - Localization: destructive confirmations never ship unreviewed machine
   translation (ADR-0020's ruling, cited here because this is the surface it
   exists for).

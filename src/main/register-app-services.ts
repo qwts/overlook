@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { dialog } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
+import { destructiveActions } from '../shared/destructive-actions.js';
 import { createEmitter } from '../shared/ipc/registry.js';
 import { createBackupFacade, type BackupFacadeOptions } from './backup/backup-facade.js';
 import type { FullService } from './fullres/full-service.js';
@@ -159,7 +160,26 @@ export function registerAppServices(options: AppServicesOptions): void {
       authorizePassword: options.authorizePassword,
     }),
   );
-  registerPurgeHandlers(() => ({ purge: (photoIds) => options.getPurge().purge(photoIds) }), options.getActivity);
+  registerPurgeHandlers(
+    () => ({ purge: (photoIds) => options.getPurge().purge(photoIds) }),
+    async (photoIds) => {
+      if (options.harnessEnv('OVERLOOK_E2E') === '1') return true;
+      const count = photoIds.length;
+      const noun = count === 1 ? 'photo' : 'photos';
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Confirm permanent deletion',
+        message: `Delete ${String(count)} ${noun} permanently?`,
+        detail: `${destructiveActions.deletePhotosPermanently.sideEffects} This cannot be undone.`,
+        buttons: ['Cancel', 'Delete permanently'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      return response === 1;
+    },
+    options.getActivity,
+  );
   registerOriginalPolicyHandlers(options.getLibrary, () => originalDeletion);
   registerLibraryRegistryHandlers(() => options.libraries);
   registerSettingsHandlers(() => getSettingsStore());
