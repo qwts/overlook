@@ -11,7 +11,7 @@ import { TitlebarHelpMenu } from '../components/TitlebarHelpMenu';
 import { ToastHost, type ToastItem } from '../components/Toast';
 import { PrimaryLibraryView } from './PrimaryLibraryView';
 import { fullUrl } from '../../../shared/library/full-url.js';
-import { ExportDialog } from '../export/ExportDialog';
+import { useExportDialog } from '../export/use-export-dialog';
 import { SettingsDialog, type SettingsSection } from '../settings/SettingsDialog';
 import { Dialog } from '../components/Dialog';
 import { RestoreWorkflow } from '../restore/RestoreWorkflow';
@@ -91,13 +91,7 @@ export function Shell({
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const providerStatusRequestRef = useRef(0);
-  const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
-  const [exportAllPhotos, setExportAllPhotos] = useState(false);
-  const openExport = (photoIds: readonly string[]): void => {
-    setExportAllPhotos(false);
-    setExportPhotoIds([...photoIds]);
-    dispatch({ type: 'dialog/set', dialog: 'export', open: true });
-  };
+  const exportDialog = useExportDialog();
   // Menu → Photo → Add to Album… opens the picker centered (no cursor anchor).
   const [menuAlbumPickerIds, setMenuAlbumPickerIds] = useState<readonly string[] | null>(null);
   // Menu → File → New Library… opens the switcher straight into create mode.
@@ -234,8 +228,8 @@ export function Shell({
     onSelectAll: selectAll,
     setShortcutSurface,
     setSettingsSection,
-    setExportPhotoIds,
-    setExportAllPhotos,
+    setExportPhotoIds: exportDialog.setPhotoIds,
+    setExportAllPhotos: exportDialog.setAllPhotos,
     setAlbumPickerIds: setMenuAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry: () => setInteropEntry(null),
@@ -587,18 +581,7 @@ export function Shell({
           }}
         />
       ) : null}
-      {state.exportOpen ? (
-        <ExportDialog
-          open
-          photoIds={exportPhotoIds ?? (state.lightboxId !== null ? [state.lightboxId] : [...state.selection])}
-          allPhotos={exportAllPhotos}
-          onClose={() => {
-            setExportAllPhotos(false);
-            setExportPhotoIds(null);
-            dispatch({ type: 'dialog/set', dialog: 'export', open: false });
-          }}
-        />
-      ) : null}
+      {exportDialog.dialog}
       {offload.dialog}
       {state.librariesOpen ? (
         <LibrarySwitcher
@@ -727,7 +710,7 @@ export function Shell({
               dispatch({ type: 'inspector/toggled' });
             }}
             // Lightbox entry point (#100): count=1, the focused photo.
-            onExport={() => openExport([current.id])}
+            onExport={() => exportDialog.openPhotos([current.id])}
             onTransfer={pcloudEnabled ? () => openInterop('lightbox', [current.id]) : undefined}
             onOffload={() => {
               offload.open([current.id], false, () => dispatch({ type: 'lightbox/closed' }));
@@ -790,7 +773,8 @@ export function Shell({
               platform={commandPlatform(platform)}
               knownTotal={counts === null ? null : counts[state.source]}
               activeAlbum={albums.find((album) => album.id === state.album) ?? null}
-              onExport={openExport}
+              onExport={exportDialog.openPhotos}
+              onBoardExport={exportDialog.openBoard}
               onOffload={offload.open}
               onTransfer={pcloudEnabled ? openInterop : undefined}
             />

@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, test } from 'node:test';
 
+import sharp from 'sharp';
+
 import { createExportRuntime } from '../../src/main/export/export-runtime.js';
 import type { PhotoRecord } from '../../src/shared/library/types.js';
+import type { BoardExportRequest } from '../../src/shared/moodboard/export-contract.js';
 
 const PHOTO = {
   id: 'photo-a',
@@ -16,7 +19,67 @@ const PHOTO = {
   contentHash: 'hash-a',
 } as PhotoRecord;
 
+const BOARD_PHOTO = { ...PHOTO, fileKind: 'png', deletedAt: null } as PhotoRecord;
+
+function boardRequest(destination: string): BoardExportRequest {
+  return {
+    board: {
+      id: 'board-runtime',
+      title: 'Runtime board',
+      notes: '',
+      size: { width: 40, height: 40 },
+      background: 'ink',
+      placements: [
+        {
+          id: 'placement-a',
+          photoId: BOARD_PHOTO.id,
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 40,
+          rotation: 0,
+          crop: { x: 0, y: 0, w: 1, h: 1 },
+          z: 1,
+          groupId: null,
+        },
+      ],
+    },
+    availability: { 'placement-a': 'available' },
+    output: { width: 40, height: 40 },
+    colorSpace: 'display-p3',
+    destination,
+  };
+}
+
+function boardRuntime(source: Buffer) {
+  return createExportRuntime({
+    repo: { get: (id) => (id === BOARD_PHOTO.id ? BOARD_PHOTO : undefined), exportableIds: () => [BOARD_PHOTO.id] },
+    blobs: { getStream: () => Readable.from([source]) },
+    resolveKey: () => undefined,
+    openOriginal: () => Promise.resolve({ stream: Readable.from([source]) }),
+    progress: () => undefined,
+    pickDestination: () => Promise.resolve(null),
+  });
+}
+
 describe('export runtime serialization (#311 review)', () => {
+  test('runs board composition through the serialized main-process export queue (#696)', async () => {
+    const destination = mkdtempSync(join(tmpdir(), 'overlook-board-runtime-'));
+    const source = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#336699' } })
+      .png()
+      .toBuffer();
+    const runtime = boardRuntime(source);
+
+    const result = await runtime.runBoard(boardRequest(destination));
+
+    assert.equal(result.rendered, 1);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.path, join(destination, 'Runtime board.png'));
+    assert.equal(existsSync(result.path ?? ''), true);
+    runtime.close();
+    await runtime.drain();
+  });
+
   test('Export All resolves the complete scope in the main-process repository (#885)', async () => {
     const destination = mkdtempSync(join(tmpdir(), 'overlook-export-runtime-all-'));
     let scopeReads = 0;
