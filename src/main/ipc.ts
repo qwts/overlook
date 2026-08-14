@@ -25,6 +25,7 @@ import type { ActivityFacade } from './activity/activity-publication.js';
 import { favoriteCommand, moveCompensationCommand, trashCommand } from './history/command-drafts.js';
 import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
+import { ExportAuthorizationStore } from './export/export-authorization.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -660,8 +661,10 @@ export interface ExportFacade {
 }
 
 export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
-  ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, destination, format }) => {
+  const authorizations = new ExportAuthorizationStore();
+  ipcMain.handle(channels.exportRun.name, (event, request: unknown) =>
+    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format }) => {
+      const destination = authorizations.consume(event.sender.id, photoIds, authorization);
       const result = await getFacade().run(photoIds, destination, format);
       getActivity?.().record({
         eventType: 'photo.exported',
@@ -678,8 +681,14 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
       return {};
     })(request),
   );
-  ipcMain.handle(channels.exportPickDestination.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportPickDestination, async () => ({ path: await getFacade().pickDestination() }))(request),
+  ipcMain.handle(channels.exportPickDestination.name, (event, request: unknown) =>
+    wrapHandler(channels.exportPickDestination, async ({ photoIds }) => {
+      const path = await getFacade().pickDestination();
+      return {
+        path,
+        authorization: path === null ? null : authorizations.issue(event.sender.id, photoIds, path),
+      };
+    })(request),
   );
 }
 

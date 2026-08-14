@@ -76,7 +76,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
       return Promise.all([
         attempt(() => window.overlook.library.stats()),
         attempt(() => window.overlook.backup.run({})),
-        attempt(() => window.overlook.export.pickDestination({})),
+        attempt(() => window.overlook.export.pickDestination({ photoIds: ['locked-photo'] })),
         attempt(() => window.overlook.settings.get()),
       ]);
     })()`);

@@ -40,6 +40,7 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
   const [format, setFormat] = useState<'original' | 'jpeg'>('original');
   const [decrypt, setDecrypt] = useState(true);
   const [destination, setDestination] = useState<string | null>(null);
+  const [authorization, setAuthorization] = useState<string | null>(null);
   const [bar, setBar] = useState<Bar>({ done: 0, total: photoIds.length });
   const [exported, setExported] = useState(0);
   const [failed, setFailed] = useState(0);
@@ -76,12 +77,12 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
   const noun = count === 1 ? 'photo' : 'photos';
 
   const start = (): void => {
-    if (destination === null) {
+    if (destination === null || authorization === null) {
       return;
     }
     setPhase('running');
     void window.overlook.export
-      .run({ photoIds: [...photoIds], destination, format })
+      .run({ photoIds: [...photoIds], authorization, format })
       .then((summary) => {
         setExported(summary.exported);
         setFailed(summary.failed);
@@ -180,9 +181,10 @@ export function ExportDialog({ open, photoIds, onClose }: ExportDialogProps): Re
               icon="folder"
               size="sm"
               onClick={() => {
-                void window.overlook.export.pickDestination({}).then(({ path }) => {
-                  if (path !== null) {
+                void window.overlook.export.pickDestination({ photoIds: [...photoIds] }).then(({ path, authorization: grant }) => {
+                  if (path !== null && grant !== null) {
                     setDestination(path);
+                    setAuthorization(grant);
                   }
                 });
               }}
