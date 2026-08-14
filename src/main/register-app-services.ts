@@ -16,6 +16,7 @@ import type { KeyStore } from './crypto/keystore.js';
 import { createRecoveryKeyFacade } from './crypto/recovery-key-facade.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
 import type { DrainableExportFacade } from './export/export-runtime.js';
+import { ExportDestinationAuthority } from './export/export-destination-authority.js';
 import type { ActivityFacade } from './activity/activity-publication.js';
 import type { HistoryService } from './history/history-service.js';
 import {
@@ -148,6 +149,7 @@ async function pickDiagnosticsExport(options: AppServicesOptions): Promise<strin
 }
 
 export function registerAppServices(options: AppServicesOptions): void {
+  const exportDestinationAuthority = new ExportDestinationAuthority();
   const originalDeletion = new OriginalDeletionService({
     getPhoto: (photoId) => options.getLibrary().get(photoId),
     activeLibraryId: options.activeLibraryId,
@@ -167,6 +169,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     () => options.getProtected().workflow,
     () => pickRecoveryKeyPath(options.harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
     readFile,
+    exportDestinationAuthority,
   );
   registerThumbProtocol(options.getThumbs, options.requireContentAccess, () => options.getProtected().media());
   registerFullProtocol(options.getFull, options.requireContentAccess, () => options.getProtected().media());
@@ -179,7 +182,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     (source, parent) => confirmImportMove(options, source, parent),
   );
   registerEmbeddingHandlers(options.getEmbedding, options.requireContentAccess);
-  registerExportHandlers(options.getExport, options.getActivity);
+  registerExportHandlers(options.getExport, options.getActivity, exportDestinationAuthority);
   registerNativeDragHandlers(options.getNativeDrag, options.requireContentAccess);
   registerPhotoKitHandlers(options.getPhotoKit, options.requireContentAccess, options.onImported, options.getActivity);
   registerFileProviderHandlers(options.getFileProvider, options.requireContentAccess);

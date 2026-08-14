@@ -14,11 +14,14 @@ const outputSizeSchema = z
     message: 'board export is limited to 32 megapixels',
   });
 
-export const boardExportRequestSchema = z.object({
+export const boardExportIntentSchema = z.object({
   board: boardSchema,
   availability: z.record(z.string().min(1), boardExportAvailabilitySchema),
   output: outputSizeSchema,
   colorSpace: boardExportColorSpaceSchema,
+});
+
+export const boardExportRequestSchema = boardExportIntentSchema.extend({
   destination: z.string().min(1),
 });
 
