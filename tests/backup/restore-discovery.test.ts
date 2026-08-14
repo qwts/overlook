@@ -135,6 +135,17 @@ describe('restore discovery (#288)', () => {
     );
   });
 
+  test('a stale recovery bootstrap cannot be paired with a newer manifest', async () => {
+    const w = await world();
+    const newerManifest = { ...manifest(1), generatedAt: '2026-07-14T23:00:01.000Z' };
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(newerManifest, w.keyStore));
+
+    await assert.rejects(
+      discoverRestore(w.provider, w.masterKey),
+      (error: unknown) => error instanceof RestoreError && error.reason === 'corrupt',
+    );
+  });
+
   test('duplicate blob references invalidate a manifest generation', async () => {
     const w = await world();
     const source = manifest(1);

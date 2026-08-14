@@ -59,6 +59,9 @@ function validateManifest(manifest: RestorableBackupManifest, bootstrap: Recover
   if (manifest.libraryId !== bootstrap.libraryId) {
     throw new RestoreError('corrupt', 'manifest library id does not match the recovery bootstrap');
   }
+  if (Date.parse(bootstrap.generatedAt) < Date.parse(manifest.generatedAt)) {
+    throw new RestoreError('corrupt', 'manifest is newer than the recovery bootstrap');
+  }
   if (manifest.databaseSchema > CURRENT_DATABASE_SCHEMA) {
     throw new RestoreError(
       'unsupported',
