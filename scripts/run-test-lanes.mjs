@@ -64,6 +64,25 @@ export function spawnLane(lane, scripts = packageScripts()) {
   });
 }
 
+// `sh -c` execs a SIMPLE command, so today's three lanes report a kill as a real signal. It cannot
+// exec a compound one (`a && b`, which most `:inner` scripts here are): the shell survives its
+// child and reports the death as exit 128+N with no signal of its own. Measured, both shapes:
+//
+//   sh -c 'sleep 8'          → the pid is `sleep`; a kill arrives as a signal
+//   sh -c 'true && sleep 8'  → the pid is `/bin/sh`; killing its child exits 137, signal null
+//
+// So the exit code is sometimes the only surviving evidence that someone tore this run down. Keyed
+// to the five teardown signals rather than any code >= 128, so an ordinary nonzero exit is never
+// read as a teardown. A lane that deliberately exits 137 is indistinguishable from one that was
+// killed — stopping is the safer reading of the two. (PR #1002 review, chatgpt-codex-connector.)
+const TEARDOWN_EXITS = new Map([
+  [129, 'SIGHUP'],
+  [130, 'SIGINT'],
+  [131, 'SIGQUIT'],
+  [137, 'SIGKILL'],
+  [143, 'SIGTERM'],
+]);
+
 export async function runLanes(lanes, runLane) {
   const results = [];
   let terminated = false;
@@ -75,10 +94,11 @@ export async function runLanes(lanes, runLane) {
     const startedAt = Date.now();
     const { code, signal } = await runLane(lane);
     const durationMs = Date.now() - startedAt;
-    if (signal !== null && signal !== undefined) {
-      // A signal is someone else ending this run — the guard's rss-limit kill, a step timeout, or
-      // Ctrl-C. Starting the next lane would fight that teardown, so report and stop.
-      results.push({ lane, status: 'failed', signal, durationMs });
+    const terminatedBy = signal ?? TEARDOWN_EXITS.get(code) ?? null;
+    if (terminatedBy !== null) {
+      // Someone else is ending this run — the guard's rss-limit kill, a step timeout, the kernel
+      // OOM killer, Ctrl-C. Starting the next lane would fight that teardown, so report and stop.
+      results.push({ lane, status: 'failed', signal: terminatedBy, durationMs });
       terminated = true;
       continue;
     }

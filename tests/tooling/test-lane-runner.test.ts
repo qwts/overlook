@@ -79,23 +79,6 @@ describe('test lane runner (PR #995)', () => {
     assert.match(summary(results), /All 2 lane\(s\) passed\./u);
   });
 
-  // A signal is the guard's rss-limit kill, a step timeout, or Ctrl-C — someone else ending the
-  // run. Starting the next lane would fight that teardown, so the remaining lanes are reported as
-  // not-run rather than silently omitted, and the run still fails.
-  it('stops after a signal-terminated lane and marks the rest as not run', async () => {
-    const { run, ran } = outcomes({ 'test:unit:run': { code: null, signal: 'SIGKILL' } });
-    const results = await runLanes(['test:unit:run', 'test:dom:run', 'test:guard:conformance'], run);
-
-    assert.deepEqual(ran, ['test:unit:run']);
-    assert.deepEqual(
-      results.map((result) => result.status),
-      ['failed', 'skipped', 'skipped'],
-    );
-    assert.match(summary(results), /terminated by SIGKILL/u);
-    assert.match(summary(results), /SKIP {2}test:dom:run/u);
-    assert.equal(exitCode(results), 1);
-  });
-
   // The runner dispatches the lane's own command rather than re-entering `npm run <lane>`, which
   // would hold a second npm resident beside every lane inside the guard's one group-wide RSS lease.
   it('reads each lane command straight from package.json', () => {
@@ -119,6 +102,66 @@ describe('test lane runner (PR #995)', () => {
     assert.doesNotMatch(testRun, /&&/u, '&& lets one red lane skip the lanes after it (PR #995)');
     for (const lane of ['test:unit:run', 'test:dom:run', 'test:guard:conformance']) {
       assert.ok(testRun.split(' ').includes(lane), `${lane} must stay in test:run`);
+    }
+  });
+});
+
+// Someone else ending the run — the guard's rss-limit kill, a step timeout, the kernel OOM killer,
+// Ctrl-C. Starting the next lane would fight that teardown, so the remaining lanes are reported as
+// not-run rather than silently omitted, and the run still fails.
+describe('lane teardown detection', () => {
+  it('stops after a signal-terminated lane and marks the rest as not run', async () => {
+    const { run, ran } = outcomes({ 'test:unit:run': { code: null, signal: 'SIGKILL' } });
+    const results = await runLanes(['test:unit:run', 'test:dom:run', 'test:guard:conformance'], run);
+
+    assert.deepEqual(ran, ['test:unit:run']);
+    assert.deepEqual(
+      results.map((result) => result.status),
+      ['failed', 'skipped', 'skipped'],
+    );
+    assert.match(summary(results), /terminated by SIGKILL/u);
+    assert.match(summary(results), /SKIP {2}test:dom:run/u);
+    assert.equal(exitCode(results), 1);
+  });
+
+  // `sh -c` cannot exec a compound lane script, so it outlives its killed child and reports the
+  // death as exit 128+N with no signal. Without this, a teardown mid-suite reads as an ordinary
+  // failure and the next lane starts into whatever is killing things (PR #1002 review).
+  it('reads a teardown exit code as a signal when the shell swallowed it', async () => {
+    const { run, ran } = outcomes({ 'test:unit:run': { code: 137, signal: null } });
+    const results = await runLanes(['test:unit:run', 'test:dom:run', 'test:guard:conformance'], run);
+
+    assert.deepEqual(ran, ['test:unit:run']);
+    assert.deepEqual(
+      results.map((result) => result.status),
+      ['failed', 'skipped', 'skipped'],
+    );
+    assert.match(summary(results), /terminated by SIGKILL/u);
+  });
+
+  it('leaves ordinary failures alone — only teardown codes stop the run', async () => {
+    for (const code of [1, 2, 7, 128, 255]) {
+      const results = await runLanes(['a', 'b'], (lane) =>
+        Promise.resolve(lane === 'a' ? { code, signal: null } : { code: 0, signal: null }),
+      );
+      assert.deepEqual(
+        results.map((result) => result.status),
+        ['failed', 'passed'],
+        `exit ${code} must not be read as a teardown`,
+      );
+    }
+  });
+
+  it('maps every teardown exit code to its signal', async () => {
+    for (const [code, expected] of [
+      [129, 'SIGHUP'],
+      [130, 'SIGINT'],
+      [131, 'SIGQUIT'],
+      [137, 'SIGKILL'],
+      [143, 'SIGTERM'],
+    ] as const) {
+      const results = await runLanes(['a'], () => Promise.resolve({ code, signal: null }));
+      assert.match(summary(results), new RegExp(`terminated by ${expected}`, 'u'));
     }
   });
 });
