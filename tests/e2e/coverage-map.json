@@ -20,6 +20,28 @@
       ]
     },
     {
+      "id": "high-contrast-appearance",
+      "wiki": "Acceptance-Test-Visual-Accessibility",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/visual-accessibility.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/theme/appearance.test.ts", "tests/tooling/color-contrast-policy.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds to verify live Increase Contrast, native forced-colors theme changes, user-theme precedence, photo chrome, and physical assistive-technology behavior."
+        }
+      ]
+    },
+    {
       "id": "context-menu-command-projections",
       "wiki": "Acceptance-Test-Context-Menus",
       "coverage": [
