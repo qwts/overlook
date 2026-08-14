@@ -75,9 +75,19 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     const workflow = source('.github/workflows/package.yml');
     const builder = source('electron-builder.yml');
     // Separate secrets: the Azure service principal, never the mac CSC_*.
-    assert.match(workflow, /AZURE_TENANT_ID: \$\{\{ secrets\.AZURE_TENANT_ID \}\}/u);
-    assert.match(workflow, /AZURE_CLIENT_ID: \$\{\{ secrets\.AZURE_CLIENT_ID \}\}/u);
-    assert.match(workflow, /AZURE_CLIENT_SECRET: \$\{\{ secrets\.AZURE_CLIENT_SECRET \}\}/u);
+    assert.match(workflow, /AZURE_TENANT_ID: \$\{\{ runner\.os == 'Windows' && secrets\.AZURE_TENANT_ID \|\| '' \}\}/u);
+    assert.match(workflow, /AZURE_CLIENT_ID: \$\{\{ runner\.os == 'Windows' && secrets\.AZURE_CLIENT_ID \|\| '' \}\}/u);
+    assert.match(workflow, /AZURE_CLIENT_SECRET: \$\{\{ runner\.os == 'Windows' && secrets\.AZURE_CLIENT_SECRET \|\| '' \}\}/u);
+    for (const secret of [
+      'CSC_LINK',
+      'CSC_KEY_PASSWORD',
+      'MAC_PROVISIONING_PROFILE',
+      'APPLE_API_KEY',
+      'APPLE_API_KEY_ID',
+      'APPLE_API_ISSUER',
+    ]) {
+      assert.match(workflow, new RegExp(`runner\\.os == 'macOS' && secrets\\.${secret} \\|\\| ''`, 'u'));
+    }
     assert.match(workflow, /unset CSC_LINK CSC_KEY_PASSWORD/u);
     // The Windows branch is its own arm.
     assert.match(workflow, /elif \[ "\$RUNNER_OS" = "Windows" \]; then/u);

@@ -4,6 +4,27 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 describe('release workflow publication', () => {
+  test('passes an explicit credential allowlist to the package workflow', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+
+    assert.doesNotMatch(workflow, /secrets: inherit/u);
+    for (const secret of [
+      'GOOGLE_DRIVE_CLIENT_ID',
+      'GOOGLE_DRIVE_CLIENT_SECRET',
+      'CSC_LINK',
+      'CSC_KEY_PASSWORD',
+      'MAC_PROVISIONING_PROFILE',
+      'APPLE_API_KEY',
+      'APPLE_API_KEY_ID',
+      'APPLE_API_ISSUER',
+      'AZURE_TENANT_ID',
+      'AZURE_CLIENT_ID',
+      'AZURE_CLIENT_SECRET',
+    ]) {
+      assert.match(workflow, new RegExp(`${secret}: \\$\\{\\{ secrets\\.${secret} \\}\\}`, 'u'));
+    }
+  });
+
   test('uploads files recursively instead of passing artifact directories to gh', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 

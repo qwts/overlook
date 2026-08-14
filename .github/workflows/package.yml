@@ -26,6 +26,29 @@ on:
         type: string
         required: false
         default: ''
+    secrets:
+      GOOGLE_DRIVE_CLIENT_ID:
+        required: false
+      GOOGLE_DRIVE_CLIENT_SECRET:
+        required: false
+      CSC_LINK:
+        required: false
+      CSC_KEY_PASSWORD:
+        required: false
+      MAC_PROVISIONING_PROFILE:
+        required: false
+      APPLE_API_KEY:
+        required: false
+      APPLE_API_KEY_ID:
+        required: false
+      APPLE_API_ISSUER:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_CLIENT_SECRET:
+        required: false
 
 permissions:
   contents: read
@@ -73,18 +96,20 @@ jobs:
           # Public Chrome Web Store identity used for the exact native-host
           # allowed_origins entry. Empty pre-release builds fail closed.
           OVERLOOK_IMAGE_TRAIL_EXTENSION_ID: ${{ vars.IMAGE_TRAIL_EXTENSION_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          MAC_PROVISIONING_PROFILE_B64: ${{ secrets.MAC_PROVISIONING_PROFILE }}
-          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Platform gates keep Apple credentials out of every Windows process,
+          # including repository-controlled build and packaging hooks.
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
+          MAC_PROVISIONING_PROFILE_B64: ${{ runner.os == 'macOS' && secrets.MAC_PROVISIONING_PROFILE || '' }}
+          APPLE_API_KEY_B64: ${{ runner.os == 'macOS' && secrets.APPLE_API_KEY || '' }}
+          APPLE_API_KEY_ID: ${{ runner.os == 'macOS' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ runner.os == 'macOS' && secrets.APPLE_API_ISSUER || '' }}
           # Azure Trusted Signing service principal (#683), kept separate from
           # the mac CSC_* secrets so a mac-only .p12 never reaches the Windows
           # signer.
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
           WIN_ARCH: ${{ matrix.win-arch }}
         run: |
           if [ "$RUNNER_OS" = "macOS" ] && [ -n "$CSC_LINK" ]; then
