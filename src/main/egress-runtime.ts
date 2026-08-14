@@ -118,6 +118,7 @@ export class EgressRuntime {
       library: this.options.library(),
       platform: process.platform,
       packaged: app.isPackaged,
+      onLibraryChanged: applicationEvents.onLibraryChanged,
     });
     this.fileProviderService = service;
     void service.reconcile().catch(() => undefined);

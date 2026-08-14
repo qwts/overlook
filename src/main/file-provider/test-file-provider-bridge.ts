@@ -24,7 +24,7 @@ export class TestFileProviderBridge implements FileProviderBridge {
     return Promise.resolve();
   }
 
-  changed(_domainId: string): Promise<void> {
+  changed(_domainId: string, _containerIds: readonly string[]): Promise<void> {
     return Promise.resolve();
   }
 

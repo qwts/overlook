@@ -5,6 +5,7 @@
 #include <napi.h>
 
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -56,8 +57,13 @@ enum class Operation { Add, Remove, Evict, Changed };
 
 class DomainWorker final : public Napi::AsyncWorker {
  public:
-  DomainWorker(Napi::Function callback, Operation operation, std::string id, std::string name)
-      : Napi::AsyncWorker(callback), operation_(operation), id_(std::move(id)), name_(std::move(name)) {}
+  DomainWorker(Napi::Function callback, Operation operation, std::string id, std::string name,
+               std::vector<std::string> container_ids = {})
+      : Napi::AsyncWorker(callback),
+        operation_(operation),
+        id_(std::move(id)),
+        name_(std::move(name)),
+        container_ids_(std::move(container_ids)) {}
 
   void Execute() override {
     @autoreleasepool {
@@ -81,7 +87,21 @@ class DomainWorker final : public Napi::AsyncWorker {
         if (operation_ == Operation::Evict) {
           [manager evictItemWithIdentifier:NSFileProviderRootContainerItemIdentifier completionHandler:done];
         } else {
-          [manager signalEnumeratorForContainerItemIdentifier:NSFileProviderWorkingSetContainerItemIdentifier completionHandler:done];
+          NSMutableArray<NSFileProviderItemIdentifier>* identifiers = [NSMutableArray arrayWithObject:NSFileProviderWorkingSetContainerItemIdentifier];
+          for (const std::string& container_id : container_ids_) {
+            NSFileProviderItemIdentifier identifier = container_id == "root" ? NSFileProviderRootContainerItemIdentifier : String(container_id);
+            if (![identifiers containsObject:identifier]) [identifiers addObject:identifier];
+          }
+          for (NSFileProviderItemIdentifier identifier in identifiers) {
+            failure = nil;
+            [manager signalEnumeratorForContainerItemIdentifier:identifier completionHandler:done];
+            dispatch_semaphore_wait(completed, DISPATCH_TIME_FOREVER);
+            if (failure != nil) {
+              SetError(Utf8(failure.localizedDescription));
+              return;
+            }
+          }
+          return;
         }
       }
       dispatch_semaphore_wait(completed, DISPATCH_TIME_FOREVER);
@@ -95,23 +115,34 @@ class DomainWorker final : public Napi::AsyncWorker {
   Operation operation_;
   std::string id_;
   std::string name_;
+  std::vector<std::string> container_ids_;
 };
 
 Napi::Value Start(const Napi::CallbackInfo& info, Operation operation) {
   std::string id;
   std::string name;
+  std::vector<std::string> container_ids;
   Napi::Function callback;
   if (operation == Operation::Add) {
     Napi::Object domain = info[0].As<Napi::Object>();
     id = domain.Get("id").As<Napi::String>().Utf8Value();
     name = domain.Get("displayName").As<Napi::String>().Utf8Value();
     callback = info[1].As<Napi::Function>();
+  } else if (operation == Operation::Changed) {
+    id = info[0].As<Napi::String>().Utf8Value();
+    name = id;
+    Napi::Array containers = info[1].As<Napi::Array>();
+    container_ids.reserve(containers.Length());
+    for (uint32_t index = 0; index < containers.Length(); ++index) {
+      container_ids.push_back(containers.Get(index).As<Napi::String>().Utf8Value());
+    }
+    callback = info[2].As<Napi::Function>();
   } else {
     id = info[0].As<Napi::String>().Utf8Value();
     name = id;
     callback = info[1].As<Napi::Function>();
   }
-  (new DomainWorker(callback, operation, std::move(id), std::move(name)))->Queue();
+  (new DomainWorker(callback, operation, std::move(id), std::move(name), std::move(container_ids)))->Queue();
   return info.Env().Undefined();
 }
 

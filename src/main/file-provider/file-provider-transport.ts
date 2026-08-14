@@ -48,6 +48,7 @@ export class FileProviderTransport {
   private token: string | undefined;
   private starting: Promise<void> | undefined;
   private readonly sockets = new Set<Socket>();
+  private readonly activeRequests = new Set<Promise<void>>();
 
   constructor(
     private readonly stateDirectory: string,
@@ -75,13 +76,19 @@ export class FileProviderTransport {
     if (server !== undefined && server.listening) {
       await new Promise<void>((resolve, reject) => server.close((error) => (error === undefined ? resolve() : reject(error))));
     }
+    await Promise.allSettled([...this.activeRequests]);
   }
 
   private async listen(): Promise<void> {
     const token = randomBytes(32).toString('base64url');
-    const server = createServer(
-      (request, response) => void this.handle(request.method, request.url, request.headers.authorization, response),
-    );
+    const server = createServer((request, response) => {
+      const active = this.handle(request.method, request.url, request.headers.authorization, response);
+      this.activeRequests.add(active);
+      void active.then(
+        () => this.activeRequests.delete(active),
+        () => this.activeRequests.delete(active),
+      );
+    });
     let temporary: string | undefined;
     server.on('connection', (socket) => {
       this.sockets.add(socket);

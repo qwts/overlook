@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { FILE_PROVIDER_CONSENT_VERSION } from '../../../shared/file-provider/contract';
 import { Button } from '../components/Button';
 import { Segmented } from '../components/Segmented';
 import { Field } from './Field';
@@ -71,7 +72,7 @@ export function FileProviderSettings(): ReactElement {
     setError(null);
     const scope = scopeKind === 'library' ? ({ kind: 'library' } as const) : { kind: 'albums' as const, albumIds: [...albumIds] };
     void window.overlook.fileProvider
-      .enable({ scope, consentVersion: 1 })
+      .enable({ scope, consentVersion: FILE_PROVIDER_CONSENT_VERSION })
       .then(setSnapshot)
       .catch(() => setError(intl.formatMessage(messages.enableError)))
       .finally(() => setBusy(false));

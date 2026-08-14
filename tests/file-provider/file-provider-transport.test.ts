@@ -78,4 +78,33 @@ describe('authenticated File Provider extension transport (#797)', () => {
     assert.equal((await request(current, '/v1/item?id=unknown')).status, 404);
     await transport.stop();
   });
+
+  test('drains an unresolved materialization and releases custody before stopping', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'overlook-file-provider-drain-'));
+    let resolveMaterialization: ((opened: { stream: Readable; release: () => Promise<void> }) => void) | undefined;
+    let releases = 0;
+    const transport = new FileProviderTransport(directory, {
+      enumerate: () => [],
+      item: () => undefined,
+      materialize: () => new Promise((resolve) => (resolveMaterialization = resolve)),
+    });
+    await transport.start();
+    const pendingRequest = request(endpoint(directory), `/v1/materialize?id=${ITEM.id}`).catch(() => undefined);
+    while (resolveMaterialization === undefined) await new Promise((resolve) => setImmediate(resolve));
+    let stopped = false;
+    const stopping = transport.stop().then(() => {
+      stopped = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(stopped, false);
+    resolveMaterialization({
+      stream: Readable.from(['late bytes']),
+      release: () => {
+        releases += 1;
+        return Promise.resolve();
+      },
+    });
+    await Promise.all([pendingRequest, stopping]);
+    assert.equal(releases, 1);
+  });
 });

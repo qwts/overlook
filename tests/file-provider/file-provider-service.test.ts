@@ -53,7 +53,7 @@ class FakeBridge implements FileProviderBridge {
   domains: FileProviderDomain[] = [];
   removed: string[] = [];
   evicted: string[] = [];
-  changes = 0;
+  changes: readonly string[][] = [];
   closed = false;
   failChanged = false;
 
@@ -80,8 +80,8 @@ class FakeBridge implements FileProviderBridge {
     return Promise.resolve();
   }
 
-  changed(): Promise<void> {
-    this.changes += 1;
+  changed(_domainId: string, containerIds: readonly string[]): Promise<void> {
+    this.changes = [...this.changes, [...containerIds]];
     return this.failChanged ? Promise.reject(new Error('signal failed')) : Promise.resolve();
   }
 
@@ -102,6 +102,7 @@ function fixture() {
   let admitted = true;
   let releases = 0;
   const transportCalls: string[] = [];
+  const libraryChangedListeners = new Set<() => void>();
   let openOriginal = (): Promise<OpenedProviderOriginal> =>
     Promise.resolve({
       stream: Readable.from(['bytes']),
@@ -133,6 +134,10 @@ function fixture() {
         return Promise.resolve();
       },
     },
+    onLibraryChanged: (listener) => {
+      libraryChangedListeners.add(listener);
+      return () => libraryChangedListeners.delete(listener);
+    },
   });
   return {
     bridge,
@@ -144,6 +149,10 @@ function fixture() {
     },
     releases: () => releases,
     transportCalls,
+    libraryChanged: () => {
+      for (const listener of libraryChangedListeners) listener();
+    },
+    libraryChangedListenerCount: () => libraryChangedListeners.size,
     setOpenOriginal: (next: () => Promise<OpenedProviderOriginal>) => {
       openOriginal = next;
     },
@@ -221,6 +230,18 @@ describe('read-only macOS File Provider (#797)', () => {
       service.enumerate('root').map(({ name }) => name),
       ['Travel', 'travel (2)'],
     );
+  });
+
+  test('coalesces projected library changes and signals affected containers', async () => {
+    const { bridge, libraryChanged, libraryChangedListenerCount, service } = fixture();
+    await service.enable({ kind: 'albums', albumIds: ['A1', 'A2'] }, 1);
+    libraryChanged();
+    libraryChanged();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(bridge.changes, [['root'], ['root', 'album.QTE', 'album.QTI']]);
+    assert.equal(libraryChangedListenerCount(), 1);
+    await service.close();
+    assert.equal(libraryChangedListenerCount(), 0);
   });
 
   test('never advertises protected-migration records and rejects mutation', async () => {

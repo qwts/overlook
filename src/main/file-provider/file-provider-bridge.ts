@@ -12,7 +12,7 @@ export interface FileProviderBridge {
   register(domain: FileProviderDomain): Promise<void>;
   remove(domainId: string): Promise<void>;
   evict(domainId: string): Promise<void>;
-  changed(domainId: string): Promise<void>;
+  changed(domainId: string, containerIds: readonly string[]): Promise<void>;
   close(): void;
 }
 
@@ -22,7 +22,7 @@ interface NativeBinding {
   readonly register: (domain: FileProviderDomain, callback: (error?: unknown) => void) => void;
   readonly remove: (domainId: string, callback: (error?: unknown) => void) => void;
   readonly evict: (domainId: string, callback: (error?: unknown) => void) => void;
-  readonly changed: (domainId: string, callback: (error?: unknown) => void) => void;
+  readonly changed: (domainId: string, containerIds: readonly string[], callback: (error?: unknown) => void) => void;
 }
 
 function validBinding(value: unknown): value is NativeBinding {
@@ -102,7 +102,7 @@ export function createFileProviderBridge(options: {
     register: (domain) => invokeNative((callback) => required().register(domain, callback)),
     remove: (domainId) => invokeNative((callback) => required().remove(domainId, callback)),
     evict: (domainId) => invokeNative((callback) => required().evict(domainId, callback)),
-    changed: (domainId) => invokeNative((callback) => required().changed(domainId, callback)),
+    changed: (domainId, containerIds) => invokeNative((callback) => required().changed(domainId, containerIds, callback)),
     close: () => {
       closed = true;
       binding = null;

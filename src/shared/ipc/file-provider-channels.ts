@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { fileProviderConfigSchema, fileProviderScopeSchema } from '../file-provider/contract.js';
+import { FILE_PROVIDER_CONSENT_VERSION, fileProviderConfigSchema, fileProviderScopeSchema } from '../file-provider/contract.js';
 import type { ChannelDefinition } from './channels.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
@@ -22,7 +22,7 @@ export const fileProviderChannels = {
   fileProviderStatus: channel('file-provider:status', z.object({}), statusSchema),
   fileProviderEnable: channel(
     'file-provider:enable',
-    z.object({ scope: fileProviderScopeSchema, consentVersion: z.literal(1) }),
+    z.object({ scope: fileProviderScopeSchema, consentVersion: z.literal(FILE_PROVIDER_CONSENT_VERSION) }),
     statusSchema,
   ),
   fileProviderDisable: channel('file-provider:disable', z.object({}), statusSchema),

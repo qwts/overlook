@@ -20,22 +20,29 @@ static NSError* ReadOnly(void) {
 @property(nonatomic, copy) NSNumber* documentSize;
 @property(nonatomic, copy) NSDate* contentModificationDate;
 @property(nonatomic) NSFileProviderItemCapabilities capabilities;
+@property(nonatomic) BOOL dataless;
 + (nullable instancetype)itemFromDictionary:(NSDictionary*)value;
 @end
 
 @implementation OverlookProviderItem
+- (NSFileProviderContentPolicy)contentPolicy API_AVAILABLE(macos(13.0)) {
+  return self.dataless ? NSFileProviderContentPolicyDownloadLazily : NSFileProviderContentPolicyInherited;
+}
+
 + (nullable instancetype)itemFromDictionary:(NSDictionary*)value {
   NSString* identifier = value[@"id"];
   NSString* parent = value[@"parentId"];
   NSString* name = value[@"name"];
   NSString* type = value[@"contentType"];
   NSNumber* size = value[@"size"];
+  NSNumber* dataless = value[@"dataless"];
   NSString* modified = value[@"modifiedAt"];
   if (![identifier isKindOfClass:NSString.class] || identifier.length == 0 ||
       ![parent isKindOfClass:NSString.class] || parent.length == 0 ||
       ![name isKindOfClass:NSString.class] || name.length == 0 ||
       ![type isKindOfClass:NSString.class] || type.length == 0 ||
       ![size isKindOfClass:NSNumber.class] || size.longLongValue < 0 ||
+      ![dataless isKindOfClass:NSNumber.class] ||
       ![modified isKindOfClass:NSString.class]) return nil;
   NSDate* modifiedDate = [NSISO8601DateFormatter.new dateFromString:modified];
   if (modifiedDate == nil) return nil;
@@ -46,7 +53,10 @@ static NSError* ReadOnly(void) {
   item.contentType = [UTType typeWithIdentifier:type] ?: UTTypeData;
   item.documentSize = size;
   item.contentModificationDate = modifiedDate;
-  item.capabilities = NSFileProviderItemCapabilitiesAllowsReading;
+  item.dataless = dataless.boolValue;
+  item.capabilities = [item.contentType conformsToType:UTTypeFolder]
+      ? NSFileProviderItemCapabilitiesAllowsReading | NSFileProviderItemCapabilitiesAllowsContentEnumerating
+      : NSFileProviderItemCapabilitiesAllowsReading;
   return item;
 }
 @end
@@ -172,7 +182,7 @@ static NSError* ReadOnly(void) {
 - (NSProgress*)itemForIdentifier:(NSFileProviderItemIdentifier)identifier request:(NSFileProviderRequest*)request completionHandler:(void (^)(NSFileProviderItem, NSError*))completionHandler {
   NSProgress* progress = [NSProgress progressWithTotalUnitCount:1];
   if ([identifier isEqual:NSFileProviderRootContainerItemIdentifier]) {
-    completionHandler([OverlookProviderItem itemFromDictionary:@{@"id": @"root", @"parentId": @"root", @"name": _domain.displayName, @"contentType": @"public.folder", @"size": @0, @"modifiedAt": @"1970-01-01T00:00:00.000Z"}], nil);
+    completionHandler([OverlookProviderItem itemFromDictionary:@{@"id": @"root", @"parentId": @"root", @"name": _domain.displayName, @"contentType": @"public.folder", @"size": @0, @"dataless": @NO, @"modifiedAt": @"1970-01-01T00:00:00.000Z"}], nil);
     return progress;
   }
   NSString* encoded = [identifier stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];

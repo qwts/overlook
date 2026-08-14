@@ -34,6 +34,7 @@ export interface FileProviderServiceDeps {
         readonly stop: () => Promise<void>;
       }
     | undefined;
+  readonly onLibraryChanged?: ((listener: () => void) => () => void) | undefined;
 }
 
 export interface FileProviderStatus {
@@ -108,8 +109,13 @@ function uniqueNames(values: readonly string[]): readonly string[] {
 
 export class FileProviderService {
   private closed = false;
+  private changeQueued = false;
+  private changeDrain: Promise<void> | undefined;
+  private readonly unsubscribeLibraryChanged: (() => void) | undefined;
 
-  constructor(private readonly deps: FileProviderServiceDeps) {}
+  constructor(private readonly deps: FileProviderServiceDeps) {
+    this.unsubscribeLibraryChanged = deps.onLibraryChanged?.(() => this.changed());
+  }
 
   status(): FileProviderStatus {
     const native = this.deps.bridge.status();
@@ -132,12 +138,12 @@ export class FileProviderService {
     try {
       await this.deps.transport?.start();
       await this.deps.bridge.register(this.domain());
-      await this.deps.bridge.changed(this.domain().id);
+      await this.deps.bridge.changed(this.domain().id, [ROOT_ID]);
     } catch (error) {
       this.deps.store.save(previous);
       if (previous.enabled) {
         await this.deps.transport?.start().catch(() => undefined);
-        await this.deps.bridge.changed(this.domain().id).catch(() => undefined);
+        await this.deps.bridge.changed(this.domain().id, [ROOT_ID]).catch(() => undefined);
       } else {
         await this.deps.transport?.stop().catch(() => undefined);
         await this.deps.bridge.evict(this.domain().id).catch(() => undefined);
@@ -232,12 +238,39 @@ export class FileProviderService {
     throw new Error('File Provider is read-only');
   }
 
+  changed(): void {
+    if (this.closed) return;
+    this.changeQueued = true;
+    if (this.changeDrain !== undefined) return;
+    const drain = Promise.resolve().then(() => this.flushChanges());
+    this.changeDrain = drain;
+    const finish = (): void => {
+      if (this.changeDrain === drain) this.changeDrain = undefined;
+      if (this.changeQueued) this.changed();
+    };
+    void drain.then(finish, finish);
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.unsubscribeLibraryChanged?.();
+    this.changeQueued = false;
     await this.deps.transport?.stop().catch(() => undefined);
+    await this.changeDrain?.catch(() => undefined);
     if (this.deps.store.load().enabled) await this.deps.bridge.evict(this.domain().id).catch(() => undefined);
     this.deps.bridge.close();
+  }
+
+  private async flushChanges(): Promise<void> {
+    while (this.changeQueued && !this.closed) {
+      this.changeQueued = false;
+      const config = this.deps.store.load();
+      if (!config.enabled || !this.deps.admit() || !this.deps.bridge.status().available) continue;
+      const containers =
+        config.scope.kind === 'library' ? [ROOT_ID] : [ROOT_ID, ...config.scope.albumIds.map((albumId) => albumItemId(albumId))];
+      await this.deps.bridge.changed(this.domain().id, containers).catch(() => undefined);
+    }
   }
 
   private photoItems(albumId?: string): readonly FileProviderItem[] {

@@ -15,6 +15,7 @@ describe('signed File Provider registration bridge (#797)', () => {
       'NSFileProviderManager removeDomain',
       'evictItemWithIdentifier',
       'signalEnumeratorForContainerItemIdentifier',
+      'NSFileProviderRootContainerItemIdentifier',
       'containerURLForSecurityApplicationGroupIdentifier',
     ]) {
       assert.ok(native.includes(contract), `native bridge must enforce ${contract}`);
@@ -22,6 +23,8 @@ describe('signed File Provider registration bridge (#797)', () => {
     for (const contract of [
       'NSFileProviderReplicatedExtension',
       'NSFileProviderItemCapabilitiesAllowsReading',
+      'NSFileProviderItemCapabilitiesAllowsContentEnumerating',
+      'NSFileProviderContentPolicyDownloadLazily',
       'NSFileWriteNoPermissionError',
       '127.0.0.1',
       'Authorization',
@@ -54,6 +57,10 @@ describe('signed File Provider registration bridge (#797)', () => {
       calls.push(name);
       done();
     };
+    const changed = (_domainId: string, containerIds: readonly string[], done: (error?: unknown) => void): void => {
+      calls.push(`changed:${containerIds.join(',')}`);
+      done();
+    };
     const bridge = createFileProviderBridge({
       platform: 'darwin',
       packaged: true,
@@ -63,16 +70,16 @@ describe('signed File Provider registration bridge (#797)', () => {
         register: (domain: unknown, done: (error?: unknown) => void) => callback('register')(domain, done),
         remove: callback('remove'),
         evict: callback('evict'),
-        changed: callback('changed'),
+        changed,
       }),
     });
     assert.deepEqual(bridge.status(), { available: true, reason: null });
     assert.equal(bridge.stateDirectory(), '/group/file-provider');
     await bridge.register({ id: 'domain', displayName: 'Library' });
-    await bridge.changed('domain');
+    await bridge.changed('domain', ['root', 'album.QTE']);
     await bridge.evict('domain');
     await bridge.remove('domain');
-    assert.deepEqual(calls, ['register', 'changed', 'evict', 'remove']);
+    assert.deepEqual(calls, ['register', 'changed:root,album.QTE', 'evict', 'remove']);
     bridge.close();
     assert.equal(bridge.status().available, false);
   });

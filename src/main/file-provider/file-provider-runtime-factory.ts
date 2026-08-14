@@ -19,6 +19,7 @@ interface FileProviderRuntimeFactoryDeps {
   readonly library: { readonly id: string; readonly name: string };
   readonly platform: NodeJS.Platform;
   readonly packaged: boolean;
+  readonly onLibraryChanged: (listener: () => void) => () => void;
 }
 
 export function createFileProviderService(deps: FileProviderRuntimeFactoryDeps): FileProviderService {
@@ -60,6 +61,7 @@ export function createFileProviderService(deps: FileProviderRuntimeFactoryDeps):
     },
     admit: () => deps.unlocked() && deps.currentParts() === deps.parts,
     transport,
+    onLibraryChanged: deps.onLibraryChanged,
   });
   serviceReference.current = service;
   return service;
