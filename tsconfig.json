@@ -15,5 +15,5 @@
     "skipLibCheck": true
   },
   "include": ["src/shared/**/*.ts", "tests/**/*.ts", "playwright.config.ts", "playwright.perf.config.ts", "electron.vite.config.ts"],
-  "exclude": ["tests/dom", "tests/fixtures", "tests/theme/icon-switch-coverage.test.ts"]
+  "exclude": ["tests/dom", "tests/fixtures"]
 }
