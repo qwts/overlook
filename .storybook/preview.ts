@@ -6,14 +6,14 @@ import { createElement } from 'react';
 import '../src/renderer/src/styles/index.css';
 import budget from '../tests/a11y/violation-budget.json' with { type: 'json' };
 import { localeGlobalType, withIntl } from './intl-decorator';
-import { themeGlobalType, withTheme } from './theme-decorator';
+import { contrastGlobalType, themeGlobalType, withTheme } from './theme-decorator';
 import { AnnouncerProvider } from '../src/renderer/src/components/LiveAnnouncer';
 
 const withAnnouncer: Decorator = (Story) => createElement(AnnouncerProvider, null, createElement(Story));
 
 const preview: Preview = {
   decorators: [withTheme, withIntl, withAnnouncer],
-  globalTypes: { ...localeGlobalType, ...themeGlobalType },
+  globalTypes: { ...localeGlobalType, ...themeGlobalType, ...contrastGlobalType },
   parameters: {
     layout: 'fullscreen',
     // Point the a11y panel at the SAME tag set the budget is counted against, read from
