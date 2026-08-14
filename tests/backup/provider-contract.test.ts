@@ -126,5 +126,25 @@ describe('storage provider contract (#103)', () => {
     const recovered: Buffer[] = [];
     for await (const chunk of await faulty.getStream('blobs/aa/keep')) recovered.push(chunk as Buffer);
     assert.deepEqual(Buffer.concat(recovered), PAYLOAD);
+
+    faulty.arm('transient-get');
+    await assert.rejects(faulty.probe('blobs/aa/keep'), (error: unknown) => error instanceof ProviderError && error.kind === 'transient');
+    faulty.disarm('transient-get');
+  });
+
+  test('probe reports size without a body and classifies auth, abort, and non-files (#994)', async () => {
+    const { provider } = world();
+    await provider.put('blobs/aa/keep', Readable.from([PAYLOAD]));
+    assert.deepEqual(await provider.probe('blobs/aa/keep'), { bytes: PAYLOAD.length });
+
+    const aborted = new AbortController();
+    aborted.abort();
+    await assert.rejects(provider.probe('blobs/aa/keep', aborted.signal), (error: unknown) => error instanceof Error);
+
+    await assert.rejects(provider.probe('blobs/aa'), (error: unknown) => error instanceof ProviderError && error.kind === 'not-found');
+    await assert.rejects(provider.probe('blobs/aa/gone'), (error: unknown) => error instanceof ProviderError && error.kind === 'not-found');
+
+    provider.setConnected(false);
+    await assert.rejects(provider.probe('blobs/aa/keep'), (error: unknown) => error instanceof ProviderError && error.kind === 'auth');
   });
 });

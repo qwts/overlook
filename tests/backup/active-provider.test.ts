@@ -27,6 +27,7 @@ function fake(id: string): StorageProvider {
     accountIdentity: () => Promise.resolve({ accountId: id, accountLabel: id }),
     put: () => Promise.resolve({ bytes: 1 }),
     getStream: () => Promise.reject(new Error('unused')),
+    probe: () => Promise.resolve({ bytes: 1 }),
     list: () => Promise.resolve([{ path: `${id}/entry`, bytes: 1 }]),
     delete: () => Promise.resolve(),
     quota: () => Promise.resolve({ usedBytes: id.length, totalBytes: 100 }),
@@ -45,6 +46,7 @@ describe('active-provider delegator (#256)', () => {
 
     assert.equal(provider.id, 'mock');
     assert.deepEqual(await provider.list('x'), [{ path: 'mock/entry', bytes: 1 }]);
+    assert.deepEqual(await provider.probe('x'), { bytes: 1 });
 
     active = 'pcloud';
     assert.equal(provider.id, 'pcloud', 'same reference, new delegate — no engine rebuild needed');

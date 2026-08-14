@@ -138,7 +138,7 @@ async function verifyWorld(count = 3): Promise<{
   return { provider, masterKey, targetDir, photos, keyStore, deps };
 }
 
-test('verify classifies 1 missing + 1 corrupt, does not activate staging, and is idempotent', async () => {
+test('verify classifies missing originals without downloading; heal restore skips them', async () => {
   const world = await verifyWorld(3);
   const [kept, missing, corrupt] = world.photos;
   assert.ok(kept !== undefined && missing !== undefined && corrupt !== undefined);
@@ -147,14 +147,13 @@ test('verify classifies 1 missing + 1 corrupt, does not activate staging, and is
 
   const engine = new RestoreEngine(world.deps);
   const result = await engine.verify({ masterKey: world.masterKey, allowReplace: false });
-  assert.equal(result.missing.length, 2);
+  assert.equal(result.missing.length, 1);
   assert.equal(result.missingCount, 1);
-  assert.equal(result.corruptCount, 1);
-  assert.equal(result.verifiedCount, 1);
+  assert.equal(result.corruptCount, 0);
+  assert.equal(result.verifiedCount, 2);
   assert.equal(result.photos, 3);
-  const reasons = new Map(result.missing.map((m) => [m.path, m.reason]));
-  assert.equal(reasons.get(missing.blobPath), 'not-found');
-  assert.equal(reasons.get(corrupt.blobPath), 'failed-verification');
+  assert.equal(result.missing[0]?.path, missing.blobPath);
+  assert.equal(result.missing[0]?.reason, 'not-found');
   assert.equal(existsSync(join(world.targetDir, 'library.db')), false);
   assert.equal(existsSync(`${world.targetDir}.restore-staging`), false);
 
@@ -164,11 +163,19 @@ test('verify classifies 1 missing + 1 corrupt, does not activate staging, and is
     [...result.missing].sort((a, b) => a.path.localeCompare(b.path)),
   );
 
+  const gets: string[] = [];
+  const getStream = world.provider.getStream.bind(world.provider);
+  world.provider.getStream = (path) => {
+    gets.push(path);
+    return getStream(path);
+  };
   const runResult = await new RestoreEngine(world.deps).run({
     masterKey: world.masterKey,
     allowReplace: false,
     verification: result,
   });
+  assert.equal(gets.includes(missing.blobPath), false);
+  assert.equal(gets.includes(corrupt.blobPath), true);
   assert.equal(runResult.missing.length, 2);
   assert.equal(runResult.photos, 1);
   assert.equal(existsSync(join(world.targetDir, 'library.db')), true);
@@ -257,7 +264,7 @@ test('verify emits per-object discovering/verifying progress', async () => {
   assert.equal(verifying.at(-1)?.total, 3);
 });
 
-test('a listing miss is not NOT FOUND when getStream can still read the object (#969)', async () => {
+test('a listing miss is not NOT FOUND when probe can still see the object (#969/#994)', async () => {
   const world = await verifyWorld(2);
   const hidden = new Set(world.photos.map((photo) => photo.blobPath));
   const list = world.provider.list.bind(world.provider);
@@ -272,7 +279,7 @@ test('a listing miss is not NOT FOUND when getStream can still read the object (
   assert.equal(existsSync(join(world.targetDir, 'library.db')), true);
 });
 
-test('getStream not-found is still NOT FOUND after a listing miss (#969)', async () => {
+test('probe not-found is still NOT FOUND after a listing miss (#969/#994)', async () => {
   const world = await verifyWorld(1);
   const photo = world.photos[0];
   assert.ok(photo);
@@ -289,12 +296,32 @@ test('a transient provider read remains retryable and is never classified as cor
   const world = await verifyWorld(1);
   const photo = world.photos[0];
   assert.ok(photo);
-  const getStream = world.provider.getStream.bind(world.provider);
-  world.provider.getStream = (path) =>
-    path === photo.blobPath ? Promise.reject(new ProviderError('provider is temporarily offline', 'transient', 'object')) : getStream(path);
+  const list = world.provider.list.bind(world.provider);
+  const probe = world.provider.probe.bind(world.provider);
+  world.provider.list = async (prefix, signal) => (await list(prefix, signal)).filter((entry) => !entry.path.startsWith('blobs/'));
+  world.provider.probe = (path, signal) =>
+    path === photo.blobPath
+      ? Promise.reject(new ProviderError('provider is temporarily offline', 'transient', 'object'))
+      : probe(path, signal);
   await assert.rejects(
     () => new RestoreEngine(world.deps).verify({ masterKey: world.masterKey, allowReplace: false }),
     (error: unknown) => error instanceof ProviderError && error.kind === 'transient',
+  );
+});
+
+test('verify does not download original bodies (#994)', async () => {
+  const world = await verifyWorld(2);
+  const gets: string[] = [];
+  const getStream = world.provider.getStream.bind(world.provider);
+  world.provider.getStream = (path) => {
+    gets.push(path);
+    return getStream(path);
+  };
+  const plan = await new RestoreEngine(world.deps).verify({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(plan.verifiedCount, 2);
+  assert.deepEqual(
+    gets.filter((path) => path.startsWith('blobs/')),
+    [],
   );
 });
 

@@ -40,6 +40,7 @@ export function createActiveProvider(options: ActiveProviderOptions): StoragePro
     accountIdentity: (signal) => delegate().accountIdentity(signal),
     put: (path, bytes) => delegate().put(path, bytes),
     getStream: (path) => delegate().getStream(path),
+    probe: (path, signal) => delegate().probe(path, signal),
     list: (prefix, signal) => delegate().list(prefix, signal),
     delete: (path) => delegate().delete(path),
     quota: (signal) => delegate().quota(signal),

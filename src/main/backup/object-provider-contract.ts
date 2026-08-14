@@ -37,6 +37,7 @@ export async function exerciseObjectProviderContract(browser: StorageProvider, l
     await provider.put(bootstrap, Readable.from([PAYLOAD]));
     assert.ok((await browser.listLibraries()).includes(libraryId));
     assert.deepEqual(await provider.list('blobs'), [{ path, bytes: PAYLOAD.length }]);
+    assert.deepEqual(await provider.probe(path), { bytes: PAYLOAD.length });
     assert.deepEqual(await buffer(await provider.getStream(path)), PAYLOAD);
     assert.deepEqual(await provider.verify(path), {
       sha256: createHash('sha256').update(PAYLOAD).digest('hex'),
