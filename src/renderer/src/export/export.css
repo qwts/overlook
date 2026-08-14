@@ -36,6 +36,38 @@
   color: var(--text-body);
 }
 
+.ovl-export__dimensionGroup {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  align-items: end;
+  gap: var(--space-2);
+  color: var(--text-body);
+  font-size: var(--text-md);
+}
+
+.ovl-export__dimensionGroup label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-faint);
+  font: var(--type-meta);
+}
+
+.ovl-export__dimensionGroup input {
+  width: 76px;
+  color: var(--text-body);
+  background-color: var(--gray-0);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  padding: var(--space-1) var(--space-2);
+}
+
+.ovl-export__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .ovl-export__destinationPath,
 .ovl-export__failureValue {
   width: 100%;

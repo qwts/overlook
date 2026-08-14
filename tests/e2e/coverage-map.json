@@ -1857,6 +1857,7 @@
             "tests/moodboard/announce.test.ts",
             "tests/moodboard/availability.test.ts",
             "tests/moodboard/export-layout.test.ts",
+            "tests/export/board-export.test.ts",
             "tests/library/app-state.test.ts",
             "tests/main/application-menu-model.test.ts",
             "tests/db/board-repository.test.ts",
@@ -1870,11 +1871,6 @@
         {
           "type": "playwright-e2e",
           "path": "tests/e2e/moodboard.spec.ts"
-        },
-        {
-          "type": "deferred",
-          "issue": 696,
-          "reason": "The composed-board export at declared dimensions + color space (I4 raster / export-geometry E2E) is deferred to #696 pending the export owner's confirmation of the color-managed render path (spec section 09); transcode.ts currently strips ICC on the JPEG path. The board->output geometry is covered by the pure export-layout unit test."
         },
         {
           "type": "manual",

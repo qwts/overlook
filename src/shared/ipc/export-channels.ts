@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ChannelDefinition } from './channels.js';
+import { boardExportRequestSchema, boardExportResultSchema } from '../moodboard/export-contract.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   name: string,
@@ -32,5 +33,6 @@ export const exportChannels = {
     result,
   ),
   exportRunAll: channel('export:run-all', z.object({ destination: z.string().min(1), metadata: metadataMode.optional() }), result),
+  exportRunBoard: channel('export:run-board', boardExportRequestSchema, boardExportResultSchema),
   exportCancel: channel('export:cancel', z.object({}), z.object({})),
 } as const;

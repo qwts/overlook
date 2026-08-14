@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { Board } from '../../../shared/moodboard/board.js';
+import type { PlacementAvailability } from '../../../shared/moodboard/availability.js';
 import { Moodboard } from './Moodboard';
 import { makeResolver, seedBoardFromPhotos } from './board-seed';
 
@@ -18,7 +19,7 @@ const SAVE_DEBOUNCE_MS = 400;
 
 export interface MoodboardRouteProps {
   readonly photos: readonly PhotoRecord[];
-  readonly onExport: (photoIds: readonly string[]) => void;
+  readonly onExport: (request: { readonly board: Board; readonly availability: Readonly<Record<string, PlacementAvailability>> }) => void;
 }
 
 function usable(photos: readonly PhotoRecord[]): readonly PhotoRecord[] {

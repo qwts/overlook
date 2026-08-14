@@ -4,6 +4,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 
 import './moodboard.css';
 import type { Board, BoardBackground, BoardSize, Placement } from '../../../shared/moodboard/board.js';
+import type { PlacementAvailability } from '../../../shared/moodboard/availability.js';
 import {
   BOARD_ZOOM_MAX,
   BOARD_ZOOM_MIN,
@@ -99,7 +100,7 @@ type Drag =
 export interface MoodboardProps {
   readonly board: Board;
   readonly resolvePlacement: ResolvePlacement;
-  readonly onExport?: (photoIds: readonly string[]) => void;
+  readonly onExport?: (request: { readonly board: Board; readonly availability: Readonly<Record<string, PlacementAvailability>> }) => void;
   /** Seeds the initial selection (stories, tests); the canvas owns it after. */
   readonly initialSelection?: readonly string[];
   /** Photo ids available to add — used to repopulate an emptied board. */
@@ -572,7 +573,14 @@ export function Moodboard({
         onZoomIn={() => zoomBy(1)}
         onZoomOut={() => zoomBy(-1)}
         onFit={() => zoomBy(0)}
-        onExport={() => onExport?.(board.placements.map((p) => p.photoId))}
+        onExport={() =>
+          onExport?.({
+            board,
+            availability: Object.fromEntries(
+              board.placements.map((placement) => [placement.id, resolvePlacement(placement.photoId).availability]),
+            ),
+          })
+        }
       />
 
       <ol className="ovl-moodboard__reading-order" aria-label={intl.formatMessage(moodboardMessages.readingOrder)}>
