@@ -2,7 +2,7 @@
 
 Use a packaged macOS build for first-frame and native-title-bar checks. The
 automated Electron and Storybook lanes cover persistence, runtime switching,
-token use, and both first-party contrast passes.
+token use, and standard/high-contrast passes over both first-party themes.
 
 ## Live application
 
@@ -16,6 +16,8 @@ token use, and both first-party contrast passes.
    the window.
 5. Select System, then change the operating-system appearance in both directions.
    Confirm the open window follows each change and Settings remains on System.
+6. Toggle the operating-system high-contrast preference. Confirm it strengthens
+   the current base appearance without changing the persisted selection.
 
 ## Persistence and first paint
 
@@ -27,9 +29,12 @@ token use, and both first-party contrast passes.
 
 ## Storybook and accessibility
 
-1. Run Storybook and use the appearance toolbar to inspect Dark and Light on
-   shell, grid, lightbox, dialogs, Settings, and protected stories.
+1. Run Storybook and use the appearance and contrast toolbars to inspect Dark,
+   Light, Dark/High Contrast, and Light/High Contrast on shell, grid, lightbox,
+   dialogs, Settings, and protected stories.
 2. Run `npm run test:stories:ci`. Confirm every non-exempt story is audited in
-   both modes against the checked-in WCAG 2.2 AA budget.
+   all four variants against the checked-in WCAG 2.2 AA budget.
 3. Run `npm run lint:colors`. Confirm renderer component CSS containing a raw
    color literal fails while token-source files remain the only color authority.
+4. Run `npm run lint:contrast`. Confirm text, status, selection, border, focus,
+   pressed, destructive, and photo-chrome pairs meet their declared floors.

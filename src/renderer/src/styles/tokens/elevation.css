@@ -17,6 +17,20 @@
   --shadow-3: 0 16px 48px rgb(23 26 33 / 0.2), 0 2px 8px rgb(23 26 33 / 0.14);
 }
 
+:root[data-contrast='more'] {
+  --shadow-1: none;
+  --shadow-2: 0 0 0 2px var(--border-1);
+  --shadow-3: 0 0 0 3px var(--border-2);
+}
+
+@media (forced-colors: active) {
+  :root[data-theme] {
+    --shadow-1: none;
+    --shadow-2: 0 0 0 2px ButtonBorder;
+    --shadow-3: 0 0 0 3px CanvasText;
+  }
+}
+
 /* One renderer-wide preference contract: components keep their semantic
  * transition/animation declarations, while reduced-motion users get an
  * effectively immediate lifecycle. The finite iteration override also stops

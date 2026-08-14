@@ -65,10 +65,13 @@ test('appearance resolution follows the system only in system mode (#395)', () =
 test('renderer appearance observer applies live settings and ignores a stale initial response (#395)', async () => {
   const root: AppearanceRoot = { dataset: {}, style: { colorScheme: '' } };
   const media = new FakeMedia();
+  const contrastMedia = new FakeMedia();
   const settings = new FakeSettings();
-  const dispose = installAppearanceObserver({ root, media, settings });
+  const dispose = installAppearanceObserver({ root, media, contrastMedia, settings });
 
-  assert.deepEqual(root, { dataset: { theme: 'light' }, style: { colorScheme: 'light' } });
+  assert.equal(root.dataset.theme, 'light');
+  assert.equal(root.dataset.contrast, undefined);
+  assert.equal(root.style.colorScheme, 'light');
   settings.push('dark');
   assert.equal(root.dataset.theme, 'dark');
   media.set(true);
@@ -79,6 +82,11 @@ test('renderer appearance observer applies live settings and ignores a stale ini
   media.set(false);
   assert.equal(root.dataset.theme, 'light');
 
+  contrastMedia.set(true);
+  assert.equal(root.dataset.contrast, 'more');
+  contrastMedia.set(false);
+  assert.equal(root.dataset.contrast, undefined);
+
   settings.resolve('dark');
   await settings.pendingGet;
   assert.equal(root.dataset.theme, 'light');
@@ -86,5 +94,7 @@ test('renderer appearance observer applies live settings and ignores a stale ini
   dispose();
   settings.push('dark');
   media.set(true);
+  contrastMedia.set(true);
   assert.equal(root.dataset.theme, 'light');
+  assert.equal(root.dataset.contrast, undefined);
 });
