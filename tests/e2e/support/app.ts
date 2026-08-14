@@ -88,6 +88,8 @@ export interface LaunchSpec {
   readonly prefix?: string;
   /** Reuse an existing profile dir (relaunch flows) instead of a fresh one. */
   readonly userData?: string;
+  /** Additional Electron argv, used for cold-start OS document-open flows. */
+  readonly args?: readonly string[];
   /** Extra launch env (OVERLOOK_SEED, fault injection, …). */
   readonly env?: Readonly<Record<string, string>>;
   /**
@@ -131,7 +133,7 @@ async function launchStages(spec: LaunchSpec, track: (tracked: TrackedApp) => vo
     null,
     LAUNCH_STAGE_TIMEOUT_MS,
     electron.launch({
-      args: ['.'],
+      args: ['.', ...(spec.args ?? [])],
       env: {
         ...process.env,
         OVERLOOK_USER_DATA: userData,

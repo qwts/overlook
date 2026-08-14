@@ -123,11 +123,16 @@ export class LibraryRegistryRuntime {
     this.closeSummary = undefined;
   }
 
-  /** Creates one serialized Finder-document handler after startup recovery has
-   * validated the registry and the live switch runtime is available. */
+  /** Creates one serialized Finder-document handler that can repair a moved
+   * startup target before the missing-path startup failure gate runs. */
   documentHandler(open: (id: string) => Promise<SwitchOutcome>, failure: (message: string) => void): (directory: string) => Promise<void> {
-    const router = new LibraryDocumentRouter({ registry: this.getRegistry(), open, failure });
-    return (directory) => router.open(directory);
+    return async (directory) => {
+      try {
+        await new LibraryDocumentRouter({ registry: this.getRegistry(), open, failure }).open(directory);
+      } catch {
+        failure('The library registry is unavailable.');
+      }
+    };
   }
 
   /** Fail loud, fail closed (§1): a corrupt registry must never be

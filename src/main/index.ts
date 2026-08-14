@@ -234,7 +234,8 @@ function getImportService(): ImportService {
       parts,
       harnessEnv,
       broadcast: (name, payload) => broadcast((win) => win.webContents.send(name, payload)),
-      imported: () => {
+      imported: (photoIds) => {
+        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         ensureMaintenanceServices();
         void posterCaptureService?.capture().catch(() => undefined);
         embeddingRuntime?.service.notifyWorkAvailable();
@@ -332,8 +333,7 @@ const changeProviderWork = (delta: 1 | -1): void => {
   embeddingRuntime?.service.notifyWorkAvailable();
 };
 
-const notifyEmbeddingEligibilityChanged = (photoIds: readonly string[]): void =>
-  embeddingRuntime?.service.notifyEligibilityChanged(photoIds);
+const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
 function getEmbeddingService(): EmbeddingService {
   embeddingRuntime ??= createEmbeddingApplicationRuntime({
@@ -792,13 +792,13 @@ void externalOpen.whenReady().then(async () => {
   // caches an entry and before anything opens or classifies libraries. A
   // corrupt registry falls through to resolveFailure()'s loud dialog below.
   await settleRelocationJournals();
+  await externalOpen.handleLibraryDocuments(
+    registryRuntime.documentHandler(switchLibrary, (message) => dialog.showErrorBox('Unable to open library', message)),
+  );
   if (!reportStartupFailures((title, message) => dialog.showErrorBox(title, message))) {
     app.exit(1);
     return;
   }
-  await externalOpen.handleLibraryDocuments(
-    registryRuntime.documentHandler(switchLibrary, (message) => dialog.showErrorBox('Unable to open library', message)),
-  );
   // Recover the activation rename crash window before IPC can classify/open the library.
   await recoverInterruptedActivation(restorePaths(libraryDataDir()));
   const lock = getAppLockController();
