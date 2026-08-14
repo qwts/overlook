@@ -4,8 +4,7 @@
     "rootDir": ".",
     "outDir": ".test-dist",
     "noEmit": false,
-    "sourceMap": true,
-    "jsx": "react-jsx"
+    "sourceMap": true
   },
   "exclude": ["tests/dom", "tests/fixtures"]
 }
