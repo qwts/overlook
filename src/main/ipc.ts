@@ -639,7 +639,7 @@ export function registerImportHandlers(
           failed: 0,
           cancelled: 0,
           sidecars: 0,
-          confirmationCancelled: true,
+          confirmationCancelled: true as const,
         };
       }
       // The zod refinement guarantees exactly one of path/files. Both paths

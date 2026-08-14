@@ -115,7 +115,7 @@ async function confirmImportMove(
     defaultId: 0,
     cancelId: 0,
     noLink: true,
-    title: 'Confirm Move import',
+    title: 'Confirm moving originals',
     message: 'Move these originals into Overlook?',
     detail: [
       'Requested source paths:',
