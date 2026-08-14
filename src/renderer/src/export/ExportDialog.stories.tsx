@@ -27,6 +27,17 @@ function installStub(): void {
       }
       return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, failures: [] };
     },
+    runBoard: () =>
+      Promise.resolve({
+        exported: true,
+        cancelled: false,
+        rendered: IDS.length,
+        skipped: 0,
+        skippedLocked: 0,
+        skippedUnavailable: 0,
+        fileName: 'Moodboard.png',
+        path: '/Users/demo/Exports/Moodboard.png',
+      }),
     cancel: () => Promise.resolve({}),
     onProgress: (next) => {
       listener = next;

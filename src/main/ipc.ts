@@ -9,6 +9,7 @@ import { wrapHandler as createValidatedHandler } from '../shared/ipc/registry.js
 import type { HandlerErrorReport } from '../shared/ipc/registry.js';
 import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js';
 import type { LibraryDescriptor } from '../shared/library/registry.js';
+import type { BoardExportRequest, BoardExportResult } from '../shared/moodboard/export-contract.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
 import type {
   ProviderCapacityStatus,
@@ -774,6 +775,7 @@ export interface ExportFacade {
     metadata?: 'original' | 'overlook' | 'none',
   ): Promise<ExportRunResult>;
   runAll(destination: string, metadata?: 'original' | 'overlook' | 'none'): Promise<ExportRunResult>;
+  runBoard(request: BoardExportRequest): Promise<BoardExportResult>;
   cancel(): void;
   pickDestination(): Promise<string | null>;
 }
@@ -809,6 +811,26 @@ export function registerExportHandlers(getFacade: () => ExportFacade, getActivit
         entityIds: [],
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
         payload: { format: 'original', metadata: metadata ?? 'original', scope: 'all', ...summary },
+      });
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.exportRunBoard.name, (_event, request: unknown) =>
+    wrapHandler(channels.exportRunBoard, async (input) => {
+      const result = await getFacade().runBoard(input);
+      getActivity?.().record({
+        eventType: 'photo.exported',
+        entityIds: input.board.placements.map((placement) => placement.photoId),
+        outcome: result.cancelled || result.skipped > 0 ? 'partial' : 'succeeded',
+        payload: {
+          scope: 'moodboard',
+          boardId: input.board.id,
+          colorSpace: input.colorSpace,
+          width: input.output.width,
+          height: input.output.height,
+          rendered: result.rendered,
+          skipped: result.skipped,
+        },
       });
       return result;
     })(request),

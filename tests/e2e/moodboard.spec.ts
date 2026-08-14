@@ -1,4 +1,8 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test';
+import sharp from 'sharp';
 
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 import { serializeBoard, type Board } from '../../src/shared/moodboard/board.js';
@@ -72,6 +76,46 @@ test('Moodboard view renders and its layout survives an app restart (I2)', async
     const restored = await page.evaluate<BoardResult>(`window.overlook.boards.get({ boardId: 'board-local' })`);
     if (restored.board === null) throw new Error('board did not survive restart');
     expect(serializeBoard(restored.board)).toBe(serializeBoard(SAVED_BOARD));
+  } finally {
+    await app.close();
+  }
+});
+
+test('Moodboard exports a color-managed PNG at declared dimensions (I4, I6)', async () => {
+  const userData = mkE2eTmpDir('overlook-e2e-moodboard-export-');
+  const destination = mkE2eTmpDir('overlook-e2e-moodboard-output-');
+  const app = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      OVERLOOK_USER_DATA: userData,
+      OVERLOOK_SEED: '3',
+      OVERLOOK_INSECURE_KEYSTORE: '1',
+      OVERLOOK_EXPORT_DESTINATION: destination,
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    await page.getByRole('radio', { name: 'Moodboard' }).click();
+    await expect(page.getByRole('application', { name: /Moodboard canvas/u })).toBeVisible();
+    await page.getByRole('button', { name: 'Export board' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export board' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Width').fill('320');
+    await dialog.getByLabel('Height').fill('240');
+    await dialog.getByRole('radio', { name: 'Display P3' }).click();
+    await dialog.getByRole('button', { name: 'Choose folder…' }).click();
+    await dialog.getByRole('button', { name: 'Export board' }).click();
+    await expect(dialog.getByText(/Board exported with \d+ placements?\./u)).toBeVisible({ timeout: 30_000 });
+
+    const files = readdirSync(destination);
+    expect(files).toEqual(['Summer palette.png']);
+    const metadata = await sharp(join(destination, files[0] ?? '')).metadata();
+    expect(metadata.width).toBe(320);
+    expect(metadata.height).toBe(240);
+    expect(metadata.format).toBe('png');
+    expect(metadata.icc?.length ?? 0).toBeGreaterThan(0);
   } finally {
     await app.close();
   }

@@ -7,7 +7,9 @@ import type { KeyResolver } from '../crypto/envelope.js';
 import type { ExportFacade } from '../ipc.js';
 import { ExportEngine, writeFileCleanly, type ExportMetadataMode } from './export-engine.js';
 import { transcodeToJpeg } from './transcode.js';
+import { BoardExportCancelledError, exportBoardPng } from './board-export.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
+import type { BoardExportRequest, BoardExportResult } from '../../shared/moodboard/export-contract.js';
 
 export type DrainableExportFacade = ExportFacade & { close(): void; drain(): Promise<void> };
 
@@ -85,9 +87,58 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     );
     return next;
   };
+  const scheduleBoard = (request: BoardExportRequest): Promise<BoardExportResult> => {
+    const task = async (): Promise<BoardExportResult> => {
+      if (closed) throw new Error('export service is closed');
+      controller = new AbortController();
+      try {
+        return await exportBoardPng(
+          request,
+          {
+            getPhoto: options.repo.get,
+            openOriginal: options.openOriginal,
+            writeFile: writeFileCleanly,
+            exists: async (filePath) =>
+              access(filePath).then(
+                () => true,
+                () => false,
+              ),
+            freeBytes: async (directory) => {
+              const stats = await statfs(directory);
+              return stats.bavail * stats.bsize;
+            },
+            joinPath: (directory, fileName) => path.join(directory, fileName),
+            progress: options.progress,
+          },
+          controller.signal,
+        );
+      } catch (error) {
+        if (!(error instanceof BoardExportCancelledError)) throw error;
+        return {
+          exported: false,
+          cancelled: true,
+          rendered: 0,
+          skipped: 0,
+          skippedLocked: 0,
+          skippedUnavailable: 0,
+          fileName: null,
+          path: null,
+        };
+      } finally {
+        controller = null;
+      }
+    };
+    const next = turn.then(task, task);
+    turn = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
   return {
     run: (photoIds, destination, format, metadata) => schedule(() => photoIds, destination, format, metadata),
     runAll: (destination, metadata) => schedule(options.repo.exportableIds, destination, 'original', metadata),
+    runBoard: scheduleBoard,
     cancel: () => controller?.abort(),
     close: () => {
       closed = true;
