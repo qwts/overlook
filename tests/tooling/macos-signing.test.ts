@@ -235,6 +235,10 @@ describe('macOS release signing safety (#357)', () => {
     for (const contract of ['com.zts1.overlook.library', 'com.apple.package', 'overlooklibrary'])
       assert.match(builder, new RegExp(contract));
     assert.match(buildExtension, /QuickLookUI/u);
+    assert.doesNotMatch(buildExtension, /'-bundle'/u);
+    assert.match(buildExtension, /'-fapplication-extension'/u);
+    assert.match(buildExtension, /'-Wl,-e,_NSExtensionMain'/u);
+    assert.match(buildExtension, /\\bEXECUTE\\b/u);
     assert.match(afterPack, /buildQuickLookExtension/u);
     assert.match(signer, /OverlookQuickLook\.appex/u);
     assert.match(signer, /quick-look-extension\/entitlements\.plist/u);
