@@ -211,9 +211,11 @@
    themes. System colors preserve the user's chosen contrast scheme; component
    CSS still consumes the same semantic tokens and must not opt out globally. */
 @media (forced-colors: active) {
-  /* The attribute adds specificity over the future adopted user-theme :root
-     sheet, so system colors remain authoritative without !important. */
-  :root[data-theme] {
+  /* The theme attribute outranks the future adopted user-theme :root sheet;
+     the contrast-qualified selector also ties the light high-contrast rule so
+     this later system-color layer stays authoritative without !important. */
+  :root[data-theme],
+  :root[data-theme][data-contrast='more'] {
     --gray-0: Canvas;
     --gray-1: Canvas;
     --gray-2: Canvas;

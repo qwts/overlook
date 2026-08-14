@@ -72,16 +72,21 @@ test('Windows forced colors map semantic chrome to system colors', async ({ laun
   await expect.poll(() => page.evaluate<boolean>("matchMedia('(forced-colors: active)').matches")).toBe(true);
   await expect
     .poll(() =>
-      page.evaluate<{ surface: string; text: string; selection: string }>(`(() => {
-        const style = getComputedStyle(document.documentElement);
+      page.evaluate<{ surface: string; text: string; selection: string; success: string; border: string }>(`(() => {
+        const root = document.documentElement;
+        root.dataset.theme = 'light';
+        root.dataset.contrast = 'more';
+        const style = getComputedStyle(root);
         return {
           surface: style.getPropertyValue('--surface-window').trim().toLowerCase(),
           text: style.getPropertyValue('--text-body').trim().toLowerCase(),
           selection: style.getPropertyValue('--selection').trim().toLowerCase(),
+          success: style.getPropertyValue('--accent-green').trim().toLowerCase(),
+          border: style.getPropertyValue('--border-1').trim().toLowerCase(),
         };
       })()`),
     )
-    .toEqual({ surface: 'canvas', text: 'canvastext', selection: 'highlight' });
+    .toEqual({ surface: 'canvas', text: 'canvastext', selection: 'highlight', success: 'linktext', border: 'buttonborder' });
 });
 
 test('shell, Settings, grid, and Lightbox controls remain reachable at 200% Electron zoom', async ({ launchOverlook }) => {
