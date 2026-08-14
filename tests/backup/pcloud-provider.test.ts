@@ -221,6 +221,17 @@ describe('pCloud provider adapter (#255)', () => {
     assert.equal(await kinds({ userinfo: () => new Response(null, { status: 503 }) }, (p) => p.quota()), 'transient');
   });
 
+  test('probe: uses checksumfile size and never fetches the download host', async () => {
+    const { provider, calls } = world({
+      checksumfile: () => ok({ metadata: { name: 'h1', isfolder: false, size: 12 } }),
+    });
+    assert.deepEqual(await provider.probe('blobs/ab/h1'), { bytes: 12 });
+    assert.equal(
+      calls.some((call) => call.method === 'getfilelink'),
+      false,
+    );
+  });
+
   test('getStream: follows the download host and streams the bytes', async () => {
     const { provider } = world({ getfilelink: () => ok({ hosts: ['dl.pcloud.com'], path: '/x/h1.bin' }) }, { '/x/h1.bin': 'DATA' });
     assert.deepEqual(await buffer(await provider.getStream('blobs/ab/h1')), Buffer.from('DATA'));

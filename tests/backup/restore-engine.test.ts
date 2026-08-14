@@ -76,6 +76,10 @@ class CountingProvider implements StorageProvider {
     return this.inner.getStream(path);
   }
 
+  probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    return this.inner.probe(path, signal);
+  }
+
   list(prefix: string): Promise<readonly RemoteEntry[]> {
     return this.inner.list(prefix);
   }

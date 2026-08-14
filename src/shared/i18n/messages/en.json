@@ -1383,31 +1383,40 @@
     "defaultMessage": "Restore complete — some items were NOT FOUND"
   },
   "restore.missing.help": {
-    "defaultMessage": "Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder."
+    "defaultMessage": "Unverified photos were excluded from the healed library. Their cloud objects were moved to the provider Trash when present, and the list is saved as restore-report.json plus quarantine/gen-N/gaps.json. Export the list before you leave this screen if you still need it."
   },
   "restore.restored.count": {
     "defaultMessage": "{count, plural, one {# photo restored.} other {# photos restored.}}"
   },
+  "restore.verify.cancel": {
+    "defaultMessage": "Cancel scan"
+  },
   "restore.verify.continue": {
-    "defaultMessage": "Continue with verified only"
+    "defaultMessage": "Heal"
   },
   "restore.verify.counts": {
     "defaultMessage": "{missing} missing, {corrupt} corrupt (failed verification) — {verified} verified"
   },
+  "restore.verify.discardDisclosure": {
+    "defaultMessage": "Discard moves this entire cloud backup to the provider Trash or Recently Deleted area. Your local library is not changed. This is the only path that removes the backup, and only after you type the confirmation."
+  },
+  "restore.verify.doNothing": {
+    "defaultMessage": "Do nothing"
+  },
   "restore.verify.exportCorrupt": {
-    "defaultMessage": "Export corrupt images"
+    "defaultMessage": "Save corrupt copies"
   },
   "restore.verify.exportCsv": {
-    "defaultMessage": "Export CSV"
+    "defaultMessage": "Export missing/corrupt list"
   },
   "restore.verify.heading": {
     "defaultMessage": "Verify backup before restore"
   },
   "restore.verify.help": {
-    "defaultMessage": "A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage."
+    "defaultMessage": "Missing or corrupt objects do not block recovery. Heal restores what verified and moves gaps aside. Discard trashes this backup after a second confirmation. Do nothing cancels with no changes."
   },
   "restore.verify.trash": {
-    "defaultMessage": "Trash backup and quit"
+    "defaultMessage": "Discard this backup…"
   },
   "restore.verify.trashConfirm": {
     "defaultMessage": "Type Permanently Delete Backup to confirm"

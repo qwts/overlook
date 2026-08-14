@@ -263,6 +263,14 @@ export class PCloudProvider implements StorageProvider {
     return Readable.fromWeb(response.body);
   }
 
+  async probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    const data = await this.api('checksumfile', { path: this.remotePath(path) }, undefined, signal);
+    const metadata = data['metadata'] as PCloudFileMeta | undefined;
+    if (typeof metadata?.size === 'number') return { bytes: metadata.size };
+    await this.api('getfilelink', { path: this.remotePath(path) }, undefined, signal);
+    return { bytes: 0 };
+  }
+
   async list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]> {
     let data: Record<string, unknown>;
     try {

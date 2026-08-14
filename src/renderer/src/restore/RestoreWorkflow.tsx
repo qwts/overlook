@@ -74,7 +74,7 @@ const messages = defineMessages({
   missingHelp: {
     id: 'restore.missing.help',
     defaultMessage:
-      'Unverified photos and companion files were excluded from the healed library. The next normal backup publishes this reduced catalog as the new cloud truth. The full excluded-object list is saved as restore-report.json in the library folder.',
+      'Unverified photos were excluded from the healed library. Their cloud objects were moved to the provider Trash when present, and the list is saved as restore-report.json plus quarantine/gen-N/gaps.json. Export the list before you leave this screen if you still need it.',
   },
   restoredCount: {
     id: 'restore.restored.count',
@@ -93,12 +93,19 @@ const messages = defineMessages({
   verifyHelp: {
     id: 'restore.verify.help',
     defaultMessage:
-      'A single missing or corrupt object must not prevent restoring what can be verified. Review the gap and choose how to proceed. Export options stay on this screen for triage.',
+      'Missing or corrupt objects do not block recovery. Heal restores what verified and moves gaps aside. Discard trashes this backup after a second confirmation. Do nothing cancels with no changes.',
   },
-  exportCsv: { id: 'restore.verify.exportCsv', defaultMessage: 'Export CSV' },
-  exportCorrupt: { id: 'restore.verify.exportCorrupt', defaultMessage: 'Export corrupt images' },
-  continueVerified: { id: 'restore.verify.continue', defaultMessage: 'Continue with verified only' },
-  trashBackup: { id: 'restore.verify.trash', defaultMessage: 'Trash backup and quit' },
+  exportCsv: { id: 'restore.verify.exportCsv', defaultMessage: 'Export missing/corrupt list' },
+  exportCorrupt: { id: 'restore.verify.exportCorrupt', defaultMessage: 'Save corrupt copies' },
+  continueVerified: { id: 'restore.verify.continue', defaultMessage: 'Heal' },
+  cancelScan: { id: 'restore.verify.cancel', defaultMessage: 'Cancel scan' },
+  trashBackup: { id: 'restore.verify.trash', defaultMessage: 'Discard this backup…' },
+  doNothing: { id: 'restore.verify.doNothing', defaultMessage: 'Do nothing' },
+  discardDisclosure: {
+    id: 'restore.verify.discardDisclosure',
+    defaultMessage:
+      'Discard moves this entire cloud backup to the provider Trash or Recently Deleted area. Your local library is not changed. This is the only path that removes the backup, and only after you type the confirmation.',
+  },
   trashConfirmLabel: { id: 'restore.verify.trashConfirm', defaultMessage: 'Type Permanently Delete Backup to confirm' },
   trashConfirmPlaceholder: { id: 'restore.verify.trashPlaceholder', defaultMessage: 'Permanently Delete Backup' },
   details: { id: 'restore.error.details', defaultMessage: 'Details' },
@@ -301,7 +308,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             verifiedCount: response.result.verifiedCount,
             photos: response.result.photos,
           });
-          if (response.result.missingCount === 0 && response.result.corruptCount === 0) setStep('confirm');
         }
       })
       .catch(() => {
@@ -544,6 +550,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                 label={progress === null ? 'Starting' : restoreStageLabel(progress.stage, true)}
                 {...(progress === null ? {} : { detail: restoreProgressDetail(progress) })}
               />
+              <Button variant="secondary" onClick={() => void window.overlook.restore.cancel({})}>
+                {intl.formatMessage(messages.cancelScan)}
+              </Button>
             </div>
           ) : verifyResult === null ? (
             <div className="ovl-restore__empty">Preparing verification…</div>
@@ -607,7 +616,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                   <Button
                     variant="primary"
                     onClick={() => {
-                      // Continue with verified only — heal and proceed to confirm with verified count
                       setStep('confirm');
                     }}
                   >
@@ -615,6 +623,15 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                   </Button>
                   <Button variant="danger" onClick={() => setShowTrashConfirm(true)}>
                     {intl.formatMessage(messages.trashBackup)}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setShowTrashConfirm(false);
+                      setStep('choose');
+                    }}
+                  >
+                    {intl.formatMessage(messages.doNothing)}
                   </Button>
                 </div>
                 {actionNotice === null ? null : (
@@ -624,10 +641,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                 )}
                 {showTrashConfirm ? (
                   <div className="ovl-restore__warnings ovl-restore__trashWarning">
-                    <strong>
-                      Trash backup and quit — this moves the scoped cloud backup to the provider's Trash or Recently Deleted area. Recovery
-                      remains subject to the provider's retention window.
-                    </strong>
+                    <strong>{intl.formatMessage(messages.discardDisclosure)}</strong>
                     <label className="ovl-restore__field">
                       <span>{intl.formatMessage(messages.trashConfirmLabel)}</span>
                       <input
@@ -654,7 +668,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                             })
                             .then((res) => {
                               if (res.trashed) {
-                                window.close();
+                                setShowTrashConfirm(false);
+                                setActionNotice('The cloud backup was moved to the provider Trash. The local library was not changed.');
+                                setStep('choose');
                                 return;
                               }
                               setError(res.error ?? { reason: 'io', message: 'The backup was not fully moved to Trash.' });
@@ -666,9 +682,6 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     </div>
                   </div>
                 ) : null}
-                <Button variant="ghost" onClick={() => setStep('choose')}>
-                  Back
-                </Button>
               </div>
             </>
           )}
@@ -681,7 +694,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
               <li>Disk space is checked before any originals download.</li>
               <li>Downloads are staged, verified, and resumable after cancellation.</li>
               <li>The current library remains active unless the complete staged restore validates.</li>
-              <li>Activation uses rollback-safe replacement, then Overlook relaunches.</li>
+              <li>Activation uses rollback-safe replacement. Overlook stays open on this screen.</li>
             </ul>
             {verifyResult !== null ? (
               <span>
@@ -735,7 +748,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           <strong>{missing.length === 0 ? 'Restore complete' : intl.formatMessage(messages.missingHeading)}</strong>
           <span className="ovl-restore__completeSummary">
             {restoredPhotoCount === null ? null : <span>{intl.formatMessage(messages.restoredCount, { count: restoredPhotoCount })}</span>}
-            <span>{fallbackNotice ?? 'Overlook is relaunching with the restored library.'}</span>
+            <span>{fallbackNotice ?? 'Quit and reopen Overlook to use the restored library.'}</span>
           </span>
           {missing.length === 0 ? null : (
             <div className="ovl-restore__warnings ovl-restore__missing" data-testid="restore-missing">

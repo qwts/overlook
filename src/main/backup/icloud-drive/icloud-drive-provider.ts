@@ -175,6 +175,15 @@ export class ICloudDriveProvider implements StorageProvider {
     return stream;
   }
 
+  async probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    const slash = path.lastIndexOf('/');
+    const parent = slash === -1 ? '.' : path.slice(0, slash);
+    const entries = await this.list(parent, signal);
+    const found = entries.find((entry) => entry.path === path);
+    if (found === undefined) throw new ProviderError(`no iCloud Drive entry at ${path}`, 'not-found');
+    return { bytes: found.bytes };
+  }
+
   async list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]> {
     if (prefix !== '.') assertSafeRemotePath(prefix);
     const normalized = prefix === '.' ? '' : prefix;

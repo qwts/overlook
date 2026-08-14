@@ -203,6 +203,51 @@ test('a reopened running dialog follows status-changed to the complete screen', 
   }
 });
 
+test('a finished verify stays on the results screen even when nothing is missing (#994)', async () => {
+  const { restore } = installOverlook({
+    ...idleRestoreStatus(),
+    phase: 'session',
+    sessionId: 'session-a',
+    libraryId: LIBRARY.libraryId,
+    providerId: 'prov-a',
+    verification: {
+      verificationId: 'plan-a',
+      libraryId: LIBRARY.libraryId,
+      generation: 3,
+      photos: 100,
+      verifiedCount: 100,
+      missingCount: 0,
+      corruptCount: 0,
+      missing: [],
+    },
+    libraries: [LIBRARY],
+  });
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <RestoreWorkflow context="settings" />
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    assert.ok(container.querySelector('[data-testid="restore-verify"]'));
+    assert.match(container.textContent ?? '', /0 missing, 0 corrupt/u);
+    assert.match(container.textContent ?? '', /Heal/u);
+    assert.match(container.textContent ?? '', /Discard this backup/u);
+    assert.match(container.textContent ?? '', /Do nothing/u);
+    assert.match(container.textContent ?? '', /Export missing\/corrupt list/u);
+    assert.match(container.textContent ?? '', /Save corrupt copies/u);
+    assert.doesNotMatch(container.textContent ?? '', /This replaces the active library/u);
+  } finally {
+    restore();
+  }
+});
+
 test('SettingsDialog no longer nests RestoreWorkflow, so closing Settings cannot unmount a running job', () => {
   const source = readFileSync(join(process.cwd(), 'src/renderer/src/settings/SettingsDialog.tsx'), 'utf8');
   assert.doesNotMatch(source, /RestoreWorkflow/u);

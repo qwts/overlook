@@ -182,7 +182,7 @@ test('restore coordinator discovers validated metadata and runs through an opaqu
   ]);
   const run = await coordinator.run('session-1', LIBRARY_ID, await verificationId(coordinator, 'session-1'), false);
   assert.equal(run.error, null);
-  assert.equal(run.result?.relaunching, true);
+  assert.equal(run.result?.relaunching, false);
   assert.equal(activated, true);
   assert.deepEqual(
     progress.map(({ stage }) => stage),

@@ -105,8 +105,13 @@ The complete product checklist and recovery procedure are in
 3. Confirm the real library is **Validated** with the expected generation,
    photo count, byte count, and album count. An in-progress blob-only folder
    and an empty contract-scratch folder must not appear.
-4. Review and run restore. Confirm completion/relaunch, exact photo/favorite/
-   album state, and open at least one original at full resolution.
+4. Review the verify results screen (present / missing / failed). The options
+   are Heal, Discard, and Do nothing. Do nothing must leave cloud and local
+   libraries unchanged. Discard must require the typed confirmation and must
+   not quit Overlook. Heal restores verified photos, moves gap objects aside,
+   and stays on the complete screen. Then quit and reopen Overlook. Confirm
+   exact photo/favorite/album state, and open at least one original at full
+   resolution.
 5. Repeat after cancelling during download; the next run must report resumable
    staged work and must not redownload already verified objects.
 6. Close Settings (or the restore dialog) while verify or restore is running.
@@ -116,14 +121,16 @@ The complete product checklist and recovery procedure are in
    screen. Starting again must not be required; if the lock is still held the
    dialog reattaches instead of showing “A restore is already running.”
 7. On a backup with extra missing/corrupt objects after the verify scan,
-   choose **Continue with verified only**. Restore must activate the verified
-   subset and list the extra gaps on the complete screen / `restore-report.json`,
-   not abort with “The backup changed after verification.”
+   choose **Heal**. Restore must activate the verified subset, move gap
+   objects aside, and list them on the complete screen / `restore-report.json`
+   plus the exported missing/corrupt list. It must not abort with “The backup
+   changed after verification.”
 8. If verify reports a wall of NOT FOUND on a backup that just completed on
    machine A, do not accept that as truth yet. A provider listing miss must
-   not hide objects `getStream` can still read. Retry once; a complete
-   backup should go straight to confirm (0 missing / 0 corrupt) and restore
-   the full photo count after relaunch.
+   not hide objects `probe` can still see, and verify must not download
+   original bodies. A complete backup stays on the results screen (0 missing /
+   0 corrupt) so you can choose Heal, Discard, or Do nothing. After Heal,
+   quit and reopen; the full photo count must be there.
 
 If the completed real library says **Wrong key**, compare the recovery-key
 fingerprint with machine A. If it says **Corrupt**, capture the library ID and
