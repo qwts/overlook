@@ -1,5 +1,11 @@
 # photos
 
+## 0.68.1
+
+### Patch Changes
+
+- 0956567: Require main-process confirmation before local Move imports can delete source originals.
+
 ## 0.68.0
 
 ### Minor Changes
