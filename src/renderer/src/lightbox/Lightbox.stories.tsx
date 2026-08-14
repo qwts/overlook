@@ -239,7 +239,10 @@ export const SquareFillCoversWidescreen: Story = {
     await waitFor(() => expect(viewport).toHaveAttribute('data-load-state', 'decoded'));
     await userEvent.dblClick(image);
     await expect(viewport).toHaveAttribute('data-mode', 'fill');
-    await expect(viewport).toHaveAttribute('data-zoom', '1.778');
+    // Poll the scale: until the ResizeObserver reports the viewport, Fill has a
+    // zero box to work from and reads back 1.000 alongside an already-'fill'
+    // mode. A bare assertion here caught that transient render and went red.
+    await waitFor(() => expect(viewport).toHaveAttribute('data-zoom', '1.778'));
     await expect(viewport).toHaveAttribute('data-pan-x', '0.0');
     await expect(viewport).toHaveAttribute('data-pan-y', '0.0');
     await expectOneAxisOverflow(viewport, image, 'vertical');
