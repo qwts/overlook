@@ -2056,6 +2056,25 @@
       ]
     },
     {
+      "id": "969-restore-list-is-not-presence",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verify and restore classify not-found only from getStream ProviderError.kind === 'not-found'. provider.list is a disk-space hint; a listing miss that getStream can still read must restore (#969).",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/restore-verify.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "A complete pCloud backup that verify used to report as all-NOT-FOUND is owner-verified in docs/acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md step 8."
+        }
+      ]
+    },
+    {
       "id": "391-semantic-embedding-index",
       "wiki": "Acceptance-Test-Semantic-Embedding-Index",
       "coverage": [
