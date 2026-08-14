@@ -1370,6 +1370,14 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/import/ImportDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/import/import-move-confirmation.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Use a packaged build to verify the native Move confirmation lists the exact requested paths, defaults to Cancel, leaves every source untouched on cancellation, and proceeds only after explicit confirmation."
         }
       ]
     },
