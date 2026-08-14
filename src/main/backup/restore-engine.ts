@@ -200,41 +200,34 @@ export class RestoreEngine {
     signal: AbortSignal | undefined,
     ticker: ScanTicker,
   ): Promise<void> {
-    const remote = new Map((await this.deps.provider.list('blobs')).map((e) => [e.path, e]));
     for (const photo of candidate.manifest.photos) {
       assertNotAborted(signal);
       try {
-        if (!remote.has(photo.blobPath)) {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
+        const stream = await this.deps.provider.getStream(photo.blobPath);
+        const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
+        const hasher = createHash('sha256');
+        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
+        const readable = Readable.from([ciphertext]);
+        try {
+          for await (const chunk of readable.pipe(decrypt)) {
+            hasher.update(chunk as Buffer);
+          }
+        } catch {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
           continue;
         }
-        try {
-          const stream = await this.deps.provider.getStream(photo.blobPath);
-          const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
-          addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
-          const hasher = createHash('sha256');
-          const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
-          const readable = Readable.from([ciphertext]);
-          try {
-            for await (const chunk of readable.pipe(decrypt)) {
-              hasher.update(chunk as Buffer);
-            }
-          } catch {
-            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
-            continue;
-          }
-          if (hasher.digest('hex') !== photo.contentHash) {
-            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
-          }
-        } catch (error) {
-          if (error instanceof ProviderError && error.kind === 'not-found') {
-            missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
-          } else if (error instanceof RestoreError) throw error;
-          else {
-            // Transient provider errors are not classified as corrupt — they
-            // remain retryable. Bubble as offline/transient.
-            throw error;
-          }
+        if (hasher.digest('hex') !== photo.contentHash) {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+        }
+      } catch (error) {
+        if (error instanceof ProviderError && error.kind === 'not-found') {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
+        } else if (error instanceof RestoreError) throw error;
+        else {
+          // Transient provider errors are not classified as corrupt — they
+          // remain retryable. Bubble as offline/transient.
+          throw error;
         }
       } finally {
         ticker.tick(photo.id);
@@ -251,32 +244,25 @@ export class RestoreEngine {
     ticker: ScanTicker,
   ): Promise<void> {
     if (candidate.manifest.schema !== 6) return;
-    const remote = new Map((await this.deps.provider.list('sidecars')).map((e) => [e.path, e]));
     for (const sidecar of candidate.manifest.sidecars) {
       assertNotAborted(signal);
       try {
-        if (!remote.has(sidecar.blobPath)) {
-          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
-          continue;
-        }
+        const stream = await this.deps.provider.getStream(sidecar.blobPath);
+        const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
+        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
+        const readable = Readable.from([buf]);
         try {
-          const stream = await this.deps.provider.getStream(sidecar.blobPath);
-          const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
-          addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
-          const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
-          const readable = Readable.from([buf]);
-          try {
-            for await (const _ of readable.pipe(decrypt)) {
-              // Drain every authenticated envelope chunk for verification
-            }
-          } catch {
-            missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'failed-verification' });
+          for await (const _ of readable.pipe(decrypt)) {
+            // Drain every authenticated envelope chunk for verification
           }
-        } catch (error) {
-          if (error instanceof ProviderError && error.kind === 'not-found') {
-            missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
-          } else throw error;
+        } catch {
+          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'failed-verification' });
         }
+      } catch (error) {
+        if (error instanceof ProviderError && error.kind === 'not-found') {
+          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
+        } else throw error;
       } finally {
         ticker.tick(sidecar.photoId);
       }
@@ -502,14 +488,8 @@ export class RestoreEngine {
     await saveCheckpoint(paths, checkpoint);
     const pending = entries.filter((entry) => !completed.has(entry.id));
     if (pending.length === 0) return checkpoint;
-    const remote = new Map((await this.deps.provider.list('sidecars')).map((entry) => [entry.path, entry]));
     for (const entry of pending) {
       assertNotAborted(signal);
-      if (!remote.has(entry.sidecar.blobPath)) {
-        if (missing === null) throw new RestoreError('corrupt', `manifest references missing ${entry.sidecar.blobPath}`);
-        missing.push({ path: entry.sidecar.blobPath, kind: 'sidecar', photoId: entry.sidecar.photoId, reason: 'not-found' });
-        continue;
-      }
       try {
         const remoteStream = await this.deps.provider.getStream(entry.sidecar.blobPath);
         await store.restoreSidecar(
@@ -631,17 +611,11 @@ export class RestoreEngine {
     await saveCheckpoint(paths, checkpoint);
     const remote = new Map((await this.deps.provider.list('blobs')).map((entry) => [entry.path, entry]));
     const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id));
-    const absent = new Set<string>();
+    // #969: list() is a size hint only. A listing miss is not NOT FOUND —
+    // getStream decides presence. Manifest bytes cover omitted paths.
     let requiredBytes = SCRATCH_BYTES;
     for (const photo of pending) {
-      const entry = remote.get(photo.blobPath);
-      if (entry === undefined) {
-        if (missing === null) throw new RestoreError('corrupt', `manifest references missing ${photo.blobPath}`);
-        missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
-        absent.add(photo.id);
-        continue;
-      }
-      requiredBytes += entry.bytes;
+      requiredBytes += remote.get(photo.blobPath)?.bytes ?? photo.bytes;
     }
     const available = await (this.deps.availableBytes ?? defaultAvailableBytes)(dirname(paths.targetDir));
     if (available < requiredBytes) {
@@ -650,7 +624,6 @@ export class RestoreEngine {
     let done = completed.size;
     this.emit('downloading', done, candidate.manifest.photos.length, null);
     for (const photo of pending) {
-      if (absent.has(photo.id)) continue;
       assertNotAborted(signal);
       try {
         const remoteStream = await this.deps.provider.getStream(photo.blobPath);

@@ -257,6 +257,34 @@ test('verify emits per-object discovering/verifying progress', async () => {
   assert.equal(verifying.at(-1)?.total, 3);
 });
 
+test('a listing miss is not NOT FOUND when getStream can still read the object (#969)', async () => {
+  const world = await verifyWorld(2);
+  const hidden = new Set(world.photos.map((photo) => photo.blobPath));
+  const list = world.provider.list.bind(world.provider);
+  world.provider.list = async (prefix, signal) => (await list(prefix, signal)).filter((entry) => !hidden.has(entry.path));
+  const engine = new RestoreEngine(world.deps);
+  const plan = await engine.verify({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(plan.missing.length, 0);
+  assert.equal(plan.verifiedCount, 2);
+  const result = await engine.run({ masterKey: world.masterKey, allowReplace: false, verification: plan });
+  assert.equal(result.photos, 2);
+  assert.equal(result.missing.length, 0);
+  assert.equal(existsSync(join(world.targetDir, 'library.db')), true);
+});
+
+test('getStream not-found is still NOT FOUND after a listing miss (#969)', async () => {
+  const world = await verifyWorld(1);
+  const photo = world.photos[0];
+  assert.ok(photo);
+  await world.provider.delete(photo.blobPath);
+  const list = world.provider.list.bind(world.provider);
+  world.provider.list = async (prefix, signal) => (await list(prefix, signal)).filter((entry) => entry.path !== photo.blobPath);
+  const result = await new RestoreEngine(world.deps).verify({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(result.missing.length, 1);
+  assert.equal(result.missing[0]?.reason, 'not-found');
+  assert.equal(result.verifiedCount, 0);
+});
+
 test('a transient provider read remains retryable and is never classified as corrupt', async () => {
   const world = await verifyWorld(1);
   const photo = world.photos[0];
