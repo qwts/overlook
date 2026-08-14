@@ -28,8 +28,30 @@ interface ProvisioningProfileModule {
   ) => void;
 }
 
+interface MacSignModule {
+  readonly nestedCodeSignArguments: (
+    configuration: {
+      readonly identity?: string;
+      readonly keychain?: string;
+      readonly optionsForFile?: (filePath: string) => {
+        readonly additionalArguments?: string[];
+        readonly hardenedRuntime?: boolean;
+        readonly requirements?: string;
+        readonly signatureFlags?: string | string[];
+        readonly timestamp?: string;
+      };
+    },
+    bundlePath: string,
+    entitlements: string,
+  ) => string[];
+}
+
 function provisioningProfileModule(): Promise<ProvisioningProfileModule> {
   return import(pathToFileURL(join(root, 'scripts/provisioning-profile.mjs')).href) as Promise<ProvisioningProfileModule>;
+}
+
+function macSignModule(): Promise<MacSignModule> {
+  return import(pathToFileURL(join(root, 'scripts/sign-macos-app.mjs')).href) as Promise<MacSignModule>;
 }
 
 function source(path: string): string {
@@ -119,7 +141,7 @@ describe('macOS release signing safety (#357)', () => {
     for (const binary of ['plutil', 'security']) assert.match(provisioningProfile, new RegExp(binary, 'u'));
   });
 
-  test('builds and signs the nested File Provider extension with its own identity', () => {
+  test('builds and signs the nested File Provider extension with its own identity', async () => {
     const builder = source('electron-builder.yml');
     const buildExtension = source('scripts/build-file-provider-extension.mjs');
     const signer = source('scripts/sign-macos-app.mjs');
@@ -131,11 +153,10 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(buildExtension, /embedded\.provisionprofile/u);
     assert.match(buildExtension, /ElectronTeamID/u);
     assert.match(buildExtension, /xcrun/u);
-    assert.match(signer, /optionsForFile/u);
-    assert.match(signer, /binaries/u);
+    assert.match(signer, /signNestedBundle/u);
+    assert.match(signer, /nestedCodeSignArguments/u);
+    assert.match(signer, /verifyFileProviderIdentity/u);
     assert.match(signer, /Contents.*PlugIns.*OverlookFileProvider\.appex/u);
-    assert.match(signer, /ignore:/u);
-    assert.match(signer, /extensionEntitlements\(filePath\) !== null \? false/u);
     assert.match(signer, /preEmbedProvisioningProfile: false/u);
     assert.match(signer, /preAutoEntitlements: false/u);
     assert.match(signer, /OverlookFileProvider\.appex/u);
@@ -149,6 +170,40 @@ describe('macOS release signing safety (#357)', () => {
     ]) {
       assert.match(extensionEntitlements, new RegExp(contract.replaceAll('.', '\\.')));
     }
+
+    const { nestedCodeSignArguments } = await macSignModule();
+    assert.deepEqual(
+      nestedCodeSignArguments(
+        {
+          identity: 'Developer ID hash',
+          keychain: '/tmp/agent.keychain',
+          optionsForFile: () => ({
+            additionalArguments: ['--generate-entitlement-der'],
+            hardenedRuntime: true,
+            requirements: '=designated => anchor apple generic',
+            signatureFlags: ['library'],
+            timestamp: 'none',
+          }),
+        },
+        '/tmp/OverlookFileProvider.appex',
+        '/tmp/file-provider-entitlements.plist',
+      ),
+      [
+        '--sign',
+        'Developer ID hash',
+        '--force',
+        '--keychain',
+        '/tmp/agent.keychain',
+        '--timestamp=none',
+        '--options',
+        'library,runtime',
+        '-r=designated => anchor apple generic',
+        '--generate-entitlement-der',
+        '--entitlements',
+        '/tmp/file-provider-entitlements.plist',
+        '/tmp/OverlookFileProvider.appex',
+      ],
+    );
   });
 
   test('builds a sandboxed privacy-safe Quick Look extension without custody entitlements (#799)', () => {
