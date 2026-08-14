@@ -19,7 +19,6 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
   const emitScanProgress = createEmitter(events.scanProgress, options.broadcast);
   const emitCopyProgress = createEmitter(events.importCopyProgress, options.broadcast);
   const emitThumbProgress = createEmitter(events.importThumbProgress, options.broadcast);
-  const emitChanged = createEmitter(events.libraryChanged, options.broadcast);
   const emitPending = createEmitter(events.pendingCountChanged, options.broadcast);
   return createImportRuntime({
     dataDir: options.dataDir,
@@ -37,7 +36,6 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
       copyProgress: (done, total) => emitCopyProgress({ done, total }),
       thumbProgress: (done, total) => emitThumbProgress({ done, total }),
       imported: (photoIds) => {
-        emitChanged({ photoIds: [...photoIds], membership: 'library' });
         const pending = repo.stats().pending;
         emitPending({ count: pending });
         options.imported(photoIds, pending);

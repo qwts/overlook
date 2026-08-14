@@ -387,7 +387,7 @@ export function LibrarySwitcher({
               size="sm"
               disabled={creating}
               onClick={() => {
-                void window.overlook.libraries.pickLocation().then(({ path }) => {
+                void window.overlook.libraries.pickCreateLocation().then(({ path }) => {
                   if (path !== null) setCreatePath(path);
                 });
               }}

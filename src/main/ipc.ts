@@ -436,6 +436,7 @@ export interface LibraryRegistryFacade {
   resetDisplayName(id: string): LibraryDescriptor;
   add(path: string | null): Promise<LibraryAddOutcome>;
   pickLocation(): Promise<{ path: string | null }>;
+  pickCreateLocation(): Promise<{ path: string | null }>;
 }
 
 // Multi-library registry (#384): registry mutations never require content
@@ -468,6 +469,9 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
   );
   ipcMain.handle(channels.libraryRegistryPickLocation.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRegistryPickLocation, () => getFacade().pickLocation())(request),
+  );
+  ipcMain.handle(channels.libraryRegistryPickCreateLocation.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRegistryPickCreateLocation, () => getFacade().pickCreateLocation())(request),
   );
 }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { commandLineOpenPaths, ExternalOpenIntake, type IntakeScheduler } from '../../src/main/import/external-open-intake.js';
+import { commandLineOpenPaths, ExternalOpenIntake, openPathKey, type IntakeScheduler } from '../../src/main/import/external-open-intake.js';
 
 class ManualScheduler implements IntakeScheduler {
   private readonly tasks = new Map<number, () => void>();
@@ -25,6 +25,12 @@ class ManualScheduler implements IntakeScheduler {
 }
 
 describe('external open intake (#406)', () => {
+  test('dedupe keys preserve case only on case-sensitive platforms', () => {
+    assert.equal(openPathKey('/Photos/FAMILY.overlooklibrary', 'darwin'), '/photos/family.overlooklibrary');
+    assert.equal(openPathKey('/Photos/FAMILY.overlooklibrary', 'win32'), '/photos/family.overlooklibrary');
+    assert.equal(openPathKey('/Photos/FAMILY.overlooklibrary', 'linux'), '/Photos/FAMILY.overlooklibrary');
+  });
+
   test('argv parsing strips Electron launch arguments and rejects flags', () => {
     assert.deepEqual(commandLineOpenPaths(['/Electron', '/app', 'one.jpg', '--inspect', '/two.nef'], false, '/cwd', 'darwin'), [
       '/cwd/one.jpg',

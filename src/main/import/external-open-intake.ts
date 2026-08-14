@@ -20,7 +20,7 @@ const defaultScheduler: IntakeScheduler = {
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
-function pathKey(path: string, platform: NodeJS.Platform): string {
+export function openPathKey(path: string, platform: NodeJS.Platform = process.platform): string {
   return platform === 'win32' || platform === 'darwin' ? path.toLocaleLowerCase('en-US') : path;
 }
 
@@ -30,7 +30,7 @@ export function normalizeOpenPaths(paths: readonly string[], cwd: string, platfo
     const trimmed = candidate.trim();
     if (trimmed === '' || (!isAbsolute(trimmed) && trimmed.startsWith('-'))) continue;
     const absolute = isAbsolute(trimmed) ? resolve(trimmed) : resolve(cwd, trimmed);
-    normalized.set(pathKey(absolute, platform), absolute);
+    normalized.set(openPathKey(absolute, platform), absolute);
   }
   return [...normalized.values()];
 }
@@ -69,7 +69,7 @@ export class ExternalOpenIntake {
     const normalized = normalizeOpenPaths(paths, cwd, this.platform);
     for (const path of normalized) {
       if (this.pending.size >= MAX_PENDING_PATHS) break;
-      this.pending.set(pathKey(path, this.platform), path);
+      this.pending.set(openPathKey(path, this.platform), path);
     }
     if (normalized.length > 0) this.options.attention?.();
     this.arm(this.delayMs);

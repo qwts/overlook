@@ -135,7 +135,7 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(signer, /binaries/u);
     assert.match(signer, /Contents.*PlugIns.*OverlookFileProvider\.appex/u);
     assert.match(signer, /ignore:/u);
-    assert.match(signer, /isFileProviderExtension\(filePath\) \? false/u);
+    assert.match(signer, /extensionEntitlements\(filePath\) !== null \? false/u);
     assert.match(signer, /preEmbedProvisioningProfile: false/u);
     assert.match(signer, /preAutoEntitlements: false/u);
     assert.match(signer, /OverlookFileProvider\.appex/u);
@@ -149,6 +149,34 @@ describe('macOS release signing safety (#357)', () => {
     ]) {
       assert.match(extensionEntitlements, new RegExp(contract.replaceAll('.', '\\.')));
     }
+  });
+
+  test('builds a sandboxed privacy-safe Quick Look extension without custody entitlements (#799)', () => {
+    const builder = source('electron-builder.yml');
+    const buildExtension = source('scripts/build-quick-look-extension.mjs');
+    const afterPack = source('scripts/prune-foreign-binaries.mjs');
+    const signer = source('scripts/sign-macos-app.mjs');
+    const verifier = source('scripts/verify-macos-provisioned-app.mjs');
+    const extension = source('native/quick-look-extension/OverlookQuickLook.m');
+    const info = source('native/quick-look-extension/Info.plist');
+    const entitlements = source('native/quick-look-extension/entitlements.plist');
+    for (const contract of ['com.zts1.overlook.library', 'com.apple.package', 'overlooklibrary'])
+      assert.match(builder, new RegExp(contract));
+    assert.match(buildExtension, /QuickLookUI/u);
+    assert.match(afterPack, /buildQuickLookExtension/u);
+    assert.match(signer, /OverlookQuickLook\.appex/u);
+    assert.match(signer, /quick-look-extension\/entitlements\.plist/u);
+    assert.match(verifier, /OverlookQuickLook\.appex/u);
+    assert.match(verifier, /trueEntitlement\(quickLookEntitlements, 'com\.apple\.security\.app-sandbox'\)/u);
+    assert.match(verifier, /Quick Look extension unexpectedly claims/u);
+    assert.match(info, /com\.apple\.quicklook\.preview/u);
+    assert.match(info, /com\.zts1\.overlook\.library/u);
+    assert.match(entitlements, /com\.apple\.security\.app-sandbox/u);
+    for (const forbidden of ['library.db', 'library-id', 'master.key', 'keys.json', 'thumbnail', 'album']) {
+      assert.doesNotMatch(extension, new RegExp(forbidden.replace('.', '\\.'), 'iu'));
+    }
+    assert.match(extension, /OverlookSummary\.json/u);
+    assert.match(extension, /SummaryLimit = 4096/u);
   });
 
   test('the signed app executable is the native messaging host and registration is build-identity gated', () => {

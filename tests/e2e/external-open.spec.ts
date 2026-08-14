@@ -1,7 +1,8 @@
-import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ElectronApplication, Page } from '@playwright/test';
+import type { OverlookApi } from '../../src/shared/ipc/api.js';
 
 import { expect, test } from './support/app.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
@@ -172,4 +173,39 @@ test('P0 #406/#489: a dropped folder recursively moves only admitted files after
   expect(existsSync(unrelated)).toBe(true);
   expect(app.windows()).toHaveLength(1);
   await expectNativeAttentionMatchesHarness(app);
+});
+
+test('P0 #799: a moved Finder library package repairs its missing path and opens without import intake', async ({ launchOverlook }) => {
+  const packageRoot = mkE2eTmpDir('overlook-e2e-library-document-');
+  const first = await launchOverlook({ prefix: 'overlook-e2e-library-document-profile-', env: { OVERLOOK_SEED: '1' } });
+  const requestedPath = join(packageRoot, 'Finder Family');
+  const created = await first.page.evaluate(
+    async ({ requested }) => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      return (await overlook.libraries.create({ name: 'Finder Family', path: requested })).library;
+    },
+    { requested: requestedPath },
+  );
+  expect(created.path).toBe(join(packageRoot, 'Finder Family.overlooklibrary'));
+  const summary = JSON.parse(readFileSync(join(created.path, 'OverlookSummary.json'), 'utf8')) as unknown;
+  expect(summary).toEqual({ version: 1, name: 'Finder Family', itemCount: 0, updatedAt: expect.any(String) });
+
+  await first.close();
+  const moved = join(packageRoot, 'Moved Family.overlooklibrary');
+  renameSync(created.path, moved);
+  const second = await launchOverlook({ userData: first.userData, args: [moved], readyTestId: 'empty-state' });
+  const current = await second.page.evaluate(async () => {
+    const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+    return (await overlook.libraries.current()).library;
+  });
+  expect(current).toMatchObject({ id: created.id, path: moved, open: true, missing: false });
+  await expect(second.page.getByRole('dialog', { name: 'Import photos' })).toHaveCount(0);
+  await expectNativeAttentionMatchesHarness(second.app);
+
+  await second.app.evaluate(({ app }, fixture) => app.emit('open-file', { preventDefault: () => undefined }, fixture), FIXTURE);
+  await second.page.getByRole('button', { name: 'Import 1 photos', exact: true }).click();
+  await expect(second.page.getByText('All 1 photos imported and encrypted.')).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(() => (JSON.parse(readFileSync(join(moved, 'OverlookSummary.json'), 'utf8')) as { itemCount?: unknown }).itemCount)
+    .toBe(1);
 });
