@@ -1,5 +1,15 @@
 # photos
 
+## 0.70.0
+
+### Minor Changes
+
+- e99048a: Present custom libraries as Finder packages with identity-aware double-click routing and a privacy-safe Quick Look summary on macOS.
+
+### Patch Changes
+
+- 1a9af04: Restore verify shows Heal, Discard, and Do nothing. Missing or corrupt objects do not block recovery, and nothing is deleted unless Discard is confirmed.
+
 ## 0.69.0
 
 ### Minor Changes
