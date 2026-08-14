@@ -15,6 +15,7 @@
     "src/main/backup/restore-runtime-factory.ts",
     "src/main/export/export-facade-factory.ts",
     "src/main/export/export-destination.ts",
+    "src/main/file-provider/file-provider-runtime-factory.ts",
     "src/main/interop/inbound-move-ipc.ts",
     "src/main/interop/inbound-move-production.ts",
     "src/main/interop/inbound-move-runtime-factory.ts",

@@ -661,6 +661,7 @@ const egressRuntime = new EgressRuntime({
   dataDir: libraryDataDir,
   harnessEnv,
   unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
+  library: () => registryRuntime.resolveActive(),
 });
 
 async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
@@ -754,7 +755,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
       const authorized = Buffer.from(masterKey);
       releasedMaster = authorized;
       try {
-        getLibraryService();
+        egressRuntime.activateLibrary(getLibraryService);
       } finally {
         authorized.fill(0);
         releasedMaster = undefined;
@@ -848,7 +849,7 @@ void externalOpen.whenReady().then(async () => {
     getEmbedding: getEmbeddingService,
     getExport: () => egressRuntime.exports(),
     getNativeDrag: () => egressRuntime.nativeDrag(),
-    getPhotoKit: () => egressRuntime.photoKit(),
+    ...{ getPhotoKit: () => egressRuntime.photoKit(), getFileProvider: () => egressRuntime.fileProvider() },
     getKeyStore: () => requireParts('key store').keyStore,
     getRestore: getRestoreRuntime,
     getPurge: getPurgeRuntime,

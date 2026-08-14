@@ -14,6 +14,7 @@ import { resolveProviderTargetId } from './provider-presentation.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
 import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
+import { FileProviderSettings } from './FileProviderSettings';
 
 // Storage & Backup section (#114, updated by #239, #254): the provider
 // connection card + backup knobs. Disconnected now HIDES the backup-specific
@@ -266,6 +267,8 @@ export function StoragePane({
         onPrimary={onPrimary}
         onCapacityRoute={openCapacitySettings}
       />
+
+      <FileProviderSettings />
 
       <Dialog
         open={disconnectConfirmation}

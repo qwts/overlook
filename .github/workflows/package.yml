@@ -138,6 +138,7 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           MAC_PROVISIONING_PROFILE_B64: ${{ secrets.MAC_PROVISIONING_PROFILE }}
+          FILE_PROVIDER_PROVISIONING_PROFILE_B64: ${{ secrets.FILE_PROVIDER_PROVISIONING_PROFILE }}
           APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
@@ -160,8 +161,14 @@ jobs:
               printf '%s' "$APPLE_API_KEY_B64" | base64 -d > "$APPLE_API_KEY"
             fi
             if [ -n "$MAC_PROVISIONING_PROFILE_B64" ]; then
+              if [ -z "$FILE_PROVIDER_PROVISIONING_PROFILE_B64" ]; then
+                echo "FILE_PROVIDER_PROVISIONING_PROFILE is required for provisioned macOS packages" >&2
+                exit 1
+              fi
               export OVERLOOK_MAC_PROVISIONING_PROFILE="$RUNNER_TEMP/overlook.provisionprofile"
+              export OVERLOOK_FILE_PROVIDER_PROVISIONING_PROFILE="$RUNNER_TEMP/overlook-file-provider.provisionprofile"
               printf '%s' "$MAC_PROVISIONING_PROFILE_B64" | base64 -d > "$OVERLOOK_MAC_PROVISIONING_PROFILE"
+              printf '%s' "$FILE_PROVIDER_PROVISIONING_PROFILE_B64" | base64 -d > "$OVERLOOK_FILE_PROVIDER_PROVISIONING_PROFILE"
               npm run dist:signed:provisioned
             else
               # A profile-free release remains launchable and signed, but its

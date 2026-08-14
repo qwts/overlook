@@ -58,6 +58,8 @@ import type { NativeDragOutService } from './native-drag/native-drag-service.js'
 import { registerNativeDragHandlers } from './native-drag/native-drag-ipc.js';
 import type { PhotoKitService } from './photo-kit/photo-kit-service.js';
 import { registerPhotoKitHandlers } from './photo-kit/photo-kit-ipc.js';
+import type { FileProviderService } from './file-provider/file-provider-service.js';
+import { registerFileProviderHandlers } from './file-provider/file-provider-ipc.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -77,6 +79,7 @@ export interface AppServicesOptions {
   readonly getExport: () => DrainableExportFacade;
   readonly getNativeDrag: () => NativeDragOutService;
   readonly getPhotoKit: () => PhotoKitService;
+  readonly getFileProvider: () => FileProviderService;
   readonly getKeyStore: () => KeyStore;
   readonly safeStorage: Parameters<typeof createRecoveryKeyFacade>[0]['safeStorage'];
   readonly getRestore: () => RestoreRuntime;
@@ -179,6 +182,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerExportHandlers(options.getExport, options.getActivity);
   registerNativeDragHandlers(options.getNativeDrag, options.requireContentAccess);
   registerPhotoKitHandlers(options.getPhotoKit, options.requireContentAccess, options.onImported, options.getActivity);
+  registerFileProviderHandlers(options.getFileProvider, options.requireContentAccess);
   registerKeysHandlers(() =>
     createRecoveryKeyFacade({
       keyStore: options.getKeyStore,

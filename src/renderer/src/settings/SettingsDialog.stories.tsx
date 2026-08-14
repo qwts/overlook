@@ -348,6 +348,17 @@ function installStub(options?: {
     },
     export: () => Promise.resolve({ exported: true, count: diagnosticReports.length }),
   };
+  const fileProviderSnapshot: Awaited<ReturnType<OverlookApi['fileProvider']['status']>> = {
+    available: false,
+    reason: 'unsigned-build',
+    config: { version: 1, enabled: false, consentVersion: 1, scope: { kind: 'library' } },
+    albums: [],
+  };
+  const fileProviderApi: OverlookApi['fileProvider'] = {
+    status: () => Promise.resolve(fileProviderSnapshot),
+    enable: () => Promise.resolve(fileProviderSnapshot),
+    disable: () => Promise.resolve(fileProviderSnapshot),
+  };
   let interopStatus: Awaited<ReturnType<OverlookApi['interop']['status']>> = {
     provider: { provider: 'pcloud', status: 'not-connected', busy: false },
     pairing: { status: 'not-configured', pairingId: null, keyId: null, createdAt: null },
@@ -444,6 +455,7 @@ function installStub(options?: {
     restore: restoreApi,
     appLock: appLockApi,
     diagnostics: diagnosticsApi,
+    fileProvider: fileProviderApi,
     interop: interopApi,
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
@@ -678,7 +690,9 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Verify backup' }));
     await waitFor(() => expect(body.getByText('This replaces the active library.')).toBeVisible());
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeDisabled();
-    await userEvent.click(body.getByRole('checkbox'));
+    await userEvent.click(
+      body.getByRole('checkbox', { name: 'I understand that the active local library will be replaced after validation.' }),
+    );
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeEnabled();
     await userEvent.click(body.getByRole('button', { name: 'Restore 1,542 photos' }));
     await waitFor(() => expect(body.getByText('Restore complete')).toBeVisible());

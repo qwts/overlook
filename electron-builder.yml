@@ -38,6 +38,7 @@ files:
   - '!node_modules/@overlook/touch-id/raw_preview.mm'
   - '!node_modules/@overlook/touch-id/native_drag.mm'
   - '!node_modules/@overlook/touch-id/photokit.mm'
+  - '!node_modules/@overlook/touch-id/file_provider.mm'
 # Everything ships bundled by electron-vite (no runtime node_modules yet);
 # native modules must land in "dependencies" so npmRebuild picks them up
 # (ADR-0006's prebuilt-only policy — better-sqlite3/sharp arrive with M03).
@@ -96,6 +97,10 @@ mac:
   # Helpers/native children get only Electron's runtime allowances; Keychain
   # custody and iCloud container access stay on the main executable's identity.
   entitlementsInherit: build/entitlements.mac.inherit.plist
+  # The File Provider extension has a separate sandboxed identity. Preserve
+  # electron-builder's per-file policy while selecting its reviewed entitlement
+  # set for the nested appex executable and bundle.
+  sign: scripts/sign-macos-app.mjs
   # Runs only after a successful signing pass, and skips with a warning when
   # the APPLE_API_* env vars are absent — so unsigned builds are unaffected.
   notarize: true
