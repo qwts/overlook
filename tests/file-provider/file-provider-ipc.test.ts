@@ -32,7 +32,10 @@ describe('File Provider renderer IPC (#797)', () => {
     );
     const invoke = (channel: string, request: unknown): Promise<unknown> => Promise.resolve(handlers.get(channel)?.({}, request));
     assert.equal(((await invoke(channels.fileProviderStatus.name, {})) as { config: { enabled: boolean } }).config.enabled, false);
-    await assert.rejects(invoke(channels.fileProviderEnable.name, { scope: { kind: 'library' }, consentVersion: 0 }));
+    assert.deepEqual(await invoke(channels.fileProviderEnable.name, { scope: { kind: 'library' }, consentVersion: 0 }), {
+      __overlookIpcFailure: true,
+      error: { code: 'IPC_INVALID_REQUEST' },
+    });
     assert.equal(admitted, 0, 'schema rejection must precede authorization');
     assert.equal(
       (

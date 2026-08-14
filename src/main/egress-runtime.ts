@@ -1,5 +1,5 @@
-import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { app } from 'electron';
+import type { EphemeralOriginalService } from './backup/ephemeral-originals.js';
 import { PhotosRepository } from './db/photos-repository.js';
 import { createExportFacade } from './export/export-facade-factory.js';
 import type { DrainableExportFacade } from './export/export-runtime.js';
@@ -14,12 +14,8 @@ import { TestPhotoKitBridge } from './photo-kit/test-photo-kit-bridge.js';
 import { cleanupPhotoKitStage } from './photo-kit/photo-kit-staging.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { applicationEvents } from './application-events.js';
-import { createFileProviderBridge } from './file-provider/file-provider-bridge.js';
-import { FileProviderService } from './file-provider/file-provider-service.js';
-import { FileProviderStore } from './file-provider/file-provider-store.js';
-import { FileProviderTransport } from './file-provider/file-provider-transport.js';
-import { TestFileProviderBridge } from './file-provider/test-file-provider-bridge.js';
-import path from 'node:path';
+import type { FileProviderService } from './file-provider/file-provider-service.js';
+import { createFileProviderService } from './file-provider/file-provider-runtime-factory.js';
 
 export interface EgressRuntimeOptions {
   readonly parts: () => LibraryParts;
@@ -112,46 +108,17 @@ export class EgressRuntime {
   fileProvider(): FileProviderService {
     if (this.fileProviderService !== undefined) return this.fileProviderService;
     const parts = this.options.parts();
-    const repo = new PhotosRepository(parts.db);
-    const fixtureDirectory = this.options.harnessEnv('OVERLOOK_FILE_PROVIDER_STATE_DIRECTORY');
-    const bridge =
-      fixtureDirectory === undefined
-        ? createFileProviderBridge({ platform: process.platform, packaged: app.isPackaged })
-        : new TestFileProviderBridge(fixtureDirectory);
-    const stateDirectory = bridge.status().available ? bridge.stateDirectory() : null;
-    const serviceReference: { current?: FileProviderService } = {};
-    const currentService = (): FileProviderService => {
-      if (serviceReference.current === undefined) throw new Error('File Provider service is unavailable');
-      return serviceReference.current;
-    };
-    const transport =
-      stateDirectory === null
-        ? undefined
-        : new FileProviderTransport(stateDirectory, {
-            enumerate: (parentId) => currentService().enumerate(parentId),
-            item: (itemId) => currentService().item(itemId),
-            materialize: (itemId) => currentService().materialize(itemId),
-          });
-    const service = new FileProviderService({
-      bridge,
-      store: new FileProviderStore(path.join(this.options.dataDir(), 'file-provider.json')),
+    const service = createFileProviderService({
+      parts,
+      currentParts: this.options.parts,
+      ephemeral: this.options.ephemeral,
+      dataDir: this.options.dataDir(),
+      harnessEnv: this.options.harnessEnv,
+      unlocked: this.options.unlocked,
       library: this.options.library(),
-      albums: () => repo.albums(),
-      selectPhotoIds: (albumId) => repo.selectAllIds({ source: 'all', ...(albumId === undefined ? {} : { albumId }) }),
-      getPhoto: (photoId) => repo.get(photoId),
-      isMigrating: (photoId) => repo.isInProtectedMigration(photoId),
-      openOriginal: async (photo) => {
-        const ephemeral = this.options.ephemeral();
-        const opened = await ephemeral.open(photo.id, 'export');
-        return {
-          stream: opened.stream,
-          release: opened.custody === 'ephemeral' ? () => ephemeral.release(photo.id, 'export') : undefined,
-        };
-      },
-      admit: () => this.options.unlocked() && this.options.parts() === parts,
-      transport,
+      platform: process.platform,
+      packaged: app.isPackaged,
     });
-    serviceReference.current = service;
     this.fileProviderService = service;
     void service.reconcile().catch(() => undefined);
     return service;
