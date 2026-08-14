@@ -1139,6 +1139,69 @@
   "moodboard.empty.title": {
     "defaultMessage": "This board is empty"
   },
+  "moodboard.export.action": {
+    "defaultMessage": "Export board"
+  },
+  "moodboard.export.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "moodboard.export.cancelled": {
+    "defaultMessage": "Board export canceled."
+  },
+  "moodboard.export.chooseFolder": {
+    "defaultMessage": "Choose folder…"
+  },
+  "moodboard.export.colorSpace": {
+    "defaultMessage": "Color space"
+  },
+  "moodboard.export.colorSpace.p3": {
+    "defaultMessage": "Display P3"
+  },
+  "moodboard.export.colorSpace.srgb": {
+    "defaultMessage": "sRGB"
+  },
+  "moodboard.export.complete": {
+    "defaultMessage": "Board exported with {rendered} {rendered, plural, one {placement} other {placements}}."
+  },
+  "moodboard.export.composing": {
+    "defaultMessage": "Composing board"
+  },
+  "moodboard.export.destination": {
+    "defaultMessage": "Destination"
+  },
+  "moodboard.export.dimensionSeparator": {
+    "defaultMessage": "×"
+  },
+  "moodboard.export.dimensions": {
+    "defaultMessage": "Output dimensions"
+  },
+  "moodboard.export.done": {
+    "defaultMessage": "Done"
+  },
+  "moodboard.export.failed": {
+    "defaultMessage": "Board export failed. No source photos were changed."
+  },
+  "moodboard.export.height": {
+    "defaultMessage": "Height"
+  },
+  "moodboard.export.invalidSize": {
+    "defaultMessage": "Choose dimensions up to 8,192 pixels and 32 megapixels."
+  },
+  "moodboard.export.outputPath": {
+    "defaultMessage": "board export path"
+  },
+  "moodboard.export.pixels": {
+    "defaultMessage": "pixels"
+  },
+  "moodboard.export.skipped": {
+    "defaultMessage": "{count} locked or unavailable {count, plural, one {placement was} other {placements were}} skipped."
+  },
+  "moodboard.export.title": {
+    "defaultMessage": "Export board"
+  },
+  "moodboard.export.width": {
+    "defaultMessage": "Width"
+  },
   "moodboard.panel.background": {
     "defaultMessage": "Background"
   },

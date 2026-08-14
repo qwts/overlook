@@ -53,6 +53,7 @@ existing links resolve — never add content there.
 - [Full-display image acceptance](./acceptance/acceptance-test-full-display-image.md) — image-first chrome, transform persistence, and reset boundaries
 - [Inspector follow and detached-window acceptance](./acceptance/acceptance-test-inspector-window.md) — #503 focus, paging, reattachment, and lock-boundary evidence
 - [Photo metadata acceptance](./acceptance/Acceptance-Test-Photo-Metadata.md) — title, description, tag provenance, bulk editing, search, backup, and XMP export (#508)
+- [Moodboard export acceptance](./acceptance/Acceptance-Test-Moodboard-Export.md) — declared raster dimensions, ICC profiles, geometry, privacy skips, and cleanup (#696)
 - [GIF/WebP animated media acceptance](./acceptance/acceptance-test-gif-webp-animated-media.md) — #547 classification, poster/animation, reduced motion, and custody evidence
 - [MPEG-TS video media acceptance](./acceptance/acceptance-test-mpeg-ts-video-media.md) — #548 signature classification, deterministic poster/duration, playback, and byte-faithful custody evidence
 - [Context menu acceptance](./acceptance/Acceptance-Test-Context-Menus.md) — #504 selection, command parity, focus, viewport, and destructive-action evidence
