@@ -1,5 +1,11 @@
 # photos
 
+## 0.69.0
+
+### Minor Changes
+
+- 509e1b2: Add an explicitly enabled, read-only macOS File Provider location for ordinary Overlook libraries and albums.
+
 ## 0.68.1
 
 ### Patch Changes
