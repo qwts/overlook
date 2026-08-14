@@ -9,6 +9,7 @@ class FacadeCredentials {
   statusValue: AppLockStatus = { state: 'unconfigured' };
   unlockValue: UnlockResult = { ok: true, masterKey: Buffer.alloc(32, 7) };
   configured: ConfigureAppLockInput | null = null;
+  policy: 'usability' | 'hardened' = 'usability';
 
   status(): AppLockStatus {
     return this.statusValue;
@@ -19,8 +20,8 @@ class FacadeCredentials {
     return Promise.resolve();
   }
 
-  unlock(_password: string): Promise<UnlockResult> {
-    return Promise.resolve(this.unlockValue);
+  unlock(password: string): Promise<UnlockResult> {
+    return Promise.resolve(password === 'current' ? this.unlockValue : { ok: false, reason: 'wrong-password' });
   }
 
   changePassword(current: string, next: string): Promise<boolean> {
@@ -33,6 +34,16 @@ class FacadeCredentials {
 
   recover(_input: ConfigureAppLockInput): Promise<void> {
     return Promise.resolve();
+  }
+
+  anchorPolicy(): 'usability' | 'hardened' {
+    return this.policy;
+  }
+
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened'): Promise<boolean> {
+    if (password !== 'current') return Promise.resolve(false);
+    this.policy = policy;
+    return Promise.resolve(true);
   }
 }
 
@@ -71,9 +82,31 @@ describe('app-lock facade (#311)', () => {
     });
 
     assert.deepEqual(await facade.unlock('current'), { ok: true });
-    assert.equal(await facade.changePassword('current', 'next'), true);
-    assert.equal(await facade.remove('current'), true);
+    assert.deepEqual(await facade.changePassword('current', 'next'), { ok: true });
+    assert.deepEqual(await facade.remove('current'), { ok: true });
     await facade.lock();
     assert.equal(facade.snapshot().state, 'unconfigured-unlocked');
+  });
+
+  test('requires and consumes a fresh recovery-export receipt before hardened policy', async () => {
+    const credentials = new FacadeCredentials();
+    credentials.statusValue = { state: 'locked', libraryId: 'library-a' };
+    const controller = new AppLockController({ credentials, openAuthorized: () => undefined, closeAuthorized: () => undefined });
+    await controller.unlock('current');
+    let receipts = 1;
+    const facade = createAppLockFacade({
+      controller,
+      currentMaster: () => Buffer.alloc(32),
+      libraryId: () => 'library-a',
+      dataDir: () => '/unused',
+      pickRecovery: () => Promise.resolve(null),
+      recoveryExportReceipt: (consume) => (consume ? receipts-- > 0 : receipts > 0),
+    });
+
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', false), { ok: false, reason: null });
+    assert.deepEqual(await facade.setAnchorPolicy('wrong', 'hardened', true), { ok: false, reason: 'wrong-password' });
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', true), { ok: true });
+    assert.equal(facade.anchorPolicy(), 'hardened');
+    assert.deepEqual(await facade.setAnchorPolicy('current', 'hardened', true), { ok: false, reason: null }, 'receipt is single-use');
   });
 });

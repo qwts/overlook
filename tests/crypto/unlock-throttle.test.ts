@@ -28,12 +28,16 @@ describe('persisted unlock throttling (#311)', () => {
     const make = (): UnlockThrottle => new UnlockThrottle({ dataDir, safeStorage: storage, now: () => now });
     const throttle = make();
     assert.equal(throttle.remainingMs(), 0);
+    assert.equal(throttle.attemptsRemaining(), 3);
     assert.equal(throttle.recordFailure(), 1_000);
+    assert.equal(throttle.failureCount(), 1);
+    assert.equal(throttle.attemptsRemaining(), 2);
     assert.equal(make().remainingMs(), 1_000);
 
     now += 1_000;
     assert.equal(make().remainingMs(), 0);
     assert.equal(make().recordFailure(), 2_000);
+    assert.equal(make().attemptsRemaining(), 1);
     now += 2_000;
     for (const delay of [4_000, 8_000, 16_000, 32_000, 60_000, 60_000]) {
       assert.equal(make().recordFailure(), delay);
@@ -41,8 +45,10 @@ describe('persisted unlock throttling (#311)', () => {
     }
 
     assert.equal(make().recordFailure(), 60_000);
+    assert.equal(make().attemptsRemaining(), 0);
     make().reset();
     assert.equal(make().remainingMs(), 0);
+    assert.equal(make().attemptsRemaining(), 3);
   });
 
   test('corrupt sealed state fails closed to a persisted 60-second delay', () => {

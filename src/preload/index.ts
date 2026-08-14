@@ -22,6 +22,7 @@ const subscribeTransport: SubscribeTransport = (eventName, listener) => {
 
 const getPlatform = createInvoker(channels.getPlatform, invokeTransport);
 const getLocale = createInvoker(channels.getLocale, invokeTransport);
+const clipboardWrite = createInvoker(channels.clipboardWrite, invokeTransport);
 const minimizeWindow = createInvoker(channels.windowMinimize, invokeTransport);
 const toggleMaximizeWindow = createInvoker(channels.windowToggleMaximize, invokeTransport);
 const closeWindow = createInvoker(channels.windowClose, invokeTransport);
@@ -35,6 +36,10 @@ const commandContextUpdate = createInvoker(channels.commandContextUpdate, invoke
 const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
+const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTransport);
+const photoKitStatus = createInvoker(channels.photoKitStatus, invokeTransport);
+const photoKitImportReview = createInvoker(channels.photoKitImportReview, invokeTransport);
+const photoKitCancel = createInvoker(channels.photoKitCancel, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
@@ -71,12 +76,14 @@ const keysStatus = createInvoker(channels.keysStatus, invokeTransport);
 const keysPickFile = createInvoker(channels.keysPickFile, invokeTransport);
 const restoreProfileStatus = createInvoker(channels.restoreProfileStatus, invokeTransport);
 const restorePickKey = createInvoker(channels.restorePickKey, invokeTransport);
+const restoreStatus = createInvoker(channels.restoreStatus, invokeTransport);
 const appLockStatus = createInvoker(channels.appLockStatus, invokeTransport);
 const appLockNow = createInvoker(channels.appLockNow, invokeTransport);
 const appLockPickRecovery = createInvoker(channels.appLockPickRecovery, invokeTransport);
 const appLockTouchIdStatus = createInvoker(channels.appLockTouchIdStatus, invokeTransport);
 const appLockTouchIdDisable = createInvoker(channels.appLockTouchIdDisable, invokeTransport);
 const appLockTouchIdUnlock = createInvoker(channels.appLockTouchIdUnlock, invokeTransport);
+const appLockAnchorPolicyStatus = createInvoker(channels.appLockAnchorPolicyStatus, invokeTransport);
 const interopStatus = createInvoker(channels.interopStatus, invokeTransport);
 const interopPairingSelect = createInvoker(channels.interopPairingSelect, invokeTransport);
 const interopRefresh = createInvoker(channels.interopRefresh, invokeTransport);
@@ -100,6 +107,11 @@ const overlook: OverlookApi = {
   help: Object.freeze({
     open: async () => {
       await helpOpen({});
+    },
+  }),
+  clipboard: Object.freeze({
+    writeText: async (text) => {
+      await clipboardWrite({ text });
     },
   }),
   inspectorWindow: Object.freeze({
@@ -127,6 +139,8 @@ const overlook: OverlookApi = {
     configure: createInvoker(channels.appLockConfigure, invokeTransport),
     lockNow: async () => appLockNow({}),
     changePassword: createInvoker(channels.appLockChangePassword, invokeTransport),
+    anchorPolicyStatus: async () => appLockAnchorPolicyStatus({}),
+    setAnchorPolicy: createInvoker(channels.appLockSetAnchorPolicy, invokeTransport),
     remove: createInvoker(channels.appLockRemove, invokeTransport),
     pickRecovery: async () => appLockPickRecovery({}),
     recover: createInvoker(channels.appLockRecover, invokeTransport),
@@ -153,9 +167,16 @@ const overlook: OverlookApi = {
   }),
   library: Object.freeze({
     page: createInvoker(channels.libraryPage, invokeTransport),
+    selectAll: createInvoker(channels.librarySelectAll, invokeTransport),
+    selectionRange: createInvoker(channels.librarySelectionRange, invokeTransport),
     get: createInvoker(channels.libraryGet, invokeTransport),
+    updateMetadata: createInvoker(channels.libraryMetadataUpdate, invokeTransport),
+    metadataSummary: createInvoker(channels.libraryMetadataSummary, invokeTransport),
+    manageTag: createInvoker(channels.libraryTagManage, invokeTransport),
+    tagSuggestions: createInvoker(channels.libraryTagSuggestions, invokeTransport),
     repairDimensions: createInvoker(channels.libraryRepairDimensions, invokeTransport),
     toggleFavorite: createInvoker(channels.libraryToggleFavorite, invokeTransport),
+    toggleFavorites: createInvoker(channels.libraryToggleFavorites, invokeTransport),
     setOriginal: createInvoker(channels.librarySetOriginal, invokeTransport),
     counts: createInvoker(channels.libraryCounts, invokeTransport),
     stats: async () => libraryStats({}),
@@ -174,6 +195,20 @@ const overlook: OverlookApi = {
     onSyncStateChanged: createSubscriber(events.photoSyncStateChanged, subscribeTransport),
     onStorageChanged: createSubscriber(events.storageChanged, subscribeTransport),
     onPendingCountChanged: createSubscriber(events.pendingCountChanged, subscribeTransport),
+  }),
+  nativeDrag: Object.freeze({
+    status: async () => nativeDragStatus({}),
+    start: createInvoker(channels.nativeDragStart, invokeTransport),
+  }),
+  photoKit: Object.freeze({
+    status: async () => photoKitStatus({}),
+    reviewImport: async () => photoKitImportReview({}),
+    import: createInvoker(channels.photoKitImportRun, invokeTransport),
+    export: createInvoker(channels.photoKitExportRun, invokeTransport),
+    cancel: async () => {
+      await photoKitCancel({});
+    },
+    onProgress: createSubscriber(events.photoKitProgress, subscribeTransport),
   }),
   activity: Object.freeze({
     page: createInvoker(channels.activityPage, invokeTransport),
@@ -239,11 +274,13 @@ const overlook: OverlookApi = {
     providerStorage: backupProviderStorage,
     connect: backupConnect,
     disconnect: backupDisconnect,
+    removeAuthorizationAnyway: createInvoker(channels.backupRemoveAuthorizationAnyway, invokeTransport),
     openCapacitySettings: backupOpenCapacitySettings,
   }),
   export: Object.freeze({
     pickDestination: createInvoker(channels.exportPickDestination, invokeTransport),
     run: createInvoker(channels.exportRun, invokeTransport),
+    runAll: createInvoker(channels.exportRunAll, invokeTransport),
     cancel: createInvoker(channels.exportCancel, invokeTransport),
     onProgress: createSubscriber(events.exportProgress, subscribeTransport),
   }),
@@ -258,8 +295,14 @@ const overlook: OverlookApi = {
     pickKey: async () => restorePickKey({}),
     discover: createInvoker(channels.restoreDiscover, invokeTransport),
     run: createInvoker(channels.restoreRun, invokeTransport),
+    verify: createInvoker(channels.restoreVerify, invokeTransport),
+    trash: createInvoker(channels.restoreTrash, invokeTransport),
+    exportCsv: createInvoker(channels.restoreExportCsv, invokeTransport),
+    exportCorrupt: createInvoker(channels.restoreExportCorrupt, invokeTransport),
     cancel: createInvoker(channels.restoreCancel, invokeTransport),
+    status: async () => restoreStatus({}),
     onProgress: createSubscriber(events.restoreProgress, subscribeTransport),
+    onStatusChanged: createSubscriber(events.restoreStatusChanged, subscribeTransport),
   }),
   settings: Object.freeze({
     get: async () => settingsGet({}),
@@ -293,11 +336,14 @@ const overlook: OverlookApi = {
     open: createInvoker(channels.libraryRegistryOpen, invokeTransport),
     remove: createInvoker(channels.libraryRegistryRemove, invokeTransport),
     current: async () => libraryRegistryCurrent({}),
+    setDisplayName: createInvoker(channels.libraryRegistrySetDisplayName, invokeTransport),
+    resetDisplayName: createInvoker(channels.libraryRegistryResetDisplayName, invokeTransport),
     add: createInvoker(channels.libraryRegistryAdd, invokeTransport),
     pickLocation: async () => libraryRegistryPickLocation({}),
     // Relocation (#483, ADR-0022): move/cancel/cleanup + journal-backed
     // pending list for the resume banner; progress drives the wizard tracks.
     move: createInvoker(channels.libraryRelocationMove, invokeTransport),
+    renameFolder: createInvoker(channels.libraryRelocationRename, invokeTransport),
     probeMove: createInvoker(channels.libraryRelocationPreflight, invokeTransport),
     cancelMove: createInvoker(channels.libraryRelocationCancel, invokeTransport),
     resumeMove: createInvoker(channels.libraryRelocationResume, invokeTransport),

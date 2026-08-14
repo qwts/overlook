@@ -11,13 +11,20 @@ permissions:
   contents: read
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad
+        with:
+          authorization-only: 'true'
+
   perf:
+    needs: policy
     name: 200K perf harness
     runs-on: ubuntu-latest
-    # Outer backstop only — the harness itself runs under scripts/run-guarded.mjs
-    # (aggregate-RSS ceiling + a 2700s/45min wall-clock timeout, generous pending a
-    # real measured peak — see docs/agent-process-guard.md). Raised from the prior
-    # 30 to leave headroom around that guard timeout for setup/Electron-install/upload.
+    # The only bound on this job. This job runs test:perf:inner directly, without the
+    # guard's --timeout-s 2700; 60 leaves headroom over the test step's 45 for
+    # setup/Electron-install/upload.
     timeout-minutes: 60
 
     steps:
@@ -41,16 +48,17 @@ jobs:
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
 
+      # Step-level bound, replacing the guard's --timeout-s 2700 (the :inner entrypoint
+      # runs unwrapped here). Below the job's 60 so a hang fails here and the report
+      # upload below still runs.
       - name: Run the perf harness (Electron under Xvfb)
-        run: xvfb-run --auto-servernum -- npm run test:perf
+        timeout-minutes: 45
+        run: xvfb-run --auto-servernum -- npm run test:perf:inner
 
-      # Peak-RSS/duration record from the process-tree guard (scripts/run-guarded.mjs).
-      # The perf lane's ceilings are provisional (docs/agent-process-guard.md) — this
-      # is the data source for ratcheting them from a measured peak. Runs even on
-      # failure: an rss-limit/timeout kill is exactly when the record matters.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
+      # No guard diagnostics step here: this job invokes the :inner entrypoint, so the
+      # guard never runs and never writes .guard/last-run.json on a runner. The perf
+      # lane's local cost is still unmeasured (docs/agent-process-guard.md); measuring it
+      # needs an owner-granted local run, not this job.
 
       - name: Upload perf report
         if: ${{ !cancelled() }}

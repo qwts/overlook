@@ -2,17 +2,20 @@ import { isDeepStrictEqual } from 'node:util';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, rm, statfs, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { addAbortSignal } from 'node:stream';
+import { addAbortSignal, Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
+import { createHash } from 'node:crypto';
 
 import { BlobStore, BlobStoreError } from '../blobs/blob-store.js';
 import { ProtectedBlobStore, ProtectedBlobStoreError } from '../blobs/protected-blob-store.js';
 import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
 import { installRecoveredMaster } from '../crypto/recovery.js';
+import { createDecryptStream } from '../crypto/envelope.js';
 import { openLibraryDatabase } from '../db/database.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
+import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
 import type { BackupManifestPhotoV2 } from './backup-manifest.js';
@@ -30,7 +33,10 @@ import {
   type RestorePaths,
 } from './restore-staging.js';
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
-import type { StorageProvider } from './provider.js';
+import { ProviderError, type StorageProvider } from './provider.js';
+import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
+import { projectVerifiedManifest } from './restore-projection.js';
+import { createScanTicker, verifyObjectCount, type ScanTicker } from './restore-verify-scan.js';
 
 const SCRATCH_BYTES = 16 * 1024 * 1024;
 
@@ -62,6 +68,10 @@ export interface RestoreRequest {
    * activation re-establishes the password-derived app-lock record instead of
    * leaving the restored library on downgraded keychain-form custody. */
   readonly custodyPassword?: string | undefined;
+  /** Non-activating scan accepted by the user. Bind is manifest identity
+   * (library / generation / path / sealed hash); extra download gaps are
+   * reported as NOT FOUND instead of aborting (#965). */
+  readonly verification?: RestoreVerifyResult | undefined;
 }
 
 export interface RestoreRunResult {
@@ -69,10 +79,54 @@ export interface RestoreRunResult {
   readonly generation: number;
   readonly photos: number;
   readonly resumed: boolean;
+  /** Objects the restore could not recover (#915). Empty for a complete
+   * restore; a partial restore reports every one, never just the first. */
+  readonly missing: readonly RestoreMissingObject[];
+}
+
+export interface RestoreVerifyResult {
+  readonly libraryId: string;
+  readonly generation: number;
+  readonly manifestPath: string;
+  readonly sealedManifestSha256: string;
+  /** Digest of every object observed by the scan, including corrupt objects.
+   * This is internal plan state and is never exposed as a caller-selected
+   * restore parameter. */
+  readonly objectSetSha256: string;
+  readonly photos: number;
+  readonly missing: readonly RestoreMissingObject[];
+  /** Counts split for the verify screen (X missing, Y corrupt) */
+  readonly missingCount: number;
+  readonly corruptCount: number;
+  readonly verifiedCount: number;
+}
+
+/** Partial-pass accumulator (#915). `null` means strict: any missing or
+ * unverifiable object rejects the candidate (the #741 fallback contract). */
+type MissingObjects = RestoreMissingObject[] | null;
+
+function objectSetSha256(fingerprints: readonly string[]): string {
+  return createHash('sha256')
+    .update([...fingerprints].sort().join('\n'))
+    .digest('hex');
+}
+
+function addObjectFingerprint(fingerprints: string[], path: string, bytes: Buffer): void {
+  fingerprints.push(`${path}\u0000${String(bytes.length)}\u0000${createHash('sha256').update(bytes).digest('hex')}`);
+}
+
+function missingOriginalIds(missing: MissingObjects): ReadonlySet<string> {
+  return new Set(
+    (missing ?? []).filter((object) => object.kind === 'original' && object.photoId !== null).map((object) => object.photoId as string),
+  );
 }
 
 function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted === true) throw new RestoreError('cancelled', 'restore cancelled');
+}
+
+function missingRemoteError(path: string): RestoreError {
+  return new RestoreError('corrupt', `manifest references missing ${path}`);
 }
 
 function checkpointFor(discovery: RestoreDiscovery, candidate: RestoreCandidate): RestoreCheckpoint {
@@ -103,6 +157,157 @@ async function defaultAvailableBytes(path: string): Promise<number> {
 export class RestoreEngine {
   constructor(private readonly deps: RestoreEngineDeps) {}
 
+  /** Non-activating scan (#947): classifies every manifest object as
+   * verified vs missing (not-found) vs corrupt (failed-verification) without
+   * writing library.db. Reuses provider list + getStream + envelope decrypt
+   * verification. Idempotent and cancellable. */
+  async verify(request: RestoreRequest): Promise<RestoreVerifyResult> {
+    await recoverInterruptedActivation(restorePaths(this.deps.targetDir));
+    if (!this.deps.safeStorage.isEncryptionAvailable()) {
+      throw new RestoreError('io', 'OS keychain is unavailable; restored master key cannot be protected');
+    }
+    this.emit('discovering', 0, 0, null);
+    const discovery = await discoverRestore(this.deps.provider, request.masterKey, request.signal);
+    // Use newest valid candidate — same ordering as run()
+    const candidate = discovery.candidates[0];
+    if (candidate === undefined) throw new RestoreError('corrupt', 'no manifest generation could be restored');
+    const missing: RestoreMissingObject[] = [];
+    const fingerprints: string[] = [];
+    const ticker = createScanTicker(verifyObjectCount(candidate), (stage, done, total, photoId) => {
+      this.emit(stage, done, total, photoId);
+    });
+    await this.scanBlobs(discovery, candidate, missing, fingerprints, request.signal, ticker);
+    await this.scanSidecars(discovery, candidate, missing, fingerprints, request.signal, ticker);
+    await this.scanProtected(discovery, candidate, missing, fingerprints, request.signal, ticker);
+    const missingCount = missing.filter((o) => o.reason === 'not-found').length;
+    const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
+    const verifiedCount = candidate.manifest.photos.length - missing.filter((o) => o.kind === 'original').length;
+    return {
+      libraryId: candidate.manifest.libraryId,
+      generation: candidate.generation,
+      manifestPath: candidate.path,
+      sealedManifestSha256: candidate.sealedSha256,
+      objectSetSha256: objectSetSha256(fingerprints),
+      photos: candidate.manifest.photos.length,
+      missing,
+      missingCount,
+      corruptCount,
+      verifiedCount: Math.max(0, verifiedCount),
+    };
+  }
+
+  private async scanBlobs(
+    discovery: RestoreDiscovery,
+    candidate: RestoreCandidate,
+    missing: RestoreMissingObject[],
+    fingerprints: string[],
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
+  ): Promise<void> {
+    for (const photo of candidate.manifest.photos) {
+      assertNotAborted(signal);
+      try {
+        const stream = await this.deps.provider.getStream(photo.blobPath);
+        const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
+        const hasher = createHash('sha256');
+        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
+        const readable = Readable.from([ciphertext]);
+        try {
+          for await (const chunk of readable.pipe(decrypt)) {
+            hasher.update(chunk as Buffer);
+          }
+        } catch {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+          continue;
+        }
+        if (hasher.digest('hex') !== photo.contentHash) {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
+        }
+      } catch (error) {
+        if (error instanceof ProviderError && error.kind === 'not-found') {
+          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
+        } else if (error instanceof RestoreError) throw error;
+        else {
+          // Transient provider errors are not classified as corrupt — they
+          // remain retryable. Bubble as offline/transient.
+          throw error;
+        }
+      } finally {
+        ticker.tick(photo.id);
+      }
+    }
+  }
+
+  private async scanSidecars(
+    discovery: RestoreDiscovery,
+    candidate: RestoreCandidate,
+    missing: RestoreMissingObject[],
+    fingerprints: string[],
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
+  ): Promise<void> {
+    if (candidate.manifest.schema !== 6) return;
+    for (const sidecar of candidate.manifest.sidecars) {
+      assertNotAborted(signal);
+      try {
+        const stream = await this.deps.provider.getStream(sidecar.blobPath);
+        const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
+        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
+        const readable = Readable.from([buf]);
+        try {
+          for await (const _ of readable.pipe(decrypt)) {
+            // Drain every authenticated envelope chunk for verification
+          }
+        } catch {
+          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'failed-verification' });
+        }
+      } catch (error) {
+        if (error instanceof ProviderError && error.kind === 'not-found') {
+          missing.push({ path: sidecar.blobPath, kind: 'sidecar', photoId: sidecar.photoId, reason: 'not-found' });
+        } else throw error;
+      } finally {
+        ticker.tick(sidecar.photoId);
+      }
+    }
+  }
+
+  private async scanProtected(
+    _discovery: RestoreDiscovery,
+    candidate: RestoreCandidate,
+    missing: RestoreMissingObject[],
+    fingerprints: string[],
+    signal: AbortSignal | undefined,
+    ticker: ScanTicker,
+  ): Promise<void> {
+    if (candidate.manifest.schema === 2) return;
+    const entries = candidate.manifest.protectedPhotos.flatMap((photo) =>
+      photo.objects.filter((o) => o.status === 'synced').map((o) => ({ photo, object: o })),
+    );
+    for (const entry of entries) {
+      assertNotAborted(signal);
+      try {
+        const stream = await this.deps.provider.getStream(entry.object.path);
+        const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
+        addObjectFingerprint(fingerprints, entry.object.path, buf);
+        const h = createHash('sha256').update(buf).digest('hex');
+        if (h !== entry.object.sha256 || buf.length !== entry.object.bytes) {
+          missing.push({ path: entry.object.path, kind: 'protected', photoId: entry.photo.id, reason: 'failed-verification' });
+        }
+      } catch (error) {
+        if (error instanceof ProviderError && error.kind === 'not-found') {
+          missing.push({ path: entry.object.path, kind: 'protected', photoId: entry.photo.id, reason: 'not-found' });
+        } else if (error instanceof ProviderError) throw error;
+        else {
+          missing.push({ path: entry.object.path, kind: 'protected', photoId: entry.photo.id, reason: 'failed-verification' });
+        }
+      } finally {
+        ticker.tick(entry.photo.id);
+      }
+    }
+  }
+
   async run(request: RestoreRequest): Promise<RestoreRunResult> {
     const paths = restorePaths(this.deps.targetDir);
     try {
@@ -114,14 +319,41 @@ export class RestoreEngine {
       }
       this.emit('discovering', 0, 0, null);
       const discovery = await discoverRestore(this.deps.provider, request.masterKey, request.signal);
+      if (request.verification !== undefined) {
+        // #965: bind to manifest identity; extra download gaps are NOT FOUND.
+        const candidate = discovery.candidates.find(
+          (item) =>
+            item.path === request.verification?.manifestPath &&
+            item.generation === request.verification.generation &&
+            item.sealedSha256 === request.verification.sealedManifestSha256,
+        );
+        if (candidate === undefined || candidate.manifest.libraryId !== request.verification.libraryId) {
+          throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
+        }
+        return await this.restoreCandidate(paths, discovery, candidate, request, []);
+      }
       let lastCandidateError: RestoreError | null = null;
       for (const candidate of discovery.candidates) {
         try {
-          return await this.restoreCandidate(paths, discovery, candidate, request);
+          return await this.restoreCandidate(paths, discovery, candidate, request, null);
         } catch (error) {
           const mapped = toRestoreError(error);
           if (mapped.reason !== 'corrupt' && mapped.reason !== 'unsupported') throw mapped;
           lastCandidateError = mapped;
+        }
+      }
+      // Partial pass (#915): no retained generation is complete — blob paths
+      // are content-addressed, so one lost object usually poisons every
+      // generation. Restore the newest candidate that works, skipping objects
+      // that are absent or fail verification, and report every one as NOT
+      // FOUND instead of restoring nothing. The strict pass above keeps the
+      // #741 guarantee: a complete retained generation always wins.
+      for (const candidate of discovery.candidates) {
+        try {
+          return await this.restoreCandidate(paths, discovery, candidate, request, []);
+        } catch (error) {
+          const mapped = toRestoreError(error);
+          if (mapped.reason !== 'corrupt' && mapped.reason !== 'unsupported') throw mapped;
         }
       }
       throw lastCandidateError ?? new RestoreError('corrupt', 'no manifest generation could be restored');
@@ -135,6 +367,7 @@ export class RestoreEngine {
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     request: RestoreRequest,
+    missing: MissingObjects,
   ): Promise<RestoreRunResult> {
     const loaded = await loadCheckpoint(paths);
     let checkpoint: RestoreCheckpoint;
@@ -152,17 +385,48 @@ export class RestoreEngine {
     const protectedStore = new ProtectedBlobStore(paths.stagingDir);
     await store.init();
     await protectedStore.init();
-    checkpoint = await this.restoreBlobs(paths, store, discovery, candidate, checkpoint, request.signal);
-    checkpoint = await this.restoreProtectedBlobs(paths, protectedStore, candidate, checkpoint, request.signal);
+    checkpoint = await this.restoreBlobs(paths, store, discovery, candidate, checkpoint, missing, request.signal);
+    checkpoint = await this.restoreSidecars(paths, store, discovery, candidate, checkpoint, missing, request.signal);
+    checkpoint = await this.restoreProtectedBlobs(paths, protectedStore, candidate, checkpoint, missing, request.signal);
+    const restoreCandidate =
+      missing === null ? candidate : { ...candidate, manifest: projectVerifiedManifest(candidate.manifest, missing) };
+    if (missing !== null) {
+      const retainedPhotoIds = new Set(restoreCandidate.manifest.photos.map((photo) => photo.id));
+      for (const photo of candidate.manifest.photos) {
+        if (!retainedPhotoIds.has(photo.id)) await store.deleteSidecars(photo.id);
+      }
+      if (candidate.manifest.schema !== 2 && restoreCandidate.manifest.schema !== 2) {
+        const retainedProtectedIds = new Set(restoreCandidate.manifest.protectedPhotos.map((photo) => photo.id));
+        for (const photo of candidate.manifest.protectedPhotos) {
+          if (retainedProtectedIds.has(photo.id)) continue;
+          for (const object of photo.objects) {
+            if (object.status === 'synced' && protectedStore.has(photo.albumId, photo.blobRef, object.kind)) {
+              await protectedStore.deleteKind(photo.albumId, photo.blobRef, object.kind);
+            }
+          }
+        }
+      }
+    }
     const recoveredKeys = await this.prepareRecoveredCustody(paths, discovery, candidate, request.masterKey);
     try {
-      await this.restoreThumbnails(paths, store, recoveredKeys, discovery, candidate, checkpoint, request.signal);
-      this.emit('rebuilding', 0, candidate.manifest.photos.length, null);
-      await this.rebuildCatalog(paths, store, protectedStore, discovery, candidate);
+      await this.restoreThumbnails(paths, store, recoveredKeys, discovery, candidate, checkpoint, missing, request.signal);
+      this.emit('rebuilding', 0, restoreCandidate.manifest.photos.length, null);
+      await this.rebuildCatalog(paths, store, protectedStore, discovery, restoreCandidate, missing);
     } finally {
       recoveredKeys.close();
     }
     assertNotAborted(request.signal);
+    if (missing !== null && missing.length > 0) {
+      // The production path relaunches right after activation, so the NOT
+      // FOUND report must survive the relaunch: it rides the staging→active
+      // rename as a durable file next to library.db (#915).
+      const reportPath = join(paths.stagingDir, 'restore-report.json');
+      await writeFile(
+        `${reportPath}.tmp`,
+        JSON.stringify({ version: 1, generation: candidate.generation, generatedAt: candidate.manifest.generatedAt, missing }, null, 2),
+      );
+      await rename(`${reportPath}.tmp`, reportPath);
+    }
     this.emit('activating', 0, 1, null);
     await this.deps.beforeActivate?.();
     await activateStagedLibrary(paths, this.deps.activationOperations);
@@ -196,9 +460,67 @@ export class RestoreEngine {
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
-      photos: candidate.manifest.photos.length,
+      photos: restoreCandidate.manifest.photos.length,
       resumed,
+      missing: missing ?? [],
     };
+  }
+
+  /** Encrypted companions (#484): schema-6 manifests list every sidecar
+   * object; each download re-verifies (decrypt + content-address) before it
+   * counts, with its own resumable checkpoint set. */
+  private async restoreSidecars(
+    paths: RestorePaths,
+    store: BlobStore,
+    discovery: RestoreDiscovery,
+    candidate: RestoreCandidate,
+    checkpoint: RestoreCheckpoint,
+    missing: MissingObjects,
+    signal?: AbortSignal,
+  ): Promise<RestoreCheckpoint> {
+    if (candidate.manifest.schema !== 6) return checkpoint;
+    const entries = candidate.manifest.sidecars.map((sidecar) => ({ sidecar, id: `${sidecar.photoId}:${sidecar.hash}` }));
+    const ids = new Set(entries.map((entry) => entry.id));
+    const completed = new Set((checkpoint.completedSidecarIds ?? []).filter((id) => ids.has(id)));
+    for (const entry of entries) {
+      if (!completed.has(entry.id)) continue;
+      if (!(await store.verifySidecar(entry.sidecar.photoId, entry.sidecar.hash, discovery.resolveKey))) {
+        completed.delete(entry.id);
+      }
+    }
+    checkpoint = { ...checkpoint, completedSidecarIds: [...completed] };
+    await saveCheckpoint(paths, checkpoint);
+    const pending = entries.filter((entry) => !completed.has(entry.id));
+    if (pending.length === 0) return checkpoint;
+    for (const entry of pending) {
+      assertNotAborted(signal);
+      try {
+        const remoteStream = await this.deps.provider.getStream(entry.sidecar.blobPath);
+        await store.restoreSidecar(
+          entry.sidecar.photoId,
+          entry.sidecar.hash,
+          signal === undefined ? remoteStream : addAbortSignal(signal, remoteStream),
+          discovery.resolveKey,
+        );
+      } catch (error) {
+        if (missing !== null && (error instanceof BlobStoreError || (error instanceof ProviderError && error.kind === 'not-found'))) {
+          missing.push({
+            path: entry.sidecar.blobPath,
+            kind: 'sidecar',
+            photoId: entry.sidecar.photoId,
+            reason: error instanceof BlobStoreError ? 'failed-verification' : 'not-found',
+          });
+          continue;
+        }
+        if (error instanceof BlobStoreError) throw new RestoreError('corrupt', error.message);
+        if (error instanceof ProviderError && error.kind === 'not-found') throw missingRemoteError(entry.sidecar.blobPath);
+        throw error;
+      }
+      completed.add(entry.id);
+      checkpoint = { ...checkpoint, completedSidecarIds: [...completed] };
+      await saveCheckpoint(paths, checkpoint);
+    }
+    return checkpoint;
   }
 
   private async restoreProtectedBlobs(
@@ -206,6 +528,7 @@ export class RestoreEngine {
     store: ProtectedBlobStore,
     candidate: RestoreCandidate,
     checkpoint: RestoreCheckpoint,
+    missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
     if (candidate.manifest.schema === 2) return checkpoint;
@@ -249,6 +572,18 @@ export class RestoreEngine {
           bytes: entry.object.bytes,
         });
       } catch (error) {
+        if (
+          missing !== null &&
+          (error instanceof ProtectedBlobStoreError || (error instanceof ProviderError && error.kind === 'not-found'))
+        ) {
+          missing.push({
+            path: entry.object.path,
+            kind: 'protected',
+            photoId: entry.photo.id,
+            reason: error instanceof ProtectedBlobStoreError ? 'failed-verification' : 'not-found',
+          });
+          continue;
+        }
         if (error instanceof ProtectedBlobStoreError) throw new RestoreError('corrupt', error.message);
         throw error;
       }
@@ -266,6 +601,7 @@ export class RestoreEngine {
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     checkpoint: RestoreCheckpoint,
+    missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
     const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
@@ -278,13 +614,13 @@ export class RestoreEngine {
     }
     checkpoint = { ...checkpoint, completedBlobIds: [...completed] };
     await saveCheckpoint(paths, checkpoint);
-    const remote = new Map((await this.deps.provider.list('blobs')).map((entry) => [entry.path, entry]));
+    const remote = new Map((await this.deps.provider.list('blobs', signal)).map((entry) => [entry.path, entry]));
     const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id));
+    // #969: list() is a size hint only. A listing miss is not NOT FOUND —
+    // getStream decides presence. Manifest bytes cover omitted paths.
     let requiredBytes = SCRATCH_BYTES;
     for (const photo of pending) {
-      const entry = remote.get(photo.blobPath);
-      if (entry === undefined) throw new RestoreError('corrupt', `manifest references missing ${photo.blobPath}`);
-      requiredBytes += entry.bytes;
+      requiredBytes += remote.get(photo.blobPath)?.bytes ?? photo.bytes;
     }
     const available = await (this.deps.availableBytes ?? defaultAvailableBytes)(dirname(paths.targetDir));
     if (available < requiredBytes) {
@@ -303,7 +639,18 @@ export class RestoreEngine {
           photo.id,
         );
       } catch (error) {
+        if (missing !== null && (error instanceof BlobStoreError || (error instanceof ProviderError && error.kind === 'not-found'))) {
+          missing.push({
+            path: photo.blobPath,
+            kind: 'original',
+            photoId: photo.id,
+            reason: error instanceof BlobStoreError ? 'failed-verification' : 'not-found',
+          });
+          if (store.hasOriginal(photo.contentHash)) await store.deleteOriginal(photo.contentHash);
+          continue;
+        }
         if (error instanceof BlobStoreError) throw new RestoreError('corrupt', error.message);
+        if (error instanceof ProviderError && error.kind === 'not-found') throw missingRemoteError(photo.blobPath);
         throw error;
       }
       completed.add(photo.id);
@@ -322,9 +669,11 @@ export class RestoreEngine {
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     checkpoint: RestoreCheckpoint,
+    missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
     const thumbnails = this.deps.thumbnails(store);
+    const skip = missingOriginalIds(missing);
     const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
     const completed = new Set(checkpoint.completedThumbnailIds.filter((id) => manifestIds.has(id)));
     for (const photo of candidate.manifest.photos) {
@@ -335,7 +684,7 @@ export class RestoreEngine {
     }
     let done = completed.size;
     this.emit('rebuilding', done, candidate.manifest.photos.length, null);
-    for (const photo of candidate.manifest.photos.filter((item) => !completed.has(item.id))) {
+    for (const photo of candidate.manifest.photos.filter((item) => !completed.has(item.id) && !skip.has(item.id))) {
       assertNotAborted(signal);
       await this.generateThumbnails(thumbnails, store, recoveredKeys, discovery, photo, signal);
       completed.add(photo.id);
@@ -402,9 +751,12 @@ export class RestoreEngine {
     protectedStore: ProtectedBlobStore,
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
+    missing: MissingObjects,
   ): Promise<void> {
     const dbKey = discovery.resolveKey(1);
     if (dbKey === undefined) throw new RestoreError('wrong-key', 'recovery bootstrap does not contain database key #1');
+    const skip = missingOriginalIds(missing);
+    const missingPaths = new Set((missing ?? []).map((object) => object.path));
     const dbPath = join(paths.stagingDir, 'library.db');
     for (const suffix of ['', '-wal', '-shm']) await rm(`${dbPath}${suffix}`, { force: true });
     const db = openLibraryDatabase({ path: dbPath, dbKey });
@@ -419,11 +771,28 @@ export class RestoreEngine {
       createManifestDebtStore(db, () => new Date()).save(true);
       if ('boards' in candidate.manifest) restoreBoards(db, candidate.manifest.boards);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
-      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5) {
+      if (candidate.manifest.schema === 6) {
+        const sidecarRepo = new SidecarRepository(db);
+        // A NOT FOUND sidecar row is omitted rather than kept: unlike a
+        // photo row it carries no album membership, and a row pointing at
+        // absent content would poison the next backup publication (#915).
+        for (const sidecar of candidate.manifest.sidecars.filter((item) => !missingPaths.has(item.blobPath))) {
+          sidecarRepo.insert({
+            photoId: sidecar.photoId,
+            role: sidecar.role,
+            fileName: sidecar.fileName,
+            contentHash: sidecar.hash,
+            bytes: sidecar.bytes,
+            keyId: sidecar.keyId,
+            importedAt: candidate.manifest.generatedAt,
+          });
+        }
+      }
+      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
         new ActivityRepository(db).restoreSnapshot(candidate.manifest.activity);
       }
       const rebuilt = repo.manifestSnapshot();
-      const expectedBoards = candidate.manifest.schema === 5 ? candidate.manifest.boards : [];
+      const expectedBoards = candidate.manifest.schema === 5 || candidate.manifest.schema === 6 ? candidate.manifest.boards : [];
       const expected = {
         keyIds: candidate.manifest.keyIds,
         totals: candidate.manifest.totals,
@@ -438,8 +807,9 @@ export class RestoreEngine {
         albums: rebuilt.albums,
         boards: boardsSnapshot(db),
       };
-      if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the manifest');
+      if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the verified projection');
       for (const photo of candidate.manifest.photos) {
+        if (skip.has(photo.id)) continue;
         if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, photo.id))) {
           throw new RestoreError('corrupt', `final verification failed for ${photo.id}`);
         }
@@ -451,11 +821,11 @@ export class RestoreEngine {
           protectedPhotos: candidate.manifest.protectedPhotos,
         };
         if (!isDeepStrictEqual(protectedRepo.snapshot(), protectedExpected)) {
-          throw new RestoreError('corrupt', 'rebuilt protected catalog does not match the manifest');
+          throw new RestoreError('corrupt', 'rebuilt protected catalog does not match the verified projection');
         }
         for (const photo of candidate.manifest.protectedPhotos) {
           for (const object of photo.objects) {
-            if (object.status === 'offloaded') continue;
+            if (object.status === 'offloaded' || missingPaths.has(object.path)) continue;
             const actual = await protectedStore.ciphertextInfo(photo.albumId, photo.blobRef, object.kind);
             if (actual.sha256 !== object.sha256 || actual.bytes !== object.bytes) {
               throw new RestoreError('corrupt', 'final protected ciphertext verification failed');
@@ -463,10 +833,10 @@ export class RestoreEngine {
           }
         }
       }
-      if (candidate.manifest.schema === 4) {
+      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
         const activity = new ActivityRepository(db).backupSnapshot();
         if (!isDeepStrictEqual(activity, candidate.manifest.activity)) {
-          throw new RestoreError('corrupt', 'rebuilt activity history does not match the manifest');
+          throw new RestoreError('corrupt', 'rebuilt activity history does not match the verified projection');
         }
       }
     } finally {

@@ -52,6 +52,13 @@ export function remoteClaims(db: BetterSqlite3.Database): readonly OrdinaryClaim
   );
 }
 
+/** Provider selection owns only locally recoverable synced rows. Offloaded
+ * rows are routed by ADR-0028 custody authority; legacy-unbound rows remain
+ * fail-closed until reconnect reconciliation proves them individually. */
+export function providerSwitchClaims(db: BetterSqlite3.Database): readonly OrdinaryClaimRow[] {
+  return remoteClaims(db).filter((claim) => claim.status === 'synced');
+}
+
 /** Rows whose remote-copy claim references one of `contentHashes`: the
  * manifest preflight's map from a missing remote blob back to the photos
  * that promise it, deleted-but-retained rows included. */

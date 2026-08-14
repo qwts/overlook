@@ -108,6 +108,11 @@ Synchronize on the app's own completion signal under a bound sized to the work.
 `expect.poll` with the default 5 s bound (window count, menu state, settings
 push, gesture/animation settle, image decode via `naturalWidth`) is used
 throughout — acceptable because each polls a semantic predicate, not a clock.
+The 200% zoom reachability checks in `visual-accessibility.spec.ts` poll the
+strict target rectangle until every edge is inside the renderer viewport. This
+synchronizes zoom-triggered layout and the Lightbox `ResizeObserver`: at narrow
+container widths the initial toolbar placement is intentionally transient, but
+the zero-edge accessibility bounds are never relaxed.
 
 ## Product-time behavior — real elapsed time (category 1)
 
@@ -139,9 +144,11 @@ library-switch are now the fixture's `appExited` helper.
 
 ## Harness bounds (outer envelope)
 
-- `scripts/run-guarded.mjs` wraps every test entrypoint with a wall-clock
-  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A
-  guard kill is a real failure — see [agent-process-guard](agent-process-guard.md).
+- `tools/agent-guard/run-guarded.mjs` wraps every test entrypoint with a wall-clock
+  timeout: `test:e2e` runs at `--timeout-s 1800` (30 min whole-run). A guard kill is a
+  real failure — see [agent-process-guard](agent-process-guard.md). CI invokes
+  `test:e2e:inner` directly, so on a runner the guard never runs and the job's
+  `timeout-minutes` is the operative bound.
 - `playwright.config.ts`: per-test `timeout: 30_000`, `expect.timeout: 5_000`,
   CI `workers: 1`, CI `retries: 0`, `fullyParallel: false` (spec files run
   concurrently, tests within a file serially).
@@ -151,10 +158,12 @@ library-switch are now the fixture's `appExited` helper.
 
 ## Runner capacity (category 4 scope §4 of #630)
 
-`scripts/measure-runner-capacity.mjs` wraps the guarded E2E entrypoint in CI and
-records elapsed time, logical/available CPUs, memory, normalized load, and Linux
-CPU/I/O pressure samples. The process-tree guard remains the source for peak RSS
-and process count. Manual `workflow_dispatch` inputs select one, two, or three
+`scripts/measure-runner-capacity.mjs` wraps the E2E CI entrypoint
+(`test:e2e:inner`) and records elapsed time, logical/available CPUs, memory,
+normalized load, and Linux CPU/I/O pressure samples. It is the only source of
+these numbers for a CI run: the workflow does not route through the guard
+wrapper, so no peak-RSS or process-count record is written on a runner. Manual `workflow_dispatch` inputs select one,
+two, or three
 workers and zero retries, producing a retained `runner-capacity-*` artifact for
 each comparison. Ordinary required runs use one worker and zero retries.
 

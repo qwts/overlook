@@ -8,6 +8,7 @@ import type { Readable } from 'node:stream';
 import {
   assertSafeRemotePath,
   ProviderError,
+  type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
   type RemoteEntry,
@@ -26,6 +27,8 @@ export interface MockProviderOptions {
   readonly totalBytes?: number | undefined;
   /** Stable identity represented by this filesystem root. */
   readonly libraryId?: string | undefined;
+  /** Test-overridable account subject; null exercises identity-unavailable. */
+  readonly accountIdentity?: ProviderAccountIdentity | null | undefined;
 }
 
 const DEFAULT_TOTAL = 10 * 1024 * 1024 * 1024;
@@ -40,16 +43,20 @@ export class MockProvider implements StorageProvider {
     platforms: ['darwin', 'win32', 'linux'],
     interactiveAuth: false,
     reconnectRequired: false,
+    accountIdentity: 'stable-subject',
   } as const;
   private readonly rootDir: string;
   private readonly totalBytes: number;
   private readonly libraryId: string;
+  private account: ProviderAccountIdentity | null;
   private connected = true;
 
   constructor(options: MockProviderOptions) {
     this.rootDir = options.rootDir;
     this.totalBytes = options.totalBytes ?? DEFAULT_TOTAL;
     this.libraryId = options.libraryId ?? 'mock-library';
+    this.account =
+      options.accountIdentity === undefined ? { accountId: 'mock-account', accountLabel: 'Mock account' } : options.accountIdentity;
   }
 
   async listLibraries(signal?: AbortSignal): Promise<readonly string[]> {
@@ -77,6 +84,17 @@ export class MockProvider implements StorageProvider {
 
   authState(): Promise<ProviderAuthState> {
     return Promise.resolve(this.connected ? 'connected' : 'not-connected');
+  }
+
+  accountIdentity(): Promise<ProviderAccountIdentity> {
+    this.assertAuth();
+    if (this.account === null) throw new ProviderError('mock account identity is unavailable', 'transient');
+    return Promise.resolve(this.account);
+  }
+
+  /** Shared-contract hook for account replacement and unavailable paths. */
+  setAccountIdentity(account: ProviderAccountIdentity | null): void {
+    this.account = account;
   }
 
   private resolve(path: string): string {
@@ -167,7 +185,7 @@ export class MockProvider implements StorageProvider {
   }
 }
 
-export type FaultKind = 'put' | 'verify-mismatch' | 'auth-expired' | 'transient-get';
+export type FaultKind = 'put' | 'verify-mismatch' | 'auth-expired' | 'identity-unavailable' | 'transient-get';
 
 /** Wraps any provider with forced failures — each engine error path gets a
  * deterministic trigger (#103 exit criteria). */
@@ -188,7 +206,9 @@ export class FaultInjectingProvider implements StorageProvider {
   }
 
   forLibrary(libraryId: string): StorageProvider {
-    return new FaultInjectingProvider(this.inner.forLibrary(libraryId));
+    const scoped = new FaultInjectingProvider(this.inner.forLibrary(libraryId));
+    for (const fault of this.faults) scoped.arm(fault);
+    return scoped;
   }
 
   arm(fault: FaultKind): void {
@@ -204,6 +224,13 @@ export class FaultInjectingProvider implements StorageProvider {
       return 'expired';
     }
     return this.inner.authState();
+  }
+
+  accountIdentity(signal?: AbortSignal): Promise<ProviderAccountIdentity> {
+    if (this.faults.has('identity-unavailable')) {
+      return Promise.reject(new ProviderError('account identity is unavailable', 'transient'));
+    }
+    return this.inner.accountIdentity(signal);
   }
 
   async put(path: string, bytes: Readable): Promise<{ bytes: number }> {

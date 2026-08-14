@@ -17,7 +17,9 @@ export const commandMenuContextSchema = z
     targetTrashable: z.boolean(),
     /** The active route is an album (#689 Photo menu "Remove from Album"). */
     inAlbum: z.boolean(),
-    selectionCount: z.number().int().nonnegative().max(100_000),
+    /** Protected albums have their own authorized export boundary. */
+    protectedAlbumOpen: z.boolean(),
+    selectionCount: z.number().int().nonnegative(),
     appLockConfigured: z.boolean(),
     providerBusy: z.boolean(),
     pcloudEnabled: z.boolean(),
@@ -38,6 +40,7 @@ export const EMPTY_COMMAND_MENU_CONTEXT: CommandMenuContext = {
   hasTarget: false,
   targetTrashable: false,
   inAlbum: false,
+  protectedAlbumOpen: false,
   selectionCount: 0,
   appLockConfigured: false,
   providerBusy: false,

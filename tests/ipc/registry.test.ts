@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { channels, events } from '../../src/shared/ipc/channels.js';
 import { createEmitter, createInvoker, createSubscriber, IpcRemoteError, wrapHandler } from '../../src/shared/ipc/registry.js';
-import { PHOTO_PURGE_AUTHORIZATION } from '../../src/shared/destructive-actions.js';
+import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../../src/shared/destructive-actions.js';
 
 describe('channel registry', () => {
   test('channel and event names are unique', () => {
@@ -35,6 +35,21 @@ describe('channel registry', () => {
     assert.throws(() => channels.backupOffload.response.parse({ offloaded: 1, skipped: 0, freedBytes: 42 }));
   });
 
+  test('bulk metadata summaries allow aggregate tag unions beyond the per-photo cap (#508 review)', () => {
+    const varyingTags = Array.from({ length: 102 }, (_, index) => `tag-${String(index).padStart(3, '0')}`);
+    assert.deepEqual(
+      channels.libraryMetadataSummary.response.parse({
+        found: 2,
+        missing: 0,
+        title: { mixed: false, value: null },
+        description: { mixed: false, value: null },
+        commonTags: [],
+        varyingTags,
+      }).varyingTags,
+      varyingTags,
+    );
+  });
+
   test('Touch ID IPC exposes states but strips native and unlock secrets (#310)', () => {
     assert.deepEqual(
       channels.appLockTouchIdStatus.response.parse({
@@ -50,10 +65,12 @@ describe('channel registry', () => {
       channels.appLockTouchIdUnlock.response.parse({
         ok: true,
         reason: null,
+        retryAfterMs: 0,
+        attemptsRemaining: 3,
         unlockKey: Buffer.alloc(32, 5),
         masterKey: Buffer.alloc(32, 6),
       }),
-      { ok: true, reason: null },
+      { ok: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 },
     );
   });
 
@@ -110,6 +127,13 @@ describe('channel registry', () => {
           gpsLat: null,
           gpsLon: null,
           place: null,
+          title: null,
+          description: null,
+          tags: [],
+          userTags: [],
+          importedKeywords: [],
+          suppressedKeywords: [],
+          metadataVersion: 1,
           importedAt: '2026-07-16T12:00:00.000Z',
           importSource: 'test',
           favorite: false,
@@ -149,6 +173,26 @@ describe('channel registry', () => {
       photoIds: ['P1'],
       authorization: PHOTO_PURGE_AUTHORIZATION,
     });
+  });
+
+  test('emergency provider removal requires its ADR-0023 risk acknowledgement (#732)', () => {
+    assert.throws(() => channels.backupRemoveAuthorizationAnyway.request.parse({ providerId: 'pcloud' }));
+    assert.throws(() =>
+      channels.backupRemoveAuthorizationAnyway.request.parse({ providerId: 'pcloud', authorization: 'stale-confirmation' }),
+    );
+    assert.deepEqual(
+      channels.backupRemoveAuthorizationAnyway.request.parse({
+        providerId: 'pcloud',
+        authorization: PROVIDER_AUTHORIZATION_REMOVAL,
+      }),
+      { providerId: 'pcloud', authorization: PROVIDER_AUTHORIZATION_REMOVAL },
+    );
+  });
+
+  test('clipboard writes are bounded and registry-validated (#805)', () => {
+    assert.deepEqual(channels.clipboardWrite.request.parse({ text: 'copy me' }), { text: 'copy me' });
+    assert.throws(() => channels.clipboardWrite.request.parse({ text: 'x'.repeat(1_000_001) }));
+    assert.deepEqual(channels.clipboardWrite.response.parse({}), {});
   });
 });
 

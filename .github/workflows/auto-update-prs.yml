@@ -1,102 +1,67 @@
-# The hand-rolled merge queue (user-owned repos get no real one — GitHub's merge
-# queue is organizations-only). Three pieces compose into serialized, always-tested-
-# on-tip merges:
+# GitHub's native merge queue is organization-only, so this user-owned repository
+# keeps ready branches current with a serialized updater:
 #
-#   1. This workflow: every push to main updates each open, non-draft, non-bot PR
-#      branch by MERGING main into it (GitHub's update-branch API) — no rebase, no
-#      force-push, no history rewrite.
-#   2. The ruleset's strict up-to-date requirement: a PR whose branch is behind main
-#      cannot merge, so auto-merge can never land a stale-green combination.
-#   3. Auto-merge (agents run `gh pr merge --auto --merge` once ready): lands the PR
-#      as a merge commit the moment its updated head goes green and threads resolve.
+#   1. Every push to main updates each open, non-draft, non-bot PR by MERGING main
+#      through GitHub's update-branch API — no rebase, force-push, or local rewrite.
+#   2. Strict required checks prevent auto-merge from landing a stale-green branch.
+#   3. Auto-merge lands the current, green PR as a merge commit after review.
 #
-# The cascade after each merge — update next PR → CI on the true merged state →
-# auto-merge — is exactly what a merge queue does, minus the queue UI. Nobody
-# clicks "update branch" by hand.
-#
-# Why chores-dumb[bot] instead of GITHUB_TOKEN: pushes made with GITHUB_TOKEN do not
-# trigger downstream workflows, so the old version had to re-dispatch CI by hand
-# (and that manual lane needed workflow-run approval). Updating the branch under a
-# an App token fires the PR's `synchronize` event normally, so CI runs on its own —
-# no re-dispatch step, no `actions: write`, no "allow workflow" click. The
-# update-branch API produces GitHub-signed merge commits, so `required_signatures`
-# on main is satisfied without any local signing.
-#
-# Excluded branches: dependabot/* (a foreign update makes Dependabot stop
-# maintaining its PR — comment `@dependabot rebase` instead) and changeset-release/*
-# (the version-cut workflow force-pushes it already).
+# The update is performed only as chores-dumb[bot], so its synchronize event starts
+# normal ready-PR CI. Dependabot and changeset-release branches remain excluded.
 name: Auto-update PR branches
 
 on:
   push:
     branches:
       - main
-  # A draft skipped during a main merge would otherwise sit stuck once marked
-  # ready: strict up-to-date blocks its auto-merge, and nothing re-runs this
-  # updater until the next unrelated merge (PR #541 review). The ready flip —
-  # and a PR opened or reopened on an already-stale base — gets an update pass
-  # of its own. Draft-opened PRs no-op in the job's non-draft filter.
-  #
-  # pull_request_target, NOT pull_request: this job mints a bot token, and a PR
-  # that edits this file must not be able to run its modified YAML with that
-  # credential. pull_request_target always runs the workflow definition
-  # from the base ref (main, i.e. already-reviewed), and this job never checks
-  # out or executes PR head code — it only makes API calls — so the usual
-  # pull_request_target code-injection risk does not apply.
+  # A draft skipped during a main merge would otherwise remain behind when marked
+  # ready. pull_request_target is safe here because the base workflow is used and
+  # no PR code is checked out or executed; the job only calls GitHub APIs.
   pull_request_target:
     types: [opened, reopened, ready_for_review]
-  # Manual lever for recovery (e.g. after a conflict was resolved elsewhere).
   workflow_dispatch:
 
-# Normal runs authenticate as chores-dumb[bot]. These scopes exist only for the
-# `|| github.token` fallback (when neither the App nor the PAT is present): listing
-# PRs needs pull-requests read, and update-branch needs contents write.
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
-# One updater at a time, and GitHub keeps at most one queued run per group — a burst
-# of merges coalesces into the run that sees the final main tip.
 concurrency:
   group: auto-update-prs
   cancel-in-progress: false
 
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad
+        with:
+          authorization-only: 'true'
+
   update:
+    needs: policy
     name: Merge main into open PRs
     runs-on: ubuntu-latest
-    # Dependabot-triggered runs are not given regular Actions secrets, so
-    # the App secrets would be empty; skip them (their PRs are excluded from the
-    # updater anyway — `@dependabot rebase` maintains those).
+    permissions:
+      contents: write
+      pull-requests: read
+    # Dependabot-triggered runs receive no regular Actions secrets and its branches
+    # are intentionally maintained through `@dependabot rebase` instead.
     if: github.actor != 'dependabot[bot]'
     env:
-      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' }}
+      HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:
+      - name: Require chores-dumb credentials
+        run: test "$HAS_CHORES_DUMB" = true
+
       - name: Mint the chores-dumb token
         id: chores
-        # Never fatal. The token expressions below fall back to RELEASE_TOKEN and
-        # then github.token, but a *failed* step aborts the job before any of that
-        # applies — so an unreadable App key took the whole release pipeline down
-        # instead of degrading it (PR #836 follow-up).
-        continue-on-error: true
-        # actions/* — first-party, so the App key never reaches a third-party
-        # action (AGENTS.md → Branch And GitHub Hygiene).
-        if: env.HAS_CHORES_DUMB == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          # client-id, not app-id: v3 deprecated the latter, and the two are
-          # easy to confuse with the bot's *user* id, which is a third number
-          # entirely (PR #838 review).
           client-id: ${{ secrets.CHORES_DUMB_CLIENT_ID }}
           private-key: ${{ secrets.CHORES_DUMB_PRIVATE_KEY }}
 
       - name: Update each behind branch by merging main into it
         env:
-          # The bot token so the resulting push fires each PR's CI automatically;
-          # fall back to the PAT, then to the default token, so the job never runs
-          # with an empty GH_TOKEN (the last path can update branches but won't
-          # auto-trigger CI — a GITHUB_TOKEN limitation, not a bug).
-          GH_TOKEN: ${{ steps.chores.outputs.token || secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.chores.outputs.token }}
           REPO: ${{ github.repository }}
         run: |
           gh pr list --repo "$REPO" --state open \
@@ -115,16 +80,12 @@ jobs:
               echo "PR #$number ($branch) is current; nothing to do."
               continue
             fi
-            # expected_head_sha is update-branch's optimistic lock: if the owning
-            # agent pushed between our list and now, GitHub 422s and the next main
-            # merge retries us — the same guarantee the old --force-with-lease gave.
+            # expected_head_sha is an optimistic lock. A raced push or real conflict
+            # is left visible on the PR and retried by a later updater event.
             if gh api -X PUT "repos/$REPO/pulls/$number/update-branch" \
                  -f expected_head_sha="$sha" >/dev/null 2>&1; then
               echo "PR #$number ($branch): merged main in ($behind behind); CI will run on the new head."
             else
-              # Either a real merge conflict (the PR now shows CONFLICTING and
-              # AGENTS.md points the owner there) or a lost race on expected_head_sha
-              # (retried on the next merge). Non-fatal for the rest of the queue.
               echo "::warning title=PR #$number needs attention::update-branch failed for $branch (conflict or raced push); skipped."
             fi
           done

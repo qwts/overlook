@@ -9,9 +9,8 @@ import {
   type ICloudDriveNativeErrorCode,
 } from '../backup/icloud-drive/native-bridge.js';
 import type { ICloudNativeAuthority } from './icloud-native-host.js';
-import { InteropTransportError, assertSafeInteropPath } from './transport.js';
+import { INTEROP_PROVIDER_LOGICAL_ROOT, InteropTransportError, assertSafeInteropPath } from './transport.js';
 
-const INTEROP_ROOT = 'Overlook Interop/v1';
 const PAGE_SIZE = 100;
 
 export interface ICloudAccountAuthorityStore {
@@ -38,7 +37,7 @@ function mappedError(error: unknown): InteropTransportError {
 }
 
 function remotePath(path: string): string {
-  return `${INTEROP_ROOT}/${assertSafeInteropPath(path)}`;
+  return `${INTEROP_PROVIDER_LOGICAL_ROOT}/${assertSafeInteropPath(path)}`;
 }
 
 function stagingPath(root: string, reference: string): string {
@@ -97,7 +96,7 @@ export class BridgeICloudNativeAuthority implements ICloudNativeAuthority {
       const expected = this.options.accountAuthority.load();
       if (expected === null || page.accountToken !== expected)
         throw new InteropTransportError('iCloud account authority changed.', 'auth-expired', false);
-      const rootPrefix = `${INTEROP_ROOT}/`;
+      const rootPrefix = `${INTEROP_PROVIDER_LOGICAL_ROOT}/`;
       if (page.entries.some((entry) => !entry.path.startsWith(rootPrefix)))
         throw new InteropTransportError('iCloud returned an object outside the interop namespace.', 'corrupt', false);
       return {

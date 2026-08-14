@@ -13,12 +13,19 @@ import { FaultInjectingProvider, MockProvider, ProviderRegistry } from './mock-p
 import { createPCloudConnect, type PCloudConnectResult } from './pcloud/connect.js';
 import { PCloudProvider } from './pcloud/pcloud-provider.js';
 import { PCloudTokenStore } from './pcloud/token-store.js';
-import type { StorageProvider } from './provider.js';
-import { raceWithAbort } from './provider.js';
-import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../shared/backup/provider-descriptor.js';
+import { ProviderError, raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
+import type {
+  CustodyCredential,
+  CustodyPreflight,
+  CustodyRequirement,
+  ProviderCapacityStatus,
+  ProviderConnectionStatus,
+  ProviderDescriptor,
+} from '../../shared/backup/provider-descriptor.js';
 import { ICloudDriveProvider } from './icloud-drive/icloud-drive-provider.js';
 import { ICloudDriveAuthorityStore } from './icloud-drive/authority-store.js';
 import type { ICloudDriveNativeBridge, ICloudDriveUnavailableReason } from './icloud-drive/native-bridge.js';
+import type { CustodyReconnectResult } from './custody-reconnect.js';
 
 // Provider-selection + pCloud-custody runtime (#256), extracted from the
 // composition root: which provider is active, who Connect targets, the
@@ -51,6 +58,21 @@ export interface ProviderRuntimeOptions {
    * remote-only object the library claims (see provider-switch-guard.ts).
    * Absent in tests that exercise pure selection mechanics. */
   readonly switchGuard?: ((target: { providerId: string; provider: StorageProvider }) => Promise<PCloudConnectResult>) | undefined;
+  /** Re-scopes a restore-browser registry provider only when a library is
+   * already open. Fresh-profile onboarding must return the input unchanged. */
+  readonly scopeProviderForOpenLibrary?: ((provider: StorageProvider) => StorageProvider) | undefined;
+  readonly custodyPreflight?: ((credential: CustodyCredential) => CustodyPreflight) | undefined;
+  readonly markProviderRequired?: ((credential: CustodyCredential) => (() => void) | void) | undefined;
+  readonly deleteUnreferencedAuthorities?: ((credential: CustodyCredential) => void) | undefined;
+  readonly providerRequirements?: (() => readonly CustodyRequirement[]) | undefined;
+  readonly pauseCustodyReconnectProofs?: (() => Promise<() => void>) | undefined;
+  readonly verifyCustodyReconnect?:
+    | ((input: {
+        readonly provider: StorageProvider;
+        readonly identity: ProviderAccountIdentity;
+        readonly signal?: AbortSignal;
+      }) => Promise<CustodyReconnectResult>)
+    | undefined;
   /** Test seams; production probes connection for at most 5s and capacity for 30s. */
   readonly statusTimeoutMs?: number | undefined;
   readonly storageTimeoutMs?: number | undefined;
@@ -58,6 +80,15 @@ export interface ProviderRuntimeOptions {
 
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
 const DEFAULT_STORAGE_TIMEOUT_MS = 30_000;
+const ACTIVE_WORK_DISCONNECT_REASON = 'Wait for the active backup or restore to finish before disconnecting.';
+
+type AccountIdentityAttempt =
+  | {
+      readonly ok: true;
+      readonly identity: ProviderAccountIdentity;
+      readonly requiresSwitchGuard: boolean;
+    }
+  | { readonly ok: false; readonly reauthenticate: boolean; readonly result: PCloudConnectResult };
 
 export class ProviderRuntime {
   private readonly options: ProviderRuntimeOptions;
@@ -76,6 +107,8 @@ export class ProviderRuntime {
     string,
     { readonly controller: AbortController; readonly promise: Promise<ProviderCapacityStatus> }
   >();
+  private reconnectAbortController = new AbortController();
+  private readonly reconnectInFlight = new Set<Promise<CustodyReconnectResult>>();
 
   constructor(options: ProviderRuntimeOptions) {
     this.options = options;
@@ -85,15 +118,12 @@ export class ProviderRuntime {
     if (this.tokenStoreInstance === undefined) {
       const safeStorage = this.options.safeStorage();
       const credentialDir = this.credentialDirectory('pcloud');
-      this.tokenStoreInstance = new PCloudTokenStore({ safeStorage, dataDir: credentialDir });
-      if (credentialDir !== this.options.dataDir() && this.tokenStoreInstance.load() === null) {
-        const legacy = new PCloudTokenStore({ safeStorage, dataDir: this.options.dataDir() });
-        const record = legacy.load();
-        if (record !== null) {
-          this.tokenStoreInstance.save(record);
-          legacy.clear();
-        }
-      }
+      this.tokenStoreInstance = new PCloudTokenStore({
+        safeStorage,
+        dataDir: credentialDir,
+        ...(credentialDir === this.options.dataDir() ? {} : { legacyDataDir: this.options.dataDir() }),
+      });
+      this.tokenStoreInstance.migrateLegacy();
     }
     return this.tokenStoreInstance;
   }
@@ -160,7 +190,11 @@ export class ProviderRuntime {
     });
     const result = await this.connectFlow();
     if (!result.ok) return result;
-    return this.activate('pcloud');
+    const provider = this.provider('pcloud');
+    if (provider === undefined) return identityUnavailable('pCloud');
+    const identity = await this.establishAccountIdentity('pcloud', provider);
+    if (!identity.ok) return identity.result;
+    return this.activate('pcloud', provider, identity);
   }
 
   private async connectGoogleDrive(): Promise<PCloudConnectResult> {
@@ -177,24 +211,153 @@ export class ProviderRuntime {
     });
     const result = await this.googleConnectFlow();
     if (!result.ok) return result;
-    return this.activate('google-drive');
+    const provider = this.provider('google-drive');
+    if (provider === undefined) return identityUnavailable('Google Drive');
+    const identity = await this.establishAccountIdentity('google-drive', provider);
+    if (!identity.ok) return identity.result;
+    return this.activate('google-drive', provider, identity);
+  }
+
+  refreshAccountIdentity(providerId: string, identity: ProviderAccountIdentity): boolean {
+    const accountChanged = this.persistedAccountIdentity(providerId)?.accountId !== identity.accountId;
+    try {
+      if (providerId === 'pcloud') {
+        const record = this.tokenStore().load();
+        if (record === null) return false;
+        this.tokenStore().save({ ...record, ...identity });
+      } else if (providerId === 'google-drive') {
+        const record = this.googleTokenStore().load();
+        if (record === null) return false;
+        this.googleTokenStore().save({ ...record, ...identity });
+      } else if (providerId === 'icloud-drive') {
+        this.iCloudAuthorityStore().save(identity);
+        this.iCloudDriveProviderInstance?.resetAccountAuthority(identity.accountId);
+      }
+      if (accountChanged && this.options.providerId() === providerId) this.options.setProviderId(null);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private persistedAccountIdentity(providerId: string): ProviderAccountIdentity | null {
+    const record =
+      providerId === 'pcloud'
+        ? this.tokenStore().load()
+        : providerId === 'google-drive'
+          ? this.googleTokenStore().load()
+          : providerId === 'icloud-drive'
+            ? this.iCloudAuthorityStore().loadRecord()
+            : null;
+    if (record?.accountId === undefined || record.accountLabel === undefined) return null;
+    return { accountId: record.accountId, accountLabel: record.accountLabel };
+  }
+
+  private clearFailedAuthentication(providerId: string): boolean {
+    try {
+      if (providerId === 'pcloud') {
+        this.tokenStore().clear();
+      } else if (providerId === 'google-drive') {
+        this.googleAuth().clear();
+        this.resetGoogleDriveAccountCache();
+      } else {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async establishAccountIdentity(providerId: string, provider: StorageProvider): Promise<AccountIdentityAttempt> {
+    const previousIdentity = this.persistedAccountIdentity(providerId);
+    try {
+      const identity = await withAbortableDeadline(
+        (signal) => provider.accountIdentity(signal),
+        this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS,
+      );
+      const accountChanged = previousIdentity !== null && previousIdentity.accountId !== identity.accountId;
+      return {
+        ok: true,
+        identity,
+        requiresSwitchGuard: this.activeId() !== providerId || (providerId !== 'mock' && (previousIdentity === null || accountChanged)),
+      };
+    } catch (error) {
+      const authenticationFailed = error instanceof ProviderError && error.kind === 'auth';
+      return {
+        ok: false,
+        reauthenticate: authenticationFailed && this.clearFailedAuthentication(providerId),
+        result: identityUnavailable(provider.label),
+      };
+    }
   }
 
   /** Moves settings.providerId, fail-closed (#741): switching to a
    * different provider first proves the target holds every remote-only
-   * object the library claims. Re-activating the current provider skips the
-   * proof — nothing about the claims changes. */
-  private async activate(providerId: string): Promise<PCloudConnectResult> {
-    if (this.options.switchGuard !== undefined && this.activeId() !== providerId) {
-      const provider = this.provider(providerId);
-      if (provider === undefined) {
-        return { ok: false, reason: 'This provider is not available on this device.' };
+   * object the library claims. Re-activating the same account skips the
+   * proof; a changed account under the same provider ID does not. */
+  private async activate(
+    providerId: string,
+    provider: StorageProvider,
+    attempt: Extract<AccountIdentityAttempt, { readonly ok: true }>,
+  ): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before switching providers.' };
+    }
+    if (attempt.requiresSwitchGuard && this.options.providerId() === providerId) {
+      this.options.setProviderId(null);
+      if (this.options.providerId() === providerId) {
+        return { ok: false, reason: 'Could not save the disconnected state. Try again.' };
       }
-      const verdict = await this.options.switchGuard({ providerId, provider });
+    }
+    if (!this.refreshAccountIdentity(providerId, attempt.identity)) {
+      return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
+    }
+    let scopedProvider: StorageProvider;
+    try {
+      scopedProvider = this.options.scopeProviderForOpenLibrary?.(provider) ?? provider;
+    } catch {
+      return custodyUnavailable();
+    }
+    if (this.options.switchGuard !== undefined && attempt.requiresSwitchGuard) {
+      const verdict = await this.options.switchGuard({ providerId, provider: scopedProvider });
       if (!verdict.ok) return verdict;
     }
     this.options.setProviderId(providerId);
+    let reconnect: CustodyReconnectResult | undefined;
+    try {
+      reconnect = await this.verifyReconnect({ provider: scopedProvider, identity: attempt.identity });
+    } catch {
+      return custodyUnavailable();
+    }
+    if (reconnect?.ok === false) {
+      if (reconnect.reason === 'wrong-account' && reconnect.replacementIdentity !== undefined) {
+        if (!this.refreshAccountIdentity(providerId, reconnect.replacementIdentity)) {
+          return providerId === 'icloud-drive' ? iCloudAuthoritySaveFailure() : identityUnavailable(provider.label);
+        }
+      }
+      return reconnect.reason === 'wrong-account' ? custodyWrongAccount() : custodyUnavailable();
+    }
     return { ok: true, reason: null };
+  }
+
+  private async verifyReconnect(input: {
+    readonly provider: StorageProvider;
+    readonly identity: ProviderAccountIdentity;
+  }): Promise<CustodyReconnectResult | undefined> {
+    const verifier = this.options.verifyCustodyReconnect;
+    if (verifier === undefined) return undefined;
+    const signal = this.reconnectAbortController.signal;
+    signal.throwIfAborted();
+    const resumeCustodyProofs = (await this.options.pauseCustodyReconnectProofs?.()) ?? (() => undefined);
+    const operation = new Promise<CustodyReconnectResult>((resolve) => resolve(verifier({ ...input, signal })));
+    this.reconnectInFlight.add(operation);
+    try {
+      return await operation;
+    } finally {
+      this.reconnectInFlight.delete(operation);
+      resumeCustodyProofs();
+    }
   }
 
   async descriptors(): Promise<readonly ProviderDescriptor[]> {
@@ -228,6 +391,15 @@ export class ProviderRuntime {
     return this.options.iCloudDriveBridge.drain();
   }
 
+  async drainReconnectVerifications(): Promise<void> {
+    this.reconnectAbortController.abort(new Error('library binding changed'));
+    await Promise.allSettled([...this.reconnectInFlight]);
+  }
+
+  renewReconnectVerificationLifecycle(): void {
+    this.reconnectAbortController = new AbortController();
+  }
+
   /** Connection authority is intentionally cheap (#721): provider capacity
    * lives behind storage(), so a completed OAuth flow can render
    * Connected without waiting on the provider network. */
@@ -240,8 +412,18 @@ export class ProviderRuntime {
       this.descriptor(provider),
       withDeadline(provider.authState(), this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS),
     ]);
-    const connected = this.activeId() === providerId && authState === 'connected';
-    return { provider: descriptor, connected, account: null };
+    let identity = this.persistedAccountIdentity(providerId);
+    if (providerId === 'mock' && authState === 'connected') {
+      identity = await provider.accountIdentity().catch(() => null);
+    }
+    const connected = this.activeId() === providerId && authState === 'connected' && identity !== null;
+    const custodyRequirements = this.options.providerRequirements?.().filter((requirement) => requirement.providerId === providerId) ?? [];
+    return {
+      provider: descriptor,
+      connected,
+      accountLabel: connected ? (identity?.accountLabel ?? null) : null,
+      ...(custodyRequirements.length === 0 ? {} : { custodyRequirements }),
+    };
   }
 
   /** Bounded, informational provider capacity (#721). Calls are single-flight
@@ -307,10 +489,22 @@ export class ProviderRuntime {
     if (provider === undefined || descriptor?.available !== true) {
       return { ok: false, reason: descriptor?.unavailableReason ?? 'This provider is not available on this device.' };
     }
+    const providerState = await provider.authState();
+    const activeProviderId = this.activeId();
+    if (activeProviderId !== null && (activeProviderId !== providerId || providerState !== 'connected')) {
+      const blocked = await this.custodyChangeBlocked(activeProviderId);
+      if (blocked !== null) return blocked;
+    }
     // Selecting a provider with existing sealed authority is activation, not a
     // new OAuth grant.
-    if ((await provider.authState()) === 'connected') {
-      return this.activate(providerId);
+    if (providerState === 'connected') {
+      const identity = await this.establishAccountIdentity(providerId, provider);
+      if (!identity.ok) {
+        if (identity.reauthenticate && providerId === 'pcloud') return this.connectPCloud();
+        if (identity.reauthenticate && providerId === 'google-drive') return this.connectGoogleDrive();
+        return identity.result;
+      }
+      return this.activate(providerId, provider, identity);
     }
     if (providerId === 'pcloud') {
       return this.connectPCloud();
@@ -323,17 +517,13 @@ export class ProviderRuntime {
       if (!status.available || status.accountToken === null) {
         return { ok: false, reason: iCloudUnavailableCopy(status.reason ?? 'native-unavailable') };
       }
-      try {
-        this.iCloudAuthorityStore().save(status.accountToken);
-      } catch {
-        return { ok: false, reason: 'Could not securely save this iCloud account authority. Check Keychain access and try again.' };
-      }
-      provider.resetAccountAuthority(status.accountToken);
     }
     if (provider instanceof FaultInjectingProvider) {
       provider.disarm('auth-expired');
     }
-    return this.activate(providerId);
+    const identity = await this.establishAccountIdentity(providerId, provider);
+    if (!identity.ok) return identity.result;
+    return this.activate(providerId, provider, identity);
   }
 
   disconnect(providerId: string): Promise<PCloudConnectResult> {
@@ -348,10 +538,27 @@ export class ProviderRuntime {
     return operation;
   }
 
-  private disconnectOnce(providerId: string): PCloudConnectResult {
-    if (this.options.isWorkActive?.() === true) {
-      return { ok: false, reason: 'Wait for the active backup or restore to finish before disconnecting.' };
+  private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
+    // Invokes can arrive after the first clears custody; only the fully disconnected state is idempotent.
+    // `load()` also returns null for unreadable records, so use the normal
+    // force-clear, verification, and structured-error path before succeeding.
+    if (providerId === 'pcloud' && this.options.providerId() !== providerId && this.tokenStore().load() === null)
+      return this.disconnectPCloud();
+    const credential = this.options.custodyPreflight === undefined ? null : await this.custodyCredential(providerId);
+    if (this.options.custodyPreflight !== undefined && credential === null) return custodyUnavailable();
+    if (credential !== null) {
+      const custody = this.options.custodyPreflight?.(credential);
+      const blocked = custody === undefined ? null : custodyBlocked(custody);
+      if (blocked !== null) return blocked;
     }
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
+    const result = this.disconnectAuthorization(providerId);
+    if (result.ok && credential !== null) this.options.deleteUnreferencedAuthorities?.(credential);
+    return result;
+  }
+
+  private disconnectAuthorization(providerId: string): PCloudConnectResult {
     this.abortStorage(providerId);
     if (providerId === 'pcloud') return this.disconnectPCloud();
     try {
@@ -373,6 +580,55 @@ export class ProviderRuntime {
     }
   }
 
+  async removeAuthorizationAnyway(providerId: string): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) {
+      return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
+    }
+    const resumeCustodyProofs = (await this.options.pauseCustodyReconnectProofs?.()) ?? (() => undefined);
+    await this.drainReconnectVerifications();
+    try {
+      const credential = await this.custodyCredential(providerId);
+      if (credential === null) {
+        return custodyUnavailable('Could not verify which provider account is being removed.');
+      }
+      if (this.options.isWorkActive?.() === true) {
+        return { ok: false, reason: 'Wait for the active backup or restore to finish before removing authorization.' };
+      }
+      const rollbackRequired = this.options.markProviderRequired?.(credential);
+      const result = this.disconnectAuthorization(providerId);
+      if (!result.ok && this.samePersistedCredential(credential)) rollbackRequired?.();
+      return result;
+    } finally {
+      this.renewReconnectVerificationLifecycle();
+      resumeCustodyProofs();
+    }
+  }
+
+  private async custodyChangeBlocked(providerId: string): Promise<PCloudConnectResult | null> {
+    if (this.options.custodyPreflight === undefined) return null;
+    const credential = await this.custodyCredential(providerId);
+    if (credential === null) return custodyUnavailable();
+    const custody = this.options.custodyPreflight(credential);
+    return custodyBlocked(custody);
+  }
+
+  private async custodyCredential(providerId: string): Promise<CustodyCredential | null> {
+    const persisted = this.persistedAccountIdentity(providerId);
+    if (persisted !== null) return { providerId, accountId: persisted.accountId };
+    const provider = this.provider(providerId);
+    if (provider === undefined) return null;
+    try {
+      const identity = await provider.accountIdentity();
+      return { providerId, accountId: identity.accountId };
+    } catch {
+      return null;
+    }
+  }
+
+  private samePersistedCredential(credential: CustodyCredential): boolean {
+    return this.persistedAccountIdentity(credential.providerId)?.accountId === credential.accountId;
+  }
+
   private disconnectPCloud(): PCloudConnectResult {
     const store = this.tokenStore();
     const previous = store.load();
@@ -381,7 +637,7 @@ export class ProviderRuntime {
     } catch {
       return { ok: false, reason: 'Could not remove the pCloud authorization from this device. Check file access and try again.' };
     }
-    if (store.load() !== null) {
+    if (store.hasStoredAuthorization()) {
       return { ok: false, reason: 'Could not verify that the pCloud authorization was removed. Check status and try again.' };
     }
 
@@ -392,7 +648,7 @@ export class ProviderRuntime {
       // exception. Never roll a completed disconnect back on an emit failure.
     }
     const selectionCleared = this.options.providerId() !== 'pcloud';
-    const custodyCleared = store.load() === null;
+    const custodyCleared = !store.hasStoredAuthorization();
     if (selectionCleared && custodyCleared) return { ok: true, reason: null };
     if (!selectionCleared) return this.rollbackPCloudCustody(previous);
     return {
@@ -448,19 +704,20 @@ export class ProviderRuntime {
    * folder. */
   activeId(): string | null {
     const raw = this.options.providerId();
-    if (raw === null) {
-      return null;
-    }
+    if (raw === null) return null;
     if (raw === 'mock' && !this.mockEnabled()) {
       return null;
     }
     if (raw === 'pcloud' && !this.pcloudAvailable()) {
       return null;
     }
+    if (raw === 'pcloud' && this.persistedAccountIdentity(raw) === null) {
+      return null;
+    }
     if (raw === 'google-drive' && this.googleClientId() === null) {
       return null;
     }
-    if (raw === 'icloud-drive' && this.iCloudAuthorityStore().load() === null) {
+    if ((raw === 'google-drive' || raw === 'icloud-drive') && this.persistedAccountIdentity(raw) === null) {
       return null;
     }
     if (this.registryInstance !== undefined && this.registryInstance.get(raw) === undefined) {
@@ -475,7 +732,13 @@ export class ProviderRuntime {
     const registry = new ProviderRegistry();
     const libraryId = build.libraryId ?? this.libraryId();
     if (this.pcloudAvailable()) {
-      registry.register(new PCloudProvider({ auth: () => this.tokenStore().load(), libraryId }));
+      registry.register(
+        new PCloudProvider({
+          auth: () => this.tokenStore().load(),
+          libraryId,
+          ...(this.options.fetchImpl === undefined ? {} : { fetchImpl: this.options.fetchImpl }),
+        }),
+      );
     }
     const googleProvider = new GoogleDriveProvider({
       auth: this.googleAuth(),
@@ -496,7 +759,13 @@ export class ProviderRuntime {
     if (this.mockEnabled()) {
       const faulty = new FaultInjectingProvider(new MockProvider({ rootDir: build.mockRootDir, libraryId }));
       const fault = build.fault;
-      if (fault === 'put' || fault === 'verify-mismatch' || fault === 'auth-expired' || fault === 'transient-get') {
+      if (
+        fault === 'put' ||
+        fault === 'verify-mismatch' ||
+        fault === 'auth-expired' ||
+        fault === 'identity-unavailable' ||
+        fault === 'transient-get'
+      ) {
         faulty.arm(fault);
       }
       registry.register(faulty);
@@ -530,7 +799,7 @@ export class ProviderRuntime {
     try {
       return await withDeadline(this.options.iCloudDriveBridge.status(), this.options.statusTimeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS);
     } catch {
-      return { available: false as const, reason: 'native-unavailable' as const, accountToken: null };
+      return { available: false as const, reason: 'native-unavailable' as const, accountToken: null, accountLabel: null };
     }
   }
 
@@ -565,6 +834,53 @@ function emptyCapacity(): ProviderCapacityStatus {
   };
 }
 
+function identityUnavailable(providerLabel: string): PCloudConnectResult {
+  return {
+    ok: false,
+    reason: `${providerLabel} could not verify the account identity. Check the connection and try again.`,
+    code: 'identity-unavailable',
+    retryable: true,
+  };
+}
+
+function custodyUnavailable(reason = 'Could not verify custody for this provider account.'): PCloudConnectResult {
+  return { ok: false, reason, code: 'custody-unavailable', retryable: true };
+}
+
+function custodyWrongAccount(): PCloudConnectResult {
+  return {
+    ok: false,
+    reason: 'This provider account does not match the account holding this library’s cloud-only originals.',
+    code: 'custody-wrong-account',
+  };
+}
+
+function restoreRequired(custody: CustodyPreflight): PCloudConnectResult {
+  return {
+    ok: false,
+    reason: 'Restore all originals first before changing this provider account.',
+    code: 'custody-restore-required',
+    custody,
+  };
+}
+
+function custodyBlocked(custody: CustodyPreflight): PCloudConnectResult | null {
+  if (custody.unverifiedLibraries !== undefined && custody.unverifiedLibraries.length > 0) {
+    return {
+      ok: false,
+      reason: 'Open each unverified library before changing this provider account.',
+      code: 'custody-unavailable',
+      retryable: true,
+      custody,
+    };
+  }
+  return custody.totalItems === 0 ? null : restoreRequired(custody);
+}
+
+function iCloudAuthoritySaveFailure(): PCloudConnectResult {
+  return { ok: false, reason: 'Could not securely save this iCloud account authority. Check Keychain access and try again.' };
+}
+
 function unavailableCapacity(providerId: string): ProviderCapacityStatus {
   return {
     ...emptyCapacity(),
@@ -578,6 +894,14 @@ function withDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
     timeout.unref();
     void operation.then(resolve, reject).finally(() => clearTimeout(timeout));
   });
+}
+
+function withAbortableDeadline<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('provider identity timed out')), timeoutMs);
+  timeout.unref();
+  const pending = Promise.resolve().then(() => operation(controller.signal));
+  return raceWithAbort(pending, controller.signal).finally(() => clearTimeout(timeout));
 }
 
 function iCloudUnavailableCopy(reason: ICloudDriveUnavailableReason): string {

@@ -15,7 +15,7 @@ function fakeBridge(): ICloudDriveNativeBridge & { readonly deleted: string[] } 
   return {
     deleted,
     drain: () => Promise.resolve(),
-    status: () => Promise.resolve({ available: true, reason: null, accountToken: '0123456789abcdef' }),
+    status: () => Promise.resolve({ available: true, reason: null, accountToken: '0123456789abcdef', accountLabel: 'Test account' }),
     replaceFile: async (path, source) => {
       objects.set(path, await import('node:fs/promises').then(({ readFile }) => readFile(source)));
     },
@@ -47,12 +47,12 @@ function fakeBridge(): ICloudDriveNativeBridge & { readonly deleted: string[] } 
 }
 
 describe('packaged iCloud native smoke (#656)', () => {
-  test('the documented npm entrypoint runs under the process-tree guard', () => {
+  test('the documented npm entrypoint runs under the memory guard', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
       readonly scripts?: Record<string, string>;
     };
     const command = packageJson.scripts?.['test:icloud:native-smoke'] ?? '';
-    assert.match(command, /scripts\/run-guarded\.mjs/u);
+    assert.match(command, /tools\/agent-guard\/run-guarded\.mjs/u);
     assert.match(command, /--label test:icloud:native-smoke/u);
     assert.match(command, /scripts\/verify-macos-icloud-native-smoke\.mjs/u);
   });
@@ -89,7 +89,7 @@ describe('packaged iCloud native smoke (#656)', () => {
     const exits: number[] = [];
     const output: string[] = [];
     const bridge = fakeBridge();
-    bridge.status = () => Promise.resolve({ available: false, reason: 'unentitled', accountToken: null });
+    bridge.status = () => Promise.resolve({ available: false, reason: 'unentitled', accountToken: null, accountLabel: null });
     await runICloudNativeSmokeIfRequested(
       { isPackaged: true, exit: (code) => exits.push(code) },
       { argv: ['Overlook', ICLOUD_NATIVE_SMOKE_ARGUMENT], bridge, write: (value) => output.push(value) },

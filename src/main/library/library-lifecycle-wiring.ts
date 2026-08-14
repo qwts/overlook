@@ -3,6 +3,7 @@ import path from 'node:path';
 import { BrowserWindow, app } from 'electron';
 
 import { createSwitchLibrary } from './switch-runtime.js';
+import { describeStartupLockHold } from './library-lock.js';
 import type { AppLockHost } from '../crypto/app-lock-host.js';
 import { LibraryRegistryError } from './library-registry.js';
 import { recoverRelocations, type RelocationDeps } from './relocation-engine.js';
@@ -54,6 +55,12 @@ export interface LibraryLifecycle {
    * A corrupt registry is swallowed here: resolveFailure() reports it loud
    * immediately after. */
   readonly settleRelocationJournals: () => Promise<void>;
+  /** Startup failure gate (§1, #842): a damaged registry reports and aborts
+   * (returns false); a startup selection lock-held by another live instance
+   * reports loud but boots on — the selection stays put and the switcher
+   * stays available, so the user is never silently left in a different
+   * library. */
+  readonly reportStartupFailures: (showError: (title: string, message: string) => void) => boolean;
 }
 
 export function createLibraryLifecycle(deps: LibraryLifecycleDeps): LibraryLifecycle {
@@ -82,8 +89,8 @@ export function createLibraryLifecycle(deps: LibraryLifecycleDeps): LibraryLifec
 
   // Journals live in the profile root so recovery still runs when the
   // destination volume is unplugged (ADR-0022 §2). The staged-custody probe
-  // lives in relocation-verify.ts (covered; skips app-locked OVLK custody —
-  // PR #553 review).
+  // lives in relocation-verify.ts (covered; the runtime requires OVLK custody
+  // to be actively authenticated before relocation).
   const engineDeps = (): RelocationDeps => ({
     journals: new RelocationJournalStore(path.join(app.getPath('userData'), 'relocations')),
     registry: deps.registryRuntime.getRegistry(),
@@ -150,5 +157,17 @@ export function createLibraryLifecycle(deps: LibraryLifecycleDeps): LibraryLifec
     }
   };
 
-  return { switchLibrary, getRelocationRuntime, settleRelocationJournals };
+  const reportStartupFailures = (showError: (title: string, message: string) => void): boolean => {
+    const registryFailure = deps.registryRuntime.resolveFailure();
+    if (registryFailure !== null) {
+      showError('Library registry is damaged', registryFailure);
+      return false;
+    }
+    const entry = deps.registryRuntime.resolveActive();
+    const hold = describeStartupLockHold(entry.path, entry.name, deps.instanceId);
+    if (hold !== null) showError('Library is locked', hold);
+    return true;
+  };
+
+  return { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures };
 }

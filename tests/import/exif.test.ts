@@ -74,6 +74,7 @@ describe('EXIF extraction (#85)', () => {
       takenAt: null,
       gpsLat: null,
       gpsLon: null,
+      keywords: [],
     });
   });
 

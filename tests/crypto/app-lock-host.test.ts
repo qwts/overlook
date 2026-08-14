@@ -58,8 +58,8 @@ function fakeController(libraryId: string | null): AppLockControllerLike & {
       return Promise.resolve();
     },
     configure: () => Promise.resolve(),
-    changePassword: () => Promise.resolve(true),
-    remove: () => Promise.resolve(true),
+    changePassword: () => Promise.resolve({ ok: true }),
+    remove: () => Promise.resolve({ ok: true }),
     recover: () => Promise.resolve(),
   };
 }

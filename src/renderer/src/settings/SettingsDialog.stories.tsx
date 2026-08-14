@@ -1,7 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+/* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import { SettingsDialog } from './SettingsDialog';
+import { useState, type ReactElement } from 'react';
+
+import { Dialog } from '../components/Dialog';
+import { RestoreWorkflow } from '../restore/RestoreWorkflow';
+import { SettingsDialog, type SettingsDialogProps } from './SettingsDialog';
 import { defaultSettings, mergeSettings, type AppSettings } from '../../../shared/settings/settings.js';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import { AppStateProvider } from '../state/app-state-context';
@@ -31,8 +36,10 @@ function installStub(options?: {
   readonly deferQuickActionSettings?: boolean;
   readonly deferInteropUnlock?: boolean;
   readonly iCloudAvailable?: boolean;
+  readonly appLockConfigured?: boolean;
 }): void {
   let current: AppSettings = { ...defaultSettings };
+  const nonInteractiveIdentity = { interactiveAuth: false, reconnectRequired: false, accountIdentity: 'stable-subject' } as const;
   const mockProvider = {
     id: 'mock',
     label: 'Local mock',
@@ -41,8 +48,7 @@ function installStub(options?: {
       verification: 'server-checksum' as const,
       resumableUpload: false,
       platforms: ['darwin' as const],
-      interactiveAuth: false,
-      reconnectRequired: false,
+      ...nonInteractiveIdentity,
     },
     available: true,
     unavailableReason: null,
@@ -55,8 +61,7 @@ function installStub(options?: {
       verification: 'download-hash' as const,
       resumableUpload: false,
       platforms: ['darwin' as const],
-      interactiveAuth: false,
-      reconnectRequired: false,
+      ...nonInteractiveIdentity,
     },
     available: options?.iCloudAvailable !== false,
     unavailableReason: options?.iCloudAvailable === false ? 'iCloud Drive requires a provisioned signed macOS build.' : null,
@@ -71,6 +76,7 @@ function installStub(options?: {
       platforms: ['darwin' as const, 'win32' as const, 'linux' as const],
       interactiveAuth: true,
       reconnectRequired: true,
+      accountIdentity: 'stable-subject' as const,
     },
     available: true,
     unavailableReason: null,
@@ -100,7 +106,6 @@ function installStub(options?: {
       return () => listeners.delete(listener);
     },
   };
-  const embeddingApi = createEmbeddingStoryController().api;
   const initialProviderStatus =
     options?.deferInitialProviderStatus === true
       ? new Promise<void>((resolve) => {
@@ -171,7 +176,7 @@ function installStub(options?: {
       return {
         provider,
         connected: current.providerId === providerId,
-        account:
+        accountLabel:
           current.providerId !== providerId
             ? null
             : providerId === iCloudDriveProvider.id
@@ -214,6 +219,7 @@ function installStub(options?: {
       apply({ providerId: null });
       return { ok: true, reason: null };
     },
+    removeAuthorizationAnyway: () => Promise.resolve({ ok: true, reason: null }),
     openCapacitySettings: () => Promise.resolve({ ok: true }),
   };
   const keysApi = {
@@ -253,26 +259,65 @@ function installStub(options?: {
           resumed: true,
           fallbackFromGeneration: 9,
           relaunching: true,
+          missing: [],
         },
         error: null,
       }),
+    verify: () =>
+      Promise.resolve({
+        result: {
+          verificationId: 'story-verification',
+          libraryId: '01JZZZZZZZZZZZZZZZZZZZZZZZ',
+          generation: 7,
+          photos: 1542,
+          verifiedCount: 1542,
+          missingCount: 0,
+          corruptCount: 0,
+          missing: [],
+        },
+        error: null,
+      }),
+    trash: () => Promise.resolve({ trashed: false, error: null }),
+    exportCsv: () => Promise.resolve({ exported: false, path: null, error: null }),
+    exportCorrupt: () => Promise.resolve({ exported: false, count: 0, unavailable: 0, error: null }),
     cancel: () => Promise.resolve({}),
+    status: () =>
+      Promise.resolve({
+        phase: 'idle',
+        sessionId: null,
+        libraryId: null,
+        providerId: null,
+        progress: null,
+        lastError: null,
+        lastResult: null,
+        verification: null,
+        libraries: [],
+      }),
     onProgress: () => () => undefined,
+    onStatusChanged: () => () => undefined,
   };
   const appLockListeners = new Set<Parameters<OverlookApi['appLock']['onChanged']>[0]>();
   const appLockApi: OverlookApi['appLock'] = {
-    status: () => Promise.resolve({ state: 'unconfigured-unlocked', libraryId: null, retryAfterMs: 0 }),
-    unlock: () => Promise.resolve({ ok: true, reason: null, retryAfterMs: 0 }),
-    configure: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0 }),
-    lockNow: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0 }),
-    changePassword: () => Promise.resolve({ changed: true }),
-    remove: () => Promise.resolve({ removed: true }),
+    status: () =>
+      Promise.resolve({
+        state: options?.appLockConfigured === true ? ('unlocked' as const) : ('unconfigured-unlocked' as const),
+        libraryId: options?.appLockConfigured === true ? 'story-library' : null,
+        retryAfterMs: 0,
+        attemptsRemaining: 3,
+      }),
+    unlock: () => Promise.resolve({ ok: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 }),
+    configure: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0, attemptsRemaining: 3 }),
+    lockNow: () => Promise.resolve({ state: 'locked', libraryId: 'story-library', retryAfterMs: 0, attemptsRemaining: 3 }),
+    changePassword: () => Promise.resolve({ changed: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 }),
+    anchorPolicyStatus: () => Promise.resolve({ policy: 'usability' }),
+    setAnchorPolicy: () => Promise.resolve({ changed: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 }),
+    remove: () => Promise.resolve({ removed: true, reason: null, retryAfterMs: 0, attemptsRemaining: 3 }),
     pickRecovery: () => Promise.resolve({ path: null }),
     recover: () => Promise.resolve({ recovered: false, reason: 'invalid' }),
     touchIdStatus: () => Promise.resolve({ available: false, reason: 'unsigned-build', enabled: false, reenrollmentRequired: false }),
-    touchIdEnable: () => Promise.resolve({ enabled: false, reason: 'unsigned-build' }),
+    touchIdEnable: () => Promise.resolve({ enabled: false, reason: 'unsigned-build', retryAfterMs: 0, attemptsRemaining: 3 }),
     touchIdDisable: () => Promise.resolve({ disabled: true }),
-    touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'not-enabled' }),
+    touchIdUnlock: () => Promise.resolve({ ok: false, reason: 'not-enabled', retryAfterMs: 0, attemptsRemaining: 3 }),
     onChanged: (listener) => {
       appLockListeners.add(listener);
       return () => appLockListeners.delete(listener);
@@ -393,7 +438,7 @@ function installStub(options?: {
   };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     settings: settingsApi,
-    embedding: embeddingApi,
+    embedding: createEmbeddingStoryController().api,
     backup: backupApi,
     keys: keysApi,
     restore: restoreApi,
@@ -414,10 +459,25 @@ function installStub(options?: {
   };
 }
 
+function SettingsRestoreHost(props: SettingsDialogProps): ReactElement {
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  return (
+    <>
+      <SettingsDialog {...props} onRestore={() => setRestoreOpen(true)} />
+      {restoreOpen ? (
+        <Dialog open title="Restore from cloud backup" icon="cloud-download" width={640} onClose={() => setRestoreOpen(false)}>
+          <RestoreWorkflow context="settings" />
+        </Dialog>
+      ) : null}
+    </>
+  );
+}
+
 const meta: Meta<typeof SettingsDialog> = {
   title: 'App/SettingsDialog',
   component: SettingsDialog,
   args: { open: true, onClose: fn(), selectedPhotoIds: ['offloaded-1', 'offloaded-2'] },
+  render: (args) => <SettingsRestoreHost {...args} />,
   decorators: [
     (Story) => {
       installStub();
@@ -576,7 +636,8 @@ export const ICloudUnavailableSetup: Story = {
 };
 
 export const GoogleDriveSelection: Story = {
-  play: async ({ canvasElement }) => {
+  args: { onProviderSelection: fn() },
+  play: async ({ canvasElement, args }) => {
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('button', { name: 'Disconnect provider' })).toBeVisible());
     await userEvent.click(body.getByRole('button', { name: 'Disconnect provider' }));
@@ -584,6 +645,7 @@ export const GoogleDriveSelection: Story = {
       within(body.getByRole('dialog', { name: 'Disconnect Local mock?' })).getByRole('button', { name: 'Disconnect provider' }),
     );
     await userEvent.click(await waitFor(() => body.getByRole('radio', { name: 'Google Drive' })));
+    await expect(args.onProviderSelection).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'google-drive', label: 'Google Drive' }));
     await userEvent.click(body.getByRole('button', { name: 'Connect Google Drive' }));
     // Google Drive: account-wide capacity comes from about.storageQuota.
     await waitFor(() => expect(body.getByText('42 GB of 100 GB used')).toBeVisible());
@@ -613,8 +675,8 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await waitFor(() => expect(body.getByTestId('restore-library-card')).toHaveTextContent('1,542 photos'));
     await expect(body.getByText('1 retained fallback generation available')).toBeVisible();
     await expect(body.getByText('Verified staged work is ready to resume')).toBeVisible();
-    await userEvent.click(body.getByRole('button', { name: 'Review restore' }));
-    await expect(body.getByText('This replaces the active library.')).toBeVisible();
+    await userEvent.click(body.getByRole('button', { name: 'Verify backup' }));
+    await waitFor(() => expect(body.getByText('This replaces the active library.')).toBeVisible());
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeDisabled();
     await userEvent.click(body.getByRole('checkbox'));
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeEnabled();
@@ -763,6 +825,25 @@ export const PrivacySection: Story = {
     await userEvent.click(within(clearConfirmation).getByRole('button', { name: 'Clear report' }));
     await expect(body.getByText('No reports are waiting locally.')).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: 'Done' }));
+  },
+};
+
+export const HardenedAnchorProtection: Story = {
+  decorators: [
+    (Story) => {
+      installStub({ appLockConfigured: true });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('tab', { name: 'Privacy' }));
+    const hardened = await waitFor(() => body.getByRole('switch', { name: 'Hardened anchor protection' }));
+    await expect(hardened).toBeEnabled();
+    await expect(hardened).not.toBeChecked();
+    await userEvent.click(hardened);
+    await expect(body.getByRole('dialog', { name: 'Back up encryption key' })).toBeVisible();
+    await expect(body.getByText(/requires a freshly exported recovery key/u)).toBeVisible();
   },
 };
 

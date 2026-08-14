@@ -7,6 +7,7 @@ import { RestoreCoordinator, type RestoreSource } from './restore-coordinator.js
 import { RestoreEngine, type RestoreRunResult } from './restore-engine.js';
 import { loadCheckpoint, restorePaths, type ActivationOperations } from './restore-staging.js';
 import type { RestoreProgress } from './restore-types.js';
+import type { RestoreStatusSnapshot } from '../../shared/backup/restore-contract.js';
 
 export interface RestoreRuntimeOptions {
   readonly targetDir: string;
@@ -16,6 +17,7 @@ export interface RestoreRuntimeOptions {
   readonly sources: (providerId: string) => Promise<readonly RestoreSource[]>;
   readonly sessionId: () => string;
   readonly progress: (value: RestoreProgress) => void;
+  readonly statusChanged?: ((status: RestoreStatusSnapshot) => void) | undefined;
   readonly beforeActivate: () => Promise<void>;
   readonly activationOperations?: ActivationOperations | undefined;
   readonly resetLockAnchor?: (() => void) | undefined;
@@ -54,6 +56,13 @@ export class RestoreRuntime {
               await pool.close();
             }
           },
+          verify: async (request) => {
+            try {
+              return await engine.verify(request);
+            } finally {
+              await pool.close();
+            }
+          },
         };
       },
       sessionId: options.sessionId,
@@ -68,6 +77,7 @@ export class RestoreRuntime {
         );
       },
       progress: options.progress,
+      statusChanged: options.statusChanged,
       workStarted: options.workStarted,
       workFinished: options.workFinished,
       activated: options.activated,

@@ -34,6 +34,20 @@ describe('app state reducer', () => {
     assert.equal(apply(second, { type: 'thumbs/invalidated', photoIds: [] }), second);
   });
 
+  test('metadata responses patch only named records without resetting selection or scroll state (#508)', () => {
+    const photo = (id: string, title: string | null) => ({ id, title }) as AppState['photos'][number];
+    const loaded = apply(
+      initialAppState,
+      { type: 'photos/loaded', photos: [photo('a', null), photo('b', null)], append: false },
+      { type: 'selection/all', photoIds: ['a'] },
+    );
+    const patched = apply(loaded, { type: 'photos/records-patched', photos: [photo('a', 'Authored')] });
+    assert.equal(patched.photos[0]?.title, 'Authored');
+    assert.equal(patched.photos[1], loaded.photos[1]);
+    assert.deepEqual([...patched.selection], ['a']);
+    assert.equal(patched.selection, loaded.selection, 'unrelated record patches preserve the memoized Inspector selection scope');
+  });
+
   test('view switches across grid, list, and moodboard (#515)', () => {
     assert.equal(initialAppState.view, 'grid');
     assert.equal(apply(initialAppState, { type: 'view/set', view: 'moodboard' }).view, 'moodboard');
@@ -75,6 +89,68 @@ describe('app state reducer', () => {
     assert.deepEqual([...appended.selection], ['b']);
   });
 
+  test('complete Select All survives page replacement until the collection changes', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b', 'c'] });
+    const refreshed = apply(selected, { type: 'photos/loaded', photos: [{ id: 'a' } as AppState['photos'][number]], append: false });
+    assert.deepEqual([...refreshed.selection].sort(), ['a', 'b', 'c']);
+    const switched = apply(refreshed, { type: 'source/set', source: 'favorites' });
+    const landed = apply(switched, { type: 'photos/loaded', photos: [{ id: 'b' } as AppState['photos'][number]], append: false });
+    assert.deepEqual([...landed.selection], ['b']);
+  });
+
+  test('complete Select All survives sort changes', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b', 'c'] });
+    const sorted = apply(selected, { type: 'sortOrder/set', order: 'name' });
+    const refreshed = apply(sorted, { type: 'photos/loaded', photos: [{ id: 'c' } as AppState['photos'][number]], append: false });
+    assert.equal(refreshed.selectionMode, 'all');
+    assert.deepEqual([...refreshed.selection].sort(), ['a', 'b', 'c']);
+  });
+
+  test('refining complete Select All preserves unloaded ids across page replacement', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b', 'c'] });
+    const refined = apply(selected, { type: 'selection/toggled', photoId: 'b' });
+    const refreshed = apply(refined, {
+      type: 'photos/loaded',
+      photos: [{ id: 'a' } as AppState['photos'][number]],
+      append: false,
+    });
+    assert.equal(refreshed.selectionMode, 'all');
+    assert.deepEqual([...refreshed.selection].sort(), ['a', 'c']);
+  });
+
+  test('mutation refresh clears complete selection and advances selection intent', () => {
+    const selected = apply(initialAppState, { type: 'selection/all', photoIds: ['a', 'b'] });
+    const cleared = apply(selected, {
+      type: 'photos/loaded',
+      photos: [{ id: 'a' } as AppState['photos'][number]],
+      append: false,
+      invalidateCompleteSelection: true,
+    });
+    assert.equal(cleared.selection.size, 0);
+    assert.equal(cleared.selectionMode, 'explicit');
+    assert.equal(cleared.selectionRevision, selected.selectionRevision + 1);
+    const emptyClear = apply(cleared, { type: 'selection/cleared' });
+    assert.equal(emptyClear.selectionRevision, cleared.selectionRevision + 1);
+  });
+
+  test('membership refresh intersects explicit selection without clearing surviving ids', () => {
+    const photos = ['a', 'b', 'c'].map((id) => ({ id }) as AppState['photos'][number]);
+    const selected = apply(
+      initialAppState,
+      { type: 'photos/loaded', photos, append: false },
+      { type: 'selection/toggled', photoId: 'a' },
+      { type: 'selection/toggled', photoId: 'b' },
+    );
+    const refreshed = apply(selected, {
+      type: 'photos/loaded',
+      photos: [photos[0]!, photos[2]!],
+      append: false,
+      invalidateCompleteSelection: true,
+    });
+    assert.deepEqual([...refreshed.selection], ['a']);
+    assert.equal(refreshed.selectionRevision, selected.selectionRevision);
+  });
+
   test('escape exits the lightbox when open, otherwise clears selection', () => {
     const withBoth = apply(initialAppState, { type: 'selection/all', photoIds: ['a'] }, { type: 'lightbox/opened', photoId: 'a' });
     const afterFirst = apply(withBoth, { type: 'escape' });
@@ -82,6 +158,7 @@ describe('app state reducer', () => {
     assert.equal(afterFirst.selection.size, 1, 'selection survives the lightbox exit');
     const afterSecond = apply(afterFirst, { type: 'escape' });
     assert.equal(afterSecond.selection.size, 0);
+    assert.equal(afterSecond.selectionRevision, afterFirst.selectionRevision + 1);
   });
 
   test('opening a shell dialog is exclusive while closing one preserves the active dialog (#486)', () => {

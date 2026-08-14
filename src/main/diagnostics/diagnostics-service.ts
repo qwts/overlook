@@ -5,7 +5,8 @@ import { type QueuedDiagnostic } from './diagnostics-queue.js';
 import type { DiagnosticEvent } from './event-contract.js';
 import { writeDiagnosticsExport } from './diagnostics-export.js';
 
-export type DiagnosticOccurrence = Pick<DiagnosticEvent, 'kind'> & Partial<Pick<DiagnosticEvent, 'reason' | 'exitCode'>>;
+export type DiagnosticOccurrence = Pick<DiagnosticEvent, 'kind'> &
+  Partial<Pick<DiagnosticEvent, 'reason' | 'exitCode' | 'phase' | 'failureReason' | 'messagePreview' | 'missingCount' | 'corruptCount'>>;
 
 export type DiagnosticsFailureCode = 'invalid-event' | 'custody-unavailable';
 

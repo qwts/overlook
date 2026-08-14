@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron';
+/* eslint-disable max-lines -- IPC registration is intentionally large */
+import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 
@@ -9,22 +10,41 @@ import type { HandlerErrorReport } from '../shared/ipc/registry.js';
 import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js';
 import type { LibraryDescriptor } from '../shared/library/registry.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
-import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../shared/backup/provider-descriptor.js';
-import type { RestoreDiscoverResponse, RestoreRunResponse } from '../shared/backup/restore-contract.js';
+import type {
+  ProviderCapacityStatus,
+  ProviderConnectionStatus,
+  ProviderConnectResult,
+  ProviderDescriptor,
+} from '../shared/backup/provider-descriptor.js';
+import type {
+  RestoreDiscoverResponse,
+  RestoreRunResponse,
+  RestoreStatusSnapshot,
+  RestoreTrashResponse,
+  RestoreVerifyResponse,
+} from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
 import type { LibraryService } from './library/library-service.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
 import type { ProtectedWorkflowService } from './library/protected-workflow-service.js';
 import type { OffloadPreflight, OffloadSummary, RestoreOriginalsSummary } from './backup/offload.js';
-import type { AppLockState, AppTouchIdUnlockResult, AppUnlockResult, LockStateSnapshot } from './crypto/app-lock-controller.js';
+import type {
+  AppLockState,
+  AppSettingsMutationResult,
+  AppTouchIdUnlockResult,
+  AppUnlockResult,
+  LockStateSnapshot,
+} from './crypto/app-lock-controller.js';
 import type { TouchIdEnableResult, TouchIdStatus } from './crypto/touch-id.js';
 import type { DiagnosticEvent } from './diagnostics/event-contract.js';
 import { mutateWithActivity } from './activity/activity-publication.js';
 import type { ActivityFacade } from './activity/activity-publication.js';
-import { favoriteCommand, moveCompensationCommand, trashCommand } from './history/command-drafts.js';
+import { moveCompensationCommand, trashCommand } from './history/command-drafts.js';
 import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
+import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './library/favorite-mutation-handler.js';
+import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -48,6 +68,7 @@ const wrapHandler: typeof validateHandler = (channel, handler) =>
 export interface AppLockFacade {
   snapshot(): LockStateSnapshot;
   retryAfterMs(): number;
+  attemptsRemaining(): number;
   unlock(password: string): Promise<AppUnlockResult>;
   touchIdStatus(): Promise<TouchIdStatus>;
   touchIdUnlock(): Promise<AppTouchIdUnlockResult>;
@@ -55,8 +76,10 @@ export interface AppLockFacade {
   touchIdDisable(): Promise<boolean>;
   configure(password: string): Promise<void>;
   lock(): Promise<void>;
-  changePassword(currentPassword: string, nextPassword: string): Promise<boolean>;
-  remove(password: string): Promise<boolean>;
+  changePassword(currentPassword: string, nextPassword: string): Promise<AppSettingsMutationResult>;
+  anchorPolicy(): 'usability' | 'hardened';
+  setAnchorPolicy(password: string, policy: 'usability' | 'hardened', confirmedExport: boolean): Promise<AppSettingsMutationResult>;
+  remove(password: string): Promise<AppSettingsMutationResult>;
   pickRecovery(): Promise<string | null>;
   recover(
     path: string,
@@ -68,8 +91,21 @@ export interface AppLockFacade {
   }>;
 }
 
-function lockStatus(facade: AppLockFacade): { state: AppLockState; libraryId: string | null; retryAfterMs: number } {
-  return { ...facade.snapshot(), retryAfterMs: facade.retryAfterMs() };
+function lockStatus(facade: AppLockFacade): {
+  state: AppLockState;
+  libraryId: string | null;
+  retryAfterMs: number;
+  attemptsRemaining: number;
+} {
+  return { ...facade.snapshot(), retryAfterMs: facade.retryAfterMs(), attemptsRemaining: facade.attemptsRemaining() };
+}
+
+function settingsMutationStatus(result: AppSettingsMutationResult, facade: AppLockFacade) {
+  return {
+    reason: result.ok ? null : result.reason,
+    retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? facade.retryAfterMs()),
+    attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? facade.attemptsRemaining()),
+  };
 }
 
 export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
@@ -83,6 +119,7 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
         ok: result.ok,
         reason: result.ok ? null : result.reason,
         retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? getFacade().retryAfterMs()),
+        attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? getFacade().attemptsRemaining()),
       };
     })(request),
   );
@@ -99,12 +136,28 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
     })(request),
   );
   ipcMain.handle(channels.appLockChangePassword.name, (_event, request: unknown) =>
-    validateHandler(channels.appLockChangePassword, async ({ currentPassword, nextPassword }) => ({
-      changed: await getFacade().changePassword(currentPassword, nextPassword),
-    }))(request),
+    validateHandler(channels.appLockChangePassword, async ({ currentPassword, nextPassword }) => {
+      const facade = getFacade();
+      const result = await facade.changePassword(currentPassword, nextPassword);
+      return { changed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
+  );
+  ipcMain.handle(channels.appLockAnchorPolicyStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.appLockAnchorPolicyStatus, () => ({ policy: getFacade().anchorPolicy() }))(request),
+  );
+  ipcMain.handle(channels.appLockSetAnchorPolicy.name, (_event, request: unknown) =>
+    wrapHandler(channels.appLockSetAnchorPolicy, async ({ password, policy, confirmedExport }) => {
+      const facade = getFacade();
+      const result = await facade.setAnchorPolicy(password, policy, confirmedExport);
+      return { changed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
   );
   ipcMain.handle(channels.appLockRemove.name, (_event, request: unknown) =>
-    validateHandler(channels.appLockRemove, async ({ password }) => ({ removed: await getFacade().remove(password) }))(request),
+    validateHandler(channels.appLockRemove, async ({ password }) => {
+      const facade = getFacade();
+      const result = await facade.remove(password);
+      return { removed: result.ok, ...settingsMutationStatus(result, facade) };
+    })(request),
   );
   ipcMain.handle(channels.appLockPickRecovery.name, (_event, request: unknown) =>
     validateHandler(channels.appLockPickRecovery, async () => ({ path: await getFacade().pickRecovery() }))(request),
@@ -120,7 +173,12 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
   ipcMain.handle(channels.appLockTouchIdEnable.name, (_event, request: unknown) =>
     validateHandler(channels.appLockTouchIdEnable, async ({ password }) => {
       const result = await getFacade().touchIdEnable(password);
-      return { enabled: result.ok, reason: result.ok ? null : result.reason };
+      return {
+        enabled: result.ok,
+        reason: result.ok ? null : result.reason,
+        retryAfterMs: result.ok ? 0 : (result.retryAfterMs ?? getFacade().retryAfterMs()),
+        attemptsRemaining: result.ok ? 3 : (result.attemptsRemaining ?? getFacade().attemptsRemaining()),
+      };
     })(request),
   );
   ipcMain.handle(channels.appLockTouchIdDisable.name, (_event, request: unknown) =>
@@ -129,7 +187,12 @@ export function registerAppLockHandlers(getFacade: () => AppLockFacade): void {
   ipcMain.handle(channels.appLockTouchIdUnlock.name, (_event, request: unknown) =>
     validateHandler(channels.appLockTouchIdUnlock, async () => {
       const result = await getFacade().touchIdUnlock();
-      return { ok: result.ok, reason: result.ok ? null : result.reason };
+      return {
+        ok: result.ok,
+        reason: result.ok ? null : result.reason,
+        retryAfterMs: result.ok ? 0 : getFacade().retryAfterMs(),
+        attemptsRemaining: result.ok ? 3 : getFacade().attemptsRemaining(),
+      };
     })(request),
   );
 }
@@ -152,26 +215,24 @@ export function registerLibraryHandlers(
 ): void {
   const page = (request: unknown): unknown => wrapHandler(channels.libraryPage, (req) => getService().page(req))(request);
   ipcMain.handle(channels.libraryPage.name, (_event, request: unknown) => page(request));
+  ipcMain.handle(channels.librarySelectAll.name, (_event, request: unknown) =>
+    wrapHandler(channels.librarySelectAll, (req) => ({ photoIds: getService().selectAllIds(req) }))(request),
+  );
+  ipcMain.handle(channels.librarySelectionRange.name, (_event, request: unknown) =>
+    wrapHandler(channels.librarySelectionRange, (req) => getService().selectionRange(req))(request),
+  );
   ipcMain.handle(channels.libraryGet.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryGet, ({ id }) => ({ photo: getService().get(id) ?? null }))(request),
   );
+  registerPhotoMetadataHandlers(getService, contentAdmission);
   ipcMain.handle(channels.libraryRepairDimensions.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryRepairDimensions, ({ id, width, height }) => getService().repairDimensions(id, width, height))(request),
   );
   ipcMain.handle(channels.libraryToggleFavorite.name, (_event, request: unknown) =>
-    wrapHandler(channels.libraryToggleFavorite, ({ id }) => {
-      return mutateWithActivity(
-        getActivity,
-        () => getService().toggleFavorite(id),
-        (result) => ({
-          eventType: 'photo.favorite-changed',
-          entityIds: [id],
-          outcome: 'succeeded',
-          payload: { favorite: result.favorite },
-        }),
-        (result) => favoriteCommand(id, result.favorite),
-      );
-    })(request),
+    wrapHandler(channels.libraryToggleFavorite, ({ id }) => toggleFavoriteWithActivity(getService, getActivity, id))(request),
+  );
+  ipcMain.handle(channels.libraryToggleFavorites.name, (_event, request: unknown) =>
+    wrapHandler(channels.libraryToggleFavorites, ({ photoIds }) => toggleFavoritesWithActivity(getService, getActivity, photoIds))(request),
   );
   ipcMain.handle(channels.libraryCounts.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryCounts, ({ recentSince }) => getService().counts(recentSince))(request),
@@ -369,6 +430,8 @@ export interface LibraryRegistryFacade {
   open(id: string): LibraryOpenOutcome | Promise<LibraryOpenOutcome>;
   remove(id: string): boolean;
   current(): LibraryDescriptor;
+  setDisplayName(id: string, name: string): LibraryDescriptor;
+  resetDisplayName(id: string): LibraryDescriptor;
   add(path: string | null): Promise<LibraryAddOutcome>;
   pickLocation(): Promise<{ path: string | null }>;
 }
@@ -392,6 +455,12 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
   ipcMain.handle(channels.libraryRegistryCurrent.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRegistryCurrent, () => ({ library: getFacade().current() }))(request),
   );
+  ipcMain.handle(channels.libraryRegistrySetDisplayName.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRegistrySetDisplayName, ({ id, name }) => ({ library: getFacade().setDisplayName(id, name) }))(request),
+  );
+  ipcMain.handle(channels.libraryRegistryResetDisplayName.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRegistryResetDisplayName, ({ id }) => ({ library: getFacade().resetDisplayName(id) }))(request),
+  );
   ipcMain.handle(channels.libraryRegistryAdd.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRegistryAdd, ({ path }) => getFacade().add(path))(request),
   );
@@ -400,15 +469,21 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
   );
 }
 
-export type RelocationFacade = Pick<RelocationRuntime, 'move' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'>;
+export type RelocationFacade = Pick<
+  RelocationRuntime,
+  'move' | 'rename' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'
+>;
 
 // Library relocation (#483, ADR-0022). Like the registry handlers these use
-// validateHandler directly: moving an INACTIVE library exposes no content and
-// must work while the active library is app-locked; moving the ACTIVE library
-// is refused by the runtime while locked ('app-locked' designed refusal).
+// validateHandler directly. The runtime refuses OVLK custody without an
+// authenticated open and refuses a locked active library; other inactive
+// libraries may move while the active library is app-locked.
 export function registerRelocationHandlers(getRuntime: () => RelocationFacade): void {
   ipcMain.handle(channels.libraryRelocationMove.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationMove, ({ id, destPath }) => getRuntime().move(id, destPath))(request),
+  );
+  ipcMain.handle(channels.libraryRelocationRename.name, (_event, request: unknown) =>
+    validateHandler(channels.libraryRelocationRename, ({ id, newName }) => getRuntime().rename(id, newName))(request),
   );
   ipcMain.handle(channels.libraryRelocationCancel.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationCancel, ({ id }) => ({ cancelled: getRuntime().cancel(id) }))(request),
@@ -520,6 +595,7 @@ export function registerImportHandlers(
         duplicates: summary.duplicates,
         failed: summary.failed,
         cancelled: summary.cancelled,
+        sidecars: summary.sidecars,
       };
     })(request),
   );
@@ -568,6 +644,7 @@ export function registerImportHandlers(
         duplicates: summary.duplicates,
         failed: summary.failed,
         cancelled: summary.cancelled,
+        sidecars: summary.sidecars,
       };
     })(request),
   );
@@ -611,8 +688,21 @@ export interface RestoreFacade {
     providerId: string,
     key: { keyPath: string; password: string } | { localKey: true; password?: string | undefined },
   ): Promise<RestoreDiscoverResponse>;
-  run(sessionId: string, libraryId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
+  run(sessionId: string, libraryId: string, verificationId: string, allowReplace: boolean): Promise<RestoreRunResponse>;
+  verify(sessionId: string, libraryId: string): Promise<RestoreVerifyResponse>;
+  trash(sessionId: string, libraryId: string, verificationId: string, confirmation: string): Promise<RestoreTrashResponse>;
+  exportCsv(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; path: string | null; error: string | null }>;
+  exportCorrupt(
+    sessionId: string,
+    libraryId: string,
+    verificationId: string,
+  ): Promise<{ exported: boolean; count: number; unavailable: number; error: string | null }>;
   cancel(): void;
+  status(): RestoreStatusSnapshot;
 }
 
 export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
@@ -631,15 +721,36 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
     )(request),
   );
   ipcMain.handle(channels.restoreRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, allowReplace }) => getFacade().run(sessionId, libraryId, allowReplace))(
-      request,
-    ),
+    wrapHandler(channels.restoreRun, ({ sessionId, libraryId, verificationId, allowReplace }) =>
+      getFacade().run(sessionId, libraryId, verificationId, allowReplace),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreVerify.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreVerify, ({ sessionId, libraryId }) => getFacade().verify(sessionId, libraryId))(request),
+  );
+  ipcMain.handle(channels.restoreTrash.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreTrash, ({ sessionId, libraryId, verificationId, confirmation }) =>
+      getFacade().trash(sessionId, libraryId, verificationId, confirmation),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreExportCsv.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreExportCsv, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCsv(sessionId, libraryId, verificationId),
+    )(request),
+  );
+  ipcMain.handle(channels.restoreExportCorrupt.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreExportCorrupt, ({ sessionId, libraryId, verificationId }) =>
+      getFacade().exportCorrupt(sessionId, libraryId, verificationId),
+    )(request),
   );
   ipcMain.handle(channels.restoreCancel.name, (_event, request: unknown) =>
     wrapHandler(channels.restoreCancel, () => {
       getFacade().cancel();
       return {};
     })(request),
+  );
+  ipcMain.handle(channels.restoreStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.restoreStatus, () => getFacade().status())(request),
   );
 }
 
@@ -648,20 +759,44 @@ export interface ExportFacade {
     photoIds: readonly string[],
     destination: string,
     format?: 'original' | 'jpeg',
-  ): Promise<{ exported: number; failed: number; cancelled: number; previewTranscodes: number }>;
+    metadata?: 'original' | 'overlook' | 'none',
+  ): Promise<ExportRunResult>;
+  runAll(destination: string, metadata?: 'original' | 'overlook' | 'none'): Promise<ExportRunResult>;
   cancel(): void;
   pickDestination(): Promise<string | null>;
 }
 
+export interface ExportRunResult {
+  readonly exported: number;
+  readonly failed: number;
+  readonly cancelled: number;
+  readonly previewTranscodes: number;
+  readonly failures: { photoId: string; fileName: string; reason: string }[];
+}
+
 export function registerExportHandlers(getFacade: () => ExportFacade, getActivity?: () => ActivityFacade): void {
   ipcMain.handle(channels.exportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, destination, format }) => {
-      const result = await getFacade().run(photoIds, destination, format);
+    wrapHandler(channels.exportRun, async ({ photoIds, destination, format, metadata }) => {
+      const result = await getFacade().run(photoIds, destination, format, metadata);
+      const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: format ?? 'original', ...result },
+        payload: { format: format ?? 'original', metadata: metadata ?? 'original', ...summary },
+      });
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.exportRunAll.name, (_event, request: unknown) =>
+    wrapHandler(channels.exportRunAll, async ({ destination, metadata }) => {
+      const result = await getFacade().runAll(destination, metadata);
+      const { failures: _failures, ...summary } = result;
+      getActivity?.().record({
+        eventType: 'photo.exported',
+        entityIds: [],
+        outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
+        payload: { format: 'original', metadata: metadata ?? 'original', scope: 'all', ...summary },
       });
       return result;
     })(request),
@@ -696,8 +831,9 @@ export interface BackupFacade {
   providerStatus(providerId: string): Promise<ProviderConnectionStatus>;
   providerStorage(providerId: string): Promise<ProviderCapacityStatus>;
   /** Runs the addressed provider's instant or interactive handshake. */
-  connect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
+  connect(providerId: string): Promise<ProviderConnectResult>;
   disconnect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
+  removeAuthorizationAnyway(providerId: string): Promise<ProviderConnectResult>;
   openCapacitySettings(providerId: string): Promise<{ ok: boolean }>;
 }
 
@@ -755,6 +891,11 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
   ipcMain.handle(channels.backupDisconnect.name, (_event, request: unknown) =>
     wrapHandler(channels.backupDisconnect, async ({ providerId }) => getFacade().disconnect(providerId))(request),
   );
+  ipcMain.handle(channels.backupRemoveAuthorizationAnyway.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupRemoveAuthorizationAnyway, async ({ providerId }) => getFacade().removeAuthorizationAnyway(providerId))(
+      request,
+    ),
+  );
   ipcMain.handle(channels.backupOpenCapacitySettings.name, (_event, request: unknown) =>
     wrapHandler(channels.backupOpenCapacitySettings, async ({ providerId }) => getFacade().openCapacitySettings(providerId))(request),
   );
@@ -769,6 +910,12 @@ export function registerIpcHandlers(getLanguage: () => string | null): void {
 
   const getLocale = validateHandler(channels.getLocale, () => ({ locale: resolveActiveLocale(getLanguage()) }));
   ipcMain.handle(channels.getLocale.name, (_event, request: unknown) => getLocale(request));
+
+  const clipboardWrite = validateHandler(channels.clipboardWrite, ({ text }) => {
+    clipboard.writeText(text);
+    return {};
+  });
+  ipcMain.handle(channels.clipboardWrite.name, (_event, request: unknown) => clipboardWrite(request));
 
   // Window controls need the calling window, so validation wraps a handler
   // built per invocation.

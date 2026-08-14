@@ -4,6 +4,30 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 describe('release workflow publication', () => {
+  test('requires exact-commit CI and reviewed-PR evidence before packaging', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+
+    assert.match(workflow, /name: Verify release evidence/u);
+    assert.match(workflow, /event=merge_group&head_sha=\$RELEASE_SHA/u);
+    assert.match(workflow, /\.name == "Complete suite" and \.conclusion == "success"/u);
+    assert.match(workflow, /\.state == "APPROVED"/u);
+    assert.match(workflow, /needs: verify/u);
+  });
+
+  test('rejects real pending releases but permits empty governance changesets', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+    const evidenceIndex = workflow.indexOf('- name: Verify exact-commit');
+    const installIndex = workflow.indexOf('- name: Install release verification dependencies');
+    const semanticVerify = workflow.split('- name: Verify semantic changeset state')[1]?.split('\n  build:')[0] ?? '';
+
+    assert.match(workflow, /npm ci --ignore-scripts/u);
+    assert.ok(evidenceIndex >= 0 && installIndex > evidenceIndex, 'release dependencies execute only after evidence verification');
+    assert.match(semanticVerify, /npx changeset status --output/u);
+    assert.match(semanticVerify, /\.releases\.length/u);
+    assert.match(semanticVerify, /test "\$releases" -eq 0/u);
+    assert.doesNotMatch(semanticVerify, /find \.changeset/u);
+  });
+
   test('uploads files recursively instead of passing artifact directories to gh', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 

@@ -211,12 +211,12 @@ Frame remediation as "apply the pattern already here", not "invent one":
 `src/renderer/src/state/use-global-keys.ts` is 41 lines: one `window` `keydown` listener,
 a flat if-chain, no registry.
 
-| Key        | Action                              | Guards                          |
-| ---------- | ----------------------------------- | ------------------------------- |
-| `⌘/Ctrl+A` | select all **loaded** photos        | not in field, no tracked dialog |
-| `Escape`   | exit lightbox, else clear selection | no tracked dialog               |
-| `i`        | toggle inspector                    | not in field, no tracked dialog |
-| `←` / `→`  | step lightbox ±1, wrapping          | lightbox open                   |
+| Key        | Action                                     | Guards                          |
+| ---------- | ------------------------------------------ | ------------------------------- |
+| `⌘/Ctrl+A` | select all photos in the active collection | not in field, no tracked dialog |
+| `Escape`   | exit lightbox, else clear selection        | no tracked dialog               |
+| `i`        | toggle inspector                           | not in field, no tracked dialog |
+| `←` / `→`  | step lightbox ±1, wrapping                 | lightbox open                   |
 
 `+`/`-`/`0` (zoom) are registered **separately** in `LightboxViewport.tsx` with a
 _different, inconsistent_ guard.
@@ -225,8 +225,8 @@ Limitations for #399 to absorb: no registry or discoverability surface (no short
 help; ⌘A and the zoom keys are documented nowhere in the UI); 2.1.4 failure (finding 14);
 `anyDialogOpen` tracks 3 of ~11 dialogs (finding 23); no arrow navigation, Home/End,
 Space-to-select, or range selection in the grid; no focus awareness; not remappable; the
-listener re-subscribes on every `state.photos` change. Also: **⌘A selects only the loaded
-page, not the library** — "select all" is a lie at scale (3.2.4-adjacent, worth carrying).
+listener re-subscribes on every `state.photos` change. **⌘A now resolves the complete
+active collection, including unloaded virtualized rows** (#884).
 
 ## Method
 

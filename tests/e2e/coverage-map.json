@@ -1,5 +1,5 @@
 {
-  "$comment": "Acceptance coverage ledger (#82, ADR-0001): every user-facing flow declares how it is covered \u2014 automated (playwright-e2e / storybook / unit-dom), manual (with a reason), or deferred (with an issue). check-e2e-coverage-map.mjs validates shape and path existence; check-acceptance-coverage-diff.mjs forces updates alongside renderer changes. Each epic seeds its own entries.",
+  "$comment": "Acceptance coverage ledger (#82, ADR-0001): every user-facing flow declares how it is covered — automated (playwright-e2e / storybook / unit-dom), manual (with a reason), or deferred (with an issue). check-e2e-coverage-map.mjs validates shape and path existence; check-acceptance-coverage-diff.mjs forces updates alongside renderer changes. Each epic seeds its own entries.",
   "entries": [
     {
       "id": "visual-accessibility-preferences",
@@ -66,7 +66,7 @@
     {
       "id": "native-application-menu",
       "wiki": "Acceptance-Test-Native-Application-Menu",
-      "$note": "#689 rebuilt the macOS bar to the design-system six-menu spec (Overlook \u00b7 File \u00b7 Edit \u00b7 View \u00b7 Photo \u00b7 Help). Structure/order/accelerators/target-aware enablement are asserted by application-menu.spec.ts (`\u2026six-menu design-system spec\u2026`) and application-menu-model.test.ts. The follow-up wired the new commands to their handlers \u2014 Toggle Sidebar and the Export parity path are exercised by application-menu.spec.ts (`\u2026drive their shared handlers (parity)`), the sidebar reducer by app-state.test.ts; the router lives in use-native-command-router.ts and shares handlers with the toolbar/context menu (ADR-0024).",
+      "$note": "#689 rebuilt the macOS bar to the design-system six-menu spec (Overlook · File · Edit · View · Photo · Help). Structure/order/accelerators/target-aware enablement are asserted by application-menu.spec.ts (`…six-menu design-system spec…`) and application-menu-model.test.ts. The follow-up wired the new commands to their handlers — Toggle Sidebar and the Export parity path are exercised by application-menu.spec.ts (`…drive their shared handlers (parity)`), the sidebar reducer by app-state.test.ts; the router lives in use-native-command-router.ts and shares handlers with the toolbar/context menu (ADR-0024).",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -144,7 +144,7 @@
       "coverage": [
         {
           "type": "playwright-e2e",
-          "path": "tests/e2e/browse.spec.ts"
+          "paths": ["tests/e2e/browse.spec.ts", "tests/e2e/grid.spec.ts"]
         },
         {
           "type": "playwright-e2e",
@@ -191,6 +191,34 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/grid/SelectionPill.stories.tsx"
+        }
+      ]
+    },
+    {
+      "id": "m04-complete-select-all",
+      "wiki": "User-Story-M04-Library-browsing",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "paths": ["tests/e2e/browse.spec.ts", "tests/e2e/grid.spec.ts"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/app-state.test.ts", "tests/library/library-service.test.ts"]
+        }
+      ]
+    },
+    {
+      "id": "m04-full-projection-range-selection",
+      "wiki": "User-Story-M04-Library-browsing",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/browse.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-service.test.ts"]
         }
       ]
     },
@@ -401,6 +429,10 @@
         {
           "type": "unit-dom",
           "path": "tests/lightbox/lightbox-geometry.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Issue #968 square and extreme-aspect Fill behavior is covered by docs/acceptance/acceptance-test-full-display-image.md: cover on both axes with no bars on any side, and overflow confined to the single longer axis."
         }
       ]
     },
@@ -577,6 +609,7 @@
           "paths": [
             "src/renderer/src/grid/VirtualGrid.stories.tsx",
             "src/renderer/src/commands/ShortcutHelp.stories.tsx",
+            "src/renderer/src/components/forms.stories.tsx",
             "src/renderer/src/components/Dialog.stories.tsx"
           ]
         },
@@ -613,6 +646,7 @@
     {
       "id": "m07-export-dialog",
       "wiki": "User-Story-M07-Export",
+      "$note": "#885 adds library-wide unencrypted Original export. ExportDialog.stories.tsx covers the dialog variants; application-menu.spec.ts covers native File-menu parity and the Windows/Linux toolbar entry point.",
       "coverage": [
         {
           "type": "storybook",
@@ -620,7 +654,7 @@
         },
         {
           "type": "playwright-e2e",
-          "path": "tests/e2e/export-flow.spec.ts"
+          "paths": ["tests/e2e/export-flow.spec.ts", "tests/e2e/application-menu.spec.ts"]
         }
       ]
     },
@@ -1113,6 +1147,10 @@
         },
         {
           "type": "unit-dom",
+          "path": "tests/library/library-lock.test.ts"
+        },
+        {
+          "type": "unit-dom",
           "path": "tests/crypto/hidden-window-lock.test.ts"
         },
         {
@@ -1152,6 +1190,44 @@
         {
           "type": "manual",
           "reason": "On a notarized Developer ID build on a Touch ID Mac: upgrade a working com.qwts.overlook profile to com.zts1.overlook and prove existing Electron safeStorage custody still opens the library and provider tokens; verify the explicit password-confirmed Touch ID re-enrollment path, restart/unlock, cancel, failed scan, lockout, enrollment change, password fallback, password-change revocation, opt-out, and Keychain item accessibility/synchronization attributes. CI cannot provide both signed identities, physical biometric hardware, or mutate the enrolled biometric set."
+        }
+      ]
+    },
+    {
+      "id": "882-app-lock-anchor-recovery",
+      "wiki": "User-Story-M20-Privacy-lock-protected-albums",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/app-lock.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/lock/LockScreen.stories.tsx"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-credentials.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/app-lock-controller.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/recovery-export-receipt.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/crypto/unlock-throttle.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Verify usability-mode anchor repair and hardened-mode recovery on notarized macOS and Windows builds, including real Keychain or Credential Manager loss, Touch ID cancellation and failure classification, recovery-export acknowledgement, receipt expiry, single-use consumption, VoiceOver, and password-manager behavior. CI cannot remove platform credential-store records or exercise physical biometric hardware."
         }
       ]
     },
@@ -1428,8 +1504,43 @@
       ]
     },
     {
+      "id": "selectable-machine-data-copy",
+      "wiki": "Accessibility-Audit-2026-07",
+      "coverage": [
+        {
+          "type": "storybook",
+          "paths": [
+            "src/renderer/src/components/CopyableValue.stories.tsx",
+            "src/renderer/src/activity/ActivityDialog.stories.tsx",
+            "src/renderer/src/export/ExportDialog.stories.tsx",
+            "src/renderer/src/import/ImportDialog.stories.tsx",
+            "src/renderer/src/inspector/Inspector.stories.tsx",
+            "src/renderer/src/settings/DiagnosticsControls.stories.tsx",
+            "src/renderer/src/settings/KeyDialog.stories.tsx",
+            "src/renderer/src/settings/SettingsDialog.stories.tsx"
+          ]
+        },
+        {
+          "type": "playwright-e2e",
+          "paths": [
+            "tests/e2e/activity.spec.ts",
+            "tests/e2e/export-flow.spec.ts",
+            "tests/e2e/import-flow.spec.ts",
+            "tests/e2e/inspector-window.spec.ts",
+            "tests/e2e/keys-recovery.spec.ts",
+            "tests/e2e/settings.spec.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Packaged macOS and Windows acceptance verifies native mouse selection, keyboard copy, clipboard integration, and titlebar drag behavior that browser interaction tests cannot fully reproduce."
+        }
+      ]
+    },
+    {
       "id": "a11y-audit-and-gates",
       "wiki": "Accessibility-Audit-2026-07",
+      "$note": "Issue #840 makes the Toast rapid-announcement story capture live-region mutations after play begins, so hosted Storybook timing cannot erase the first announcement before order is asserted.",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -1483,7 +1594,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/shell/LibrarySwitcher.stories.tsx"
+          "paths": ["src/renderer/src/shell/LibrarySwitcher.stories.tsx", "src/renderer/src/shell/EditLibraryDisplayNameDialog.tsx"]
         },
         {
           "type": "unit-dom",
@@ -1507,6 +1618,24 @@
             "tests/import/import-engine.integration.test.ts",
             "tests/library/switch-runtime.test.ts"
           ]
+        }
+      ]
+    },
+    {
+      "id": "847-locked-startup-library-switch",
+      "wiki": "ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "paths": ["tests/e2e/application-menu.spec.ts", "tests/e2e/library-switcher-ui.spec.ts"]
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/lock/LockScreen.stories.tsx", "src/renderer/src/shell/LibrarySwitcher.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/library/switch-runtime.test.ts"
         }
       ]
     },
@@ -1563,7 +1692,7 @@
     {
       "id": "encrypted-library-activity-history",
       "wiki": "Activity-History",
-      "$note": "Activity is reached only from Help \u2192 Activity\u2026 (#690), never a sidebar row; the Help-menu command and its dialog open are covered by application-menu.spec.ts, and Sidebar.stories.tsx regression-guards the row's absence.",
+      "$note": "Activity is reached only from Help → Activity… (#690), never a sidebar row; the Help-menu command and its dialog open are covered by application-menu.spec.ts, and Sidebar.stories.tsx regression-guards the row's absence.",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -1755,7 +1884,7 @@
         },
         {
           "type": "manual",
-          "reason": "The offscreen-renderer poster decode (\u00a76: capture.html/capture-frame.ts loaded in a hidden BrowserWindow, mpegts.js TS\u2192fMP4 remux over MediaSource, capturePage of the first decodable frame) and encrypted-TS full-viewer playback run only inside the signed macOS/Windows package \u2014 MSE and the offscreen window are absent under headless unit/story runs. Validate against owner-supplied .ts/.mts/.m2ts originals per docs/acceptance/acceptance-test-mpeg-ts-video-media.md: deterministic poster on the tile, duration pill, no autoplay, keyboard-accessible playback, and byte-identical Original export."
+          "reason": "The offscreen-renderer poster decode (§6: capture.html/capture-frame.ts loaded in a hidden BrowserWindow, mpegts.js TS→fMP4 remux over MediaSource, capturePage of the first decodable frame) and encrypted-TS full-viewer playback run only inside the signed macOS/Windows package — MSE and the offscreen window are absent under headless unit/story runs. Validate against owner-supplied .ts/.mts/.m2ts originals per docs/acceptance/acceptance-test-mpeg-ts-video-media.md: deterministic poster on the tile, duration pill, no autoplay, keyboard-accessible playback, and byte-identical Original export."
         }
       ]
     },
@@ -1777,7 +1906,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow the Titlebar Help Menu spec (\u00a705/\u00a708): on real Windows/Linux confirm no native menu bar renders, the titlebar Help button opens the ContextMenu with correct pointer placement and viewport-edge clamping across desktop-environment window-control layouts, RTL mirroring, reduced-motion, 200% text scaling, and native menu/menuitem screen-reader semantics that automated lanes cannot fully observe."
+          "reason": "Follow the Titlebar Help Menu spec (§05/§08): on real Windows/Linux confirm no native menu bar renders, the titlebar Help button opens the ContextMenu with correct pointer placement and viewport-edge clamping across desktop-environment window-control layouts, RTL mirroring, reduced-motion, 200% text scaling, and native menu/menuitem screen-reader semantics that automated lanes cannot fully observe."
         }
       ]
     },
@@ -1872,6 +2001,80 @@
       ]
     },
     {
+      "id": "915-partial-restore-not-found-report",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "When no retained generation is complete, restore recovers everything that verifies, marks NOT FOUND originals ledger 'error', and reports the full missing list on the complete screen and in restore-report.json (#915). The strict complete-generation fallback (#741) is unchanged.",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/restore-engine.test.ts", "tests/dom/restore-workflow-missing.test.tsx"]
+        }
+      ]
+    },
+    {
+      "id": "947-partitioned-restore-verify",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verify-before-restore binds activation and triage exports to an opaque scan, projects a reduced internally consistent catalog, and reports the actual restored count. The automated cases cover clean and gap paths, stale plans, retained-generation fallback, exports, trash failure, diagnostics, and the four visible triage actions.",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/backup/restore-verify.test.ts",
+            "tests/backup/restore-coordinator.test.ts",
+            "tests/backup/restore-facade.test.ts",
+            "tests/dom/restore-workflow-missing.test.tsx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "965-restore-progress-reopen-verified-only",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verified-only restore binds to manifest identity (not an exact gap set), verify/run show 1/N progress, and closing Settings or the restore dialog leaves a status snapshot so the status-bar chip and Restore library… reopen the live job (#965).",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/backup/restore-verify.test.ts",
+            "tests/backup/restore-coordinator.test.ts",
+            "tests/backup/restore-facade.test.ts",
+            "tests/dom/restore-workflow-reopen.test.tsx"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Close-and-reopen during a live cloud restore, the status-bar chip, and extra-gap activation after verify are owner-verified on a real provider in docs/acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md steps 6–7."
+        }
+      ]
+    },
+    {
+      "id": "969-restore-list-is-not-presence",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verify and restore classify not-found only from getStream ProviderError.kind === 'not-found'. provider.list is a disk-space hint; a listing miss that getStream can still read must restore (#969).",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/restore-verify.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "A complete pCloud backup that verify used to report as all-NOT-FOUND is owner-verified in docs/acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md step 8."
+        }
+      ]
+    },
+    {
       "id": "391-semantic-embedding-index",
       "wiki": "Acceptance-Test-Semantic-Embedding-Index",
       "coverage": [
@@ -1892,6 +2095,110 @@
         {
           "type": "manual",
           "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Embedding-Index.md on packaged macOS and Windows builds to verify native execution-provider fallback, battery transitions, and relaunch behavior that unit and Storybook lanes cannot observe."
+        }
+      ]
+    },
+    {
+      "id": "m30-library-folder-rename",
+      "wiki": "Library-Management",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/library-relocation.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/RenameLibraryDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-rename.test.ts", "tests/library/folder-name.test.ts"]
+        }
+      ]
+    },
+    {
+      "id": "m31-encrypted-sidecars",
+      "wiki": "Library-Format-v1",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/import-flow.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/import/sidecar-custody.test.ts", "tests/import/source-scanner.test.ts", "tests/backup/backup-manifest.test.ts"]
+        }
+      ]
+    },
+    {
+      "id": "m32-common-video-containers",
+      "wiki": "Library-Format-v1",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/video-media.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/common-video.test.ts", "tests/library/media-signatures.test.ts", "tests/library/mpeg-ts.test.ts"]
+        }
+      ]
+    },
+    {
+      "id": "508-photo-metadata",
+      "wiki": "Acceptance-Test-Photo-Metadata",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photo-metadata.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/export/ExportDialog.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/db/photo-metadata-repository.test.ts", "tests/import/xmp-metadata.test.ts", "tests/export/export-engine.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The packaged-build check verifies real IPTC/XMP producer compatibility and authorized protected-domain presentation while byte identity and isolation are enforced by automated repository, import, export, and backup tests."
+        }
+      ]
+    },
+    {
+      "id": "796-native-drag-out",
+      "wiki": "Acceptance-Test-Native-Drag-Out",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/native-drag-out.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/native-drag/native-drag-service.test.ts", "tests/native-drag/native-drag-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged check proves real AppKit file promises across Finder, browsers, and native apps; automated tests cover renderer selection, bounded materialization, lock cancellation, naming, custody release, and native-source policy."
+        }
+      ]
+    },
+    {
+      "id": "798-apple-photos-bridge",
+      "wiki": "Acceptance-Test-Apple-Photos-Bridge",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photokit.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/photo-kit/photo-kit-service.test.ts", "tests/photo-kit/photo-kit-bridge.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "The signed packaged pass exercises live PhotoKit permission states, limited and revoked access, iCloud-only assets, add-only export, supported metadata fidelity, and destination-owned retention; automated tests cover exact review scope, staging cleanup, lock refusal, native source policy, and the renderer/IPC flow."
         }
       ]
     }

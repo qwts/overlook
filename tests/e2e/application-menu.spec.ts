@@ -1,5 +1,6 @@
 import { expect, test, _electron as electron, type ElectronApplication } from '@playwright/test';
 
+import type { OverlookApi } from '../../src/shared/ipc/api.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 const PASSWORD = 'Correct Horse Battery Staple 42!';
@@ -108,8 +109,27 @@ test('lock-safe Settings commands wait without exposing content, then open after
     await expect(page.getByTestId('lock-screen')).toBeVisible();
     await configuring;
     await expect.poll(() => menuState(app, 'app.settings.open.privacy')).toMatchObject({ enabled: true });
+    await expect.poll(() => menuState(app, 'library.switch')).toMatchObject({ enabled: true });
     await expect.poll(() => menuState(app, 'library.import')).toMatchObject({ enabled: false });
 
+    await invokeMenu(app, 'library.switch');
+    await expect(page.getByTestId('library-switcher')).toBeVisible();
+    await expect(page.getByTestId('virtual-grid')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await page.getByLabel('App password').fill(PASSWORD);
+    await page.getByRole('button', { name: 'Unlock' }).click();
+    await expect(page.getByTestId('virtual-grid')).toBeVisible();
+    await expect(page.getByTestId('library-switcher')).toHaveCount(0);
+
+    const locking = page
+      .evaluate(async () => {
+        const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+        await overlook.appLock.lockNow();
+      })
+      .catch(() => undefined);
+    await expect(page.getByTestId('lock-screen')).toBeVisible();
+    await locking;
     await invokeMenu(app, 'app.settings.open.privacy');
     await expect(page.getByTestId('virtual-grid')).toHaveCount(0);
     await page.getByLabel('App password').fill(PASSWORD);
@@ -141,10 +161,11 @@ test('macOS application menu is the six-menu design-system spec projected from t
     // Six menus, exact order, no Window menu.
     expect(await topLevelMenuLabels(app)).toEqual(['Overlook', 'File', 'Edit', 'View', 'Photo', 'Help']);
 
-    // File carries Import + Export Selection + the library trio, in order.
+    // File carries Import + Export Selection + Export All + the library trio, in order.
     expect(await submenuItemIds(app, 'File')).toEqual([
       'library.import',
       'photo.export',
+      'library.exportAll',
       '—',
       'library.switch',
       'library.move',
@@ -153,7 +174,7 @@ test('macOS application menu is the six-menu design-system spec projected from t
 
     // Library + sidebar entries are enabled with a library open; Moodboard is a
     // real view (#515) while Feed has no view yet, so it stays disabled.
-    for (const id of ['library.move', 'library.new', 'view.sidebar.toggle', 'view.mode.moodboard']) {
+    for (const id of ['library.move', 'library.new', 'library.exportAll', 'view.sidebar.toggle', 'view.mode.moodboard']) {
       await expect.poll(() => menuState(app, id)).toMatchObject({ enabled: true });
     }
     await expect.poll(() => menuState(app, 'view.mode.feed')).toMatchObject({ enabled: false });
@@ -191,6 +212,12 @@ test('#689 File/View/Photo menu commands drive their shared handlers (parity)', 
     await expect.poll(() => menuState(app, 'photo.export')).toMatchObject({ enabled: true });
     await invokeMenu(app, 'photo.export');
     await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await invokeMenu(app, 'library.exportAll');
+    const allDialog = page.getByRole('dialog', { name: 'Export' });
+    await expect(allDialog.getByText('Every photo in this library')).toBeVisible();
+    await expect(allDialog.getByText('Unencrypted originals')).toBeVisible();
   } finally {
     await app.close();
   }
@@ -223,6 +250,12 @@ test('Windows/Linux draw no native menu and expose Help from the titlebar (#699)
     await page.getByTestId('virtual-grid').waitFor();
     // No native application menu bar on these platforms (ADR-0024 §5).
     expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)).toBe(true);
+
+    // Export All remains reachable without macOS's native File menu. It uses
+    // the same registry command handler as the native menu surface.
+    await page.getByRole('button', { name: 'Export All Unencrypted…' }).click();
+    await expect(page.getByRole('dialog', { name: 'Export' }).getByText('Every photo in this library')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
 
     // The titlebar Help menu carries the two otherwise menu-only commands.
     const help = page.getByRole('button', { name: 'Help' });

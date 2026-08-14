@@ -1,4 +1,4 @@
-import { ProviderError, type ProviderAuthState } from '../provider.js';
+import { ProviderError, raceWithAbort, type ProviderAuthState } from '../provider.js';
 import { googleOAuthFailureReason, redactGoogleCredentials } from './oauth.js';
 import type { GoogleDriveTokenStore } from './token-store.js';
 
@@ -16,6 +16,8 @@ interface RefreshResponse {
 export class GoogleDriveAuthClient {
   private cached: { token: string; expiresAt: number } | null = null;
   private refreshInFlight: Promise<string> | null = null;
+  private refreshController: AbortController | null = null;
+  private refreshWaiters = 0;
 
   constructor(
     private readonly options: {
@@ -46,22 +48,57 @@ export class GoogleDriveAuthClient {
     this.options.tokenStore.clear();
   }
 
-  accessToken(forceRefresh = false): Promise<string> {
+  accessToken(forceRefresh = false, signal?: AbortSignal): Promise<string> {
     if (!forceRefresh && this.cached !== null && this.cached.expiresAt - this.now() > 60_000) {
       return Promise.resolve(this.cached.token);
     }
     this.cached = null;
-    this.refreshInFlight ??= this.refresh().finally(() => {
-      this.refreshInFlight = null;
+    let pending = this.refreshInFlight;
+    let controller = this.refreshController;
+    if (pending === null || controller === null) {
+      controller = new AbortController();
+      const refresh = this.refresh(controller.signal).finally(() => {
+        if (this.refreshInFlight === refresh) {
+          this.refreshInFlight = null;
+          this.refreshController = null;
+          this.refreshWaiters = 0;
+        }
+      });
+      pending = refresh;
+      this.refreshInFlight = refresh;
+      this.refreshController = controller;
+    }
+    this.refreshWaiters += 1;
+    const activeController = controller;
+    const activePending = pending;
+    let released = false;
+    const release = (cancel: boolean, reason?: unknown): void => {
+      if (released) return;
+      released = true;
+      if (this.refreshInFlight === activePending) {
+        this.refreshWaiters -= 1;
+      }
+      if (cancel && this.refreshInFlight === activePending && this.refreshWaiters === 0) {
+        this.refreshInFlight = null;
+        this.refreshController = null;
+        activeController.abort(reason);
+      }
+    };
+    if (signal === undefined) return activePending.finally(() => release(false));
+    const cancelRefresh = (): void => release(true, signal.reason);
+    if (signal.aborted) cancelRefresh();
+    else signal.addEventListener('abort', cancelRefresh, { once: true });
+    return raceWithAbort(activePending, signal).finally(() => {
+      signal.removeEventListener('abort', cancelRefresh);
+      release(false);
     });
-    return this.refreshInFlight;
   }
 
   private now(): number {
     return this.options.now?.() ?? Date.now();
   }
 
-  private async refresh(): Promise<string> {
+  private async refresh(signal: AbortSignal): Promise<string> {
     const clientId = this.options.clientId();
     const record = this.options.tokenStore.load();
     if (clientId === null || record === null || record.clientId !== clientId) {
@@ -76,6 +113,7 @@ export class GoogleDriveAuthClient {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body,
+        signal,
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'network failure';

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -9,7 +9,7 @@ import { videoTileProps } from '../media/device-capabilities.js';
 import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
-import { useLibraryPhotos } from '../state/use-library-photos';
+import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
 import { AlbumPicker } from './AlbumPicker';
@@ -31,6 +31,7 @@ import {
 import { resolveCommand, type CommandPlatform, type QuickActionCommandId } from '../../../shared/commands/registry.js';
 import { DEFAULT_QUICK_ACTIONS } from '../../../shared/settings/settings.js';
 import { QuickActions, type QuickActionItem } from './QuickActions';
+import { useFavoriteMutations } from '../state/use-favorite-mutations';
 
 const messages = defineMessages({
   trashPolicyDays: {
@@ -84,6 +85,48 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
+  const projectionKey = `${state.source}|${state.query}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
+  const selectionAnchorRef = useRef<string | null>(null);
+  const rangeRequestRef = useRef(0);
+  const projectionKeyRef = useRef(projectionKey);
+  useEffect(() => {
+    projectionKeyRef.current = projectionKey;
+    selectionAnchorRef.current = null;
+    rangeRequestRef.current += 1;
+  }, [projectionKey]);
+  const selectPhoto = useCallback(
+    (photoId: string, extend: boolean): void => {
+      const anchorId = selectionAnchorRef.current;
+      if (!extend || anchorId === null || projectionKeyRef.current !== projectionKey) {
+        rangeRequestRef.current += 1;
+        dispatch({ type: 'selection/toggled', photoId });
+        selectionAnchorRef.current = photoId;
+        return;
+      }
+      const requestId = (rangeRequestRef.current += 1);
+      void window.overlook.library
+        .selectionRange({
+          source: state.source,
+          anchorId,
+          targetId: photoId,
+          ...(state.source === 'recent' ? { recentSince: recentSinceIso() } : {}),
+          ...(state.query === '' ? {} : { query: state.query }),
+          ...(Object.values(state.chips).some(Boolean) ? { chips: state.chips } : {}),
+          ...(state.sortOrder === 'date' ? {} : { order: state.sortOrder }),
+          ...(state.album === null ? {} : { albumId: state.album }),
+        })
+        .then(({ photoIds }) => {
+          if (requestId !== rangeRequestRef.current || projectionKeyRef.current !== projectionKey) return;
+          if (photoIds.length === 0) {
+            dispatch({ type: 'selection/toggled', photoId });
+            selectionAnchorRef.current = photoId;
+            return;
+          }
+          dispatch({ type: 'selection/replaced', photoIds });
+        });
+    },
+    [dispatch, projectionKey, state.album, state.chips, state.query, state.sortOrder, state.source],
+  );
   // Purge ceremony (#121): the Trash pill's permanent-delete action opens the confirm over
   // a SNAPSHOT of the selection — global shortcuts (⌘A) stay live while
   // the modal is open, and the destructive set must be exactly what the
@@ -104,13 +147,28 @@ export function LibraryGridView({
     readonly y: number;
     readonly origin: HTMLButtonElement;
   } | null>(null);
-  const favoritePendingRef = useRef<ReadonlySet<string>>(new Set());
-  const [favoritePending, setFavoritePending] = useState<ReadonlySet<string>>(() => new Set());
+  const { pending: favoritePending, toggleFavorite, toggleFavorites } = useFavoriteMutations();
   const [retentionNow] = useState(() => Date.now());
   const [trashRetention, setTrashRetention] = useState<TrashRetention>(DEFAULT_TRASH_RETENTION);
   const [quickActionIds, setQuickActionIds] = useState<readonly QuickActionCommandId[]>(DEFAULT_QUICK_ACTIONS);
   const [quickActionVisibility, dispatchQuickActionVisibility] = useReducer(reduceQuickActionVisibility, initialQuickActionVisibility);
   const [quickAlbumIds, setQuickAlbumIds] = useState<readonly string[] | null>(null);
+  const [nativeDragAvailable, setNativeDragAvailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void window.overlook.nativeDrag
+      .status()
+      .then(({ available }) => {
+        if (active) setNativeDragAvailable(available);
+      })
+      .catch(() => {
+        if (active) setNativeDragAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -132,35 +190,13 @@ export function LibraryGridView({
     };
   }, []);
 
-  const toggleFavorite = (photo: PhotoRecord): void => {
-    if (favoritePendingRef.current.has(photo.id)) return;
-    const pending = new Set(favoritePendingRef.current);
-    pending.add(photo.id);
-    favoritePendingRef.current = pending;
-    setFavoritePending(pending);
-    void window.overlook.library
-      .toggleFavorite({ id: photo.id })
-      .then(({ pendingCount }) => {
-        dispatch({ type: 'pendingCount/set', count: pendingCount });
-      })
-      .catch(() => {
-        dispatch({ type: 'toast/shown', toast: { title: `Couldn't update favorite — ${photo.fileName}`, tone: 'red' } });
-      })
-      .finally(() => {
-        const remaining = new Set(favoritePendingRef.current);
-        remaining.delete(photo.id);
-        favoritePendingRef.current = remaining;
-        setFavoritePending(remaining);
-      });
-  };
-
   const openContextMenu = (
     photo: PhotoRecord,
     point: { readonly x: number; readonly y: number; readonly origin: HTMLButtonElement },
   ): void => {
     const selectionBeforeOpen = [...state.selection];
     const targetIds = state.selection.has(photo.id) ? selectionBeforeOpen : [photo.id];
-    if (!state.selection.has(photo.id)) dispatch({ type: 'selection/all', photoIds: targetIds });
+    if (!state.selection.has(photo.id)) dispatch({ type: 'selection/replaced', photoIds: targetIds });
     setContextPhoto({ photo, targetIds, selectionBeforeOpen, ...point });
   };
 
@@ -209,13 +245,31 @@ export function LibraryGridView({
       });
       if (command?.id !== 'photo.purge') return;
       const targetIds = state.selection.size > 0 ? [...state.selection] : state.lightboxId === null ? [] : [state.lightboxId];
-      const containsOriginal = state.photos.some((photo) => targetIds.includes(photo.id) && photo.isOriginal);
-      if (!containsOriginal) return;
+      if (targetIds.length === 0) return;
+      if (state.photos.some((photo) => targetIds.includes(photo.id) && photo.isOriginal)) {
+        event.preventDefault();
+        setOriginalDeleteIds(targetIds);
+        return;
+      }
+      // A complete Select All spans unloaded pages (#884), so loaded rows can
+      // never rule a protected Original out. Main owns that answer: preflight
+      // rejects a selection with nothing protected, and the probe challenge is
+      // cancelled straight away so the dialog opens its own ceremony.
+      const loaded = new Set(state.photos.map(({ id }) => id));
+      if (targetIds.every((id) => loaded.has(id))) return;
       event.preventDefault();
-      setOriginalDeleteIds(targetIds);
+      void window.overlook.library
+        .originalDeletePreflight({ photoIds: targetIds })
+        .then(({ challengeId }) => {
+          void window.overlook.library.originalDeleteCancel({ challengeId });
+          setOriginalDeleteIds(targetIds);
+        })
+        .catch(() => {
+          // Nothing protected in the unloaded pages: no ceremony is owed.
+        });
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [originalDeleteIds, platform, purgeIds, quickAlbumIds, state]);
   const trashPolicy = intl.formatMessage(retentionDays === null ? messages.trashPolicyOff : messages.trashPolicyDays, {
     days: retentionDays,
@@ -295,7 +349,8 @@ export function LibraryGridView({
     dispatchQuickActionVisibility({ type: 'dismiss' });
     switch (commandId) {
       case 'photo.favorite.toggle':
-        toggleFavorite(photo);
+        if (photoIds.length === 1) toggleFavorite(photo);
+        else toggleFavorites(photoIds);
         return;
       case 'photo.export':
         onExport(photoIds);
@@ -354,11 +409,19 @@ export function LibraryGridView({
       state.source === 'deleted'
         ? undefined
         : (event: DragEvent<HTMLButtonElement>): void => {
-            beginPhotoDrag(event.dataTransfer, {
+            const payload = {
               version: 1,
               photoIds: state.selection.has(photo.id) ? [...state.selection] : [photo.id],
               sourceAlbumId: state.album,
-            });
+            } as const;
+            beginPhotoDrag(event.dataTransfer, payload);
+            if (nativeDragAvailable && payload.photoIds.length <= 100) {
+              void window.overlook.nativeDrag
+                .start({ photoIds: payload.photoIds, sourceAlbumId: payload.sourceAlbumId })
+                .then(({ started }) => {
+                  if (started) endPhotoDrag();
+                });
+            }
           };
     const onDragEnd = onDragStart === undefined ? undefined : endPhotoDrag;
     const items = quickActionItems(photo);
@@ -390,9 +453,7 @@ export function LibraryGridView({
         onOpen={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
         }}
-        onToggleSelect={() => {
-          dispatch({ type: 'selection/toggled', photoId: photo.id });
-        }}
+        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
         onToggleFavorite={() => toggleFavorite(photo)}
         favoritePending={favoritePending.has(photo.id)}
         retentionLabel={retentionLabel}
@@ -419,9 +480,7 @@ export function LibraryGridView({
         onClick={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
         }}
-        onToggleSelect={() => {
-          dispatch({ type: 'selection/toggled', photoId: photo.id });
-        }}
+        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
         onToggleFavorite={() => toggleFavorite(photo)}
         favoritePending={favoritePending.has(photo.id)}
         retentionLabel={retentionLabel}
@@ -448,9 +507,9 @@ export function LibraryGridView({
         onNeedMore={loadMore}
         renderTile={renderTile}
         onKeyboardOpen={(photo) => dispatch({ type: 'lightbox/opened', photoId: photo.id })}
-        onKeyboardSelection={(photoIds, mode) => {
-          if (mode === 'replace') dispatch({ type: 'selection/all', photoIds });
-          else if (photoIds[0] !== undefined) dispatch({ type: 'selection/toggled', photoId: photoIds[0] });
+        onKeyboardSelection={selectPhoto}
+        onSelectionAnchorChange={(photoId) => {
+          selectionAnchorRef.current = photoId;
         }}
       />
       {state.selection.size > 0 ? (
@@ -465,17 +524,23 @@ export function LibraryGridView({
           onOffload={() => onOffload([...state.selection], true)}
           onTransfer={onTransfer === undefined ? undefined : () => onTransfer('selection', [...state.selection])}
           onMarkOriginal={
-            state.photos.some((photo) => state.selection.has(photo.id) && !photo.isOriginal)
+            state.selectionMode === 'all' || state.photos.some((photo) => state.selection.has(photo.id) && !photo.isOriginal)
               ? () => {
-                  const photoIds = state.photos.filter((photo) => state.selection.has(photo.id) && !photo.isOriginal).map(({ id }) => id);
+                  const photoIds =
+                    state.selectionMode === 'all'
+                      ? [...state.selection]
+                      : state.photos.filter((photo) => state.selection.has(photo.id) && !photo.isOriginal).map(({ id }) => id);
                   void window.overlook.library.setOriginal({ photoIds, isOriginal: true });
                 }
               : undefined
           }
           onUnmarkOriginal={
-            state.photos.some((photo) => state.selection.has(photo.id) && photo.isOriginal)
+            state.selectionMode === 'all' || state.photos.some((photo) => state.selection.has(photo.id) && photo.isOriginal)
               ? () => {
-                  const photoIds = state.photos.filter((photo) => state.selection.has(photo.id) && photo.isOriginal).map(({ id }) => id);
+                  const photoIds =
+                    state.selectionMode === 'all'
+                      ? [...state.selection]
+                      : state.photos.filter((photo) => state.selection.has(photo.id) && photo.isOriginal).map(({ id }) => id);
                   void window.overlook.library.setOriginal({ photoIds, isOriginal: false });
                 }
               : undefined
@@ -559,15 +624,15 @@ export function LibraryGridView({
           }}
           onOpen={() => dispatch({ type: 'lightbox/opened', photoId: contextPhoto.photo.id })}
           onToggleFavorite={() => {
-            const targetIds = new Set(contextPhoto.targetIds);
-            for (const photo of state.photos.filter(({ id }) => targetIds.has(id))) toggleFavorite(photo);
+            if (contextPhoto.targetIds.length === 1) toggleFavorite(contextPhoto.photo);
+            else toggleFavorites(contextPhoto.targetIds);
           }}
           onSetOriginal={(isOriginal) => {
             void window.overlook.library.setOriginal({ photoIds: [...contextPhoto.targetIds], isOriginal });
           }}
           onExport={() => {
             onExport(contextPhoto.targetIds);
-            dispatch({ type: 'selection/all', photoIds: contextPhoto.selectionBeforeOpen });
+            dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
           }}
           onAddToAlbum={() => {
             setAlbumPicker({ targetIds: contextPhoto.targetIds, x: contextPhoto.x, y: contextPhoto.y, origin: contextPhoto.origin });
@@ -643,7 +708,7 @@ export function LibraryGridView({
             }
             invokeQuickAction(id, contextPhoto.photo);
             if (id === 'photo.export') {
-              dispatch({ type: 'selection/all', photoIds: contextPhoto.selectionBeforeOpen });
+              dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
             }
           }}
         />

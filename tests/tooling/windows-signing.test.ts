@@ -30,12 +30,12 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(builder, /artifactName: \$\{productName\}-\$\{version\}-\$\{arch\}\.\$\{ext\}/u);
   });
 
-  test('each Windows leg drives the arch through a dedicated package script', () => {
+  test('each Windows leg drives the arch through a dedicated dist script', () => {
     const packageJson = JSON.parse(source('package.json')) as { readonly scripts?: Record<string, string> };
     const workflow = source('.github/workflows/package.yml');
-    assert.match(packageJson.scripts?.['package:win:x64'] ?? '', /electron-builder --publish never --win --x64/u);
-    assert.match(packageJson.scripts?.['package:win:arm64'] ?? '', /electron-builder --publish never --win --arm64/u);
-    assert.match(workflow, /npm run "package:win:\$WIN_ARCH"/u);
+    assert.match(packageJson.scripts?.['dist:win:x64'] ?? '', /electron-builder --publish never --win --x64/u);
+    assert.match(packageJson.scripts?.['dist:win:arm64'] ?? '', /electron-builder --publish never --win --arm64/u);
+    assert.match(workflow, /npm run "dist:win:\$WIN_ARCH"/u);
     assert.match(workflow, /WIN_ARCH: \$\{\{ matrix\.win-arch \}\}/u);
   });
 
@@ -55,13 +55,18 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /export ELECTRON_BUILDER_7Z_FILTER=BCJ2/u);
   });
 
-  test('cross-compiled legs re-resolve sharp for the target arch and drop host binaries', () => {
+  test('cross-compiled legs lock, verify, and isolate the target sharp binary', () => {
     const workflow = source('.github/workflows/package.yml');
     // npm ci installs only the host sharp binary; the arm64 leg must pull the
     // target-arch @img/sharp-win32-<arch> and prune the rest, or a mixed
     // payload would ship (and fail verify-windows-arch). Uses npm pack + extract
     // (not `npm install --cpu/--os`, which would prune the host build toolchain).
     assert.match(workflow, /npm pack "@img\/\$pkg@\$sharp_ver"/u);
+    assert.match(workflow, /require\("\.\/package-lock\.json"\)\.packages/u);
+    assert.match(workflow, /locked\.version !== version/u);
+    assert.match(workflow, /createHash\("sha512"\)/u);
+    assert.match(workflow, /actual !== locked\.integrity/u);
+    assert.ok(workflow.indexOf('actual !== locked.integrity') < workflow.indexOf('tar -xzf "$tgz"'));
     assert.doesNotMatch(workflow, /npm install --no-save --cpu="\$WIN_ARCH" --os=win32 sharp/u);
     assert.match(workflow, /find node_modules\/@img .* -name 'sharp-win32-\*' ! -name "\$pkg"/u);
   });

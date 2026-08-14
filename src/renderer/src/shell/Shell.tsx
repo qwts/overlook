@@ -13,11 +13,15 @@ import { PrimaryLibraryView } from './PrimaryLibraryView';
 import { fullUrl } from '../../../shared/library/full-url.js';
 import { ExportDialog } from '../export/ExportDialog';
 import { SettingsDialog, type SettingsSection } from '../settings/SettingsDialog';
+import { Dialog } from '../components/Dialog';
+import { RestoreWorkflow } from '../restore/RestoreWorkflow';
+import { useRestoreChrome } from '../restore/use-restore-chrome.js';
 import { ImportDialog } from '../import/ImportDialog';
 import { Inspector } from '../inspector/Inspector';
 import { Lightbox } from '../lightbox/Lightbox';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { commandPlatform, useCommandDispatcher } from '../state/use-command-dispatcher';
+import { useSelectAll } from '../state/use-select-all';
 import { commandMenuDialogClass } from '../state/command-menu-dialog';
 import { useNativeCommandRouter } from './use-native-command-router';
 import { AlbumPicker } from '../grid/AlbumPicker';
@@ -54,6 +58,7 @@ const viewMessages = defineMessages({
   album: { id: 'shell.view.album', defaultMessage: 'Album' },
   protected: { id: 'shell.view.protected', defaultMessage: 'Protected album' },
   results: { id: 'shell.results.count', defaultMessage: '{count, plural, one {# result} other {# results}}' },
+  restoreTitle: { id: 'settings.restore.title', defaultMessage: 'Restore from cloud backup' },
 });
 
 function mergeDropPaths(current: readonly string[] | null, incoming: readonly string[]): readonly string[] {
@@ -81,10 +86,15 @@ export function Shell({
   const { announce } = useAnnouncer();
   const offload = useOffloadWorkflow();
   const emptyTrash = useEmptyTrash();
+  const restore = useRestoreChrome();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const providerStatusRequestRef = useRef(0);
   const [exportPhotoIds, setExportPhotoIds] = useState<readonly string[] | null>(null);
+  const [exportAllPhotos, setExportAllPhotos] = useState(false);
   const openExport = (photoIds: readonly string[]): void => {
+    setExportAllPhotos(false);
     setExportPhotoIds([...photoIds]);
     dispatch({ type: 'dialog/set', dialog: 'export', open: true });
   };
@@ -93,7 +103,8 @@ export function Shell({
   // Menu → File → New Library… opens the switcher straight into create mode.
   const [librariesCreating, setLibrariesCreating] = useState(false);
   const [editableFocus, setEditableFocus] = useState(false);
-  useCommandDispatcher(platform, setShortcutSurface, shortcutSurface !== null);
+  const selectAll = useSelectAll();
+  useCommandDispatcher(platform, setShortcutSurface, shortcutSurface !== null, selectAll);
 
   useEffect(() => {
     const update = (): void => {
@@ -220,9 +231,11 @@ export function Shell({
     nativeCommand,
     state,
     dispatch,
+    onSelectAll: selectAll,
     setShortcutSurface,
     setSettingsSection,
     setExportPhotoIds,
+    setExportAllPhotos,
     setAlbumPickerIds: setMenuAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry: () => setInteropEntry(null),
@@ -233,6 +246,7 @@ export function Shell({
   });
 
   const inspectorSelectionPosition = useDetachedInspector(state, dispatch);
+  const inspectorPhotoIds = useMemo(() => (state.selection.size === 0 ? [] : [...state.selection]), [state.selection]);
 
   useEffect(() => {
     const target = state.photos.find(({ id }) => id === state.lightboxId);
@@ -250,6 +264,7 @@ export function Shell({
       hasTarget: target !== undefined,
       targetTrashable: target?.deletedAt === null,
       inAlbum: state.album !== null,
+      protectedAlbumOpen: state.protectedAlbum !== null,
       selectionCount: state.selection.size,
       appLockConfigured: lockConfigured,
       providerBusy: false,
@@ -326,33 +341,67 @@ export function Shell({
   // follow changed pushes — a sort change in the dialog re-orders the grid
   // live via the query hook's refetch.
   useEffect(() => {
+    const effectRequest = providerStatusRequestRef.current + 1;
+    providerStatusRequestRef.current = effectRequest;
     const syncProvider = (selectedId: string | null): void => {
+      const request = providerStatusRequestRef.current + 1;
+      providerStatusRequestRef.current = request;
       void window.overlook.backup.providers().then(({ providers, defaultProviderId }) => {
-        const providerId = providers.some((provider) => provider.id === selectedId) ? (selectedId ?? defaultProviderId) : defaultProviderId;
-        const descriptor = providers.find((provider) => provider.id === providerId);
-        if (descriptor === undefined) {
-          dispatch({ type: 'provider/set', connected: false, label: 'Cloud' });
+        if (providerStatusRequestRef.current !== request) return;
+        const preferred = providers.find((provider) => provider.id === selectedProviderId);
+        const persisted = providers.find((provider) => provider.id === selectedId);
+        const fallback = providers.find((provider) => provider.id === defaultProviderId);
+        const publish = (descriptor: (typeof providers)[number] | undefined): void => {
+          if (descriptor === undefined) {
+            dispatch({ type: 'provider/set', connected: false, label: 'Cloud' });
+            return;
+          }
+          void window.overlook.backup
+            .providerStatus({ providerId: descriptor.id })
+            .then(({ connected, provider }) => {
+              if (providerStatusRequestRef.current !== request) return;
+              dispatch({ type: 'provider/set', connected, label: provider.label });
+            })
+            .catch(() => {
+              if (providerStatusRequestRef.current !== request) return;
+              dispatch({ type: 'provider/set', connected: false, label: descriptor.label });
+            });
+        };
+        if (preferred !== undefined && persisted !== undefined && preferred.id !== persisted.id) {
+          void window.overlook.backup
+            .providerStatus({ providerId: persisted.id })
+            .then(({ connected, provider }) => {
+              if (providerStatusRequestRef.current !== request) return;
+              if (connected) {
+                setSelectedProviderId(null);
+                dispatch({ type: 'provider/set', connected: true, label: provider.label });
+                return;
+              }
+              publish(preferred);
+            })
+            .catch(() => {
+              if (providerStatusRequestRef.current !== request) return;
+              publish(preferred);
+            });
           return;
         }
-        void window.overlook.backup
-          .providerStatus({ providerId })
-          .then(({ connected, provider }) => {
-            dispatch({ type: 'provider/set', connected, label: provider.label });
-          })
-          .catch(() => {
-            dispatch({ type: 'provider/set', connected: false, label: descriptor.label });
-          });
+        publish(preferred ?? persisted ?? fallback);
       });
     };
     void window.overlook.settings.get().then(({ settings }) => {
+      if (providerStatusRequestRef.current !== effectRequest) return;
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });
-    return window.overlook.settings.onChanged(({ settings }) => {
+    const unsubscribe = window.overlook.settings.onChanged(({ settings }) => {
       dispatch({ type: 'sortOrder/set', order: settings.sortOrder });
       syncProvider(settings.providerId);
     });
-  }, [dispatch]);
+    return () => {
+      providerStatusRequestRef.current += 1;
+      unsubscribe();
+    };
+  }, [dispatch, selectedProviderId]);
 
   // Backup completion (#106): failures surface as the red toast with a
   // Retry action; the pending/count refresh rides the existing pushes.
@@ -422,8 +471,9 @@ export function Shell({
 
   const toast = state.toast;
   const toastItems = useMemo<readonly ToastItem[]>(
-    () =>
-      toast === null
+    () => [
+      ...restore.restoreToasts,
+      ...(toast === null
         ? []
         : [
             {
@@ -431,9 +481,10 @@ export function Shell({
               tone: toast.tone,
               title: toast.title,
               ...(toast.action === undefined ? {} : { action: <ToastAction toast={toast} /> }),
-            },
-          ],
-    [toast],
+            } satisfies ToastItem,
+          ]),
+    ],
+    [restore.restoreToasts, toast],
   );
   const activeAlbum = albums.find((album) => album.id === state.album);
   const activeProtectedAlbum = protectedAlbums.find((album) => album.id === state.protectedAlbum);
@@ -500,7 +551,9 @@ export function Shell({
       />
       <MoveResumeBanner />
       <Toolbar
+        platform={commandPlatform(platform)}
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
+        onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {
           // #237: the dialog owns source discovery (SD scan, folder picker,
           // no-card empty state) — the toolbar just opens it.
@@ -538,7 +591,9 @@ export function Shell({
         <ExportDialog
           open
           photoIds={exportPhotoIds ?? (state.lightboxId !== null ? [state.lightboxId] : [...state.selection])}
+          allPhotos={exportAllPhotos}
           onClose={() => {
+            setExportAllPhotos(false);
             setExportPhotoIds(null);
             dispatch({ type: 'dialog/set', dialog: 'export', open: false });
           }}
@@ -548,6 +603,7 @@ export function Shell({
       {state.librariesOpen ? (
         <LibrarySwitcher
           startInCreate={librariesCreating}
+          onCurrentNameChange={setLibraryName}
           onClose={() => {
             setLibrariesCreating(false);
             dispatch({ type: 'dialog/set', dialog: 'libraries', open: false });
@@ -578,11 +634,22 @@ export function Shell({
           selectedPhotoIds={[...state.selection]}
           transferEnabled={pcloudEnabled}
           onTransfer={pcloudEnabled ? () => openInterop('settings', [...state.selection]) : undefined}
+          preferredProviderId={selectedProviderId}
+          onProviderSelection={(provider) => {
+            setSelectedProviderId(provider.id);
+            dispatch({ type: 'provider/set', connected: false, label: provider.label });
+          }}
+          onRestore={restore.openRestore}
           onClose={() => {
             setSettingsSection(undefined);
             dispatch({ type: 'dialog/set', dialog: 'settings', open: false });
           }}
         />
+      ) : null}
+      {restore.restoreOpen ? (
+        <Dialog open title={intl.formatMessage(viewMessages.restoreTitle)} icon="cloud-download" width={640} onClose={restore.closeRestore}>
+          <RestoreWorkflow context="settings" />
+        </Dialog>
       ) : null}
       {state.activityOpen ? (
         <ActivityDialog
@@ -744,6 +811,7 @@ export function Shell({
             <Inspector
               providerLabel={state.providerLabel}
               photo={state.photos.find((photo) => photo.id === state.inspectorPhotoId) ?? null}
+              photoIds={inspectorPhotoIds}
               selectionPosition={inspectorSelectionPosition}
               onPrevious={() => dispatch({ type: 'inspector/stepped', delta: -1 })}
               onNext={() => dispatch({ type: 'inspector/stepped', delta: 1 })}
@@ -751,8 +819,15 @@ export function Shell({
           </aside>
         ) : null}
       </div>
-      <ToastHost className="ovl-shell__toast" toasts={toastItems} onDismiss={() => dispatch({ type: 'toast/dismissed' })} />
-      <StatusBar stats={stats} />
+      <ToastHost
+        className="ovl-shell__toast"
+        toasts={toastItems}
+        onDismiss={(id) => {
+          if (id === 'restore-background') restore.dismissRestoreToast();
+          else dispatch({ type: 'toast/dismissed' });
+        }}
+      />
+      <StatusBar stats={stats} restore={restore.restoreChip} onRestoreClick={restore.openRestore} />
       <InteropEntryDialog entry={interopEntry} onClose={() => setInteropEntry(null)} />
     </div>
   );

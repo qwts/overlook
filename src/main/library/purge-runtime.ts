@@ -9,7 +9,10 @@ export interface DrainablePurgeFacade {
 
 /** Serializes destructive manual purges and gives app-lock teardown a
  * permanent admission fence plus cancellation/drain boundary. */
-export function createPurgeRuntime(service: Pick<PurgeService, 'purge' | 'deletePermanently'>): DrainablePurgeFacade {
+export function createPurgeRuntime(
+  service: Pick<PurgeService, 'purge' | 'deletePermanently'>,
+  workChanged: (delta: 1 | -1) => void,
+): DrainablePurgeFacade {
   let controller: AbortController | null = null;
   let turn: Promise<unknown> = Promise.resolve();
   let closed = false;
@@ -17,9 +20,11 @@ export function createPurgeRuntime(service: Pick<PurgeService, 'purge' | 'delete
     const task = async () => {
       if (closed) throw new Error('purge service is closed');
       controller = new AbortController();
+      workChanged(1);
       try {
         return await (permanent ? service.deletePermanently(photoIds, controller.signal) : service.purge(photoIds, controller.signal));
       } finally {
+        workChanged(-1);
         controller = null;
       }
     };

@@ -3,6 +3,7 @@ import { useState, type ReactElement } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { ShortcutHelp } from './ShortcutHelp';
+import type { CommandPlatform } from '../../../shared/commands/registry.js';
 
 const meta: Meta<typeof ShortcutHelp> = {
   title: 'Commands/ShortcutHelp',
@@ -12,19 +13,19 @@ const meta: Meta<typeof ShortcutHelp> = {
 export default meta;
 type Story = StoryObj<typeof ShortcutHelp>;
 
-function GridHelp(): ReactElement | null {
+function GridHelp({ platform }: { readonly platform: CommandPlatform }): ReactElement | null {
   const [open, setOpen] = useState(true);
   return open ? (
     <ShortcutHelp
-      context={{ surface: 'grid', dialogOpen: false, editable: false, platform: 'darwin' }}
-      platform="darwin"
+      context={{ surface: 'grid', dialogOpen: false, editable: false, platform }}
+      platform={platform}
       onClose={() => setOpen(false)}
     />
   ) : null;
 }
 
 export const GeneratedForGridContext: Story = {
-  render: () => <GridHelp />,
+  render: () => <GridHelp platform="darwin" />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
@@ -33,5 +34,15 @@ export const GeneratedForGridContext: Story = {
     await expect(canvas.queryByText('Next photo')).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+export const GeneratedForWindows: Story = {
+  render: () => <GridHelp platform="win32" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Ctrl+A')).toBeInTheDocument();
+    await expect(canvas.getByText('Ctrl+K')).toBeInTheDocument();
+    await expect(canvas.queryByText('⌘A')).not.toBeInTheDocument();
   },
 };

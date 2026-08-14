@@ -152,7 +152,7 @@ describe('app-lock credential custody (#311, ADR-0013)', () => {
     if (unlocked.ok) assert.deepEqual(unlocked.masterKey, masterKey);
   });
 
-  test('record tamper or missing/outdated anchor fails closed before password release', async () => {
+  test('malformed records fail closed while usability policy repairs anchors only after authentication', async () => {
     const { dataDir, anchors, store, masterKey } = world();
     await store.configure({ libraryId: 'library-a', password: 'correct horse battery staple', masterKey });
     const path = join(dataDir, 'master.key');
@@ -164,10 +164,59 @@ describe('app-lock credential custody (#311, ADR-0013)', () => {
 
     writeFileSync(path, raw);
     anchors.clear();
-    assert.deepEqual(store.status(), { state: 'recovery-required', reason: 'anchor-missing' });
+    assert.deepEqual(store.status(), { state: 'locked', libraryId: 'library-a' });
+    assert.deepEqual(await store.unlock('wrong password'), { ok: false, reason: 'wrong-password' });
+    assert.equal(anchors.anchor, null, 'wrong credentials never repair trust state');
+    assert.equal((await store.unlock('correct horse battery staple')).ok, true);
+    assert.deepEqual(anchors.anchor, store.recordAnchor());
 
     anchors.write({ libraryId: 'library-a', generation: 0, recordHash: '0'.repeat(64) });
+    assert.deepEqual(store.status(), { state: 'locked', libraryId: 'library-a' });
+    assert.equal((await store.unlock('correct horse battery staple')).ok, true);
+    assert.deepEqual(anchors.anchor, store.recordAnchor());
+  });
+
+  test('hardened policy is authenticated and requires recovery after anchor loss', async () => {
+    const { anchors, store, masterKey } = world();
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+
+    assert.equal(store.anchorPolicy(), 'usability');
+    assert.equal(await store.setAnchorPolicy('wrong password', 'hardened'), false);
+    assert.equal(store.anchorPolicy(), 'usability');
+    assert.equal(await store.setAnchorPolicy(password, 'hardened'), true);
+    assert.equal(store.anchorPolicy(), 'hardened');
+
+    anchors.clear();
+    assert.deepEqual(store.status(), { state: 'recovery-required', reason: 'anchor-missing' });
+    assert.deepEqual(await store.unlock(password), { ok: false, reason: 'recovery-required' });
+  });
+
+  test('a retained hardened anchor rejects rollback to an older usability record', async () => {
+    const { dataDir, anchors, store, masterKey } = world();
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    const path = join(dataDir, 'master.key');
+    const usabilityRecord = readFileSync(path);
+
+    assert.equal(await store.setAnchorPolicy(password, 'hardened'), true);
+    const hardenedAnchor = structuredClone(anchors.anchor);
+    writeFileSync(path, usabilityRecord);
+
     assert.deepEqual(store.status(), { state: 'recovery-required', reason: 'anchor-mismatch' });
+    assert.deepEqual(await store.unlock(password), { ok: false, reason: 'recovery-required' });
+    assert.deepEqual(anchors.anchor, hardenedAnchor, 'stale usability custody cannot replace the newer hardened anchor');
+  });
+
+  test('valid credentials report unavailable storage separately when usability repair cannot persist', async () => {
+    const { anchors, store, masterKey } = world();
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    anchors.clear();
+    anchors.available = false;
+
+    assert.deepEqual(store.status(), { state: 'locked', libraryId: 'library-a' });
+    assert.deepEqual(await store.unlock(password), { ok: false, reason: 'storage-unavailable' });
   });
 
   test('password change rotates custody and revokes the old password', async () => {

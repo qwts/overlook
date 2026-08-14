@@ -8,9 +8,9 @@ import { GeneralPane } from './GeneralPane';
 import { KeyDialog, type KeyDialogMode } from './KeyDialog';
 import { PrivacyPane } from './PrivacyPane';
 import { StoragePane } from './StoragePane';
-import { RestoreWorkflow } from '../restore/RestoreWorkflow';
 import { AppPasswordDialog, type AppPasswordMode } from './AppPasswordDialog';
 import type { AppSettings, SettingsPatch } from '../../../shared/settings/settings.js';
+import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
 import { TransferPane } from './TransferPane.js';
 
 import './settings.css';
@@ -29,6 +29,9 @@ export interface SettingsDialogProps {
   readonly onTransfer?: (() => void) | undefined;
   readonly transferEnabled?: boolean | undefined;
   readonly requestedSection?: SettingsSection | undefined;
+  readonly onProviderSelection?: ((provider: ProviderDescriptor) => void) | undefined;
+  readonly preferredProviderId?: string | null | undefined;
+  readonly onRestore?: (() => void) | undefined;
 }
 
 const messages = defineMessages({
@@ -38,7 +41,6 @@ const messages = defineMessages({
   storage: { id: 'settings.nav.storage', defaultMessage: 'Storage & Backup' },
   transfer: { id: 'settings.nav.transfer', defaultMessage: 'Transfer & Sync' },
   privacy: { id: 'settings.nav.privacy', defaultMessage: 'Privacy' },
-  restoreTitle: { id: 'settings.restore.title', defaultMessage: 'Restore from cloud backup' },
 });
 
 const SECTIONS: readonly { key: SettingsSection; icon: IconName; label: MessageDescriptor }[] = [
@@ -55,6 +57,9 @@ export function SettingsDialog({
   onTransfer,
   transferEnabled = false,
   requestedSection,
+  onProviderSelection,
+  preferredProviderId,
+  onRestore,
 }: SettingsDialogProps): ReactElement | null {
   const intl = useIntl();
   const [section, setSection] = useState<SettingsSection>(
@@ -64,11 +69,13 @@ export function SettingsDialog({
   const [settings, setSettings] = useState<AppSettings | null>(null);
   // Recovery-key dialog (#240): layered over Settings, per the mock.
   const [keyMode, setKeyMode] = useState<KeyDialogMode | null>(null);
-  const [restoreOpen, setRestoreOpen] = useState(false);
   const [passwordMode, setPasswordMode] = useState<AppPasswordMode | null>(null);
   const [appLockConfigured, setAppLockConfigured] = useState(false);
   const [touchIdStatus, setTouchIdStatus] = useState<Awaited<ReturnType<typeof window.overlook.appLock.touchIdStatus>> | null>(null);
   const [touchIdBusy, setTouchIdBusy] = useState(false);
+  const [anchorPolicy, setAnchorPolicy] = useState<'usability' | 'hardened' | null>(null);
+  const [pendingHarden, setPendingHarden] = useState(false);
+  const [recoveryExported, setRecoveryExported] = useState(false);
 
   useEffect(() => {
     if (!open || requestedSection === undefined) return;
@@ -98,6 +105,11 @@ export function SettingsDialog({
       unsubscribe();
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !appLockConfigured) return;
+    void window.overlook.appLock.anchorPolicyStatus().then(({ policy }) => setAnchorPolicy(policy));
+  }, [open, appLockConfigured]);
 
   useEffect(() => {
     if (!open) return;
@@ -201,7 +213,14 @@ export function SettingsDialog({
           {settings === null ? null : activeSection === 'general' ? (
             <GeneralPane settings={settings} onPatch={patch} />
           ) : activeSection === 'storage' ? (
-            <StoragePane settings={settings} selectedPhotoIds={selectedPhotoIds} onPatch={patch} onRestore={() => setRestoreOpen(true)} />
+            <StoragePane
+              settings={settings}
+              selectedPhotoIds={selectedPhotoIds}
+              onPatch={patch}
+              onRestore={onRestore}
+              onProviderSelection={onProviderSelection}
+              preferredProviderId={preferredProviderId}
+            />
           ) : activeSection === 'transfer' && transferEnabled ? (
             <TransferPane onOpen={onTransfer} />
           ) : (
@@ -227,6 +246,16 @@ export function SettingsDialog({
                   })
                   .catch(() => setTouchIdBusy(false));
               }}
+              anchorPolicy={anchorPolicy}
+              onAnchorPolicyChange={(policy) => {
+                if (policy === 'hardened') {
+                  setRecoveryExported(false);
+                  setPendingHarden(true);
+                  setKeyMode('backup');
+                  return;
+                }
+                setPasswordMode('anchor-usability');
+              }}
             />
           )}
         </div>
@@ -237,22 +266,24 @@ export function SettingsDialog({
           mode={keyMode}
           onClose={() => {
             setKeyMode(null);
+            if (pendingHarden) {
+              setPendingHarden(false);
+              if (recoveryExported) setPasswordMode('anchor-harden');
+            }
           }}
+          onExported={() => setRecoveryExported(true)}
         />
       ) : null}
-      {restoreOpen ? (
-        <Dialog
-          open
-          title={intl.formatMessage(messages.restoreTitle)}
-          icon="cloud-download"
-          width={640}
-          onClose={() => setRestoreOpen(false)}
-        >
-          <RestoreWorkflow context="settings" />
-        </Dialog>
-      ) : null}
       {passwordMode === null ? null : (
-        <AppPasswordDialog mode={passwordMode} onClose={() => setPasswordMode(null)} onDone={() => setPasswordMode(null)} />
+        <AppPasswordDialog
+          mode={passwordMode}
+          onClose={() => setPasswordMode(null)}
+          onDone={() => {
+            if (passwordMode === 'anchor-harden') setAnchorPolicy('hardened');
+            if (passwordMode === 'anchor-usability') setAnchorPolicy('usability');
+            setPasswordMode(null);
+          }}
+        />
       )}
     </Dialog>
   );

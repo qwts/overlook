@@ -38,6 +38,7 @@ const LIBRARIES: readonly LibraryDescriptor[] = [
 
 interface StubOptions {
   readonly libraries?: readonly LibraryDescriptor[];
+  readonly current?: LibraryDescriptor;
   readonly openOutcome?: Awaited<ReturnType<OverlookApi['libraries']['open']>>;
   readonly openRejects?: boolean;
   readonly addOutcome?: Awaited<ReturnType<OverlookApi['libraries']['add']>>;
@@ -45,9 +46,10 @@ interface StubOptions {
 
 function installStub(options: StubOptions = {}): { readonly calls: string[] } {
   const calls: string[] = [];
+  let currentLibraries = [...(options.libraries ?? LIBRARIES)];
   const libraries = {
-    list: () => Promise.resolve({ libraries: options.libraries ?? LIBRARIES }),
-    current: () => Promise.resolve({ library: (options.libraries ?? LIBRARIES).find((entry) => entry.open) ?? LIBRARIES[0] }),
+    list: () => Promise.resolve({ libraries: currentLibraries }),
+    current: () => Promise.resolve({ library: options.current ?? currentLibraries.find((entry) => entry.open) ?? LIBRARIES[0] }),
     open: ({ id }: { id: string }) => {
       calls.push(`open:${id}`);
       if (options.openRejects === true) return Promise.reject(new Error('IPC_HANDLER_FAILED'));
@@ -62,6 +64,23 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
     remove: ({ id }: { id: string }) => {
       calls.push(`remove:${id}`);
       return Promise.resolve({ removed: true });
+    },
+    setDisplayName: ({ id, name }: { id: string; name: string }) => {
+      calls.push(`display-name:${id}:${name}`);
+      const updated = currentLibraries.find((entry) => entry.id === id);
+      if (updated === undefined) return Promise.reject(new Error('missing fixture'));
+      const renamed = { ...updated, name };
+      currentLibraries = currentLibraries.map((entry) => (entry.id === id ? renamed : entry));
+      return Promise.resolve({ library: renamed });
+    },
+    resetDisplayName: ({ id }: { id: string }) => {
+      calls.push(`display-name-reset:${id}`);
+      const updated = currentLibraries.find((entry) => entry.id === id);
+      if (updated === undefined) return Promise.reject(new Error('missing fixture'));
+      const name = updated.path.split(/[\\/]/u).filter(Boolean).at(-1) ?? updated.name;
+      const renamed = { ...updated, name };
+      currentLibraries = currentLibraries.map((entry) => (entry.id === id ? renamed : entry));
+      return Promise.resolve({ library: renamed });
     },
     add: () => {
       calls.push('add');
@@ -125,6 +144,36 @@ export const AllRowStates: Story = {
   },
 };
 
+export const EditDisplayNameAndDisambiguateDuplicates: Story = {
+  args: { onCurrentNameChange: fn() },
+  decorators: [
+    (Story) => {
+      installStub({
+        libraries: [lib({ open: true }), lib({ id: BETA_ID, name: 'Alpha', path: '/Volumes/Field/Alpha', lastOpenedAt: null })],
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getAllByText(/Location: .* · ID ending/u)).toHaveLength(2);
+    });
+    await userEvent.click(body.getByTestId(`edit-display-name-${OPEN_ID}`));
+    const input = body.getByTestId('library-display-name-input');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Family archive');
+    await userEvent.click(body.getByRole('button', { name: 'Save' }));
+    await expect(body.getByTestId('library-row-Family archive')).toBeVisible();
+    await expect(args.onCurrentNameChange).toHaveBeenCalledWith('Family archive');
+
+    await userEvent.click(body.getByTestId(`edit-display-name-${OPEN_ID}`));
+    await userEvent.click(body.getByTestId('library-display-name-reset'));
+    await expect(body.getAllByTestId('library-row-Alpha')).toHaveLength(2);
+    await expect(args.onCurrentNameChange).toHaveBeenLastCalledWith('Alpha');
+  },
+};
+
 export const SwitchAndKeyboard: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
@@ -143,6 +192,35 @@ export const SwitchAndKeyboard: Story = {
     });
     await expect(body.getByText('Opening Beta…')).toBeVisible();
     await expect(body.getByText(/Closing Alpha/u)).toBeVisible();
+  },
+};
+
+export const SwitchOnlyWhileLocked: Story = {
+  args: { switchOnly: true },
+  decorators: [
+    (Story) => {
+      installStub({
+        libraries: LIBRARIES.map((entry) => ({ ...entry, open: false })),
+        current: lib({ open: false }),
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getByTestId('library-row-Alpha')).toBeVisible();
+    });
+    await expect(body.queryByTestId('new-library')).toBeNull();
+    await expect(body.queryByTestId('add-existing')).toBeNull();
+    await expect(body.queryByLabelText('Rename folder of Beta…')).toBeNull();
+    await expect(body.queryByLabelText('Edit display name of Beta…')).toBeNull();
+    await expect(body.queryByLabelText('Move Beta…')).toBeNull();
+    await expect(body.queryByRole('button', { name: 'Remove library from list: Beta' })).toBeNull();
+    await userEvent.click(body.getByTestId('library-row-Alpha'));
+    await expect(args.onClose).toHaveBeenCalledOnce();
+    await userEvent.click(body.getByTestId('library-row-Beta'));
+    await expect(body.getByTestId('switch-progress')).toBeVisible();
   },
 };
 

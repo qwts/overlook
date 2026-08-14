@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 
 import './titlebar.css';
-import { Icon } from './Icon';
+import { Icon } from './Icon.js';
 
 export interface TitleBarProps {
   /** process.platform from the main process ('darwin' → mac variant). */

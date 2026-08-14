@@ -13,17 +13,26 @@ export interface GoogleDriveAuthRecord {
   readonly clientId: string;
   readonly refreshToken: string;
   readonly connectedAt: string;
+  /** Non-secret subject captured after OAuth; absent on legacy/provisional records. */
+  readonly accountId?: string | undefined;
+  readonly accountLabel?: string | undefined;
 }
 
 function isAuthRecord(value: unknown): value is GoogleDriveAuthRecord {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
+  const accountId = record['accountId'];
+  const accountLabel = record['accountLabel'];
+  const identityValid =
+    (accountId === undefined && accountLabel === undefined) ||
+    (typeof accountId === 'string' && accountId !== '' && typeof accountLabel === 'string' && accountLabel !== '');
   return (
     typeof record['clientId'] === 'string' &&
     record['clientId'].endsWith('.apps.googleusercontent.com') &&
     typeof record['refreshToken'] === 'string' &&
     record['refreshToken'] !== '' &&
-    typeof record['connectedAt'] === 'string'
+    typeof record['connectedAt'] === 'string' &&
+    identityValid
   );
 }
 

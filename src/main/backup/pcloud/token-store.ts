@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { SafeStorageLike } from '../../crypto/keystore.js';
 import type { PCloudApiHost } from './oauth.js';
@@ -20,6 +20,9 @@ export interface PCloudAuthRecord {
   readonly accessToken: string;
   readonly apiHost: PCloudApiHost;
   readonly connectedAt: string;
+  /** Non-secret subject captured after OAuth; absent on legacy/provisional records. */
+  readonly accountId?: string | undefined;
+  readonly accountLabel?: string | undefined;
 }
 
 function isAuthRecord(value: unknown): value is PCloudAuthRecord {
@@ -27,28 +30,46 @@ function isAuthRecord(value: unknown): value is PCloudAuthRecord {
     return false;
   }
   const record = value as Record<string, unknown>;
+  const accountId = record['accountId'];
+  const accountLabel = record['accountLabel'];
+  const identityValid =
+    (accountId === undefined && accountLabel === undefined) ||
+    (typeof accountId === 'string' && accountId !== '' && typeof accountLabel === 'string' && accountLabel !== '');
   return (
     typeof record['accessToken'] === 'string' &&
     record['accessToken'] !== '' &&
     (record['apiHost'] === 'api.pcloud.com' || record['apiHost'] === 'eapi.pcloud.com') &&
-    typeof record['connectedAt'] === 'string'
+    typeof record['connectedAt'] === 'string' &&
+    identityValid
   );
 }
 
 export interface PCloudTokenStoreOptions {
   readonly safeStorage: SafeStorageLike;
   readonly dataDir: string;
+  readonly legacyDataDir?: string | undefined;
 }
 
 export class PCloudTokenStore {
   private readonly safeStorage: SafeStorageLike;
   private readonly dataDir: string;
   private readonly filePath: string;
+  private readonly legacyFilePath: string | undefined;
 
   constructor(options: PCloudTokenStoreOptions) {
     this.safeStorage = options.safeStorage;
     this.dataDir = options.dataDir;
     this.filePath = join(options.dataDir, AUTH_FILE);
+    this.legacyFilePath = options.legacyDataDir === undefined ? undefined : join(options.legacyDataDir, AUTH_FILE);
+  }
+
+  migrateLegacy(): void {
+    if (this.legacyFilePath === undefined || this.load() !== null) return;
+    const legacy = new PCloudTokenStore({ safeStorage: this.safeStorage, dataDir: dirname(this.legacyFilePath) });
+    const record = legacy.load();
+    if (record === null) return;
+    this.save(record);
+    legacy.clear();
   }
 
   save(record: PCloudAuthRecord): void {
@@ -74,7 +95,15 @@ export class PCloudTokenStore {
     }
   }
 
+  /** Physical-presence check for cleanup verification. `load()` deliberately
+   * maps corrupt ciphertext to null, which is not proof that credential bytes
+   * are gone. */
+  hasStoredAuthorization(): boolean {
+    return existsSync(this.filePath) || (this.legacyFilePath !== undefined && existsSync(this.legacyFilePath));
+  }
+
   clear(): void {
     rmSync(this.filePath, { force: true });
+    if (this.legacyFilePath !== undefined) rmSync(this.legacyFilePath, { force: true });
   }
 }

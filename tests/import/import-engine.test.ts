@@ -33,6 +33,8 @@ function sha256(bytes: Buffer): string {
 function harness(overrides?: Partial<ImportEngineDeps>) {
   const sources = new Map<string, Buffer>();
   const blobs = new Set<string>();
+  const sidecarBlobs = new Set<string>();
+  const sidecarRows: unknown[] = [];
   const rows = new Map<string, PhotoInsert>();
   const hashes = new Set<string>();
   const copyEvents: number[] = [];
@@ -91,6 +93,9 @@ function harness(overrides?: Partial<ImportEngineDeps>) {
       },
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
+      insertSidecar: (record) => {
+        sidecarRows.push(record);
+      },
     },
     blobs: {
       putOriginal: async (plaintext, _key, _photoId) => {
@@ -106,6 +111,20 @@ function harness(overrides?: Partial<ImportEngineDeps>) {
         return { keyId: 1, bytes: size };
       },
       verifyOriginal: (contentHash) => Promise.resolve(blobs.has(contentHash)),
+      putSidecar: async (plaintext, _key, photoId) => {
+        let size = 0;
+        const hasher = createHash('sha256');
+        // type-coverage:ignore-next-line -- Readable yields untyped chunks
+        for await (const chunk of plaintext) {
+          // type-coverage:ignore-next-line -- Readable yields untyped chunks
+          hasher.update(chunk as Buffer);
+          size += (chunk as Buffer).length;
+        }
+        const contentHash = hasher.digest('hex');
+        sidecarBlobs.add(`${photoId}:${contentHash}`);
+        return { contentHash, keyId: 1, bytes: size };
+      },
+      verifySidecar: (photoId, contentHash) => Promise.resolve(sidecarBlobs.has(`${photoId}:${contentHash}`)),
     },
     generateThumbs: () => Promise.resolve({ generated: true, width: 1, height: 1 }),
     extractMetadata: () => Promise.resolve(NULL_META),
@@ -211,6 +230,8 @@ describe('import engine (#87)', () => {
       blobs: {
         putOriginal: async () => Promise.resolve({ keyId: 1, bytes: 1 }),
         verifyOriginal: async () => Promise.resolve(false),
+        putSidecar: async () => Promise.resolve({ contentHash: 'x'.repeat(64), keyId: 1, bytes: 1 }),
+        verifySidecar: async () => Promise.resolve(false),
       },
     });
     const bad = addSource(broken, 'bad.jpg', other);

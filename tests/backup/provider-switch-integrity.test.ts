@@ -39,6 +39,7 @@ function providerWithId(id: string, inner: StorageProvider): StorageProvider {
     listLibraries: (signal) => inner.listLibraries(signal),
     forLibrary: (libraryId) => providerWithId(id, inner.forLibrary(libraryId)),
     authState: () => inner.authState(),
+    accountIdentity: (signal) => inner.accountIdentity(signal),
     put: (path, bytes) => inner.put(path, bytes),
     getStream: (path) => inner.getStream(path),
     list: (prefix, signal) => inner.list(prefix, signal),

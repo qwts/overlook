@@ -1,6 +1,7 @@
 import { events } from '../../shared/ipc/channels.js';
 import { createEmitter } from '../../shared/ipc/registry.js';
 import { PhotosRepository } from '../db/photos-repository.js';
+import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { LibraryParts } from '../library/library-parts.js';
 import { createDriveImport, createImportRuntime, type ImportRuntime } from './import-runtime.js';
 
@@ -26,6 +27,7 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
     // worker entry is emitted beside that bundle.
     workerUrl: new URL('./thumbnail-worker.js', import.meta.url),
     repo,
+    sidecars: new SidecarRepository(options.parts.db),
     blobs: options.parts.blobStore,
     blobsReady: options.parts.blobStoreReady,
     currentKey: () => options.parts.keyStore.currentKey(),
@@ -35,7 +37,7 @@ export function createImportApplicationRuntime(options: ImportApplicationRuntime
       copyProgress: (done, total) => emitCopyProgress({ done, total }),
       thumbProgress: (done, total) => emitThumbProgress({ done, total }),
       imported: (photoIds) => {
-        emitChanged({ photoIds: [...photoIds] });
+        emitChanged({ photoIds: [...photoIds], membership: 'library' });
         const pending = repo.stats().pending;
         emitPending({ count: pending });
         options.imported(photoIds, pending);

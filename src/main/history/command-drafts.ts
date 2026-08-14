@@ -19,6 +19,18 @@ export function favoriteCommand(photoId: string, favorite: boolean): CommandDraf
   };
 }
 
+export function favoritesCommand(changes: readonly { readonly id: string; readonly favorite: boolean }[]): CommandDraft | undefined {
+  if (changes.length === 0) return undefined;
+  return {
+    commandId: 'photo.favorite.toggle',
+    classification: 'immediately-reversible',
+    inverse: {
+      kind: 'favorites',
+      changes: changes.map(({ id, favorite }) => ({ photoId: id, before: !favorite, after: favorite })),
+    },
+  };
+}
+
 export function trashCommand(photoIds: readonly string[], operation: 'trash' | 'restore'): CommandDraft | undefined {
   if (photoIds.length === 0) return undefined;
   return {

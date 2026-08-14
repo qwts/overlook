@@ -32,6 +32,13 @@ const PHOTO: PhotoRecord = {
   dimensionStatus: 'verified',
   mediaInfo: null,
   syncState: 'synced',
+  title: null,
+  description: null,
+  tags: [],
+  userTags: [],
+  importedKeywords: [],
+  suppressedKeywords: [],
+  metadataVersion: 1,
 };
 
 const meta: Meta<typeof PhotoContextMenu> = {

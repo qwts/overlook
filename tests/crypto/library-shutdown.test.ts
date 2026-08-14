@@ -1,9 +1,38 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { CustodyWorkTracker, drainBeforeDeadline, drainWithCancellationFence } from '../../src/main/crypto/library-shutdown.js';
+import {
+  CustodyWorkTracker,
+  drainBeforeDeadline,
+  drainWithCancellationFence,
+  releaseLibraryLockAfter,
+} from '../../src/main/crypto/library-shutdown.js';
 
 describe('library shutdown barrier (#311)', () => {
+  test('retains the advisory lock when teardown fails before resources close', async () => {
+    let released = false;
+    await assert.rejects(
+      releaseLibraryLockAfter(
+        () => Promise.reject(new Error('volume disconnected')),
+        () => {
+          released = true;
+        },
+      ),
+      /volume disconnected/u,
+    );
+    assert.equal(released, false);
+  });
+
+  test('releases the advisory lock after teardown succeeds', async () => {
+    let released = false;
+    await releaseLibraryLockAfter(
+      () => Promise.resolve(),
+      () => {
+        released = true;
+      },
+    );
+    assert.equal(released, true);
+  });
   test('waits for active work before resolving', async () => {
     let release: (() => void) | undefined;
     const active = new Promise<void>((resolve) => {

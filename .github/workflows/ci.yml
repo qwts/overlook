@@ -1,23 +1,26 @@
 name: CI
+run-name: CI ${{ github.event_name }} purpose=${{ inputs.purpose || 'automatic' }} retries=${{ inputs.e2e_retries || '0' }}
 
 on:
   pull_request:
-    branches:
-      - main
-    # Default types plus ready_for_review: draft PRs skip the browser lanes (Storybook
-    # interaction tests, Electron E2E) below, so the draft→ready flip must itself trigger
-    # a run — that run supplies the full-suite verdict on the head SHA the ruleset checks.
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-  # Post-merge signal: merges may land via admin bypass, so run the same gates on main itself.
+  merge_group:
+    types: [checks_requested]
   push:
-    branches:
-      - main
-  # Manual lever, for running the suite on an arbitrary ref and for E2E capacity
-  # measurement (the inputs below). The bot-maintained version branch no longer
-  # needs a dispatch: version-cut.yml opens that PR under RELEASE_TOKEN, so it
-  # gets ordinary pull_request runs (contexts match by name across event types).
+    branches: [main]
   workflow_dispatch:
     inputs:
+      purpose:
+        description: Why the complete suite is being run manually
+        required: true
+        type: choice
+        options:
+          - exact-sha-preflight
+          - diagnostics
+          - release-recovery
+          - workflow-testing
+          - explicit-rerun
       e2e_workers:
         description: Electron E2E workers (capacity measurement; default 1)
         required: false
@@ -35,79 +38,92 @@ on:
         required: false
         type: string
         default: default
-  # The merge queue (agents run `gh pr merge --auto` once a PR is ready) builds the
-  # up-to-date merged state and requires the same "CI" and "E2E gate" contexts on it,
-  # so this workflow must run on merge_group and report both. This is what lets a PR
-  # merge without its branch ever being manually updated: staleness is validated on
-  # the queue's merged state, not the PR head.
-  merge_group:
 
-# Cancel superseded PR runs — a stacked push otherwise burns a full run per commit. Main-push
-# runs are keyed by SHA instead of ref: a shared ref group would let GitHub replace the single
-# queued run when merges land back-to-back, silently dropping an intermediate commit's verdict.
-# Per-SHA groups never collide, so every merge commit keeps its own post-merge run.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'merge_group' && format('merge-group-{0}', github.event.merge_group.head_ref) || github.sha }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 
 jobs:
-  # Path filter for the E2E job — the long pole. Skip it on PRs that cannot change app
-  # behavior (docs-only, unit-test-only); re-run it whenever the app, the E2E harness,
-  # build scripts, dependencies, the toolchain, or this workflow change. On push to main
-  # E2E always runs (main must stay green regardless of the diff).
-  #
-  # tests/a11y/* is in the list because the violation budget (#398) decides whether the
-  # a11y spec passes: tightening an entry without re-running E2E would leave the new
-  # number unverified.
-  changes:
-    name: Detect changes
+  policy:
+    name: Action Policy
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     outputs:
-      # workflow_dispatch and merge_group (the queue's merged state, about to
-      # become main) always run E2E: paths-filter has no base for dispatch
-      # events, and a merge group gets main's own always-run rule — main must
-      # stay green regardless of the diff.
-      e2e: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.e2e }}
+      mode: ${{ steps.policy.outputs.mode }}
+      run_full: ${{ steps.policy.outputs.run_full }}
+      run_post_merge: ${{ steps.policy.outputs.run_post_merge }}
+      release_gate_mode: ${{ steps.policy.outputs.release_gate_mode }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Filter paths
-        id: filter
-        if: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'merge_group' }}
+      - id: policy
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@e7c2c4992f8472dfced79afc258f4ad18bf226ad
+
+  merge-evidence:
+    name: Verify merged commit evidence
+    needs: policy
+    if: needs.policy.outputs.run_post_merge == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      validated: ${{ steps.evidence.outputs.validated }}
+    steps:
+      - id: evidence
+        name: Find successful merge-group CI for this exact commit
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          e2e=false
-          if [[ "$BASE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BASE_SHA^{commit}"; then
-            e2e=true
-          else
-            while IFS= read -r file; do
-              case "$file" in
-                src/*|tests/e2e/*|tests/a11y/*|scripts/*|playwright.config.ts|package.json|package-lock.json|tsconfig*.json|.nvmrc|.github/workflows/ci.yml)
-                  e2e=true
-                  break
-                  ;;
-              esac
-            done < <(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")
+          # Identify CI runs by `.path` ONLY: a run's `.name` is its evaluated
+          # `run-name:` (this workflow has one), so `.name == "CI"` matches
+          # nothing. `.display_title` below is deliberate — it IS the run-name,
+          # and pins the specific exact-sha-preflight dispatch.
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=merge_group&head_sha=$GITHUB_SHA&per_page=100" \
+            --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .conclusion == "success") | .id) // empty')
+          validated=false
+          if [ -n "$run_id" ]; then
+            validated=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
+              --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
           fi
-          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
+          echo "validated=$validated" >> "$GITHUB_OUTPUT"
+
+  preflight-evidence:
+    name: Verify preflight evidence
+    needs: policy
+    if: github.event_name == 'pull_request' && needs.policy.outputs.run_full == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      validated: ${{ steps.evidence.outputs.validated }}
+    steps:
+      - id: evidence
+        name: Find successful manual complete suite for the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=workflow_dispatch&head_sha=$TARGET_SHA&per_page=100" \
+            --jq 'first(.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .display_title == "CI workflow_dispatch purpose=exact-sha-preflight retries=0" and .conclusion == "success") | .id) // empty')
+          validated=false
+          if [ -n "$run_id" ]; then
+            validated=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
+              --jq 'any(.jobs[]; .name == "CI" and .conclusion == "success")')
+          fi
+          echo "validated=$validated" >> "$GITHUB_OUTPUT"
 
   ci:
-    name: CI
+    name: Complete suite
+    needs: [policy, merge-evidence, preflight-evidence]
+    if: >-
+      always() && needs.policy.result == 'success' &&
+      ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
+      (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
-    # This is a whole-job limit, not the sum of the guard's own budgets: the Test step
-    # (test:cov, --timeout-s 900) and the Storybook step (test:stories:ci, --timeout-s 1800)
-    # alone total 45 min of guard-permitted runtime, before counting checkout/npm ci/lint/
-    # format/build/Playwright-install. Sized with headroom above that 45 min guard sum so
-    # GitHub doesn't cancel the job outright before a guard step records .guard/last-run.json
-    # (same reasoning as the E2E job's timeout-minutes below).
+    # The outer bound on this job. CI calls the :inner entrypoints directly — the guard
+    # has no CI exemption (runner-local evidence is replayable), so the wrapped scripts'
+    # --timeout-s values never apply here; the per-step timeout-minutes below are what
+    # bound an individual hang, and this is the backstop over their sum plus checkout/
+    # npm ci/lint/format/build/Playwright-install.
     timeout-minutes: 65
     env:
       INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/node_modules/.interop-image-trail
@@ -119,6 +135,7 @@ jobs:
           # Full history so lint:new-files can compute a merge-base with origin/main;
           # the default single-commit fetch made that gate silently skip in PR runs.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -141,12 +158,32 @@ jobs:
           repository: qwts/image-trail
           ref: cf3fe884c7729db73cfe0ddb7c90be6c4d881c09
           path: node_modules/.interop-image-trail
+          persist-credentials: false
+
+      - name: Interop acceptance
+        run: npm run check:interop-acceptance
 
       - name: Lint
         run: npm run lint
 
       - name: Check formatting
         run: npm run format:check
+
+      - name: Changesets
+        # `changeset status` resolves the configured base branch by its local
+        # name. A PR checkout has origin/main but does not create local main.
+        run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+
+      # A source PR proves release intent by carrying a changeset. The generated
+      # Version packages PR has already consumed those changesets into
+      # package.json and CHANGELOG.md, so asking it for one can never pass —
+      # that broke #890 (playbook-engineering#134). The shared policy decides
+      # which of the two this run is, from reviewed configuration plus fields
+      # only GitHub controls; a branch name or author string here would be
+      # forgeable and would drift from the other governed repos.
+      - name: Check changesets
+        if: needs.policy.outputs.release_gate_mode != 'generated-projection'
+        run: npm run check:changesets
 
       # Acceptance-coverage gates (#82): the map validator (every spec mapped,
       # every path exists) + the diff gate (renderer changes must account for
@@ -169,18 +206,19 @@ jobs:
       # so local runs keep the plain spec output. Non-test node processes under the same step (tsc,
       # c8, npm itself) accept and ignore the flags.
       - name: Test
+        # Step-level bound, replacing the guard's --timeout-s 900 (the :inner entrypoint
+        # runs unwrapped here).
+        timeout-minutes: 20
         env:
           NODE_OPTIONS: >-
             --test-reporter=spec --test-reporter-destination=stdout
             --test-reporter=node-test-github-reporter --test-reporter-destination=stdout
-        run: npm run test:cov
+        run: npm run test:cov:inner
 
-      # Peak-RSS/duration record from the process-tree guard (scripts/run-guarded.mjs) for the
-      # test:cov run above — the data source for ratcheting the guard ceilings. Runs even on
-      # failure: an rss-limit/timeout kill is exactly when the record matters.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
+      # No guard diagnostics step here: this job invokes the :inner entrypoint, so
+      # tools/agent-guard/run-guarded.mjs never runs and never writes .guard/last-run.json
+      # on a runner. Hosted runners are disposable and bounded by timeout-minutes; the
+      # guard exists for local machines.
 
       # Render c8 totals vs. the floor into the run summary. Runs even when test:cov failed
       # (dropped below the floor) — that is when the numbers matter most.
@@ -202,44 +240,33 @@ jobs:
       # test-runner drives it with Playwright chromium. Kept in this job (not
       # the Electron E2E job) — it needs a browser, not a display server.
       #
-      # Draft PRs skip this lane (and E2E below): the working agreement has agents
-      # pushing work-in-progress slices every few minutes, and burning a Storybook
-      # build + Playwright run per slice buys a draft nothing. The deterministic
-      # gates above still run on every push; the ready_for_review trigger guarantees
-      # the full suite runs before the PR can merge. Non-PR events always run.
+      # The whole job is lifecycle-gated, so Storybook runs only as part of a
+      # complete suite; draft events start no jobs.
       - name: Install Playwright browsers (interaction tests)
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         run: npx playwright install --with-deps chromium
 
+      # Step-level bound: the :inner entrypoint runs without the guard's --timeout-s 1800,
+      # so without this a hung Storybook run would burn the whole job timeout instead of
+      # failing this step. No guard diagnostics follow it — the guard never runs here and
+      # writes no .guard/last-run.json on a runner.
       - name: Storybook interaction tests
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-        run: npm run test:stories:ci
+        timeout-minutes: 30
+        run: npm run test:stories:ci:inner
 
-      # See the guard diagnostics note on the Test step above — same record, for the
-      # Storybook lane's guard.
-      - name: Guard diagnostics (Storybook)
-        if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-        run: cat .guard/last-run.json || true
-
-  # E2E is its own job so it runs in parallel with the lint/unit/build gates above, and so
-  # the change filter can skip it wholesale on PRs that cannot affect it. test:e2e builds
-  # the app once via the Playwright global-setup, then runs the specs across workers
-  # (see playwright.config.ts).
+  # E2E is its own complete-suite job so it runs in parallel with the
+  # lint/unit/build lane. test:e2e builds once via Playwright global setup.
   e2e:
     name: E2E
-    needs: changes
-    # Drafts skip E2E even when the path filter matches: work-in-progress pushes land
-    # every few minutes and the Electron lane is the long pole. The ready_for_review
-    # trigger re-runs the whole workflow on the head SHA when the PR leaves draft, so
-    # nothing merges on a draft skip. Non-PR events (push, dispatch) are unaffected.
-    if: ${{ (github.event_name == 'push' || needs.changes.outputs.e2e == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    needs: [policy, merge-evidence, preflight-evidence]
+    if: >-
+      always() && needs.policy.result == 'success' &&
+      ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
+      (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
-    # This is a whole-job limit, not the guard's own budget: npm run test:e2e runs under
-    # scripts/run-guarded.mjs with --timeout-s 1800 (30 min). Checkout/npm ci/Electron system
-    # deps run before that step and the report upload runs after it, so the job timeout must
-    # exceed the guard timeout with headroom — otherwise GitHub can cancel the job outright
-    # before the guard records .guard/last-run.json or the report uploads (as perf.yml already
-    # does for its own guarded step).
+    # The only bound on this job. This job runs test:e2e:inner directly, without the
+    # guard's --timeout-s 1800 (30 min). 45 keeps headroom over the test step's 30 —
+    # checkout/npm ci/Electron system deps run before the test step and the report
+    # upload runs after it.
     timeout-minutes: 45
     env:
       OVERLOOK_E2E_WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_workers || '1' }}
@@ -249,6 +276,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -273,10 +302,15 @@ jobs:
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
 
+      # Step-level bound, replacing the guard's --timeout-s 1800 (the :inner entrypoint
+      # runs unwrapped here). It must stay below the job's timeout-minutes so a hung Playwright run
+      # fails this step and the report upload below still runs, instead of GitHub
+      # cancelling the whole job with no artifact.
       - name: Playwright E2E tests (Electron under Xvfb)
+        timeout-minutes: 30
         run: |
           set +e
-          xvfb-run --auto-servernum -- node scripts/measure-runner-capacity.mjs -- npm run test:e2e 2>&1 | tee test-results/e2e-output.log
+          xvfb-run --auto-servernum -- node scripts/measure-runner-capacity.mjs -- npm run test:e2e:inner 2>&1 | tee test-results/e2e-output.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -284,11 +318,6 @@ jobs:
             echo "::error file=tests/e2e/offload-ui.spec.ts,line=23,title=E2E failure::$detail"
           fi
           exit "$status"
-
-      # See the CI job's "Guard diagnostics" step — same record, for the e2e ceiling.
-      - name: Guard diagnostics
-        if: ${{ !cancelled() }}
-        run: cat .guard/last-run.json || true
 
       - name: Runner capacity summary
         if: ${{ !cancelled() }}
@@ -306,9 +335,8 @@ jobs:
       # videos / time-travel traces on failure). Upload it even when the E2E step fails —
       # that is exactly when it matters. View: download, unzip, `npx playwright show-report <dir>`.
       # This artifact is the only report channel: the job that mirrored it to GitHub Pages was
-      # removed rather than hand a repo-scoped PAT to a third-party publishing action (the
-      # managed "pages build and deployment" run is triggered by github-actions[bot], which
-      # this repository's Actions actor policy refuses).
+      # removed rather than create a GitHub-owned publishing exception or hand a repo-scoped
+      # PAT to a third-party publishing action.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -317,43 +345,125 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
-  # Stable required check for the E2E path. It always runs and reports a definitive verdict, so a
-  # path-filtered skip never leaves a required check stuck "Expected". Require THIS job ("E2E gate")
-  # in the branch ruleset — not "E2E", which is legitimately skipped on non-E2E PRs.
+  # Stable required E2E verdict. Exact-SHA manual evidence supplies this context
+  # when the ready run reuses its complete suite.
   e2e-gate:
     name: E2E gate
-    needs: [changes, e2e]
-    if: ${{ always() }}
+    needs: [policy, merge-evidence, preflight-evidence, e2e]
+    if: >-
+      always() && needs.policy.result == 'success' &&
+      ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
+      (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify E2E result
         run: |
-          changes='${{ needs.changes.result }}'
           e2e='${{ needs.e2e.result }}'
-          echo "Detect changes: $changes | E2E job: $e2e"
-          # A skip is only trustworthy when change detection itself succeeded and either the
-          # filter decided E2E wasn't needed or the PR is a draft (drafts cannot merge, and the
-          # ready_for_review trigger re-runs the suite on the head SHA before merge is possible).
-          # If the changes job failed or was cancelled, the E2E skip is an artifact of that
-          # failure, not an intentional opt-out — fail so it can't slip through.
-          if [ "$changes" != 'success' ]; then
-            echo "Change detection did not succeed ($changes); refusing to accept an E2E skip." >&2
-            exit 1
-          fi
-          # With change detection healthy: a skipped E2E job (filter opted out) is a pass, as is
-          # success; anything else (failure, cancelled) fails the gate.
-          if [ "$e2e" = 'success' ] || [ "$e2e" = 'skipped' ]; then
-            exit 0
-          fi
-          exit 1
+          echo "E2E job: $e2e"
+          test "$e2e" = success
 
   # Documentation governance (ENG-0009): the shared, zero-dependency docs-gov gate,
   # consumed from qwts/playbook-engineering per ENG-0004's reusable-workflow model so a
   # governance fix propagates to every repo without per-repo edits. photos' own rules —
   # include globs, indexes, token budgets, ADR Status field, stale-path scope — live in
   # docs-gov.config.json at the repo root (the workflow's default config path). A
-  # deterministic gate like lint/format, so it runs on every trigger including drafts.
+  # deterministic gate like lint/format, so every complete suite includes it.
   docs-gov:
     name: Docs governance
+    needs: [policy, merge-evidence, preflight-evidence]
+    if: >-
+      always() && needs.policy.result == 'success' &&
+      ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
+      (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     uses: qwts/playbook-engineering/.github/workflows/docs-governance.yml@0ab1396c527536627981b27473d38d5bbdef3138 # v1
+
+  codeql:
+    name: Advanced CodeQL
+    needs: [policy, merge-evidence, preflight-evidence]
+    if: >-
+      always() && needs.policy.result == 'success' &&
+      (needs.policy.outputs.run_post_merge == 'true' ||
+      (needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true'))
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+
+  post-merge:
+    name: Post-merge smoke
+    needs: [policy, merge-evidence]
+    if: needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated == 'true'
+    runs-on: ubuntu-latest
+    env:
+      INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/.interop-image-trail
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Checkout pinned Image Trail acceptance evidence
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qwts/image-trail
+          ref: cf3fe884c7729db73cfe0ddb7c90be6c4d881c09
+          path: .interop-image-trail
+          persist-credentials: false
+      - name: Interop integration smoke
+        run: npm run check:interop-acceptance
+
+  gate:
+    name: CI
+    needs: [policy, merge-evidence, preflight-evidence, ci, e2e-gate, docs-gov, codeql, post-merge]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce the selected lifecycle lane
+        env:
+          MODE: ${{ needs.policy.outputs.mode }}
+          POLICY: ${{ needs.policy.result }}
+          COMPLETE: ${{ needs.ci.result }}
+          E2E_GATE: ${{ needs.e2e-gate.result }}
+          DOCS_GOV: ${{ needs.docs-gov.result }}
+          CODEQL: ${{ needs.codeql.result }}
+          PREFLIGHT: ${{ needs.preflight-evidence.result }}
+          PREFLIGHT_VALIDATED: ${{ needs.preflight-evidence.outputs.validated }}
+          MERGE_VALIDATED: ${{ needs.merge-evidence.outputs.validated }}
+          POST_MERGE: ${{ needs.post-merge.result }}
+        run: |
+          test "$POLICY" = success
+          case "$MODE" in
+            full)
+              if [ "$PREFLIGHT_VALIDATED" = true ]; then
+                test "$PREFLIGHT" = success
+              else
+                test "$COMPLETE" = success
+                test "$E2E_GATE" = success
+                test "$DOCS_GOV" = success
+                test "$CODEQL" = success
+              fi
+              ;;
+            queue|manual)
+              test "$COMPLETE" = success
+              test "$E2E_GATE" = success
+              test "$DOCS_GOV" = success
+              test "$CODEQL" = success
+              ;;
+            post-merge)
+              test "$CODEQL" = success
+              if [ "$MERGE_VALIDATED" = true ]; then
+                test "$POST_MERGE" = success
+              else
+                test "$COMPLETE" = success
+                test "$E2E_GATE" = success
+                test "$DOCS_GOV" = success
+              fi
+              ;;
+            *) exit 1 ;;
+          esac

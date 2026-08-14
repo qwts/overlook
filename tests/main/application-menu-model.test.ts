@@ -73,7 +73,15 @@ test('macOS menu items are the exact per-menu spec order (#689)', () => {
     '—',
     'quit',
   ]);
-  assert.deepEqual(submenuLabels(template, 'File'), ['Import Photos…', 'Export…', '—', 'Switch Library…', 'Move Library…', 'New Library…']);
+  assert.deepEqual(submenuLabels(template, 'File'), [
+    'Import Photos…',
+    'Export…',
+    'Export All Unencrypted…',
+    '—',
+    'Switch Library…',
+    'Move Library…',
+    'New Library…',
+  ]);
   assert.deepEqual(submenuLabels(template, 'View'), [
     'All Photos',
     'Favorites',
@@ -181,6 +189,8 @@ test('File/Edit/View additions are target-aware and enabled with a library (#689
   assert.equal(commandEnabled('selection.clear', { ...grid, selectionCount: 2, editable: true }), false);
   // Feed has no view yet — it stays disabled.
   assert.equal(commandEnabled('view.mode.feed', grid), false);
+  assert.equal(commandEnabled('library.exportAll', grid), true);
+  assert.equal(commandEnabled('library.exportAll', { ...grid, protectedAlbumOpen: true }), false);
 });
 
 test('Photo menu commands resolve the lightbox target or the selection (#689)', () => {

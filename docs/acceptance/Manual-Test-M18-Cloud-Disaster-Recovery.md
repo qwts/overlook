@@ -109,6 +109,21 @@ The complete product checklist and recovery procedure are in
    album state, and open at least one original at full resolution.
 5. Repeat after cancelling during download; the next run must report resumable
    staged work and must not redownload already verified objects.
+6. Close Settings (or the restore dialog) while verify or restore is running.
+   The job must keep going. The status bar shows `Verifying N / total` or
+   `Restoring N / total`. Click the chip — or Settings → Restore library… —
+   and land on the current step with the same `N / total`, not a fresh setup
+   screen. Starting again must not be required; if the lock is still held the
+   dialog reattaches instead of showing “A restore is already running.”
+7. On a backup with extra missing/corrupt objects after the verify scan,
+   choose **Continue with verified only**. Restore must activate the verified
+   subset and list the extra gaps on the complete screen / `restore-report.json`,
+   not abort with “The backup changed after verification.”
+8. If verify reports a wall of NOT FOUND on a backup that just completed on
+   machine A, do not accept that as truth yet. A provider listing miss must
+   not hide objects `getStream` can still read. Retry once; a complete
+   backup should go straight to confirm (0 missing / 0 corrupt) and restore
+   the full photo count after relaunch.
 
 If the completed real library says **Wrong key**, compare the recovery-key
 fingerprint with machine A. If it says **Corrupt**, capture the library ID and

@@ -4,6 +4,7 @@
 
 import type { MediaInfo } from './media-info.js';
 import type { PreviewFailureReason } from './preview.js';
+import type { PhotoMetadataFields } from './photo-metadata.js';
 
 // ADR-0026 §1: containers do not get kinds — an MP4, a MOV, a WebM, and an
 // MPEG-TS are all `video`; their container × codec facts live in the probed
@@ -24,7 +25,7 @@ export type SyncStatus = 'local' | 'syncing' | 'synced' | 'offloaded' | 'error';
 /** Local comparison between embedded metadata and a successful pixel decode. */
 export type DimensionStatus = 'legacy' | 'verified' | 'metadata-mismatch' | 'unavailable';
 
-export interface PhotoRecord {
+export interface PhotoRecord extends PhotoMetadataFields {
   readonly id: string;
   readonly fileName: string;
   readonly fileKind: FileKind;
@@ -61,15 +62,22 @@ export interface PhotoRecord {
 
 export type PhotoInsert = Omit<
   PhotoRecord,
-  'favorite' | 'isOriginal' | 'deletedAt' | 'previewFailure' | 'dimensionStatus' | 'syncState' | 'mediaInfo'
+  'favorite' | 'isOriginal' | 'deletedAt' | 'previewFailure' | 'dimensionStatus' | 'syncState' | 'mediaInfo' | keyof PhotoMetadataFields
 > & {
   readonly favorite?: boolean;
   /** Optional like favorite: most kinds have no probed facts to record. */
   readonly mediaInfo?: MediaInfo | null | undefined;
+  readonly title?: string | null | undefined;
+  readonly description?: string | null | undefined;
+  readonly userTags?: readonly string[] | undefined;
+  readonly importedKeywords?: readonly string[] | undefined;
+  readonly suppressedKeywords?: readonly string[] | undefined;
+  readonly metadataVersion?: number | undefined;
 };
 
 /** The sidebar's library sources (design §Sidebar). */
 export type SourceFilter = 'all' | 'favorites' | 'recent' | 'offloaded' | 'deleted';
+export type LibraryMembershipChange = 'none' | 'favorite' | 'album' | 'library';
 
 /** The grid's sort orders (#113): date newest-first, name A→Z, size
  * largest-first (decisions recorded on the PR). */
@@ -90,13 +98,12 @@ export interface ChipFilters {
   readonly localOnly?: boolean | undefined;
 }
 
-export interface PageRequest {
+/** The complete logical collection query shared by paging and Select All. */
+export interface LibraryQuery {
   readonly source: SourceFilter;
-  readonly limit: number;
-  readonly cursor?: PageCursor | undefined;
   /** 'recent' cutoff (ISO); callers own the "recent" window policy. */
   readonly recentSince?: string | undefined;
-  /** FTS5-ranked search over name/place/camera, prefix-matched per token
+  /** FTS5-ranked search over name/title/description/tags/place/camera, prefix-matched per token
    * (#390). Falls back to a case-insensitive substring match if the query
    * has no tokenizable content. */
   readonly query?: string | undefined;
@@ -107,9 +114,29 @@ export interface PageRequest {
   readonly albumId?: string | undefined;
 }
 
+export interface PageRequest extends LibraryQuery {
+  readonly limit: number;
+  readonly cursor?: PageCursor | undefined;
+}
+
 export interface PageResult {
   readonly photos: readonly PhotoRecord[];
   readonly nextCursor: PageCursor | null;
+}
+
+export interface SelectionRangeRequest {
+  readonly source: SourceFilter;
+  readonly anchorId: string;
+  readonly targetId: string;
+  readonly recentSince?: string | undefined;
+  readonly query?: string | undefined;
+  readonly chips?: ChipFilters | undefined;
+  readonly order?: SortOrder | undefined;
+  readonly albumId?: string | undefined;
+}
+
+export interface SelectionRangeResult {
+  readonly photoIds: readonly string[];
 }
 
 export type SourceCounts = Readonly<Record<SourceFilter, number>>;

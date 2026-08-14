@@ -10,6 +10,20 @@ is not restore-ready merely because account connection or object upload works.
 | Google Drive | Scripted unit + shared contract in PR #344          | Shared contract in PR #344     | Pending owner OAuth client/account                                                             | Live gate pending |
 | iCloud Drive | Scripted native authority + shared contract in #657 | Shared contract in #657        | Passed 2026-07-22 ([run 29886355588](https://github.com/qwts/photos/actions/runs/29886355588)) | Passed            |
 
+## Account authority identity
+
+Connection is complete only after the adapter returns and persists a stable,
+non-secret account subject. Provider status exposes the label, never the
+credential or subject ID. Missing identity is a typed retryable connection
+failure and cannot activate the provider.
+
+| Provider     | Stable subject                | Display label                 | Contract evidence                                  |
+| ------------ | ----------------------------- | ----------------------------- | -------------------------------------------------- |
+| Local mock   | `mock-account` (overridable)  | Test-overridable              | Capture, replacement, unavailable                  |
+| pCloud       | `userinfo.userid`             | `userinfo.email`              | Scripted capture/change/unavailable + restart      |
+| Google Drive | `about.user.permissionId`     | `about.user.emailAddress`     | Scripted capture/change/unavailable + restart      |
+| iCloud Drive | Pinned ubiquity account token | OS label, or `iCloud account` | Deterministic capture/change/unavailable + restart |
+
 ## Required restore contract
 
 Every provider must run the same `exerciseRestoreProviderContract` and
