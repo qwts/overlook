@@ -688,6 +688,10 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await expect(body.getByText('1 retained fallback generation available')).toBeVisible();
     await expect(body.getByText('Verified staged work is ready to resume')).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: 'Verify backup' }));
+    // #994: a clean verify stays on the results screen. Heal is the explicit
+    // step to the confirmation; it is no longer an automatic advance.
+    const heal = await waitFor(() => body.getByRole('button', { name: /^Heal\b/u }));
+    await userEvent.click(heal);
     await waitFor(() => expect(body.getByText('This replaces the active library.')).toBeVisible());
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeDisabled();
     await userEvent.click(

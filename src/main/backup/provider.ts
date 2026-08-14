@@ -107,6 +107,11 @@ export interface StorageProvider {
 
   getStream(path: string): Promise<Readable>;
 
+  /** Existence and size without transferring the object body. Restore
+   * verify uses this for originals so a metered account is not billed for
+   * a full library download before the user chooses to restore. */
+  probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }>;
+
   /** Entries under `prefix`, non-recursive semantics left to adapters —
    * the engine only lists blob fan-out directories and manifest/. */
   list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]>;

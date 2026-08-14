@@ -2082,6 +2082,30 @@
       ]
     },
     {
+      "id": "994-restore-verify-results-no-quit",
+      "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Verify originals with probe (no body download), always show Heal / Discard / Do nothing, move gaps aside on heal, and do not quit (#994).",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/backup/restore-verify.test.ts",
+            "tests/backup/restore-heal.test.ts",
+            "tests/backup/restore-coordinator.test.ts",
+            "tests/dom/restore-workflow-reopen.test.tsx"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Owner verifies the results screen and no automatic quit on a real pCloud restore in docs/acceptance/Manual-Test-M18-Cloud-Disaster-Recovery.md steps 4 and 8."
+        }
+      ]
+    },
+    {
       "id": "969-restore-list-is-not-presence",
       "wiki": "User-Story-M18-Recovery-key",
       "$note": "Verify and restore classify not-found only from getStream ProviderError.kind === 'not-found'. provider.list is a disk-space hint; a listing miss that getStream can still read must restore (#969).",

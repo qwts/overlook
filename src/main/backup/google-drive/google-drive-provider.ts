@@ -229,6 +229,14 @@ export class GoogleDriveProvider implements StorageProvider {
     return Readable.fromWeb(response.body);
   }
 
+  async probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    const file = await this.resolveFile(path, true, signal);
+    if (file === null) throw new ProviderError(`no Google Drive entry at ${path}`, 'not-found');
+    const bytes = bytesOf(file.metadata.size);
+    if (bytes === null) throw new ProviderError(`Google Drive entry at ${path} has no size`, 'transient');
+    return { bytes };
+  }
+
   async list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]> {
     if (prefix !== '.') assertSafeRemotePath(prefix);
     const normalized = prefix === '.' ? '' : prefix;

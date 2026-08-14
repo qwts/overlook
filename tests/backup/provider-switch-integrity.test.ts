@@ -42,6 +42,7 @@ function providerWithId(id: string, inner: StorageProvider): StorageProvider {
     accountIdentity: (signal) => inner.accountIdentity(signal),
     put: (path, bytes) => inner.put(path, bytes),
     getStream: (path) => inner.getStream(path),
+    probe: (path, signal) => inner.probe(path, signal),
     list: (prefix, signal) => inner.list(prefix, signal),
     delete: (path) => inner.delete(path),
     quota: (signal) => inner.quota(signal),

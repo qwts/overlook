@@ -9,9 +9,10 @@ import { OsCredentialAnchorStore } from '../crypto/credential-anchor.js';
 import { TestFileCredentialAnchorStore } from '../crypto/test-credential-anchor.js';
 import type { SafeStorageLike } from '../crypto/keystore.js';
 
-// RestoreRuntime wiring (#291), extracted from the composition root. The
-// relaunch after activation is the production path; the harness opts out to
-// assert on the activated state in-process.
+// RestoreRuntime wiring (#291), extracted from the composition root.
+// Activation does not quit the process (#994): the complete screen is the
+// recovery result. The harness OVERLOOK_RESTORE_NO_RELAUNCH flag is kept so
+// existing tests still opt out of a no-op.
 
 export interface RestoreRuntimeFactoryOptions {
   readonly targetDir: string;
@@ -82,11 +83,8 @@ export function createRestoreRuntime(options: RestoreRuntimeFactoryOptions): Res
     workStarted: () => options.workChanged(1),
     workFinished: () => options.workChanged(-1),
     activated: () => {
-      if (options.harnessEnv('OVERLOOK_RESTORE_NO_RELAUNCH') === '1') return;
-      setTimeout(() => {
-        app.relaunch();
-        app.exit(0);
-      }, 250);
+      // Do not quit. Recovery stays on the complete screen so the user can
+      // see what restored. Opening the new catalog is a restart they choose.
     },
   });
 }
