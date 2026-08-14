@@ -171,6 +171,12 @@ and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
 identity entitlements are included only when `MAC_PROVISIONING_PROFILE` is also
 present and validated.
 
+Release passes credentials to the reusable Package workflow through an explicit
+allowlist, never `secrets: inherit`. Package declares every accepted installed-app
+OAuth and signing input; its matrix resolves Apple signing values only on macOS
+and Azure signing values only on Windows. Adding a Package credential requires a
+reviewed update to both the declared interface and the Release mapping.
+
 Every tag publishes as a GitHub prerelease regardless of signing availability.
 Each clickable mac and Windows installer asset is labeled `signed` or `unsigned`
 from its own platform gate; signing state never changes the release title or

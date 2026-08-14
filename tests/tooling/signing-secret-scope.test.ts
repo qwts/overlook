@@ -17,6 +17,42 @@ function workflowStep(workflow: string, name: string, nextName: string): string 
   return workflow.slice(start, end);
 }
 
+const PACKAGE_SECRETS = [
+  'GOOGLE_DRIVE_CLIENT_ID',
+  'GOOGLE_DRIVE_CLIENT_SECRET',
+  'PCLOUD_CLIENT_ID',
+  'CSC_LINK',
+  'CSC_KEY_PASSWORD',
+  'MAC_PROVISIONING_PROFILE',
+  'FILE_PROVIDER_PROVISIONING_PROFILE',
+  'APPLE_API_KEY',
+  'APPLE_API_KEY_ID',
+  'APPLE_API_ISSUER',
+  'AZURE_TENANT_ID',
+  'AZURE_CLIENT_ID',
+  'AZURE_CLIENT_SECRET',
+] as const;
+
+const APPLE_PACKAGE_ENV = [
+  ['CSC_LINK', 'CSC_LINK'],
+  ['CSC_KEY_PASSWORD', 'CSC_KEY_PASSWORD'],
+  ['MAC_PROVISIONING_PROFILE_B64', 'MAC_PROVISIONING_PROFILE'],
+  ['FILE_PROVIDER_PROVISIONING_PROFILE_B64', 'FILE_PROVIDER_PROVISIONING_PROFILE'],
+  ['APPLE_API_KEY_B64', 'APPLE_API_KEY'],
+  ['APPLE_API_KEY_ID', 'APPLE_API_KEY_ID'],
+  ['APPLE_API_ISSUER', 'APPLE_API_ISSUER'],
+] as const;
+
+const AZURE_PACKAGE_ENV = [
+  ['AZURE_TENANT_ID', 'AZURE_TENANT_ID'],
+  ['AZURE_CLIENT_ID', 'AZURE_CLIENT_ID'],
+  ['AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET'],
+] as const;
+
+function sorted(values: Iterable<string>): string[] {
+  return [...values].sort();
+}
+
 // Signing material must never be visible to the build phase: a compromised
 // build-time dependency running under electron-vite could exfiltrate the mac
 // certificate or the Azure Trusted Signing service principal and sign malware
@@ -42,6 +78,48 @@ describe('signing secret scope (#855)', () => {
     // Only the build-free dist* scripts may run under the signing env — the
     // compound package* scripts rebuild first.
     assert.doesNotMatch(pkg, /npm run "?package/u);
+  });
+
+  test('the reusable Package workflow declares exactly the credentials it consumes', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const workflowCall = workflow.split('  workflow_call:')[1]?.split('\npermissions:')[0] ?? '';
+    const declarationBlock = workflowCall.split('    secrets:')[1] ?? '';
+    const declared = [...declarationBlock.matchAll(/^ {6}([A-Z0-9_]+):$/gmu)].map((match) => match[1] ?? '');
+    const consumed = [...workflow.matchAll(/secrets\.([A-Z0-9_]+)/gu)].map((match) => match[1] ?? '');
+
+    assert.deepEqual(sorted(declared), sorted(PACKAGE_SECRETS));
+    assert.deepEqual(sorted(new Set(consumed)), sorted(PACKAGE_SECRETS));
+    for (const secret of PACKAGE_SECRETS) {
+      assert.match(declarationBlock, new RegExp(`^ {6}${secret}:\\n {8}required: false$`, 'mu'));
+    }
+  });
+
+  test('Release passes only the declared Package credentials', () => {
+    const release = source('.github/workflows/release.yml');
+    const build = release.split('\n  build:')[1]?.split('\n  publish:')[0] ?? '';
+    const mappings = [...build.matchAll(/^ {6}([A-Z0-9_]+): \$\{\{ secrets\.([A-Z0-9_]+) \}\}$/gmu)].map((match) => {
+      assert.equal(match[1], match[2], 'Package secret names must not be remapped');
+      return match[1] ?? '';
+    });
+
+    assert.deepEqual(sorted(mappings), sorted(PACKAGE_SECRETS));
+    assert.doesNotMatch(build, /secrets: inherit/u);
+  });
+
+  test('each signing platform receives only its own credential values', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const pkg = workflowStep(workflow, 'Package', 'Upload artifacts');
+
+    for (const [env, secret] of APPLE_PACKAGE_ENV) {
+      const expected = `${env}: ` + "${{ runner.os == 'macOS' && secrets." + secret + " || '' }}";
+      assert.ok(pkg.includes(expected));
+      assert.equal(pkg.split(`secrets.${secret}`).length - 1, 1);
+    }
+    for (const [env, secret] of AZURE_PACKAGE_ENV) {
+      const expected = `${env}: ` + "${{ runner.os == 'Windows' && secrets." + secret + " || '' }}";
+      assert.ok(pkg.includes(expected));
+      assert.equal(pkg.split(`secrets.${secret}`).length - 1, 1);
+    }
   });
 
   test('dist scripts package without rebuilding; package scripts compose build + dist', () => {
