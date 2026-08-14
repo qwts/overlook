@@ -690,7 +690,9 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Verify backup' }));
     await waitFor(() => expect(body.getByText('This replaces the active library.')).toBeVisible());
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeDisabled();
-    await userEvent.click(body.getByRole('checkbox'));
+    await userEvent.click(
+      body.getByRole('checkbox', { name: 'I understand that the active local library will be replaced after validation.' }),
+    );
     await expect(body.getByRole('button', { name: 'Restore 1,542 photos' })).toBeEnabled();
     await userEvent.click(body.getByRole('button', { name: 'Restore 1,542 photos' }));
     await waitFor(() => expect(body.getByText('Restore complete')).toBeVisible());
