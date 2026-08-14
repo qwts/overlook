@@ -45,6 +45,7 @@ import { photoMetadataChannels } from './photo-metadata-channels.js';
 import { exportChannels } from './export-channels.js';
 import { nativeDragChannels } from './native-drag-channels.js';
 import { photoKitChannels, photoKitEvents } from './photo-kit-channels.js';
+import { fileProviderChannels } from './file-provider-channels.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
@@ -350,6 +351,7 @@ export const channels = {
   ...photoMetadataChannels,
   ...nativeDragChannels,
   ...photoKitChannels,
+  ...fileProviderChannels,
   libraryRepairDimensions: defineChannel(
     'library:repair-dimensions',
     z.object({

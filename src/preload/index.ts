@@ -40,6 +40,8 @@ const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTranspor
 const photoKitStatus = createInvoker(channels.photoKitStatus, invokeTransport);
 const photoKitImportReview = createInvoker(channels.photoKitImportReview, invokeTransport);
 const photoKitCancel = createInvoker(channels.photoKitCancel, invokeTransport);
+const fileProviderStatus = createInvoker(channels.fileProviderStatus, invokeTransport);
+const fileProviderDisable = createInvoker(channels.fileProviderDisable, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
@@ -209,6 +211,11 @@ const overlook: OverlookApi = {
       await photoKitCancel({});
     },
     onProgress: createSubscriber(events.photoKitProgress, subscribeTransport),
+  }),
+  fileProvider: Object.freeze({
+    status: async () => fileProviderStatus({}),
+    enable: createInvoker(channels.fileProviderEnable, invokeTransport),
+    disable: async () => fileProviderDisable({}),
   }),
   activity: Object.freeze({
     page: createInvoker(channels.activityPage, invokeTransport),

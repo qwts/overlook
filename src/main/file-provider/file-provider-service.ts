@@ -110,6 +110,10 @@ export class FileProviderService {
     return { ...native, config: this.deps.admit() ? this.deps.store.load() : disabledFileProviderConfig };
   }
 
+  availableAlbums(): readonly AlbumSummary[] {
+    return this.deps.admit() ? this.deps.albums() : [];
+  }
+
   async enable(scope: FileProviderScope, consentVersion: number): Promise<FileProviderStatus> {
     this.requireOpen();
     if (consentVersion !== FILE_PROVIDER_CONSENT_VERSION) throw new Error('File Provider disclosure must be accepted');

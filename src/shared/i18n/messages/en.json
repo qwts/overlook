@@ -1499,6 +1499,57 @@
   "settings.diagnostics.title": {
     "defaultMessage": "Review diagnostics"
   },
+  "settings.fileProvider.album": {
+    "defaultMessage": "{name} ({count})"
+  },
+  "settings.fileProvider.albums": {
+    "defaultMessage": "Albums available to Finder"
+  },
+  "settings.fileProvider.consent": {
+    "defaultMessage": "I understand that Finder decrypts originals on demand and macOS may cache those plaintext copies outside Overlook."
+  },
+  "settings.fileProvider.disable": {
+    "defaultMessage": "Disable Finder access"
+  },
+  "settings.fileProvider.disableError": {
+    "defaultMessage": "Finder access could not be disabled."
+  },
+  "settings.fileProvider.disabling": {
+    "defaultMessage": "Disabling…"
+  },
+  "settings.fileProvider.enable": {
+    "defaultMessage": "Enable Finder access"
+  },
+  "settings.fileProvider.enableError": {
+    "defaultMessage": "Finder access could not be enabled."
+  },
+  "settings.fileProvider.enabledDisclosure": {
+    "defaultMessage": "Finder access is on. macOS may retain downloaded copies after Overlook locks; disabling requests eviction but cannot guarantee immediate deletion from every system cache."
+  },
+  "settings.fileProvider.enabling": {
+    "defaultMessage": "Enabling…"
+  },
+  "settings.fileProvider.hint": {
+    "defaultMessage": "Expose explicitly selected ordinary photos as a read-only macOS File Provider location."
+  },
+  "settings.fileProvider.label": {
+    "defaultMessage": "Finder access"
+  },
+  "settings.fileProvider.scope": {
+    "defaultMessage": "Finder access scope"
+  },
+  "settings.fileProvider.selectedAlbums": {
+    "defaultMessage": "Selected albums"
+  },
+  "settings.fileProvider.statusError": {
+    "defaultMessage": "File Provider status could not be loaded."
+  },
+  "settings.fileProvider.unavailable": {
+    "defaultMessage": "Finder access requires the signed macOS app and its bundled File Provider extension."
+  },
+  "settings.fileProvider.wholeLibrary": {
+    "defaultMessage": "Whole library"
+  },
   "settings.general.appearance": {
     "defaultMessage": "Appearance"
   },

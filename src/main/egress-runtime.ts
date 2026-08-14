@@ -14,6 +14,10 @@ import { TestPhotoKitBridge } from './photo-kit/test-photo-kit-bridge.js';
 import { cleanupPhotoKitStage } from './photo-kit/photo-kit-staging.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { applicationEvents } from './application-events.js';
+import { createFileProviderBridge } from './file-provider/file-provider-bridge.js';
+import { FileProviderService } from './file-provider/file-provider-service.js';
+import { FileProviderStore } from './file-provider/file-provider-store.js';
+import path from 'node:path';
 
 export interface EgressRuntimeOptions {
   readonly parts: () => LibraryParts;
@@ -22,12 +26,15 @@ export interface EgressRuntimeOptions {
   readonly dataDir: () => string;
   readonly harnessEnv: (name: string) => string | undefined;
   readonly unlocked: () => boolean;
+  readonly library: () => { readonly id: string; readonly name: string };
 }
 
 export class EgressRuntime {
   private exportFacade: DrainableExportFacade | undefined;
   private dragOut: NativeDragOutService | undefined;
   private photoKitService: PhotoKitService | undefined;
+  private fileProviderService: FileProviderService | undefined;
+  private fileProviderClose: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: EgressRuntimeOptions) {}
 
@@ -95,10 +102,38 @@ export class EgressRuntime {
     return this.photoKitService;
   }
 
+  fileProvider(): FileProviderService {
+    if (this.fileProviderService !== undefined) return this.fileProviderService;
+    const parts = this.options.parts();
+    const repo = new PhotosRepository(parts.db);
+    const service = new FileProviderService({
+      bridge: createFileProviderBridge({ platform: process.platform, packaged: app.isPackaged }),
+      store: new FileProviderStore(path.join(this.options.dataDir(), 'file-provider.json')),
+      library: this.options.library(),
+      albums: () => repo.albums(),
+      selectPhotoIds: (albumId) => repo.selectAllIds({ source: 'all', ...(albumId === undefined ? {} : { albumId }) }),
+      getPhoto: (photoId) => repo.get(photoId),
+      isMigrating: (photoId) => repo.isInProtectedMigration(photoId),
+      openOriginal: async (photo) => {
+        const ephemeral = this.options.ephemeral();
+        const opened = await ephemeral.open(photo.id, 'export');
+        return {
+          stream: opened.stream,
+          release: opened.custody === 'ephemeral' ? () => ephemeral.release(photo.id, 'export') : undefined,
+        };
+      },
+      admit: () => this.options.unlocked() && this.options.parts() === parts,
+    });
+    this.fileProviderService = service;
+    void service.reconcile().catch(() => undefined);
+    return service;
+  }
+
   close(): void {
     this.exportFacade?.close();
     this.dragOut?.close();
     this.photoKitService?.close();
+    this.fileProviderClose = this.fileProviderService?.close() ?? Promise.resolve();
   }
 
   drain(): Promise<void> {
@@ -106,6 +141,7 @@ export class EgressRuntime {
       this.exportFacade?.drain() ?? Promise.resolve(),
       this.dragOut?.drain() ?? Promise.resolve(),
       this.photoKitService?.drain() ?? Promise.resolve(),
+      this.fileProviderClose,
     ]).then(() => undefined);
   }
 
@@ -113,5 +149,7 @@ export class EgressRuntime {
     this.exportFacade = undefined;
     this.dragOut = undefined;
     this.photoKitService = undefined;
+    this.fileProviderService = undefined;
+    this.fileProviderClose = Promise.resolve();
   }
 }
