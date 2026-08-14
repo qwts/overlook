@@ -729,7 +729,11 @@ export const channels = {
     ]),
   ),
   /** Native directory picker for the create flow's location (#386). */
-  libraryRegistryPickLocation: defineChannel('library-registry:pick-location', z.object({}), z.object({ path: z.string().nullable() })),
+  libraryRegistryPickLocation: defineChannel(
+    'library-registry:pick-location',
+    z.object({}),
+    z.object({ path: z.string().nullable(), authorization: z.string().nullable() }),
+  ),
   // Library relocation (#483, ADR-0022 §1): journaled move with an atomic
   // registry path rewrite as the commit point. Designed refusals (the §5
   // preflight matrix, verification failure, cancellation) are RESPONSE
@@ -737,7 +741,7 @@ export const channels = {
   // moved-cleanup-pending is a success variant reporting both paths.
   libraryRelocationMove: defineChannel(
     'library-relocation:move',
-    z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
+    z.object({ id: libraryIdSchema, destPath: z.string().min(1), authorization: z.string().min(1) }),
     relocationMoveResponseSchema,
   ),
   /** Cancel the in-flight move for a library — honored at file boundaries,
@@ -760,7 +764,7 @@ export const channels = {
    * warning — no lock, no journal, no bytes moved. */
   libraryRelocationPreflight: defineChannel(
     'library-relocation:preflight',
-    z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
+    z.object({ id: libraryIdSchema, destPath: z.string().min(1), authorization: z.string().min(1) }),
     z.discriminatedUnion('ok', [
       z.object({
         ok: z.literal(true),

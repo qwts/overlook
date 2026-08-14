@@ -86,7 +86,7 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
     pendingMoves: () => Promise.resolve({ pending: [] }),
     pickLocation: () => {
       calls.push('pick-location');
-      return Promise.resolve({ path: '/Volumes/External/Overlook' });
+      return Promise.resolve({ path: '/Volumes/External/Overlook', authorization: 'story-authorization' });
     },
     onMoveProgress: () => () => undefined,
   } as unknown as OverlookApi['libraries'];

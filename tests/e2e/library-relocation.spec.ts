@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Page } from '@playwright/test';
@@ -33,7 +33,9 @@ async function moveLibrary(
     .evaluate(
       async ({ target, dest }) => {
         const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
-        return overlook.libraries.move({ id: target, destPath: dest });
+        const { authorization } = await overlook.libraries.pickLocation();
+        if (authorization === null) throw new Error('relocation picker was cancelled');
+        return overlook.libraries.move({ id: target, destPath: dest, authorization });
       },
       { target: id, dest: destPath },
     )
@@ -59,10 +61,13 @@ async function libraryPath(page: Page, id: string): Promise<{ path: string; open
 test('ACCEPTANCE: an inactive library moves to a new folder and the registry follows (#483 acceptance 1)', async ({ launchOverlook }) => {
   // Budget: launch+ready (≤30s staged) + an inactive move (no reload, ~1s).
   test.setTimeout(60_000);
-  const { page, userData } = await launchOverlook({ prefix: 'overlook-e2e-reloc-', env: { OVERLOOK_SEED: '1' } });
+  const destRoot = mkE2eTmpDir('overlook-e2e-reloc-direct-dest-');
+  const { page } = await launchOverlook({
+    prefix: 'overlook-e2e-reloc-',
+    env: { OVERLOOK_SEED: '1', OVERLOOK_PICK_LIBRARY_DIR: destRoot },
+  });
   const secondId = await createSecondLibrary(page);
-  const dest = join(userData, 'moved', 'Second');
-  mkdirSync(join(userData, 'moved'), { recursive: true });
+  const dest = join(destRoot, 'Second');
 
   const outcome = await moveLibrary(page, secondId, dest);
   expect(outcome).toMatchObject({ ok: true, outcome: 'moved' });
@@ -76,18 +81,18 @@ test('ACCEPTANCE: the ACTIVE library moves (copy mode), reopens from the destina
   // Budget: launch+ready (≤30s staged) + copy-mode move with an in-place
   // renderer reload (≤30s staged via expectRendererReload).
   test.setTimeout(90_000);
+  const destRoot = mkE2eTmpDir('overlook-e2e-reloc-active-dest-');
   const launched = await launchOverlook({
     prefix: 'overlook-e2e-reloc-active-',
-    env: { OVERLOOK_SEED: '3', OVERLOOK_RELOCATION_FORCE_COPY: '1' },
+    env: { OVERLOOK_SEED: '3', OVERLOOK_RELOCATION_FORCE_COPY: '1', OVERLOOK_PICK_LIBRARY_DIR: destRoot },
   });
-  const { page, userData } = launched;
+  const { page } = launched;
   await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
   const activeId = await page.evaluate(async () => {
     const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
     return (await overlook.libraries.current()).library.id;
   });
-  const dest = join(userData, 'moved', 'Active');
-  mkdirSync(join(userData, 'moved'), { recursive: true });
+  const dest = join(destRoot, 'Active');
 
   // The move reactivates + reloads the window from the destination; the
   // helper arms the navigation listener before the trigger so the reload
@@ -102,15 +107,20 @@ test('ACCEPTANCE: pre-commit crashes offer verified resume; post-commit recovery
 }) => {
   test.setTimeout(300_000);
   for (const point of ['after-copy', 'after-verify', 'after-activate', 'after-commit'] as const) {
+    const destRoot = mkE2eTmpDir(`overlook-e2e-reloc-crash-dest-${point}-`);
     const crashed: LaunchedApp = await launchOverlook({
       prefix: `overlook-e2e-reloc-crash-${point}-`,
-      env: { OVERLOOK_SEED: '1', OVERLOOK_RELOCATION_FORCE_COPY: '1', OVERLOOK_RELOCATION_FAULT: point },
+      env: {
+        OVERLOOK_SEED: '1',
+        OVERLOOK_RELOCATION_FORCE_COPY: '1',
+        OVERLOOK_RELOCATION_FAULT: point,
+        OVERLOOK_PICK_LIBRARY_DIR: destRoot,
+      },
     });
     const { page, userData } = crashed;
     const secondId = await createSecondLibrary(page);
     const sourcePath = (await libraryPath(page, secondId))?.path ?? '';
-    const dest = join(userData, 'moved', 'Second');
-    mkdirSync(join(userData, 'moved'), { recursive: true });
+    const dest = join(destRoot, 'Second');
 
     await moveLibrary(page, secondId, dest);
     await appExited(crashed);
@@ -145,12 +155,16 @@ test('ACCEPTANCE: pre-commit crashes offer verified resume; post-commit recovery
 
 test('ACCEPTANCE: a non-empty destination refuses — never overwrites, never merges (#483 acceptance 7)', async ({ launchOverlook }) => {
   test.setTimeout(60_000);
-  const { page, userData } = await launchOverlook({ prefix: 'overlook-e2e-reloc-refuse-', env: { OVERLOOK_SEED: '1' } });
+  const occupied = mkE2eTmpDir('overlook-e2e-reloc-occupied-');
+  writeFileSync(join(occupied, 'occupied'), 'keep');
+  const { page } = await launchOverlook({
+    prefix: 'overlook-e2e-reloc-refuse-',
+    env: { OVERLOOK_SEED: '1', OVERLOOK_PICK_LIBRARY_DIR: occupied },
+  });
   const secondId = await createSecondLibrary(page);
   const before = (await libraryPath(page, secondId))?.path ?? '';
 
-  // The profile directory itself is occupied — a guaranteed-non-empty target.
-  const outcome = await moveLibrary(page, secondId, userData);
+  const outcome = await moveLibrary(page, secondId, occupied);
   expect(outcome).toMatchObject({ ok: false });
   expect(await libraryPath(page, secondId)).toMatchObject({ path: before });
   expect(existsSync(join(before, 'library-id'))).toBe(true);

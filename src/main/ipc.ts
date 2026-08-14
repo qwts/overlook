@@ -9,6 +9,7 @@ import type { HandlerErrorReport } from '../shared/ipc/registry.js';
 import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js';
 import type { LibraryDescriptor } from '../shared/library/registry.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
+import { relocationDestinationAuthorization } from './library/relocation-destination-authorization.js';
 import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../shared/backup/provider-descriptor.js';
 import type { RestoreDiscoverResponse, RestoreRunResponse } from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
@@ -396,7 +397,10 @@ export function registerLibraryRegistryHandlers(getFacade: () => LibraryRegistry
     validateHandler(channels.libraryRegistryAdd, ({ path }) => getFacade().add(path))(request),
   );
   ipcMain.handle(channels.libraryRegistryPickLocation.name, (_event, request: unknown) =>
-    validateHandler(channels.libraryRegistryPickLocation, () => getFacade().pickLocation())(request),
+    validateHandler(channels.libraryRegistryPickLocation, async () => {
+      const { path } = await getFacade().pickLocation();
+      return { path, authorization: path === null ? null : relocationDestinationAuthorization.authorize(path) };
+    })(request),
   );
 }
 
@@ -408,7 +412,12 @@ export type RelocationFacade = Pick<RelocationRuntime, 'move' | 'resume' | 'disc
 // is refused by the runtime while locked ('app-locked' designed refusal).
 export function registerRelocationHandlers(getRuntime: () => RelocationFacade): void {
   ipcMain.handle(channels.libraryRelocationMove.name, (_event, request: unknown) =>
-    validateHandler(channels.libraryRelocationMove, ({ id, destPath }) => getRuntime().move(id, destPath))(request),
+    validateHandler(channels.libraryRelocationMove, ({ id, destPath, authorization }) => {
+      if (!relocationDestinationAuthorization.permits(authorization, destPath)) {
+        throw new Error('relocation destination is not authorized');
+      }
+      return getRuntime().move(id, destPath);
+    })(request),
   );
   ipcMain.handle(channels.libraryRelocationCancel.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationCancel, ({ id }) => ({ cancelled: getRuntime().cancel(id) }))(request),
@@ -420,7 +429,12 @@ export function registerRelocationHandlers(getRuntime: () => RelocationFacade): 
     validateHandler(channels.libraryRelocationDiscard, async ({ id }) => ({ result: await getRuntime().discard(id) }))(request),
   );
   ipcMain.handle(channels.libraryRelocationPreflight.name, (_event, request: unknown) =>
-    validateHandler(channels.libraryRelocationPreflight, ({ id, destPath }) => getRuntime().probe(id, destPath))(request),
+    validateHandler(channels.libraryRelocationPreflight, ({ id, destPath, authorization }) => {
+      if (!relocationDestinationAuthorization.permits(authorization, destPath)) {
+        throw new Error('relocation destination is not authorized');
+      }
+      return getRuntime().probe(id, destPath);
+    })(request),
   );
   ipcMain.handle(channels.libraryRelocationFinishCleanup.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationFinishCleanup, async ({ id }) => ({ result: await getRuntime().finishCleanup(id) }))(request),

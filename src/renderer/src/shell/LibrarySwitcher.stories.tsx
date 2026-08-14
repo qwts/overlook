@@ -69,7 +69,7 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
     },
     pickLocation: () => {
       calls.push('pick-location');
-      return Promise.resolve({ path: '/Users/ansel/External/NewHome' });
+      return Promise.resolve({ path: '/Users/ansel/External/NewHome', authorization: 'story-authorization' });
     },
     // The per-row Move action mounts the wizard, which subscribes and probes.
     onMoveProgress: () => () => undefined,

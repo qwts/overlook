@@ -195,6 +195,15 @@ library, independent progress and per-library results. There is no
 cross-library transaction: one library's failure never rolls back another's
 commit.
 
+### 8. Amendment: destination authorization
+
+Relocation destinations cross the renderer-to-main filesystem boundary. The
+main process therefore issues an unguessable authorization when its native
+directory picker returns, binds that authorization to the selected root, and
+rejects preflight or move requests outside that root. A renderer-provided path
+alone is never authority to write, move, or delete library data. One picker
+authorization may cover the child destinations of a multi-library move (§7).
+
 ## Consequences
 
 - **Easier**: relocation composes already-accepted machinery — identity (§2),

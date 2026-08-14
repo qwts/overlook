@@ -197,7 +197,8 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
   // Open library moves LAST: its reactivation reloads this window.
   const ordered = [...libraries].sort((a, b) => Number(a.open) - Number(b.open));
   const [phase, setPhase] = useState<WizardPhase>('review');
-  const [root, setRoot] = useState<string | null>(null);
+  const [destination, setDestination] = useState<{ root: string; authorization: string } | null>(null);
+  const root = destination?.root ?? null;
   const [rows, setRows] = useState<readonly Row[]>(ordered.map((lib) => ({ lib, status: 'pending', destPath: null })));
   const [activeIndex, setActiveIndex] = useState(-1);
   const [progress, setProgress] = useState<{
@@ -224,11 +225,11 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
   // 'destination-not-empty' probe is informational — the move itself retries
   // collision-safe numbered names; every other refusal blocks Start honestly.
   useEffect(() => {
-    if (root === null) return;
+    if (root === null || destination === null) return;
     let stale = false;
     for (const lib of ordered) {
       void window.overlook.libraries
-        .probeMove({ id: lib.id, destPath: destFor(lib, root, 1) })
+        .probeMove({ id: lib.id, destPath: destFor(lib, root, 1), authorization: destination.authorization })
         .then((probe) => {
           // Keyed by root+library, so a destination change never needs a
           // reset — lookups for the new root simply miss until it lands.
@@ -241,16 +242,16 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
     };
     // ordered is derived from a stable prop; root is the only real input.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ordered identity churns per render
-  }, [root]);
+  }, [root, destination]);
 
   const chooseRoot = (): void => {
-    void window.overlook.libraries.pickLocation().then(({ path }) => {
-      if (path !== null) setRoot(path);
+    void window.overlook.libraries.pickLocation().then(({ path, authorization }) => {
+      if (path !== null && authorization !== null) setDestination({ root: path, authorization });
     });
   };
 
   const runBatch = async (targets: readonly number[]): Promise<void> => {
-    if (root === null) return;
+    if (root === null || destination === null) return;
     for (const index of targets) {
       if (stopRef.current) {
         setRows((previous) => previous.map((row, at) => (at === index && row.status === 'pending' ? { ...row, status: 'skipped' } : row)));
@@ -269,7 +270,9 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
       // with a numbered suffix and gives up honestly after a few.
       for (let attempt = 1; attempt <= 4; attempt += 1) {
         destPath = destFor(lib, root, attempt);
-        outcome = await window.overlook.libraries.move({ id: lib.id, destPath }).catch(() => null);
+        outcome = await window.overlook.libraries
+          .move({ id: lib.id, destPath, authorization: destination.authorization })
+          .catch(() => null);
         if (outcome === null || outcome.ok || outcome.reason !== 'destination-not-empty') break;
       }
 
