@@ -96,7 +96,7 @@ async function remoteWorld(libraryId = LIBRARY_ID, corruptPhoto?: 'decryptable' 
     Readable.from([Buffer.from(JSON.stringify(manifest))]).pipe(createEncryptStream(keys.currentKey(), { photoId: 'manifest' })),
   );
   await put(provider, 'manifest/gen-2.ovlk', sealed);
-  return { provider, masterKey, recoveryFile: sealRecoveryKey(masterKey, PASSWORD), corruptImage };
+  return { provider, masterKey, recoveryFile: sealRecoveryKey(masterKey, PASSWORD), corruptImage, photo };
 }
 
 function engineRunner(provider: MockProvider): RestoreRunner {
@@ -483,10 +483,25 @@ test('a matching restore stops before unrelated delayed namespaces (#751)', asyn
 test('corrupt-image export writes only decryptable image plaintext and reports authentication failures', async () => {
   for (const mode of ['decryptable', 'authentication'] as const) {
     const world = await remoteWorld(LIBRARY_ID, mode);
+    const runner = engineRunner(world.provider);
+    const runVerify = runner.verify?.bind(runner);
+    assert.ok(runVerify);
     const coordinator = new RestoreCoordinator({
       readRecoveryKey: () => Promise.resolve(world.recoveryFile),
       sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
-      createRunner: (provider) => engineRunner(provider as MockProvider),
+      createRunner: () => ({
+        run: runner.run.bind(runner),
+        verify: async (request) => {
+          const current = await runVerify(request);
+          return {
+            ...current,
+            missing: [{ path: world.photo.blobPath, kind: 'original', photoId: world.photo.id, reason: 'failed-verification' }],
+            missingCount: 0,
+            corruptCount: 1,
+            verifiedCount: 0,
+          };
+        },
+      }),
       sessionId: () => `session-export-${mode}`,
       progress: () => undefined,
     });
@@ -656,6 +671,67 @@ test('trash reports incomplete deletion honestly, retains the session, and inval
   assert.match(failed.error?.message ?? '', /objects remain/u);
   assert.equal(coordinator.providerFor('session-trash', LIBRARY_ID), world.provider);
   assert.equal(coordinator.verificationFor('session-trash', LIBRARY_ID, plan), null);
+});
+
+test('heal after restore moves corrupt objects aside and still activates', async () => {
+  const world = await remoteWorld();
+  await put(world.provider, 'blobs/bb/bad', Buffer.from('corrupt'));
+  let activated = false;
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () =>
+      verifiedRunner(() =>
+        Promise.resolve({
+          libraryId: LIBRARY_ID,
+          generation: 2,
+          photos: 1,
+          resumed: false,
+          missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P1', reason: 'failed-verification' }],
+        }),
+      ),
+    sessionId: () => 'session-heal',
+    progress: () => undefined,
+    activated: () => {
+      activated = true;
+    },
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const run = await coordinator.run('session-heal', LIBRARY_ID, await verificationId(coordinator, 'session-heal'), false);
+  assert.equal(run.error, null);
+  assert.equal(activated, true);
+  assert.deepEqual(await buffer(await world.provider.getStream('quarantine/gen-2/blobs/bb/bad')), Buffer.from('corrupt'));
+  await coordinator.close();
+});
+
+test('heal failure after restore does not undo activation', async () => {
+  const world = await remoteWorld();
+  world.provider.put = () => Promise.reject(new Error('quota'));
+  let activated = false;
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () =>
+      verifiedRunner(() =>
+        Promise.resolve({
+          libraryId: LIBRARY_ID,
+          generation: 2,
+          photos: 1,
+          resumed: false,
+          missing: [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P1', reason: 'failed-verification' }],
+        }),
+      ),
+    sessionId: () => 'session-heal-fail',
+    progress: () => undefined,
+    activated: () => {
+      activated = true;
+    },
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const run = await coordinator.run('session-heal-fail', LIBRARY_ID, await verificationId(coordinator, 'session-heal-fail'), false);
+  assert.equal(run.error, null);
+  assert.equal(activated, true);
+  await coordinator.close();
 });
 
 test('dismissVerification drops the plan and keeps the discovery session (#994)', async () => {

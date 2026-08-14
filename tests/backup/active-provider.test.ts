@@ -46,6 +46,7 @@ describe('active-provider delegator (#256)', () => {
 
     assert.equal(provider.id, 'mock');
     assert.deepEqual(await provider.list('x'), [{ path: 'mock/entry', bytes: 1 }]);
+    assert.deepEqual(await provider.probe('x'), { bytes: 1 });
 
     active = 'pcloud';
     assert.equal(provider.id, 'pcloud', 'same reference, new delegate — no engine rebuild needed');

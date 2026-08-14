@@ -34,3 +34,18 @@ test('heal is a no-op when every object verified', async () => {
   await healRemoteGaps(provider, 1, []);
   assert.deepEqual(await provider.list('quarantine'), []);
 });
+
+test('heal still writes the gap list when a corrupt object cannot be copied or deleted', async () => {
+  const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-heal-fail-')) });
+  await provider.put('blobs/bb/bad', Readable.from([Buffer.from('corrupt')]));
+  provider.getStream = () => Promise.reject(new Error('unreadable'));
+  provider.delete = () => Promise.reject(new Error('busy'));
+  await healRemoteGaps(provider, 3, [{ path: 'blobs/bb/bad', kind: 'original', photoId: 'P2', reason: 'failed-verification' }]);
+  const report = JSON.parse((await buffer(await provider.getStream('quarantine/gen-3/gaps.json'))).toString('utf8')) as {
+    missing: readonly { path: string }[];
+  };
+  assert.deepEqual(
+    report.missing.map((item) => item.path),
+    ['blobs/bb/bad'],
+  );
+});
