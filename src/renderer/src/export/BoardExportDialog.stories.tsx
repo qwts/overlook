@@ -90,14 +90,16 @@ type Story = StoryObj<typeof BoardExportDialog>;
 export const ExportWithSkippedPlacement: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await expect(body.getByRole('dialog', { name: 'Export board' })).toBeVisible();
-    await expect(body.getByLabelText('Width')).toHaveValue(1600);
-    await expect(body.getByLabelText('Height')).toHaveValue(1200);
-    await userEvent.click(body.getByRole('radio', { name: 'Display P3' }));
-    await userEvent.click(body.getByRole('button', { name: 'Choose folder…' }));
-    await userEvent.click(body.getByRole('button', { name: 'Export board' }));
-    await expect(body.getByText('Board exported with 1 placement.')).toBeVisible();
-    await expect(body.getByText('1 locked or unavailable placement was skipped.')).toBeVisible();
+    const dialogElement = body.getByRole('dialog', { name: 'Export board' });
+    const dialog = within(dialogElement);
+    await expect(dialogElement).toBeVisible();
+    await expect(dialog.getByLabelText('Width')).toHaveValue(1600);
+    await expect(dialog.getByLabelText('Height')).toHaveValue(1200);
+    await userEvent.click(dialog.getByRole('radio', { name: 'Display P3' }));
+    await userEvent.click(dialog.getByRole('button', { name: 'Choose folder…' }));
+    await userEvent.click(dialog.getByRole('button', { name: 'Export board' }));
+    await expect(dialog.getByText('Board exported with 1 placement.')).toBeVisible();
+    await expect(dialog.getByText('1 locked or unavailable placement was skipped.')).toBeVisible();
     await expect(runBoard).toHaveBeenCalledWith(expect.objectContaining({ colorSpace: 'display-p3', output: BOARD.size }));
   },
 };
