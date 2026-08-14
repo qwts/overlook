@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { requireMoveImportConfirmation } from '../../src/main/ipc.js';
+import { requireMoveImportConfirmation } from '../../src/main/import/import-move-confirmation.js';
 
 describe('Move import confirmation boundary', () => {
   test('copy imports do not require destructive authorization', async () => {

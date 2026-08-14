@@ -1,6 +1,4 @@
 /* eslint-disable max-lines -- IPC registration is intentionally large */
-import { isAbsolute } from 'node:path';
-
 import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
@@ -27,6 +25,7 @@ import type {
   RestoreVerifyResponse,
 } from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
+import { requireMoveImportConfirmation, type ImportMoveSource } from './import/import-move-confirmation.js';
 import type { LibraryService } from './library/library-service.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
@@ -50,19 +49,6 @@ import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './libra
 import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
 
 let contentAdmission = (): void => undefined;
-
-export async function requireMoveImportConfirmation(
-  mode: 'copy' | 'move',
-  source: { path?: string | undefined; files?: readonly string[] | undefined },
-  confirmMove?: (source: { path?: string | undefined; files?: readonly string[] | undefined }) => Promise<boolean>,
-): Promise<boolean> {
-  if (mode !== 'move') return true;
-  const paths = source.files ?? (source.path === undefined ? [] : [source.path]);
-  if (paths.length === 0 || paths.some((candidate) => !isAbsolute(candidate))) {
-    throw new Error('Move import sources must use absolute paths');
-  }
-  return (await confirmMove?.(source)) === true;
-}
 
 const reportIpcError = ({ channelName, code, error }: HandlerErrorReport): void => {
   console.error(`[overlook] ${code} on ${channelName}`, error);
@@ -565,7 +551,7 @@ export function registerImportHandlers(
   onImported?: () => void,
   onExternalReady?: () => void,
   getActivity?: () => ActivityFacade,
-  confirmMove?: (source: { path?: string | undefined; files?: readonly string[] | undefined }) => Promise<boolean>,
+  confirmMove?: (source: ImportMoveSource) => Promise<boolean>,
 ): void {
   ipcMain.handle(channels.importListSources.name, (_event, request: unknown) =>
     wrapHandler(channels.importListSources, async () => ({ sources: await getService().listSources() }))(request),
