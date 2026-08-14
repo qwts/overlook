@@ -125,6 +125,10 @@ function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted === true) throw new RestoreError('cancelled', 'restore cancelled');
 }
 
+function missingRemoteError(path: string): RestoreError {
+  return new RestoreError('corrupt', `manifest references missing ${path}`);
+}
+
 function checkpointFor(discovery: RestoreDiscovery, candidate: RestoreCandidate): RestoreCheckpoint {
   return {
     version: 1,
@@ -509,6 +513,7 @@ export class RestoreEngine {
           continue;
         }
         if (error instanceof BlobStoreError) throw new RestoreError('corrupt', error.message);
+        if (error instanceof ProviderError && error.kind === 'not-found') throw missingRemoteError(entry.sidecar.blobPath);
         throw error;
       }
       completed.add(entry.id);
@@ -609,7 +614,7 @@ export class RestoreEngine {
     }
     checkpoint = { ...checkpoint, completedBlobIds: [...completed] };
     await saveCheckpoint(paths, checkpoint);
-    const remote = new Map((await this.deps.provider.list('blobs')).map((entry) => [entry.path, entry]));
+    const remote = new Map((await this.deps.provider.list('blobs', signal)).map((entry) => [entry.path, entry]));
     const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id));
     // #969: list() is a size hint only. A listing miss is not NOT FOUND —
     // getStream decides presence. Manifest bytes cover omitted paths.
@@ -645,6 +650,7 @@ export class RestoreEngine {
           continue;
         }
         if (error instanceof BlobStoreError) throw new RestoreError('corrupt', error.message);
+        if (error instanceof ProviderError && error.kind === 'not-found') throw missingRemoteError(photo.blobPath);
         throw error;
       }
       completed.add(photo.id);
