@@ -628,7 +628,9 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     variant="ghost"
                     onClick={() => {
                       setShowTrashConfirm(false);
+                      setVerifyResult(null);
                       setStep('choose');
+                      void window.overlook.restore.cancel({});
                     }}
                   >
                     {intl.formatMessage(messages.doNothing)}

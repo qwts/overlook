@@ -658,6 +658,26 @@ test('trash reports incomplete deletion honestly, retains the session, and inval
   assert.equal(coordinator.verificationFor('session-trash', LIBRARY_ID, plan), null);
 });
 
+test('dismissVerification drops the plan and keeps the discovery session (#994)', async () => {
+  const world = await remoteWorld();
+  const coordinator = new RestoreCoordinator({
+    readRecoveryKey: () => Promise.resolve(world.recoveryFile),
+    sources: () => Promise.resolve([{ libraryId: LIBRARY_ID, provider: world.provider }]),
+    createRunner: () => verifiedRunner(() => Promise.reject(new Error('unused'))),
+    sessionId: () => 'session-dismiss',
+    progress: () => undefined,
+  });
+  await coordinator.discover('mock', '/recovery.key', PASSWORD);
+  const plan = await verificationId(coordinator, 'session-dismiss');
+  assert.ok(coordinator.status().verification);
+  coordinator.dismissVerification();
+  assert.equal(coordinator.status().verification, null);
+  assert.equal(coordinator.status().sessionId, 'session-dismiss');
+  assert.equal(coordinator.providerFor('session-dismiss', LIBRARY_ID), world.provider);
+  assert.equal(coordinator.verificationFor('session-dismiss', LIBRARY_ID, plan), null);
+  await coordinator.close();
+});
+
 test('trash reports success only after every scoped object is gone and clears the session', async () => {
   const world = await remoteWorld();
   const coordinator = new RestoreCoordinator({

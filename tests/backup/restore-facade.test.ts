@@ -47,6 +47,7 @@ function harness(options?: {
       calls.expired += 1;
     },
     cancel: () => undefined,
+    dismissVerification: () => undefined,
     status: () => ({
       phase: 'idle' as const,
       sessionId: null,

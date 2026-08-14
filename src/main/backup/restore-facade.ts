@@ -198,6 +198,7 @@ export function createRestoreFacade(options: RestoreFacadeOptions) {
     },
     cancel: () => {
       options.coordinator().cancel();
+      options.coordinator().dismissVerification();
     },
     status: () => options.coordinator().status(),
   };

@@ -560,6 +560,14 @@ export class RestoreCoordinator {
     });
   }
 
+  /** Do nothing after verify: drop the plan, keep discovery. A live
+   * verify/restore owns the session and is left untouched. */
+  dismissVerification(): void {
+    if (this.controller !== null || this.session === null) return;
+    this.session.verifications.clear();
+    this.emitStatus();
+  }
+
   cancel(): void {
     this.controller?.abort();
   }

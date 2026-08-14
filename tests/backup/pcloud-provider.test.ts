@@ -232,6 +232,17 @@ describe('pCloud provider adapter (#255)', () => {
     );
   });
 
+  test('probe: missing checksumfile size is transient, not zero bytes', async () => {
+    const { provider, calls } = world({
+      checksumfile: () => ok({ metadata: { name: 'h1', isfolder: false } }),
+    });
+    await assert.rejects(provider.probe('blobs/ab/h1'), (error: unknown) => error instanceof ProviderError && error.kind === 'transient');
+    assert.equal(
+      calls.some((call) => call.method === 'getfilelink'),
+      false,
+    );
+  });
+
   test('getStream: follows the download host and streams the bytes', async () => {
     const { provider } = world({ getfilelink: () => ok({ hosts: ['dl.pcloud.com'], path: '/x/h1.bin' }) }, { '/x/h1.bin': 'DATA' });
     assert.deepEqual(await buffer(await provider.getStream('blobs/ab/h1')), Buffer.from('DATA'));
