@@ -22,6 +22,14 @@ function extensionEntitlements(filePath) {
   return null;
 }
 
+function requiredEntitlements(configuration, filePath) {
+  const entitlements = configuration.optionsForFile?.(filePath)?.entitlements;
+  if (typeof entitlements !== 'string' || entitlements === '') {
+    throw new Error(`entitlements are missing for ${path.basename(filePath)}`);
+  }
+  return entitlements;
+}
+
 export function nestedCodeSignArguments(configuration, bundlePath, entitlements) {
   if (configuration.identity === undefined || configuration.identity === '') {
     throw new Error(`signing identity is required for ${path.basename(bundlePath)}`);
@@ -70,6 +78,7 @@ export default async function signMacApp(configuration) {
     // before the containing app so its profile-bound identity survives the
     // outer seal and notarization.
     signNestedBundle(configuration, bundlePath, entitlements);
+    if (bundlePath === extension) verifyFileProviderIdentity(extension);
   }
   await signAsync({
     ...configuration,
@@ -80,5 +89,17 @@ export default async function signMacApp(configuration) {
       ? { provisioningProfile: undefined, preEmbedProvisioningProfile: false, preAutoEntitlements: false }
       : {}),
   });
-  if (existsSync(extension)) verifyFileProviderIdentity(extension);
+  if (nestedExtensions.length > 0) {
+    // electron-builder's signer owns every other nested code item. Re-apply
+    // these separately identified bundles after that pass, then re-seal only
+    // the containing app so the final signature is deterministically inside-out.
+    for (const bundlePath of nestedExtensions) {
+      const entitlements = extensionEntitlements(bundlePath);
+      if (entitlements === null) throw new Error(`entitlements are missing for ${path.basename(bundlePath)}`);
+      signNestedBundle(configuration, bundlePath, entitlements);
+    }
+    signNestedBundle(configuration, configuration.app, requiredEntitlements(configuration, configuration.app));
+    execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', configuration.app], { stdio: 'inherit' });
+    if (existsSync(extension)) verifyFileProviderIdentity(extension);
+  }
 }

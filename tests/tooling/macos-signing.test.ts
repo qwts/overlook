@@ -156,6 +156,8 @@ describe('macOS release signing safety (#357)', () => {
     assert.match(signer, /signNestedBundle/u);
     assert.match(signer, /nestedCodeSignArguments/u);
     assert.match(signer, /verifyFileProviderIdentity/u);
+    assert.match(signer, /requiredEntitlements\(configuration, configuration\.app\)/u);
+    assert.match(signer, /--verify', '--deep', '--strict'/u);
     assert.match(signer, /Contents.*PlugIns.*OverlookFileProvider\.appex/u);
     assert.match(signer, /preEmbedProvisioningProfile: false/u);
     assert.match(signer, /preAutoEntitlements: false/u);
