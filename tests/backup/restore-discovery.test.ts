@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { describe, test } from 'node:test';
 
-import { buildBackupManifestV2, type BackupManifestV2 } from '../../src/main/backup/backup-manifest.js';
+import { BACKUP_MANIFEST_SCHEMA_VERSION, buildBackupManifestV2, type BackupManifestV2 } from '../../src/main/backup/backup-manifest.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import { sealRecoveryBootstrap } from '../../src/main/backup/recovery-bootstrap.js';
@@ -137,7 +137,11 @@ describe('restore discovery (#288)', () => {
 
   test('a newer authenticated manifest makes the stale bootstrap fail closed instead of falling back', async () => {
     const w = await world();
-    const newerManifest = { ...manifest(1), generatedAt: '2026-07-14T23:00:01.000Z' };
+    const newerManifest = {
+      ...manifest(1),
+      schema: BACKUP_MANIFEST_SCHEMA_VERSION + 1,
+      generatedAt: '2026-07-14T23:00:01.000Z',
+    };
     await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
     await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(newerManifest, w.keyStore));
 

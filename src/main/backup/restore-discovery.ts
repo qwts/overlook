@@ -82,6 +82,16 @@ function validateManifest(manifest: RestorableBackupManifest, bootstrap: Recover
   }
 }
 
+function assertManifestNotNewerThanBootstrap(value: unknown, bootstrap: RecoveryBootstrap): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+  const generatedAt = (value as { readonly generatedAt?: unknown }).generatedAt;
+  if (typeof generatedAt !== 'string') return;
+  const manifestTimestamp = Date.parse(generatedAt);
+  if (Number.isFinite(manifestTimestamp) && Date.parse(bootstrap.generatedAt) < manifestTimestamp) {
+    throw new StaleRecoveryBootstrapError('manifest is newer than the recovery bootstrap');
+  }
+}
+
 async function openCandidate(
   provider: StorageProvider,
   entry: RemoteEntry,
@@ -103,6 +113,7 @@ async function openCandidate(
   } catch {
     throw new RestoreError('corrupt', `${entry.path} is not valid JSON`);
   }
+  assertManifestNotNewerThanBootstrap(json, bootstrap);
   const parsed = parseBackupManifest(json);
   if (!parsed.restorable) throw new RestoreError('unsupported', `${entry.path} uses non-restorable schema 1`);
   validateManifest(parsed.manifest, bootstrap, resolveKey);
