@@ -2,7 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-import { dialog } from 'electron';
+import { app, dialog } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
 import { createEmitter } from '../shared/ipc/registry.js';
@@ -93,6 +93,27 @@ async function pickImportFolder(options: AppServicesOptions): Promise<string | n
   return result.canceled ? null : (result.filePaths[0] ?? null);
 }
 
+async function confirmImportMove(
+  options: AppServicesOptions,
+  source: { path?: string | undefined; files?: readonly string[] | undefined },
+): Promise<boolean> {
+  // Browser tests cannot operate native dialogs; this switch is fixed by the
+  // main-process test harness environment and is unavailable to the renderer.
+  if (!app.isPackaged && options.harnessEnv('OVERLOOK_E2E') !== undefined) return true;
+  const sourceDescription = source.path ?? `${source.files?.length ?? 0} dropped files`;
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Cancel', 'Move originals'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: 'Confirm Move import',
+    message: 'Move these originals into Overlook?',
+    detail: `${sourceDescription}\n\nThe originals will be deleted only after their encrypted copies are verified.`,
+  });
+  return result.response === 1;
+}
+
 async function pickKeyExport(options: AppServicesOptions): Promise<string | null> {
   const fixture = options.harnessEnv('OVERLOOK_KEY_EXPORT_DESTINATION');
   if (fixture !== undefined && fixture !== '') return fixture;
@@ -136,6 +157,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     options.onImported,
     options.onImportRendererReady,
     options.getActivity,
+    (source) => confirmImportMove(options, source),
   );
   registerEmbeddingHandlers(options.getEmbedding, options.requireContentAccess);
   registerExportHandlers(options.getExport, options.getActivity);
