@@ -109,16 +109,17 @@ describe('signing secret scope (#855)', () => {
   test('each signing platform receives only its own credential values', () => {
     const workflow = source('.github/workflows/package.yml');
     const pkg = workflowStep(workflow, 'Package', 'Upload artifacts');
+    const referencedSecrets = [...pkg.matchAll(/secrets\.([A-Z0-9_]+)/gu)].map((match) => match[1] ?? '');
 
     for (const [env, secret] of APPLE_PACKAGE_ENV) {
       const expected = `${env}: ` + "${{ runner.os == 'macOS' && secrets." + secret + " || '' }}";
       assert.ok(pkg.includes(expected));
-      assert.equal(pkg.split(`secrets.${secret}`).length - 1, 1);
+      assert.equal(referencedSecrets.filter((candidate) => candidate === secret).length, 1);
     }
     for (const [env, secret] of AZURE_PACKAGE_ENV) {
       const expected = `${env}: ` + "${{ runner.os == 'Windows' && secrets." + secret + " || '' }}";
       assert.ok(pkg.includes(expected));
-      assert.equal(pkg.split(`secrets.${secret}`).length - 1, 1);
+      assert.equal(referencedSecrets.filter((candidate) => candidate === secret).length, 1);
     }
   });
 
