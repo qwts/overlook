@@ -67,11 +67,18 @@ const config: TestRunnerConfig = {
     // axe's full default rule set instead of the WCAG 2.2 AA tags the budget declares.
     if (visitedPath !== undefined) appendFileSync(visitedPath, `${context.id}\n`);
 
-    for (const theme of ['dark', 'light'] as const) {
-      await page.evaluate((nextTheme) => {
-        document.documentElement.dataset['theme'] = nextTheme;
-        document.documentElement.style.colorScheme = nextTheme;
-      }, theme);
+    for (const variant of [
+      { theme: 'dark', contrast: 'normal' },
+      { theme: 'dark', contrast: 'more' },
+      { theme: 'light', contrast: 'normal' },
+      { theme: 'light', contrast: 'more' },
+    ] as const) {
+      await page.evaluate(({ theme, contrast }) => {
+        document.documentElement.dataset['theme'] = theme;
+        if (contrast === 'more') document.documentElement.dataset['contrast'] = 'more';
+        else delete document.documentElement.dataset['contrast'];
+        document.documentElement.style.colorScheme = theme;
+      }, variant);
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
       const violations = await getViolations(page, '#storybook-root', { runOnly: { type: 'tag', values: [...budget.tags] } });
@@ -81,7 +88,8 @@ const config: TestRunnerConfig = {
           id: context.id,
           title: storyContext.title,
           name: storyContext.name,
-          theme,
+          theme: variant.theme,
+          contrast: variant.contrast,
           rules: countByRule(violations),
           violations,
         };
@@ -97,7 +105,7 @@ const config: TestRunnerConfig = {
             ...violation.nodes.map((node) => `      ${node.target.join(' ')}: ${node.failureSummary ?? 'no failure summary'}`),
           ])
           .join('\n');
-        throw new Error(`[${theme}] ${verdict.reason}\n${detail}`);
+        throw new Error(`[${variant.theme}/${variant.contrast}] ${verdict.reason}\n${detail}`);
       }
     }
   },

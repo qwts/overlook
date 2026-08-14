@@ -10,7 +10,7 @@ export interface AppearanceMediaQuery {
 }
 
 export interface AppearanceRoot {
-  readonly dataset: { theme?: string };
+  readonly dataset: { theme?: string; contrast?: string };
   readonly style: { colorScheme: string };
 }
 
@@ -26,6 +26,7 @@ export function resolveAppearance(appearance: Appearance, prefersDark: boolean):
 export function installAppearanceObserver(options: {
   readonly root: AppearanceRoot;
   readonly media: AppearanceMediaQuery;
+  readonly contrastMedia: AppearanceMediaQuery;
   readonly settings: AppearanceSettingsClient;
 }): () => void {
   const bootTheme = options.root.dataset.theme;
@@ -41,6 +42,10 @@ export function installAppearanceObserver(options: {
   const onMediaChanged = (): void => {
     if (appearance === 'system') apply();
   };
+  const applyContrast = (): void => {
+    if (options.contrastMedia.matches) options.root.dataset.contrast = 'more';
+    else delete options.root.dataset.contrast;
+  };
   const unsubscribe = options.settings.onChanged(({ settings }) => {
     changed = true;
     appearance = settings.appearance;
@@ -48,7 +53,9 @@ export function installAppearanceObserver(options: {
   });
 
   options.media.addEventListener('change', onMediaChanged);
+  options.contrastMedia.addEventListener('change', applyContrast);
   apply();
+  applyContrast();
   void options.settings.get().then(({ settings }) => {
     if (!active || changed) return;
     appearance = settings.appearance;
@@ -59,5 +66,6 @@ export function installAppearanceObserver(options: {
     active = false;
     unsubscribe();
     options.media.removeEventListener('change', onMediaChanged);
+    options.contrastMedia.removeEventListener('change', applyContrast);
   };
 }

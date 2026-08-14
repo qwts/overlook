@@ -9,6 +9,7 @@ import { installAppearanceObserver } from './theme/appearance';
 installAppearanceObserver({
   root: document.documentElement,
   media: window.matchMedia('(prefers-color-scheme: dark)'),
+  contrastMedia: window.matchMedia('(prefers-contrast: more)'),
   settings: window.overlook.settings,
 });
 
