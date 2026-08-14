@@ -147,6 +147,8 @@ const importRunSummarySchema = z.object({
   cancelled: z.number().int().nonnegative(),
   /** Companion sidecars in verified encrypted custody (#484). */
   sidecars: z.number().int().nonnegative(),
+  /** Main-process Move confirmation was declined before the import started. */
+  confirmationCancelled: z.literal(true).optional(),
 });
 
 const syncStatusSchema = z.enum(['local', 'syncing', 'synced', 'offloaded', 'error']);

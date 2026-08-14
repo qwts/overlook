@@ -2,7 +2,8 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-import { dialog } from 'electron';
+import { app, dialog } from 'electron';
+import type { BrowserWindow } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
 import { createEmitter } from '../shared/ipc/registry.js';
@@ -103,6 +104,35 @@ async function pickImportFolder(options: AppServicesOptions): Promise<string | n
   return result.canceled ? null : (result.filePaths[0] ?? null);
 }
 
+async function confirmImportMove(
+  options: AppServicesOptions,
+  source: { path?: string | undefined; files?: readonly string[] | undefined },
+  parent: BrowserWindow | null,
+): Promise<boolean> {
+  // Browser tests cannot operate native dialogs; this switch is fixed by the
+  // main-process test harness environment and is unavailable to the renderer.
+  if (!app.isPackaged && options.harnessEnv('OVERLOOK_E2E') !== undefined) return true;
+  if (parent === null) return false;
+  const lineBreak = String.fromCharCode(10);
+  const sourceDescription = source.path ?? source.files?.join(lineBreak) ?? '';
+  const result = await dialog.showMessageBox(parent, {
+    type: 'warning',
+    buttons: ['Cancel', 'Move originals'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: 'Confirm moving originals',
+    message: 'Move these originals into Overlook?',
+    detail: [
+      'Requested source paths:',
+      sourceDescription,
+      '',
+      'The originals will be deleted only after their encrypted copies are verified.',
+    ].join(lineBreak),
+  });
+  return result.response === 1;
+}
+
 async function pickKeyExport(options: AppServicesOptions): Promise<string | null> {
   const fixture = options.harnessEnv('OVERLOOK_KEY_EXPORT_DESTINATION');
   if (fixture !== undefined && fixture !== '') return fixture;
@@ -146,6 +176,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     options.onImported,
     options.onImportRendererReady,
     options.getActivity,
+    (source, parent) => confirmImportMove(options, source, parent),
   );
   registerEmbeddingHandlers(options.getEmbedding, options.requireContentAccess);
   registerExportHandlers(options.getExport, options.getActivity);

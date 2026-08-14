@@ -25,6 +25,7 @@ import type {
   RestoreVerifyResponse,
 } from '../shared/backup/restore-contract.js';
 import type { ImportService } from './import/import-service.js';
+import { requireMoveImportConfirmation, type ImportMoveSource } from './import/import-move-confirmation.js';
 import type { LibraryService } from './library/library-service.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
@@ -550,6 +551,7 @@ export function registerImportHandlers(
   onImported?: () => void,
   onExternalReady?: () => void,
   getActivity?: () => ActivityFacade,
+  confirmMove?: (source: ImportMoveSource, parent: BrowserWindow | null) => Promise<boolean>,
 ): void {
   ipcMain.handle(channels.importListSources.name, (_event, request: unknown) =>
     wrapHandler(channels.importListSources, async () => ({ sources: await getService().listSources() }))(request),
@@ -612,8 +614,24 @@ export function registerImportHandlers(
       return {};
     })(request),
   );
-  ipcMain.handle(channels.importRun.name, (_event, request: unknown) =>
+  ipcMain.handle(channels.importRun.name, (event, request: unknown) =>
     wrapHandler(channels.importRun, async ({ path, files, mode }) => {
+      const confirmForSender =
+        confirmMove === undefined
+          ? undefined
+          : (source: ImportMoveSource) => confirmMove(source, BrowserWindow.fromWebContents(event.sender));
+      if (!(await requireMoveImportConfirmation(mode, { path, files }, confirmForSender, contentAdmission))) {
+        return {
+          imported: 0,
+          moved: 0,
+          retained: 0,
+          duplicates: 0,
+          failed: 0,
+          cancelled: 0,
+          sidecars: 0,
+          confirmationCancelled: true as const,
+        };
+      }
       // The zod refinement guarantees exactly one of path/files. Both paths
       // use the engine's verified per-file Move boundary (#489).
       const summary = files !== undefined ? await getService().runFiles(files, mode) : await getService().run(path ?? '', mode);
