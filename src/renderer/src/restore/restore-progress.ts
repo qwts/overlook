@@ -48,9 +48,7 @@ export function restoreStepFromStatus(status: RestoreStatusSnapshot): RestoreWor
     case 'failed':
       return status.verification !== null ? 'confirm' : status.sessionId !== null ? 'choose' : 'setup';
     case 'session':
-      if (status.verification !== null) {
-        return status.verification.missingCount + status.verification.corruptCount > 0 ? 'verify' : 'confirm';
-      }
+      if (status.verification !== null) return 'verify';
       return 'choose';
     default:
       return null;

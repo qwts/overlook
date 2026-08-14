@@ -138,6 +138,19 @@ export class MockProvider implements StorageProvider {
     return createReadStream(target);
   }
 
+  async probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    this.assertAuth();
+    signal?.throwIfAborted();
+    try {
+      const info = await stat(this.resolve(path));
+      if (!info.isFile()) throw new ProviderError(`no remote entry at ${path}`, 'not-found');
+      return { bytes: info.size };
+    } catch (error) {
+      if (error instanceof ProviderError) throw error;
+      throw new ProviderError(`no remote entry at ${path}`, 'not-found');
+    }
+  }
+
   async list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]> {
     this.assertAuth();
     signal?.throwIfAborted();
@@ -248,6 +261,13 @@ export class FaultInjectingProvider implements StorageProvider {
       throw new ProviderError('injected download failure', 'transient');
     }
     return this.inner.getStream(path);
+  }
+
+  async probe(path: string, signal?: AbortSignal): Promise<{ bytes: number }> {
+    if (this.faults.has('transient-get')) {
+      throw new ProviderError('injected download failure', 'transient');
+    }
+    return this.inner.probe(path, signal);
   }
 
   async list(prefix: string, signal?: AbortSignal): Promise<readonly RemoteEntry[]> {

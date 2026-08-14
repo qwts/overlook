@@ -54,6 +54,7 @@ const llmProviders = createInvoker(llmChannels.llmProviders, invokeTransport);
 const libraryRegistryList = createInvoker(channels.libraryRegistryList, invokeTransport);
 const libraryRegistryCurrent = createInvoker(channels.libraryRegistryCurrent, invokeTransport);
 const libraryRegistryPickLocation = createInvoker(channels.libraryRegistryPickLocation, invokeTransport);
+const libraryRegistryPickCreateLocation = createInvoker(channels.libraryRegistryPickCreateLocation, invokeTransport);
 const libraryRelocationPending = createInvoker(channels.libraryRelocationPending, invokeTransport);
 const backupProviders = createInvoker(channels.backupProviders, invokeTransport);
 const backupProviderStatus = createInvoker(channels.backupProviderStatus, invokeTransport);
@@ -348,6 +349,7 @@ const overlook: OverlookApi = {
     resetDisplayName: createInvoker(channels.libraryRegistryResetDisplayName, invokeTransport),
     add: createInvoker(channels.libraryRegistryAdd, invokeTransport),
     pickLocation: async () => libraryRegistryPickLocation({}),
+    pickCreateLocation: async () => libraryRegistryPickCreateLocation({}),
     // Relocation (#483, ADR-0022): move/cancel/cleanup + journal-backed
     // pending list for the resume banner; progress drives the wizard tracks.
     move: createInvoker(channels.libraryRelocationMove, invokeTransport),

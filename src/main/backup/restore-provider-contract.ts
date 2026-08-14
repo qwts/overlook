@@ -25,7 +25,10 @@ export async function exerciseRestoreProviderContract(browser: StorageProvider, 
     }
     assert.ok((await browser.listLibraries()).includes(libraryId));
     const discovered = browser.forLibrary(libraryId);
-    for (const object of OBJECTS) assert.deepEqual(await buffer(await discovered.getStream(object.path)), object.bytes);
+    for (const object of OBJECTS) {
+      assert.deepEqual(await discovered.probe(object.path), { bytes: object.bytes.length });
+      assert.deepEqual(await buffer(await discovered.getStream(object.path)), object.bytes);
+    }
     assert.deepEqual(await discovered.list('manifest'), [{ path: 'manifest/gen-1.ovlk', bytes: OBJECTS[1].bytes.length }]);
   } finally {
     const cleanup = await Promise.allSettled([...OBJECTS].reverse().map((object) => scoped.delete(object.path)));

@@ -7,6 +7,7 @@ import { createDecryptStream } from '../crypto/envelope.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import type { RestoreRequest, RestoreRunResult, RestoreVerifyResult } from './restore-engine.js';
 import type { StorageProvider } from './provider.js';
+import { healRemoteGaps } from './restore-heal.js';
 import { RestoreError, toRestoreError, type RestoreProgress } from './restore-types.js';
 import type {
   RestoreDiscoverResponse,
@@ -321,6 +322,15 @@ export class RestoreCoordinator {
         verification,
         ...(session.custodyPassword === null ? {} : { custodyPassword: session.custodyPassword }),
       });
+      if (result.missing.length > 0) {
+        try {
+          await healRemoteGaps(source.provider, result.generation, result.missing);
+        } catch (error) {
+          console.error(
+            `[overlook] heal could not move remote gaps after restore: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
       this.deps.activated?.(result);
       this.lastResult = {
         libraryId: result.libraryId,
@@ -335,7 +345,7 @@ export class RestoreCoordinator {
         result: {
           ...result,
           fallbackFromGeneration: expectedGeneration !== result.generation ? expectedGeneration : null,
-          relaunching: true,
+          relaunching: false,
         },
         error: null,
       };
@@ -548,6 +558,14 @@ export class RestoreCoordinator {
         this.deps.workFinished?.();
       }
     });
+  }
+
+  /** Do nothing after verify: drop the plan, keep discovery. A live
+   * verify/restore owns the session and is left untouched. */
+  dismissVerification(): void {
+    if (this.controller !== null || this.session === null) return;
+    this.session.verifications.clear();
+    this.emitStatus();
   }
 
   cancel(): void {

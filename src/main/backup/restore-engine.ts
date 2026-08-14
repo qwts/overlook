@@ -36,7 +36,14 @@ import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgr
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
 import { projectVerifiedManifest } from './restore-projection.js';
-import { createScanTicker, verifyObjectCount, type ScanTicker } from './restore-verify-scan.js';
+import {
+  addPresenceFingerprint,
+  createScanTicker,
+  listObjectBytes,
+  presentBytes,
+  verifyObjectCount,
+  type ScanTicker,
+} from './restore-verify-scan.js';
 
 const SCRATCH_BYTES = 16 * 1024 * 1024;
 
@@ -197,40 +204,30 @@ export class RestoreEngine {
   }
 
   private async scanBlobs(
-    discovery: RestoreDiscovery,
+    _discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: RestoreMissingObject[],
     fingerprints: string[],
     signal: AbortSignal | undefined,
     ticker: ScanTicker,
   ): Promise<void> {
+    // Presence only — do not download original bodies. Restore authenticates
+    // each envelope once, when the user chooses to restore.
+    const listed = await listObjectBytes(
+      this.deps.provider,
+      candidate.manifest.photos.map((photo) => photo.blobPath),
+      signal,
+    );
     for (const photo of candidate.manifest.photos) {
       assertNotAborted(signal);
       try {
-        const stream = await this.deps.provider.getStream(photo.blobPath);
-        const ciphertext = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
-        addObjectFingerprint(fingerprints, photo.blobPath, ciphertext);
-        const hasher = createHash('sha256');
-        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: photo.id });
-        const readable = Readable.from([ciphertext]);
-        try {
-          for await (const chunk of readable.pipe(decrypt)) {
-            hasher.update(chunk as Buffer);
-          }
-        } catch {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
-          continue;
-        }
-        if (hasher.digest('hex') !== photo.contentHash) {
-          missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'failed-verification' });
-        }
+        const bytes = await presentBytes(this.deps.provider, listed, photo.blobPath, signal);
+        addPresenceFingerprint(fingerprints, photo.blobPath, bytes);
       } catch (error) {
         if (error instanceof ProviderError && error.kind === 'not-found') {
           missing.push({ path: photo.blobPath, kind: 'original', photoId: photo.id, reason: 'not-found' });
         } else if (error instanceof RestoreError) throw error;
         else {
-          // Transient provider errors are not classified as corrupt — they
-          // remain retryable. Bubble as offline/transient.
           throw error;
         }
       } finally {
@@ -330,7 +327,7 @@ export class RestoreEngine {
         if (candidate === undefined || candidate.manifest.libraryId !== request.verification.libraryId) {
           throw new RestoreError('corrupt', 'The backup changed after verification. Verify it again before restoring.');
         }
-        return await this.restoreCandidate(paths, discovery, candidate, request, []);
+        return await this.restoreCandidate(paths, discovery, candidate, request, [...request.verification.missing]);
       }
       let lastCandidateError: RestoreError | null = null;
       for (const candidate of discovery.candidates) {
@@ -417,9 +414,9 @@ export class RestoreEngine {
     }
     assertNotAborted(request.signal);
     if (missing !== null && missing.length > 0) {
-      // The production path relaunches right after activation, so the NOT
-      // FOUND report must survive the relaunch: it rides the staging→active
-      // rename as a durable file next to library.db (#915).
+      // The NOT FOUND report rides the staging→active rename as a durable
+      // file next to library.db so it survives a later user-chosen reopen
+      // (#915/#994).
       const reportPath = join(paths.stagingDir, 'restore-report.json');
       await writeFile(
         `${reportPath}.tmp`,
@@ -490,7 +487,8 @@ export class RestoreEngine {
     }
     checkpoint = { ...checkpoint, completedSidecarIds: [...completed] };
     await saveCheckpoint(paths, checkpoint);
-    const pending = entries.filter((entry) => !completed.has(entry.id));
+    const skipped = new Set((missing ?? []).map((item) => item.path));
+    const pending = entries.filter((entry) => !completed.has(entry.id) && !skipped.has(entry.sidecar.blobPath));
     if (pending.length === 0) return checkpoint;
     for (const entry of pending) {
       assertNotAborted(signal);
@@ -551,7 +549,8 @@ export class RestoreEngine {
     }
     checkpoint = { ...checkpoint, completedProtectedObjectIds: [...completed] };
     await saveCheckpoint(paths, checkpoint);
-    const pending = entries.filter((entry) => !completed.has(entry.id));
+    const skipped = new Set((missing ?? []).map((item) => item.path));
+    const pending = entries.filter((entry) => !completed.has(entry.id) && !skipped.has(entry.object.path));
     const requiredBytes = SCRATCH_BYTES + pending.reduce((sum, entry) => sum + entry.object.bytes, 0);
     const available = await (this.deps.availableBytes ?? defaultAvailableBytes)(dirname(paths.targetDir));
     if (available < requiredBytes) {
@@ -615,7 +614,8 @@ export class RestoreEngine {
     checkpoint = { ...checkpoint, completedBlobIds: [...completed] };
     await saveCheckpoint(paths, checkpoint);
     const remote = new Map((await this.deps.provider.list('blobs', signal)).map((entry) => [entry.path, entry]));
-    const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id));
+    const skipped = new Set((missing ?? []).map((item) => item.path));
+    const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id) && !skipped.has(photo.blobPath));
     // #969: list() is a size hint only. A listing miss is not NOT FOUND —
     // getStream decides presence. Manifest bytes cover omitted paths.
     let requiredBytes = SCRATCH_BYTES;

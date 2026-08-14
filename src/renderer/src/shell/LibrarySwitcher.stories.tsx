@@ -90,6 +90,10 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
       calls.push('pick-location');
       return Promise.resolve({ path: '/Users/ansel/External/NewHome' });
     },
+    pickCreateLocation: () => {
+      calls.push('pick-create-location');
+      return Promise.resolve({ path: '/Users/ansel/External/NewHome' });
+    },
     // The per-row Move action mounts the wizard, which subscribes and probes.
     onMoveProgress: () => () => undefined,
     probeMove: () =>
