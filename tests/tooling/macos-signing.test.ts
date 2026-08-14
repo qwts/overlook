@@ -29,6 +29,7 @@ interface ProvisioningProfileModule {
 }
 
 interface MacSignModule {
+  readonly abstractStringEntitlement: (source: string, key: string) => string | null;
   readonly nestedCodeSignArguments: (
     configuration: {
       readonly identity?: string;
@@ -173,7 +174,7 @@ describe('macOS release signing safety (#357)', () => {
       assert.match(extensionEntitlements, new RegExp(contract.replaceAll('.', '\\.')));
     }
 
-    const { nestedCodeSignArguments } = await macSignModule();
+    const { abstractStringEntitlement, nestedCodeSignArguments } = await macSignModule();
     assert.deepEqual(
       nestedCodeSignArguments(
         {
@@ -206,6 +207,15 @@ describe('macOS release signing safety (#357)', () => {
         '/tmp/OverlookFileProvider.appex',
       ],
     );
+    const misleadingEntitlements = `[Dict]
+\t[Key] com.apple.application-identifier
+\t[Value]
+\t\t[String] Z5DM34QS5U.com.zts1.overlook
+\t[Key] com.apple.security.application-groups
+\t[Value]
+\t\t[Array]
+\t\t\t[String] Z5DM34QS5U.com.zts1.overlook.file-provider`;
+    assert.equal(abstractStringEntitlement(misleadingEntitlements, 'com.apple.application-identifier'), 'Z5DM34QS5U.com.zts1.overlook');
   });
 
   test('builds a sandboxed privacy-safe Quick Look extension without custody entitlements (#799)', () => {

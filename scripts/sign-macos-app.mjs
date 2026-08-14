@@ -57,12 +57,18 @@ export function signNestedBundle(configuration, bundlePath, entitlements, run = 
   run('codesign', nestedCodeSignArguments(configuration, bundlePath, entitlements), { stdio: 'inherit' });
 }
 
+export function abstractStringEntitlement(source, key) {
+  const marker = `[Key] ${key}`;
+  const start = source.indexOf(marker);
+  if (start < 0) return null;
+  const next = source.indexOf('\n\t[Key] ', start + marker.length);
+  const block = source.slice(start, next < 0 ? undefined : next);
+  return /\[String\] ([^\n]+)/u.exec(block)?.[1]?.trim() ?? null;
+}
+
 function verifyFileProviderIdentity(bundlePath, run = execFileSync) {
   const entitlements = String(run('codesign', ['-d', '--entitlements', '-', bundlePath], { encoding: 'utf8' }));
-  if (
-    !entitlements.includes('[Key] com.apple.application-identifier') ||
-    !entitlements.includes(`[String] ${FILE_PROVIDER_APPLICATION_ID}`)
-  ) {
+  if (abstractStringEntitlement(entitlements, 'com.apple.application-identifier') !== FILE_PROVIDER_APPLICATION_ID) {
     throw new Error(`signed File Provider extension lacks application identifier ${FILE_PROVIDER_APPLICATION_ID}`);
   }
 }
