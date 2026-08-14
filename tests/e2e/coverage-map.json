@@ -432,7 +432,7 @@
         },
         {
           "type": "manual",
-          "reason": "Issue #898 square and near-square Fill behavior is covered by docs/acceptance/acceptance-test-full-display-image.md, including the no-scroll threshold and one-axis overflow boundary."
+          "reason": "Issue #968 square and extreme-aspect Fill behavior is covered by docs/acceptance/acceptance-test-full-display-image.md: cover on both axes with no bars on any side, and overflow confined to the single longer axis."
         }
       ]
     },
