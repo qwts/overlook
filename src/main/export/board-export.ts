@@ -149,9 +149,6 @@ export async function exportBoardPng(request: BoardExportRequest, deps: BoardExp
       const overlay = await placementOverlay(bytes, photo.fileKind, item);
       const clipped = overlay === null ? null : await clippedOverlay(overlay, request.output);
       if (clipped !== null) overlays.push(clipped);
-    } catch (error) {
-      if (error instanceof BoardExportCancelledError) throw error;
-      skippedUnavailable += 1;
     } finally {
       await release?.();
       done += 1;

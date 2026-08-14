@@ -171,6 +171,18 @@ describe('moodboard color-managed raster export (#696)', () => {
     assert.equal(result.path, join(destination, 'Color board (2).png'));
   });
 
+  test('fails corrupt source composition without writing an incomplete board', async () => {
+    const destination = await mkdtemp(join(tmpdir(), 'overlook-board-corrupt-'));
+    const { deps, writes } = await harness();
+    const corrupt: BoardExportDeps = {
+      ...deps,
+      openOriginal: () => Promise.resolve({ stream: Readable.from([Buffer.from('not an image')]) }),
+    };
+
+    await assert.rejects(exportBoardPng({ ...REQUEST, destination }, corrupt, new AbortController().signal));
+    assert.deepEqual(writes, []);
+  });
+
   test('an aborted export writes nothing', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'overlook-board-cancel-'));
     const { deps, writes } = await harness();
