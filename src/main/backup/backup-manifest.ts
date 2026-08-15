@@ -39,9 +39,9 @@ export const backupManifestPhotoV2Schema = z.strictObject({
   // ADR-0026 §1 probed facts. OPTIONAL, not defaulted: sealed protected
   // metadata is verified by exact re-stringification, so parsing must not
   // insert keys into pre-0026 plaintext (a default would make every legacy
-  // protected photo read as corrupt). Absent means "not probed"; consumers
-  // normalize to null. Device-derived playability is deliberately NOT here
-  // (ADR-0026 §3).
+  // protected photo read as corrupt). Absent means "not probed";
+  // upgradeLegacyManifest normalizes it to null for restore consumers.
+  // Device-derived playability is deliberately NOT here (ADR-0026 §3).
   mediaInfo: mediaInfoSchema.nullable().optional(),
   camera: z.string().nullable(),
   lens: z.string().nullable(),
@@ -497,6 +497,26 @@ export function buildBackupManifestV6(input: {
   });
 }
 
+/** The single migration step for legacy manifests: every restorable manifest
+ * (schemas 2..6) is upgraded to the current field contract here, before any
+ * consumer sees it. Only fields whose absence does NOT round-trip through a
+ * rebuilt catalog are normalized — today that is `mediaInfo` (absent means
+ * "not probed", and `manifestSnapshot` always emits the key, so absence must
+ * become null). `isOriginal` and the #482 metadata block stay absent:
+ * `manifestSnapshot` re-omits them by conditional emission, so their absence
+ * round-trips. Sealed protected records (`credentialRecord`,
+ * `sealedMetadata`) are opaque here and their plaintext is verified by exact
+ * re-stringification elsewhere — normalization must never touch them, and
+ * the zod schemas stay default-free for the same reason (see the mediaInfo
+ * comment on backupManifestPhotoV2Schema). */
+function upgradeLegacyManifest(manifest: RestorableBackupManifest): RestorableBackupManifest {
+  if (manifest.photos.every((photo) => photo.mediaInfo !== undefined)) return manifest;
+  return {
+    ...manifest,
+    photos: manifest.photos.map((photo) => (photo.mediaInfo === undefined ? { ...photo, mediaInfo: null } : photo)),
+  };
+}
+
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {
   const version = z.object({ schema: z.number().int() }).safeParse(input);
   if (!version.success) {
@@ -514,35 +534,35 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-2 manifest: ${z.prettifyError(parsed.error)}`);
     }
-    return { restorable: true, manifest: parsed.data };
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
   if (version.data.schema === 3) {
     const parsed = backupManifestV3Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-3 manifest: ${z.prettifyError(parsed.error)}`);
     }
-    return { restorable: true, manifest: parsed.data };
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
   if (version.data.schema === 4) {
     const parsed = backupManifestV4Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-4 manifest: ${z.prettifyError(parsed.error)}`);
     }
-    return { restorable: true, manifest: parsed.data };
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
   if (version.data.schema === 5) {
     const parsed = backupManifestV5Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-5 manifest: ${z.prettifyError(parsed.error)}`);
     }
-    return { restorable: true, manifest: parsed.data };
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
   if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
     const parsed = backupManifestV6Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-6 manifest: ${z.prettifyError(parsed.error)}`);
     }
-    return { restorable: true, manifest: parsed.data };
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
   throw new BackupManifestError(`unsupported manifest schema ${String(version.data.schema)}`);
 }

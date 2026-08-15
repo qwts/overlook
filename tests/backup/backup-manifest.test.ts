@@ -214,6 +214,22 @@ describe('media info in manifests (ADR-0026, #547)', () => {
     assert.equal('mediaInfo' in (parsed.photos[0] ?? {}), false);
   });
 
+  test('parseBackupManifest upgrades legacy manifests: absent mediaInfo reaches restore consumers as null (#1009)', () => {
+    // The schema preserves absence (above, for the sealed re-stringification
+    // paths that share it); the manifest parse entry point is where legacy
+    // shapes migrate to the current contract, in one place.
+    const source = manifest();
+    const legacy = JSON.parse(JSON.stringify(source)) as { photos: Array<Record<string, unknown>> };
+    delete legacy.photos[0]?.['mediaInfo'];
+    const parsed = parseBackupManifest(legacy);
+    assert.equal(parsed.restorable, true);
+    if (!parsed.restorable) assert.fail('schema 2 manifest must be restorable');
+    const photo = parsed.manifest.photos[0];
+    assert.ok(photo !== undefined);
+    assert.equal('mediaInfo' in photo, true);
+    assert.equal(photo.mediaInfo, null);
+  });
+
   test('probed facts roundtrip; playability tiers have no field to hide in', () => {
     const source = manifest();
     const withMedia = {

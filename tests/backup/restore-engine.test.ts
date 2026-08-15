@@ -9,6 +9,10 @@ import { buffer } from 'node:stream/consumers';
 import { test } from 'node:test';
 
 import {
+  backupManifestV3Schema,
+  backupManifestV4Schema,
+  backupManifestV5Schema,
+  backupManifestV6Schema,
   buildBackupManifestV2,
   buildBackupManifestV4,
   type BackupManifestPhotoV2,
@@ -662,6 +666,70 @@ test('verify refuses when the OS keychain cannot protect the recovered master', 
       }).verify({ masterKey: world.masterKey, allowReplace: false }),
     isReason('io'),
   );
+});
+
+/** The photo shape schema 2 shipped with (#289): no mediaInfo (#548), no
+ * isOriginal (#482), no metadata block. Frozen as an explicit pick so photos
+ * built by today's helpers cannot leak later fields into the era fixtures. */
+function legacyEraPhoto(photo: BackupManifestPhotoV2): BackupManifestPhotoV2 {
+  return {
+    id: photo.id,
+    fileName: photo.fileName,
+    fileKind: photo.fileKind,
+    width: photo.width,
+    height: photo.height,
+    bytes: photo.bytes,
+    contentHash: photo.contentHash,
+    blobPath: photo.blobPath,
+    camera: photo.camera,
+    lens: photo.lens,
+    iso: photo.iso,
+    aperture: photo.aperture,
+    shutter: photo.shutter,
+    focalLength: photo.focalLength,
+    takenAt: photo.takenAt,
+    gpsLat: photo.gpsLat,
+    gpsLon: photo.gpsLon,
+    place: photo.place,
+    importedAt: photo.importedAt,
+    importSource: photo.importSource,
+    favorite: photo.favorite,
+    keyId: photo.keyId,
+    deletedAt: photo.deletedAt,
+  };
+}
+
+/** A manifest exactly as each schema era would have written it: the era's
+ * sections with era-original photo shapes, validated by the era's schema. */
+function makeEraManifest(schema: 2 | 3 | 4 | 5 | 6, photos: readonly BackupManifestPhotoV2[]): unknown {
+  const v2 = makeManifest(photos);
+  if (schema === 2) return v2;
+  const v3 = { ...v2, schema: 3, protectedAlbums: [], protectedPhotos: [] };
+  if (schema === 3) return backupManifestV3Schema.parse(v3);
+  const v4 = { ...v3, schema: 4, activity: [] };
+  if (schema === 4) return backupManifestV4Schema.parse(v4);
+  const v5 = { ...v4, schema: 5, boards: [] };
+  if (schema === 5) return backupManifestV5Schema.parse(v5);
+  return backupManifestV6Schema.parse({ ...v5, schema: 6, sidecars: [] });
+}
+
+test('restore engine: a manifest from every supported schema era (2..6) restores cleanly (#1009 structural fix)', async () => {
+  // Legacy generations are data at rest — they never get rewritten, so every
+  // era must keep restoring forever. A future manifest field that the rebuilt
+  // snapshot always emits will fail here until the parse-time migration
+  // (upgradeLegacyManifest) learns to normalize it; the alternative is
+  // rejecting every pre-existing backup as corrupt in production (GEN 59).
+  for (const schema of [2, 3, 4, 5, 6] as const) {
+    const world = await restoreWorld(2);
+    const eraManifest = makeEraManifest(schema, world.photos.map(legacyEraPhoto));
+    await put(world.provider, 'manifest/gen-1.ovlk', await sealManifest(eraManifest, world.keyStore));
+
+    const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+    assert.equal(result.generation, 1, `schema-${String(schema)} era manifest restores`);
+    assert.equal(result.photos, 2, `schema-${String(schema)} era manifest restores every photo`);
+    assert.deepEqual(result.missing, [], `schema-${String(schema)} era manifest restores without gaps`);
+    assert.equal(world.progress.at(-1)?.stage, 'complete', `schema-${String(schema)} era restore completes`);
+  }
 });
 
 test('restore engine: re-running after the missing object is recovered fills the gap (#915)', async () => {
