@@ -614,6 +614,32 @@ test('restore engine: a present-but-unverifiable blob is reported and omitted fr
   assert.equal(ledgerStatus(world.targetDir, damaged.id), undefined, 'the unverifiable photo has no catalog or ledger row');
 });
 
+test('restore engine: a pre-#548 manifest whose photos lack the mediaInfo key restores cleanly', async () => {
+  // GEN 59 incident shape: manifests generated before probed media info
+  // existed carry photos with NO mediaInfo key. The manifest schema keeps
+  // absence (parsing must not insert keys); the rebuilt snapshot always
+  // emits mediaInfo, so the catalog equality check must normalize.
+  const world = await restoreWorld(2);
+  const legacyPhotos = world.photos.map(({ mediaInfo: _mediaInfo, ...photo }) => photo);
+  await put(world.provider, 'manifest/gen-1.ovlk', await sealManifest(makeManifest(legacyPhotos), world.keyStore));
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.deepEqual(result, { libraryId: LIBRARY_ID, generation: 1, photos: 2, resumed: false, missing: [] });
+});
+
+test('restore engine: a pre-#548 manifest with a NOT FOUND blob still partial-restores the verified photos', async () => {
+  const world = await restoreWorld(3);
+  const legacyPhotos = world.photos.map(({ mediaInfo: _mediaInfo, ...photo }) => photo);
+  await put(world.provider, 'manifest/gen-1.ovlk', await sealManifest(makeManifest(legacyPhotos), world.keyStore));
+  const lost = world.photos[2];
+  assert.ok(lost !== undefined);
+  await world.provider.delete(lost.blobPath);
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(result.photos, 2, 'the verified projection restores without a false catalog mismatch');
+  assert.deepEqual(result.missing, [{ path: lost.blobPath, kind: 'original', photoId: lost.id, reason: 'not-found' }]);
+});
+
 test('restore engine: a failed app-lock anchor reset never undoes activation (#754)', async () => {
   const world = await restoreWorld();
   const result = await new RestoreEngine({

@@ -786,7 +786,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => void navigator.clipboard.writeText(`reason: ${error.reason}\nmessage: ${error.message}`)}
+              onClick={() => void window.overlook.clipboard.writeText(`reason: ${error.reason}\nmessage: ${error.message}`)}
             >
               {intl.formatMessage(messages.copyError)}
             </Button>
