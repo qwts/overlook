@@ -796,7 +796,10 @@ export class RestoreEngine {
       const expected = {
         keyIds: candidate.manifest.keyIds,
         totals: candidate.manifest.totals,
-        photos: candidate.manifest.photos,
+        // `mediaInfo` is OPTIONAL in the manifest (absent = "not probed",
+        // pre-#548 generations) and this consumer must normalize absence to
+        // null: the rebuilt snapshot always carries the key.
+        photos: candidate.manifest.photos.map((photo) => ({ mediaInfo: null, ...photo })),
         albums: candidate.manifest.albums,
         boards: expectedBoards,
       };

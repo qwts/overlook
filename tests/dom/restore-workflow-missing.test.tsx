@@ -31,6 +31,7 @@ interface RestoreMock {
     readonly csvExports: unknown[];
     readonly corruptExports: unknown[];
     readonly trash: unknown[];
+    readonly copies: string[];
   };
 }
 
@@ -40,9 +41,21 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): RestoreMock
   const missingCount = missing.filter((o) => o.reason === 'not-found').length;
   const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
   const verifiedCount = 3 - missing.filter((o) => o.kind === 'original').length;
-  const calls = { runs: [] as unknown[], csvExports: [] as unknown[], corruptExports: [] as unknown[], trash: [] as unknown[] };
+  const calls = {
+    runs: [] as unknown[],
+    csvExports: [] as unknown[],
+    corruptExports: [] as unknown[],
+    trash: [] as unknown[],
+    copies: [] as string[],
+  };
   (window as unknown as { overlook: unknown }).overlook = {
     getLocale: () => Promise.resolve('en-US'),
+    clipboard: {
+      writeText: (text: string) => {
+        calls.copies.push(text);
+        return Promise.resolve();
+      },
+    },
     settings: { get: () => Promise.resolve({ settings: { providerId: 'prov-a' } }), onChanged: () => () => undefined },
     backup: {
       providers: () => Promise.resolve({ providers, defaultProviderId: 'prov-a' }),
@@ -265,17 +278,6 @@ test('a complete restore renders no NOT FOUND report (#915)', async () => {
 
 test('gap triage exposes all five truthful actions and retains failures on screen (#994)', async () => {
   const restoreMock = mockOverlook([...MISSING]);
-  const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-  let copied = '';
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      writeText: (value: string) => {
-        copied = value;
-        return Promise.resolve();
-      },
-    },
-  });
   try {
     const host = await renderToVerified();
     const buttons = [...host.querySelectorAll('button')];
@@ -327,13 +329,13 @@ test('gap triage exposes all five truthful actions and retains failures on scree
     assert.ok(copy);
     act(() => copy.click());
     await flush();
-    assert.equal(copied, 'reason: io\nmessage: One cloud object remains.');
+    // #806: the copy affordance rides the app clipboard bridge — the
+    // sandboxed renderer's navigator.clipboard silently no-ops.
+    assert.deepEqual(restoreMock.calls.copies, ['reason: io\nmessage: One cloud object remains.']);
     assert.equal(restoreMock.calls.csvExports.length, 1);
     assert.equal(restoreMock.calls.corruptExports.length, 1);
     assert.equal(restoreMock.calls.trash.length, 1);
   } finally {
-    if (clipboard === undefined) delete (navigator as unknown as { clipboard?: unknown }).clipboard;
-    else Object.defineProperty(navigator, 'clipboard', clipboard);
     restoreMock.cleanup();
   }
 });

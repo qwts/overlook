@@ -2295,6 +2295,20 @@
           "reason": "Follow docs/acceptance/Acceptance-Test-Finder-Library-Document-And-Quick-Look.md in a signed packaged macOS build to verify Launch Services package identity, real Finder double-click routing, Quick Look isolation, and install, upgrade, and uninstall behavior."
         }
       ]
+    },
+    {
+      "id": "1009-restore-legacy-manifest-and-error-copy",
+      "wiki": "User-Story-M18-Recovery-key",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/restore-engine.test.ts", "tests/dom/restore-workflow-missing.test.tsx"]
+        },
+        {
+          "type": "manual",
+          "reason": "Owner-verified on the packaged build against the real pre-Jul-20 iCloud backup (GEN 59): the verified partial restore completes, the NOT FOUND report lists the excluded objects, and the error panel's Copy error button places the reason and message on the system clipboard."
+        }
+      ]
     }
   ]
 }
