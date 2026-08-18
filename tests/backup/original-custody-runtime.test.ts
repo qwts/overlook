@@ -29,6 +29,13 @@ test('original custody runtime composes offload and ephemeral policy around one 
     connected: () => true,
     offloadAuthority: () => Promise.resolve(1),
     custody: { resolve: () => Promise.resolve({ authority, provider }) },
+    custodyStatus: () =>
+      Promise.resolve({
+        state: 'available',
+        providerId: 'mock',
+        providerLabel: 'Local mock',
+        accountLabel: 'Mock account',
+      }),
     custodyChanged: () => undefined,
     ledger: {
       status: (photoId: string) => statuses.get(photoId),

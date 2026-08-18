@@ -93,6 +93,39 @@ test('context-menu Offload and Settings restore complete verified transitions', 
   await pill.getByRole('button', { name: 'Clear selection' }).click();
 });
 
+test('disconnect is blocked by exact custody and emergency removal leaves provider-required recovery', async ({ launchOverlook }) => {
+  test.setTimeout(60_000);
+  const { page } = await launchOverlook({
+    prefix: 'overlook-e2e-custody-disconnect-',
+    env: { OVERLOOK_SEED: '4' },
+  });
+  await prepareBackedUpPhoto(page);
+  const firstCell = page.locator('.ovl-grid__cell').first();
+  await firstCell.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Offload original…' }).click();
+  await confirmOffload(page);
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Disconnect provider' }).click();
+  const blocked = page.getByRole('dialog', { name: 'Disconnect Local mock?' });
+  await expect(blocked).toContainText('1 cloud-only original');
+  await expect(blocked.locator('.ovl-settings__disconnectLibraries.mono-data')).toContainText('1 original');
+  await expect(blocked).toContainText('Mock account');
+  await expect(blocked).not.toContainText('Encrypted data already stored in Local mock is not deleted.');
+  await expect(blocked.getByRole('button', { name: 'Restore all originals first' })).toBeEnabled();
+
+  await blocked.getByRole('button', { name: 'Remove authorization anyway…' }).click();
+  const emergency = page.getByRole('dialog', { name: 'Remove Local mock authorization anyway?' });
+  await expect(emergency).toContainText('Reconnect Local mock as Mock account');
+  await emergency.getByRole('button', { name: 'Remove authorization anyway' }).click();
+
+  const required = page.getByRole('status');
+  await expect(required).toContainText('Local mock required');
+  await expect(required).toContainText('Reconnect Local mock as Mock account');
+  await expect(required.locator('.mono-data')).toContainText('1');
+  await expect(page.getByTestId('provider-card')).toContainText('Not connected');
+});
+
 test('lightbox offload streams temporarily and releases encrypted custody on close', async ({ launchOverlook }) => {
   test.setTimeout(60_000);
   const { page, userData } = await launchOverlook({

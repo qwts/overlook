@@ -238,6 +238,35 @@ describe('export engine (#97)', () => {
     assert.deepEqual(summary.failures, [{ photoId: 'GHOST', fileName: 'GHOST', reason: 'photo GHOST is not in the library' }]);
   });
 
+  test('an original-access failure can attach exact custody truth without replacing the diagnostic (#734)', async () => {
+    const world = await seededWorld(1);
+    const status = {
+      state: 'disconnected' as const,
+      providerId: 'pcloud' as const,
+      providerLabel: 'pCloud',
+      accountLabel: 'owner@example.test',
+    };
+    const engine = new ExportEngine({
+      ...world.deps,
+      openOriginal: () => Promise.reject(new Error('provider is disconnected')),
+      custodyStatus: (photoId, error) => {
+        assert.equal(photoId, 'PHOTO0');
+        assert.match(error instanceof Error ? error.message : '', /disconnected/u);
+        return Promise.resolve(status);
+      },
+    });
+
+    const summary = await engine.exportPhotos(['PHOTO0'], world.destination);
+    assert.deepEqual(summary.failures, [
+      {
+        photoId: 'PHOTO0',
+        fileName: 'IMG_4021.JPG',
+        reason: 'provider is disconnected',
+        custody: status,
+      },
+    ]);
+  });
+
   test('metadata export writes authored XMP by choice or omits all sidecars for privacy (#508)', async () => {
     const authored = await seededWorld(1);
     const current = authored.rows.get('PHOTO0');

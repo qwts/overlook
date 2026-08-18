@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { ExportDialog } from './ExportDialog';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
+import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 
 // #99 exit criteria: copy/pixel match to the mock, switch-off disables the
 // button + shows the warning, and phases transition on engine events (the
@@ -10,7 +11,7 @@ import type { OverlookApi } from '../../../shared/ipc/api.js';
 
 const IDS = ['A', 'B', 'C'];
 
-function installStub(): void {
+function installStub(custodyFailure?: PhotoCustodyStatus): void {
   const exportApi: OverlookApi['export'] = {
     pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
     revokeDestination: () => Promise.resolve({ revoked: true }),
@@ -26,7 +27,15 @@ function installStub(): void {
         await new Promise((resolve) => setTimeout(resolve, 40));
         listener?.({ done, total: IDS.length });
       }
-      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, failures: [] };
+      return custodyFailure === undefined
+        ? { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, failures: [] }
+        : {
+            exported: IDS.length - 1,
+            failed: 1,
+            cancelled: 0,
+            previewTranscodes: 0,
+            failures: [{ photoId: IDS[0] ?? 'A', fileName: 'IMG_4021.RAF', reason: 'custody failed', custody: custodyFailure }],
+          };
     },
     runBoard: () =>
       Promise.resolve({
@@ -56,8 +65,8 @@ const meta: Meta<typeof ExportDialog> = {
   component: ExportDialog,
   args: { open: true, photoIds: IDS, onClose: fn() },
   decorators: [
-    (Story) => {
-      installStub();
+    (Story, context) => {
+      installStub(context.parameters['custodyFailure'] as PhotoCustodyStatus | undefined);
       return <Story />;
     },
   ],
@@ -118,5 +127,24 @@ export const AllUnencrypted: Story = {
     await expect(body.queryByRole('group', { name: 'Format' })).toBeNull();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: 'Export all photos' })).toBeEnabled();
+  },
+};
+
+export const ProviderRequiredFailure: Story = {
+  parameters: {
+    custodyFailure: {
+      state: 'provider-required',
+      providerId: 'google-drive',
+      providerLabel: 'Google Drive',
+      accountLabel: 'm.rivera@gmail.com',
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
+    await userEvent.click(body.getByRole('button', { name: /Export 3 photos/u }));
+    await expect(await body.findByText(/2 exported · 1 failed/u)).toBeVisible();
+    await userEvent.click(body.getByText('View item failures'));
+    await expect(body.getByText(/Google Drive required — reconnect as m\.rivera@gmail\.com to recover this original\./u)).toBeVisible();
   },
 };

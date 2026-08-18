@@ -3,11 +3,12 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import type { SyncStatus } from '../../shared/library/types.js';
 import { CustodyAuthorityRepository, type CustodyAuthority } from './custody-authority-repository.js';
 import { CustodyHintCoordinator } from './custody-gate.js';
-import { CustodyHandleResolver, custodyRemoteRoot } from './custody-handle.js';
+import { CustodyHandleResolver, CustodyResolutionError, custodyRemoteRoot } from './custody-handle.js';
 import { raceWithAbort, type ProviderAccountIdentity, type StorageProvider } from './provider.js';
 import type { LibraryEntry } from '../../shared/library/registry.js';
 import type { LibraryRegistryRuntime } from '../library/library-registry-runtime.js';
 import { verifyCustodyReconnect } from './custody-reconnect.js';
+import type { PhotoCustodyState, PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 export interface CustodyRoutingRuntimeDeps {
   readonly db: BetterSqlite3.Database;
@@ -162,6 +163,45 @@ export function refreshCustodyHints(
   }).refresh();
 }
 
+function createCustodyStatus(
+  deps: CustodyRoutingRuntimeDeps,
+  authorities: CustodyAuthorityRepository,
+  resolver: CustodyHandleResolver,
+): (photoId: string) => Promise<PhotoCustodyStatus> {
+  return async (photoId) => {
+    const authority = authorities.forPhoto(photoId);
+    if (authority === undefined) {
+      return {
+        state: authorities.isLegacyUnbound(photoId) ? 'legacy-unbound' : 'available',
+        providerId: null,
+        providerLabel: null,
+        accountLabel: null,
+      };
+    }
+    const provider = deps.provider(authority.providerId);
+    const identity = {
+      providerId: authority.providerId,
+      providerLabel: provider?.label ?? authority.providerId,
+      accountLabel: authority.accountLabel,
+    };
+    if (authority.state === 'provider-required') return { state: 'provider-required', ...identity };
+    let state: PhotoCustodyState = 'available';
+    try {
+      await resolver.resolveAuthority(authority);
+    } catch (error) {
+      state =
+        error instanceof CustodyResolutionError
+          ? error.reason === 'custody-disconnected'
+            ? 'disconnected'
+            : error.reason === 'custody-wrong-account'
+              ? 'wrong-account'
+              : 'unavailable'
+          : 'unavailable';
+    }
+    return { state, ...identity };
+  };
+}
+
 /** Splits selection-addressed backup work from binding-addressed custody at
  * the composition boundary so callers cannot accidentally share a facade. */
 export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
@@ -190,6 +230,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     remoteRoot,
     prepareAuthority: (authority) => reconnect.prepare(authority),
   });
+  const custodyStatus = createCustodyStatus(deps, authorities, resolver);
   const legacyAuthority = async () => {
     if (!deps.backupTargetConnected()) return null;
     const identity = await accountIdentity(deps.backupTarget);
@@ -222,6 +263,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return authority.id;
     },
     custodyChanged,
+    custodyStatus,
     close: () => reconnect.close(),
     pauseReconnectProofs: () => reconnect.pause(),
     integrity: {

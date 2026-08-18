@@ -17,6 +17,7 @@ import type {
   ProviderConnectResult,
   ProviderDescriptor,
 } from '../shared/backup/provider-descriptor.js';
+import type { EphemeralFailureReason, PhotoCustodyStatus } from '../shared/backup/custody-status.js';
 import type {
   RestoreDiscoverResponse,
   RestoreRunResponse,
@@ -915,7 +916,11 @@ export interface BackupFacade {
   rehydrate(photoId: string): Promise<void>;
   keepDownloaded(photoId: string): Promise<void>;
   releaseEphemeral(photoId: string): Promise<void>;
-  ephemeralStatus(photoId: string): 'fetching' | 'verifying' | 'ready' | 'released' | 'error' | null;
+  ephemeralStatus(photoId: string): {
+    readonly stage: 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
+    readonly reason?: EphemeralFailureReason | undefined;
+  } | null;
+  photoCustodyStatus(photoId: string): Promise<PhotoCustodyStatus>;
   prepareEphemeral(photoId: string): Promise<'durable' | 'ephemeral'>;
   restoreOriginals(photoIds?: readonly string[]): Promise<RestoreOriginalsSummary>;
   providers(): Promise<{ providers: readonly ProviderDescriptor[]; defaultProviderId: string }>;
@@ -958,7 +963,10 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
     })(request),
   );
   ipcMain.handle(channels.backupEphemeralStatus.name, (_event, request: unknown) =>
-    wrapHandler(channels.backupEphemeralStatus, ({ photoId }) => ({ stage: getFacade().ephemeralStatus(photoId) }))(request),
+    wrapHandler(channels.backupEphemeralStatus, ({ photoId }) => getFacade().ephemeralStatus(photoId) ?? { stage: null })(request),
+  );
+  ipcMain.handle(channels.backupPhotoCustodyStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupPhotoCustodyStatus, async ({ photoId }) => getFacade().photoCustodyStatus(photoId))(request),
   );
   ipcMain.handle(channels.backupPrepareEphemeral.name, (_event, request: unknown) =>
     wrapHandler(channels.backupPrepareEphemeral, async ({ photoId }) => ({ custody: await getFacade().prepareEphemeral(photoId) }))(

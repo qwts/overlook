@@ -17,6 +17,7 @@ import {
   providerIdSchema,
   providerCapacityStatusSchema,
 } from '../backup/provider-descriptor.js';
+import { ephemeralFailureReasonSchema, photoCustodyStatusSchema } from '../backup/custody-status.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import {
@@ -708,8 +709,12 @@ export const channels = {
   backupEphemeralStatus: defineChannel(
     'backup:ephemeral-status',
     z.object({ photoId: z.string() }),
-    z.object({ stage: z.enum(['fetching', 'verifying', 'ready', 'released', 'error']).nullable() }),
+    z.object({
+      stage: z.enum(['fetching', 'verifying', 'ready', 'released', 'error']).nullable(),
+      reason: ephemeralFailureReasonSchema.optional(),
+    }),
   ),
+  backupPhotoCustodyStatus: defineChannel('backup:photo-custody-status', z.object({ photoId: z.string() }), photoCustodyStatusSchema),
   backupPrepareEphemeral: defineChannel(
     'backup:prepare-ephemeral',
     z.object({ photoId: z.string() }),
@@ -940,7 +945,11 @@ export const events = {
   storageChanged: defineEvent('library:storage-changed', z.object({})),
   ephemeralOriginalState: defineEvent(
     'backup:ephemeral-original-state',
-    z.object({ photoId: z.string(), stage: z.enum(['fetching', 'verifying', 'ready', 'released', 'error']) }),
+    z.object({
+      photoId: z.string(),
+      stage: z.enum(['fetching', 'verifying', 'ready', 'released', 'error']),
+      reason: ephemeralFailureReasonSchema.optional(),
+    }),
   ),
   pendingCountChanged: defineEvent('library:pending-count', z.object({ count: z.number().int().nonnegative() })),
   // Progressive scan counts for big cards (#84).

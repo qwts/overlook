@@ -527,7 +527,7 @@ function getBackupEngine(): BackupEngine {
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
       offloadAuthority: custodyRouting.offloadAuthority,
-      custody: custodyRouting.resolver,
+      ...{ custody: custodyRouting.resolver, custodyStatus: custodyRouting.custodyStatus },
       custodyChanged: custodyRouting.custodyChanged,
       ledger,
       repo,

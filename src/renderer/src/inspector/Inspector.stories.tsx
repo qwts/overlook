@@ -4,6 +4,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { Inspector } from './Inspector';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
+import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 
 // #94 exit criteria: §4 visual match — grouped truth rows, interpunct mono
 // values, RAF → RAW badge, missing EXIF rows OMITTED (never fabricated).
@@ -49,7 +50,7 @@ const meta: Meta<typeof Inspector> = {
   title: 'App/Inspector',
   component: Inspector,
   decorators: [
-    (Story) => {
+    (Story, context) => {
       const library = {
         metadataSummary: () =>
           Promise.resolve({
@@ -70,7 +71,14 @@ const meta: Meta<typeof Inspector> = {
           }),
         manageTag: () => Promise.resolve({ updated: 1, unchanged: 0, missing: 0, photoIds: [PHOTO.id], merged: false }),
       } as unknown as OverlookApi['library'];
-      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library };
+      const custodyStatus =
+        (context.parameters['custodyStatus'] as PhotoCustodyStatus | undefined) ??
+        ({ state: 'available', providerId: 'mock', providerLabel: 'Local mock', accountLabel: 'Mock account' } as const);
+      const backup = {
+        photoCustodyStatus: () => Promise.resolve(custodyStatus),
+        onEphemeralState: () => () => undefined,
+      } as unknown as OverlookApi['backup'];
+      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup };
       return (
         <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
           <Story />
@@ -132,6 +140,46 @@ export const MetadataLite: Story = {
     await expect(canvas.queryByText('Favorite')).toBeNull();
     await expect(canvas.getByText('jpeg')).toBeVisible();
     await expect(canvas.getByText('Local only — not backed up')).toBeVisible();
+  },
+};
+
+export const ProviderRequiredCustody: Story = {
+  args: { photo: { ...PHOTO, syncState: 'offloaded' } },
+  parameters: {
+    custodyStatus: {
+      state: 'provider-required',
+      providerId: 'google-drive',
+      providerLabel: 'Google Drive',
+      accountLabel: 'm.rivera@gmail.com',
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByText('Google Drive required — reconnect as m.rivera@gmail.com to recover this original.'),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('img', { name: 'Google Drive required — reconnect as m.rivera@gmail.com to recover this original.' }),
+    ).toBeVisible();
+  },
+};
+
+export const LegacyUnboundCustody: Story = {
+  args: { photo: { ...PHOTO, syncState: 'offloaded' } },
+  parameters: {
+    custodyStatus: {
+      state: 'legacy-unbound',
+      providerId: null,
+      providerLabel: null,
+      accountLabel: null,
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText(
+        'Recovery required — this legacy cloud-only original is not yet bound to a verified provider account.',
+      ),
+    ).toBeVisible();
   },
 };
 

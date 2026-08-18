@@ -16,6 +16,8 @@ import { usePrefersReducedMotion } from './use-reduced-motion.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { directionOf } from '../../../shared/i18n/locales.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
+import { custodyPresentation } from '../backup/custody-presentation.js';
+import { usePhotoCustodyStatus } from '../backup/use-photo-custody-status.js';
 
 import './lightbox.css';
 
@@ -109,6 +111,8 @@ export function Lightbox({
     useLightboxChrome(photo.id);
 
   const offloaded = photo.syncState === 'offloaded';
+  const custodyStatus = usePhotoCustodyStatus(photo.id, offloaded);
+  const custody = custodyStatus === null ? null : custodyPresentation(intl, custodyStatus);
   const rehydrateErrorRef = useRef(onRehydrateError);
   useEffect(() => {
     rehydrateErrorRef.current = onRehydrateError;
@@ -169,9 +173,9 @@ export function Lightbox({
           ? 'Verifying original'
           : ephemeralStage === 'ready'
             ? 'Streaming original. It will be offloaded again when the lightbox closes.'
-            : 'Original unavailable';
+            : (custody?.text ?? 'Original unavailable');
     announce(custodyMessage, ephemeralStage === 'error' ? 'assertive' : 'polite', 'lightbox-custody');
-  }, [announce, ephemeralStage]);
+  }, [announce, custody?.text, ephemeralStage]);
 
   return (
     // The lightbox surface observes pointer activity and image/background clicks
@@ -265,7 +269,7 @@ export function Lightbox({
             {ephemeralStage === 'fetching' ? <span className="mono-data">Fetching original…</span> : null}
             {ephemeralStage === 'verifying' ? <span className="mono-data">Verifying original…</span> : null}
             {ephemeralStage === 'ready' ? <span className="mono-data">Streaming original · re-offloads on close</span> : null}
-            {ephemeralStage === 'error' ? <span className="mono-data">Original unavailable</span> : null}
+            {ephemeralStage === 'error' ? <span className="mono-data">{custody?.text ?? 'Original unavailable'}</span> : null}
             {ephemeralStage === 'ready' ? (
               <Button
                 size="sm"

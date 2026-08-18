@@ -1,7 +1,7 @@
 import { PhotosRepository } from '../db/photos-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { createExportRuntime, type DrainableExportFacade } from './export-runtime.js';
-import type { EphemeralOriginalService } from '../backup/ephemeral-originals.js';
+import { EphemeralOriginalError, type EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
 
@@ -33,6 +33,8 @@ export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExpo
       const opened = await service.open(photo.id, 'export');
       return { stream: opened.stream, release: opened.custody === 'ephemeral' ? () => service.release(photo.id, 'export') : undefined };
     },
+    custodyStatus: (photoId, error) =>
+      error instanceof EphemeralOriginalError ? deps.ephemeral().custodyStatus(photoId) : Promise.resolve(undefined),
     pickDestination: deps.pickDestination,
     progress: deps.progress,
   });

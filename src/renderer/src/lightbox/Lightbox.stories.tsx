@@ -8,6 +8,7 @@ import portraitPhoto from '../../../../tests/fixtures/photos/street-city.jpg';
 import { Lightbox, type LightboxProps } from './Lightbox';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
+import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 
 // #92 exit criteria: chrome hides after 2.2s idle and wakes on mousemove
 // (200ms ease-out fades); RAW records carry the PREVIEW badge; the EXIF
@@ -54,7 +55,7 @@ type EphemeralStage = 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
 
 let backupStubCalls = { status: 0, prepare: 0 };
 
-function installBackupStub(stage: EphemeralStage | null): void {
+function installBackupStub(stage: EphemeralStage | null, custodyStatus?: PhotoCustodyStatus): void {
   backupStubCalls = { status: 0, prepare: 0 };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     backup: {
@@ -62,6 +63,15 @@ function installBackupStub(stage: EphemeralStage | null): void {
         backupStubCalls.status += 1;
         return Promise.resolve({ stage });
       },
+      photoCustodyStatus: () =>
+        Promise.resolve(
+          custodyStatus ?? {
+            state: stage === 'error' ? 'unavailable' : 'available',
+            providerId: 'mock',
+            providerLabel: 'Local mock',
+            accountLabel: 'Mock account',
+          },
+        ),
       prepareEphemeral: () => {
         backupStubCalls.prepare += 1;
         return Promise.resolve({ custody: 'ephemeral' });
@@ -93,7 +103,10 @@ const meta: Meta<typeof Lightbox> = {
   },
   decorators: [
     (Story, context) => {
-      installBackupStub((context.parameters['ephemeralStage'] as EphemeralStage | null | undefined) ?? null);
+      installBackupStub(
+        (context.parameters['ephemeralStage'] as EphemeralStage | null | undefined) ?? null,
+        context.parameters['custodyStatus'] as PhotoCustodyStatus | undefined,
+      );
       const width = (context.parameters['lightboxWidth'] as number | undefined) ?? 960;
       const height = (context.parameters['lightboxHeight'] as number | undefined) ?? 640;
       return (
@@ -570,8 +583,50 @@ export const OffloadedUnavailable: Story = {
   parameters: { ephemeralStage: 'error' },
   play: async ({ canvasElement }) => {
     await waitFor(() =>
-      expect(within(canvasElement).getByText('Original unavailable', { selector: '.ovl-lightbox__custody span' })).toBeVisible(),
+      expect(
+        within(canvasElement).getByText('Local mock unavailable — try again without changing the original’s recorded custody.'),
+      ).toBeVisible(),
     );
+  },
+};
+
+export const OffloadedWrongAccount: Story = {
+  args: { photo: { ...PHOTO, syncState: 'offloaded' } },
+  parameters: {
+    ephemeralStage: 'error',
+    custodyStatus: {
+      state: 'wrong-account',
+      providerId: 'google-drive',
+      providerLabel: 'Google Drive',
+      accountLabel: 'm.rivera@gmail.com',
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText(
+        'Wrong Google Drive account — reconnect as m.rivera@gmail.com; this account cannot satisfy the recorded custody.',
+      ),
+    ).toBeVisible();
+  },
+};
+
+export const OffloadedMissingOrCorrupt: Story = {
+  args: { photo: { ...PHOTO, syncState: 'offloaded' } },
+  parameters: {
+    ephemeralStage: 'error',
+    custodyStatus: {
+      state: 'missing-corrupt',
+      providerId: 'pcloud',
+      providerLabel: 'pCloud',
+      accountLabel: 'owner@pcloud.test',
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText(
+        'Original missing or corrupt in pCloud — custody remains bound and recovery could not complete.',
+      ),
+    ).toBeVisible();
   },
 };
 

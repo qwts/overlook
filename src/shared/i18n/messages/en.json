@@ -329,6 +329,33 @@
   "copyableValue.failed": {
     "defaultMessage": "Could not copy {label}."
   },
+  "custody.account.fallback": {
+    "defaultMessage": "the recorded account"
+  },
+  "custody.provider.fallback": {
+    "defaultMessage": "Cloud provider"
+  },
+  "custody.state.available": {
+    "defaultMessage": "Offloaded — original available from {provider} as {account}."
+  },
+  "custody.state.disconnected": {
+    "defaultMessage": "{provider} disconnected — reconnect as {account} to open, restore, or export this original."
+  },
+  "custody.state.legacyUnbound": {
+    "defaultMessage": "Recovery required — this legacy cloud-only original is not yet bound to a verified provider account."
+  },
+  "custody.state.missingCorrupt": {
+    "defaultMessage": "Original missing or corrupt in {provider} — custody remains bound and recovery could not complete."
+  },
+  "custody.state.providerRequired": {
+    "defaultMessage": "{provider} required — reconnect as {account} to recover this original."
+  },
+  "custody.state.unavailable": {
+    "defaultMessage": "{provider} unavailable — try again without changing the original’s recorded custody."
+  },
+  "custody.state.wrongAccount": {
+    "defaultMessage": "Wrong {provider} account — reconnect as {account}; this account cannot satisfy the recorded custody."
+  },
   "export.allPhotos": {
     "defaultMessage": "Export all photos"
   },

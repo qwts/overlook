@@ -152,6 +152,8 @@ function installStub(options?: {
     keepDownloaded: () => Promise.resolve({ ok: true }),
     releaseEphemeral: () => Promise.resolve({ ok: true }),
     ephemeralStatus: () => Promise.resolve({ stage: null }),
+    photoCustodyStatus: () =>
+      Promise.resolve({ state: 'available', providerId: 'mock', providerLabel: 'Local mock', accountLabel: 'Mock account' }),
     prepareEphemeral: () => Promise.resolve({ custody: 'ephemeral' }),
     onEphemeralState: () => () => undefined,
     restoreOriginals: ({ photoIds }) =>

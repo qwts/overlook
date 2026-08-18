@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 
-import { EphemeralOriginalError, EphemeralOriginalService } from '../../src/main/backup/ephemeral-originals.js';
+import {
+  EphemeralOriginalError,
+  EphemeralOriginalService,
+  type EphemeralOriginalState,
+} from '../../src/main/backup/ephemeral-originals.js';
 import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
@@ -60,7 +64,7 @@ async function world(
   const statuses = new Map<string, SyncStatus>([...photos.keys()].map((id) => [id, 'offloaded']));
   const ephemeral = new Map<string, Buffer>();
   const durable = new Set<string>();
-  const states: { photoId: string; stage: string }[] = [];
+  const states: EphemeralOriginalState[] = [];
   const syncUpdates: { id: string; syncState: SyncStatus }[][] = [];
   const work: number[] = [];
   let storageChanges = 0;
@@ -82,6 +86,13 @@ async function world(
         return { authority: AUTHORITY, provider };
       },
     },
+    custodyStatus: () =>
+      Promise.resolve({
+        state: providerConnected ? 'available' : 'disconnected',
+        providerId: 'mock',
+        providerLabel: 'Local mock',
+        accountLabel: 'Mock account',
+      }),
     custodyChanged: () => undefined,
     ledger: {
       status: (id) => statuses.get(id),
@@ -225,6 +236,13 @@ describe('ephemeral originals (#306)', () => {
     );
     assert.equal(missing.ephemeral.size, 0);
     assert.equal(missing.states.at(-1)?.stage, 'error');
+    assert.equal(missing.states.at(-1)?.reason, 'remote-missing');
+    assert.deepEqual(await missing.service.custodyStatus('P0'), {
+      state: 'missing-corrupt',
+      providerId: 'mock',
+      providerLabel: 'Local mock',
+      accountLabel: 'Mock account',
+    });
   });
 
   test('close during verification cannot publish abandoned custody or evict a shared viewer', async () => {

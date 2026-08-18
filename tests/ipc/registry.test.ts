@@ -209,6 +209,27 @@ describe('channel registry', () => {
     );
   });
 
+  test('photo custody failures cross IPC as a closed typed vocabulary (#734)', () => {
+    const custody = {
+      state: 'wrong-account' as const,
+      providerId: 'pcloud' as const,
+      providerLabel: 'pCloud',
+      accountLabel: 'owner@example.test',
+    };
+    assert.deepEqual(channels.backupPhotoCustodyStatus.response.parse(custody), custody);
+    assert.deepEqual(channels.backupEphemeralStatus.response.parse({ stage: 'error', reason: 'custody-wrong-account' }), {
+      stage: 'error',
+      reason: 'custody-wrong-account',
+    });
+    assert.deepEqual(events.ephemeralOriginalState.payload.parse({ photoId: 'P1', stage: 'error', reason: 'remote-missing' }), {
+      photoId: 'P1',
+      stage: 'error',
+      reason: 'remote-missing',
+    });
+    assert.throws(() => channels.backupPhotoCustodyStatus.response.parse({ ...custody, state: 'generic-error' }));
+    assert.throws(() => channels.backupEphemeralStatus.response.parse({ stage: 'error', reason: 'provider-token' }));
+  });
+
   test('clipboard writes are bounded and registry-validated (#805)', () => {
     assert.deepEqual(channels.clipboardWrite.request.parse({ text: 'copy me' }), { text: 'copy me' });
     assert.throws(() => channels.clipboardWrite.request.parse({ text: 'x'.repeat(1_000_001) }));

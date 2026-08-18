@@ -3,25 +3,23 @@ import type { Readable } from 'node:stream';
 import { CustodyResolutionError, type CustodyHandle, type CustodyHandleResolver } from './custody-handle.js';
 import { ProviderError } from './provider.js';
 import type { SyncStatus } from '../../shared/library/types.js';
+import { custodyStateFromFailure, type EphemeralFailureReason, type PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 export type OriginalPurpose = 'view' | 'prefetch' | 'export';
 export type OriginalCustody = 'durable' | 'ephemeral';
 export type EphemeralStage = 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
+export interface EphemeralOriginalState {
+  readonly photoId: string;
+  readonly stage: EphemeralStage;
+  readonly reason?: EphemeralFailureReason | undefined;
+}
 
 export class EphemeralOriginalError extends Error {
   override readonly name = 'EphemeralOriginalError';
 
   constructor(
     message: string,
-    readonly reason:
-      | 'not-found'
-      | 'not-offloaded'
-      | 'custody-disconnected'
-      | 'custody-wrong-account'
-      | 'custody-unavailable'
-      | 'remote-missing'
-      | 'verify-failed'
-      | 'cache-full',
+    readonly reason: EphemeralFailureReason,
   ) {
     super(message);
   }
@@ -29,6 +27,7 @@ export class EphemeralOriginalError extends Error {
 
 export interface EphemeralOriginalDeps {
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyStatus: (photoId: string) => Promise<PhotoCustodyStatus>;
   readonly custodyChanged: () => void;
   readonly ledger: {
     readonly status: (photoId: string) => SyncStatus | undefined;
@@ -51,7 +50,7 @@ export interface EphemeralOriginalDeps {
   readonly workChanged: (delta: 1 | -1) => void;
   readonly syncStateChanged: (updates: readonly { readonly id: string; readonly syncState: SyncStatus }[]) => void;
   readonly storageChanged: () => void;
-  readonly stateChanged: (state: { readonly photoId: string; readonly stage: EphemeralStage }) => void;
+  readonly stateChanged: (state: EphemeralOriginalState) => void;
   readonly audit: (line: string) => void;
   readonly maxCacheBytes?: number | undefined;
 }
@@ -74,7 +73,7 @@ export class EphemeralOriginalService {
   private readonly inFlight = new Map<string, Promise<CacheEntry>>();
   private readonly ownersByHash = new Map<string, Map<string, number>>();
   private readonly releasedWhilePreparing = new Set<string>();
-  private readonly states = new Map<string, EphemeralStage>();
+  private readonly states = new Map<string, Omit<EphemeralOriginalState, 'photoId'>>();
   private readonly maxCacheBytes: number;
   private cachedBytes = 0;
 
@@ -147,8 +146,15 @@ export class EphemeralOriginalService {
     await this.release(photoId);
   }
 
-  status(photoId: string): EphemeralStage | null {
+  status(photoId: string): Omit<EphemeralOriginalState, 'photoId'> | null {
     return this.states.get(photoId) ?? null;
+  }
+
+  async custodyStatus(photoId: string): Promise<PhotoCustodyStatus> {
+    const status = await this.deps.custodyStatus(photoId);
+    const failure = this.states.get(photoId)?.reason;
+    const failureState = failure === undefined ? null : custodyStateFromFailure(failure);
+    return failureState === 'missing-corrupt' ? { ...status, state: failureState } : status;
   }
 
   async release(photoId: string, purpose: Exclude<OriginalPurpose, 'prefetch'> = 'view'): Promise<void> {
@@ -236,7 +242,7 @@ export class EphemeralOriginalService {
       return entry;
     } catch (error) {
       if (staged && !published) await this.deps.blobs.deleteEphemeral(contentHash);
-      this.changeState(photoId, 'error');
+      this.changeState(photoId, 'error', error instanceof EphemeralOriginalError ? error.reason : 'custody-unavailable');
       throw error;
     } finally {
       this.deps.workChanged(-1);
@@ -302,8 +308,9 @@ export class EphemeralOriginalService {
     if (owners?.size === 0 && this.ownersByHash.get(contentHash) === owners) this.ownersByHash.delete(contentHash);
   }
 
-  private changeState(photoId: string, stage: EphemeralStage): void {
-    this.states.set(photoId, stage);
-    this.deps.stateChanged({ photoId, stage });
+  private changeState(photoId: string, stage: EphemeralStage, reason?: EphemeralFailureReason): void {
+    const state = { stage, ...(reason === undefined ? {} : { reason }) };
+    this.states.set(photoId, state);
+    this.deps.stateChanged({ photoId, ...state });
   }
 }
