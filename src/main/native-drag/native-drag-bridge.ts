@@ -4,7 +4,7 @@ import { PHOTO_DRAG_TYPE } from '../../shared/library/photo-drag.js';
 
 const nativeRequire = createRequire(import.meta.url);
 
-export type NativeDragUnavailableReason = 'unsupported-platform' | 'unsigned-build' | 'native-unavailable';
+export type NativeDragUnavailableReason = 'unsupported-platform' | 'unsigned-build' | 'native-unavailable' | 'disabled';
 
 export interface NativePromiseItem {
   readonly token: string;
@@ -65,6 +65,7 @@ function validBinding(value: unknown): value is NativeBinding {
 export function createNativeDragBridge(options: {
   readonly platform: NodeJS.Platform;
   readonly packaged: boolean;
+  readonly enabled: boolean;
   readonly bundleId?: string | undefined;
   readonly loadBinding?: (() => unknown) | undefined;
 }): NativeDragBridge {
@@ -79,6 +80,14 @@ export function createNativeDragBridge(options: {
     }
     if (!options.packaged) {
       unavailable = 'unsigned-build';
+      return null;
+    }
+    // The signed AppKit bridge starts a second native session from Chromium's
+    // active HTML drag and can terminate the process before the pointer leaves
+    // Overlook (#1027). Keep production fail-closed until drag initiation is
+    // redesigned around one authoritative session.
+    if (!options.enabled) {
+      unavailable = 'disabled';
       return null;
     }
     if (binding !== undefined) return binding;
