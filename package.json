@@ -91,7 +91,7 @@
     "seed:perf": "OVERLOOK_SEED_SYNTHETIC=200000 electron-vite dev",
     "benchmark:cold-storage": "node scripts/benchmark-cold-storage.mjs",
     "benchmark:embedding": "node tools/agent-guard/run-guarded.mjs --label benchmark:embedding --timeout-s 900 -- node scripts/benchmark-embedding-model.mjs",
-    "postinstall": "node scripts/ensure-electron-binary.mjs && electron-builder install-app-deps"
+    "postinstall": "node scripts/ensure-electron-binary.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",
@@ -168,6 +168,7 @@
   },
   "allowScripts": {
     "@overlook/touch-id@0.1.0": true,
+    "better-sqlite3-multiple-ciphers": false,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
     "electron@42.6.1": true,

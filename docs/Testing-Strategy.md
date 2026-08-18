@@ -53,13 +53,14 @@ Unit tests run against compiled JS: `tsconfig.test.json` emits unit-testable
 sources (`src/shared/` + `tests/`, `jsx: react-jsx` ready for future `.tsx`)
 to `.test-dist/`, then `node --test` runs the output — no loader magic.
 **The unit runtime is Electron's own Node** (`ELECTRON_RUN_AS_NODE=1 electron
---test`, #72): native modules in `node_modules` carry the Electron ABI
-(`postinstall` = `electron-builder install-app-deps`), so one ABI serves the
-unit lane and the app — plain `node` cannot load the drivers. Electron's
-major is capped by driver-prebuild availability (ADR-0006 prebuilt-only;
-Dependabot ignore records the removal condition). E2E
-builds the app once in `tests/e2e/global-setup.ts` (concurrent builds would
-clobber each other's output).
+--test`, #72): native modules in `node_modules` must load in the same runtime as
+the app. Encrypted SQLite v13 uses bundled Node-API prebuilds across supported
+Electron majors. The shipped native set is now entirely Node-API or loadable
+extensions, so electron-builder's ABI rebuild is disabled; adding an ABI-bound
+module requires restoring a selective rebuild strategy. Plain `node` is not the
+native-runtime proof. E2E builds the app once in
+`tests/e2e/global-setup.ts` (concurrent builds would clobber each other's
+output).
 
 ### Electron multi-process gate coverage (#51)
 
@@ -179,9 +180,12 @@ the operational package and perf workflows remain manual.
 deliberately **not** in the PR gate — it is the slow lane. The **Package**
 workflow (`workflow_dispatch`) builds unsigned mac + win artifacts on demand;
 run it when packaging risk changes (Electron bumps, native modules, builder
-config). electron-builder's `npmRebuild` stays on and native modules must land
-in `dependencies` so the rebuild mechanism engages when better-sqlite3/sharp
-arrive (M03, ADR-0006's prebuilt-only policy). Signing/notarization is M11.
+config). Native modules stay in `dependencies`; the reviewed install step lays
+down Node-API prebuilds, SQLite's inferred `binding.gyp` install is explicitly
+denied, and `npmRebuild: false` prevents electron-rebuild from mistaking that
+retained source metadata for an ABI-bound dependency. The after-pack hook
+removes every foreign onnxruntime and SQLite prebuild before architecture
+verification (ADR-0006, #683, #1020). Signing/notarization is M11.
 
 ### Perf baselines (manual, #74)
 

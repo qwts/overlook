@@ -128,8 +128,9 @@ jobs:
             # sharp` re-resolves the whole tree's optional deps for the target
             # and prunes the x64 build toolchain (@rollup/rollup-win32-x64-msvc,
             # swc, …) that must run natively on this x64 runner. npm pack +
-            # extract touches nothing else; better-sqlite3 is rebuilt for the
-            # target arch by electron-builder's npmRebuild (#683).
+            # extract touches nothing else. better-sqlite3 v13 bundles both
+            # Windows Node-API prebuilds; afterPack keeps only $WIN_ARCH before
+            # verify-windows-arch inspects every shipped .node (#683, #1020).
             sharp_ver=$(node -p "require('./node_modules/sharp/package.json').version")
             pkg="sharp-win32-$WIN_ARCH"
             tgz="img-$pkg-$sharp_ver.tgz"

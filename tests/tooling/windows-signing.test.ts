@@ -44,6 +44,25 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /node scripts\/verify-windows-arch\.mjs "\$WIN_ARCH"/u);
   });
 
+  test('SQLite v13 foreign prebuilds are pruned before Windows architecture verification', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const builder = source('electron-builder.yml');
+    const pruner = source('scripts/prune-foreign-binaries.mjs');
+    assert.match(builder, /afterPack: scripts\/prune-foreign-binaries\.mjs/u);
+    assert.match(pruner, /node_modules\/better-sqlite3-multiple-ciphers\/prebuilds/u);
+    assert.match(pruner, /const FLAT_PREBUILD_NAME/u);
+    assert.match(pruner, /flatPrebuildTarget\(entry\.name\)/u);
+    assert.ok(workflow.indexOf('npm run "dist:win:$WIN_ARCH"') < workflow.indexOf('node scripts/verify-windows-arch.mjs'));
+  });
+
+  test('packaging preserves reviewed Node-API binaries rather than rebuilding SQLite source metadata', () => {
+    const packageJson = JSON.parse(source('package.json')) as { readonly scripts?: Record<string, string> };
+    const builder = source('electron-builder.yml');
+    assert.doesNotMatch(packageJson.scripts?.['postinstall'] ?? '', /install-app-deps/u);
+    assert.match(builder, /npmRebuild: false/u);
+    assert.match(builder, /Every shipped native dependency is Node-API or a loadable/u);
+  });
+
   test('the NSIS payload uses a filter the installer can actually decode', () => {
     const workflow = source('.github/workflows/package.yml');
     // electron-builder's downloaded 7-Zip 24.x auto-applies its ARM64 branch

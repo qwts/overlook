@@ -21,6 +21,7 @@ describe('encrypted SQLite v13 migration (#1020)', () => {
     const locked = packages[`node_modules/${dependencyName}`] ?? {};
 
     assert.equal(dependencies[dependencyName], '13.0.3');
+    assert.equal(allowScripts[dependencyName], false);
     assert.equal(
       Object.keys(allowScripts).some((name) => name.startsWith(`${dependencyName}@`)),
       false,
@@ -40,5 +41,17 @@ describe('encrypted SQLite v13 migration (#1020)', () => {
     assert.equal(dependencyManifest['types'], 'index.d.ts');
     assert.equal(dependencyManifest['gypfile'], false);
     assert.equal(existsSync(join(root, declarationPath)), true);
+  });
+
+  test('keeps the reviewed Node-API prebuild instead of rebuilding retained source metadata', () => {
+    const manifest = json('package.json');
+    const scripts = manifest['scripts'] as Record<string, string>;
+    const builder = readFileSync(join(root, 'electron-builder.yml'), 'utf8');
+    const dependencyManifest = json(`node_modules/${dependencyName}/package.json`);
+
+    assert.equal(dependencyManifest['gypfile'], false);
+    assert.doesNotMatch(scripts['postinstall'] ?? '', /install-app-deps/u);
+    assert.match(builder, /npmRebuild: false/u);
+    assert.match(builder, /Rebuilding here would[\s\S]*SQLite[\s\S]*v13's bundled binding\.gyp/u);
   });
 });

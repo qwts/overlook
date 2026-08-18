@@ -3,16 +3,15 @@
 // multi-platform packages that this build can never load.
 //
 // Most native dependencies here ship one package per platform (sqlite-vec's
-// sqlite-vec-darwin-arm64 and friends), so npm installs only the matching one
-// and nothing foreign reaches the app. onnxruntime-node instead ships every
-// platform inside a single package —
-// bin/napi-v6/{darwin,linux,win32}/{arm64,x64} — so every build packaged all
-// six. On Windows that fails verify-windows-arch (#683) with three "not a PE
-// image" errors (the Mach-O and ELF bindings) plus the win32/arm64 binding in
-// the x64 build; on macOS the same surplus ships silently, because no
-// equivalent gate exists there. Either way the installer carries binaries it
-// will never dlopen — including DirectML.dll and the onnxruntime shared
-// libraries, which asarUnpack deliberately leaves unpacked beside the archive.
+// sqlite-vec-darwin-arm64 and friends), so npm installs only the matching one.
+// Two runtime packages instead bundle every target in one package:
+//
+// - onnxruntime-node: bin/napi-v6/<platform>/<arch>/
+// - better-sqlite3-multiple-ciphers v13: prebuilds/<platform>-<arch>.node
+//
+// On Windows those foreign files fail verify-windows-arch (#683) with non-PE
+// or wrong-machine errors; on macOS the same surplus would ship silently.
+// Either way the installer must not carry binaries it can never dlopen.
 //
 // Pruning here rather than through electron-builder `files` patterns is
 // deliberate: the cross-compiled Windows arm64 build runs on an x64 runner and
@@ -28,9 +27,12 @@ import { buildQuickLookExtension } from './build-quick-look-extension.mjs';
 // Package-relative roots whose immediate layout is <platform>/<arch>/.
 export const BUNDLED_MULTI_PLATFORM_ROOTS = ['node_modules/onnxruntime-node/bin/napi-v6'];
 
+// Package-relative roots whose files are <platform>-<arch>.node.
+export const BUNDLED_FLAT_PREBUILD_ROOTS = ['node_modules/better-sqlite3-multiple-ciphers/prebuilds'];
+
 // electron-builder's Arch enum is numeric; only the targets this app builds for
 // are mapped. An unmapped arch prunes nothing rather than guessing wrong.
-export const ARCH_NAME = { 1: 'x64', 3: 'arm64' };
+export const ARCH_NAME = { 1: 'x64', 3: 'arm64', 4: 'universal' };
 
 // A universal macOS build genuinely needs both darwin slices; every other
 // target wants exactly one platform/arch pair.
@@ -43,6 +45,14 @@ export function keepsArch(targetArch, candidateArch) {
 export function isForeign(platformDir, archDir, targetPlatform, targetArch) {
   if (platformDir !== targetPlatform) return true;
   return !keepsArch(targetArch, archDir);
+}
+
+const FLAT_PREBUILD_NAME = /^(darwin|linux|linuxmusl|win32)-(arm64|x64)\.node$/u;
+
+export function flatPrebuildTarget(fileName) {
+  const match = FLAT_PREBUILD_NAME.exec(fileName);
+  if (!match) return undefined;
+  return { platform: match[1], arch: match[2] };
 }
 
 async function entries(dir) {
@@ -77,7 +87,7 @@ export async function findRoots(appOutDir, relativeRoot, depth = 10) {
   return found;
 }
 
-export async function pruneForeignBinaries(appOutDir, targetPlatform, targetArch) {
+async function pruneNestedBinaries(appOutDir, targetPlatform, targetArch) {
   const removed = [];
   for (const relativeRoot of BUNDLED_MULTI_PLATFORM_ROOTS) {
     for (const root of await findRoots(appOutDir, relativeRoot)) {
@@ -99,6 +109,32 @@ export async function pruneForeignBinaries(appOutDir, targetPlatform, targetArch
   return removed;
 }
 
+async function pruneFlatPrebuilds(appOutDir, targetPlatform, targetArch) {
+  const removed = [];
+  for (const relativeRoot of BUNDLED_FLAT_PREBUILD_ROOTS) {
+    for (const root of await findRoots(appOutDir, relativeRoot)) {
+      for (const entry of await entries(root)) {
+        if (!entry.isFile()) continue;
+        const candidate = flatPrebuildTarget(entry.name);
+        // Unknown files are package metadata or a future layout. Preserve them
+        // rather than guessing and deleting a target binary.
+        if (!candidate || !isForeign(candidate.platform, candidate.arch, targetPlatform, targetArch)) continue;
+        const target = join(root, entry.name);
+        await rm(target, { force: true });
+        removed.push(target);
+      }
+    }
+  }
+  return removed;
+}
+
+export async function pruneForeignBinaries(appOutDir, targetPlatform, targetArch) {
+  return [
+    ...(await pruneNestedBinaries(appOutDir, targetPlatform, targetArch)),
+    ...(await pruneFlatPrebuilds(appOutDir, targetPlatform, targetArch)),
+  ];
+}
+
 export default async function afterPack(context) {
   const targetPlatform = context.electronPlatformName;
   const targetArch = ARCH_NAME[context.arch];
@@ -110,7 +146,7 @@ export default async function afterPack(context) {
   console.log(
     removed.length === 0
       ? `prune-foreign-binaries: nothing foreign for ${targetPlatform}/${targetArch}.`
-      : `prune-foreign-binaries: removed ${removed.length} foreign binary director${removed.length === 1 ? 'y' : 'ies'} for ${targetPlatform}/${targetArch}.`,
+      : `prune-foreign-binaries: removed ${removed.length} foreign binary path${removed.length === 1 ? '' : 's'} for ${targetPlatform}/${targetArch}.`,
   );
   for (const path of removed) console.log(`  - ${path}`);
   if (targetPlatform === 'darwin') {
