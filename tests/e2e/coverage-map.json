@@ -1428,6 +1428,7 @@
     {
       "id": "m18-recovery-key-backup-import",
       "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Recovery-key import admits exactly one local .key file and explains empty, multi-file, wrong-extension, and pathless drops (#480).",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -1440,12 +1441,17 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/dom/recovery-key-drop.test.ts"]
         }
       ]
     },
     {
       "id": "m18-cloud-disaster-recovery-workflow",
       "wiki": "User-Story-M18-Recovery-key",
+      "$note": "Cloud restore exposes the same exact-one recovery-key picker and drop contract, with real-file drag coverage for multi-file, wrong-extension, and valid inputs (#480).",
       "coverage": [
         {
           "type": "playwright-e2e",
