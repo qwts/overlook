@@ -1322,6 +1322,18 @@
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
   },
+  "recoveryKey.drop.empty": {
+    "defaultMessage": "Drop one Overlook recovery-key file."
+  },
+  "recoveryKey.drop.multiple": {
+    "defaultMessage": "Choose or drop one recovery-key file at a time."
+  },
+  "recoveryKey.drop.unavailable": {
+    "defaultMessage": "This dropped file has no readable local path. Use the file picker instead."
+  },
+  "recoveryKey.drop.wrongType": {
+    "defaultMessage": "Choose an Overlook .key recovery file."
+  },
   "restore.chrome.complete": {
     "defaultMessage": "Restore complete"
   },
@@ -1384,6 +1396,15 @@
   },
   "restore.missing.help": {
     "defaultMessage": "Unverified photos were excluded from the healed library. Their cloud objects were moved to the provider Trash when present, and the list is saved as restore-report.json plus quarantine/gen-N/gaps.json. Export the list before you leave this screen if you still need it."
+  },
+  "restore.recoveryKey.choose": {
+    "defaultMessage": "Choose recovery key"
+  },
+  "restore.recoveryKey.dropHint": {
+    "defaultMessage": "Choose or drop one .key file."
+  },
+  "restore.recoveryKey.none": {
+    "defaultMessage": "No key selected"
   },
   "restore.restored.count": {
     "defaultMessage": "{count, plural, one {# photo restored.} other {# photos restored.}}"

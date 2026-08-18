@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 /* eslint-disable max-lines -- story stub file, large setup */
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { useState, type ReactElement } from 'react';
 
@@ -457,6 +457,9 @@ function installStub(options?: {
     diagnostics: diagnosticsApi,
     fileProvider: fileProviderApi,
     interop: interopApi,
+    import: {
+      pathForFile: (file: File) => `/Users/ansel/Desktop/${file.name}`,
+    } as unknown as OverlookApi['import'],
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
       stats: () => Promise.resolve({ photos: 1542, bytes: 48_000_000_000, pending: 0, lastBackupAt: null, offloadedBytes: 12_600_000_000 }),
@@ -681,7 +684,7 @@ export const RestoreDiscoveryAndWarnings: Story = {
     const restoreButton = await waitFor(() => body.getByRole('button', { name: 'Restore library…' }));
     await userEvent.click(restoreButton);
     await expect(body.getByRole('dialog', { name: 'Restore from cloud backup' })).toBeVisible();
-    await userEvent.click(body.getByRole('button', { name: 'Choose recovery key' }));
+    await userEvent.click(body.getByRole('button', { name: /^Choose recovery key/u }));
     await userEvent.type(body.getByLabelText('Recovery-key password'), 'correct horse battery staple');
     await userEvent.click(body.getByRole('button', { name: 'Discover backups' }));
     await waitFor(() => expect(body.getByTestId('restore-library-card')).toHaveTextContent('1,542 photos'));
@@ -701,6 +704,30 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Restore 1,542 photos' }));
     await waitFor(() => expect(body.getByText('Restore complete')).toBeVisible());
     await expect(body.getByText('Generation 9 failed validation; restored generation 7.')).toBeVisible();
+  },
+};
+
+export const RestoreRecoveryKeyDrop: Story = {
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await waitFor(() => body.getByRole('button', { name: 'Restore library…' })));
+    const target = body.getByTestId('recovery-key-drop-target');
+    const dropFiles = (...files: File[]): Promise<boolean> => {
+      const dataTransfer = new DataTransfer();
+      Object.defineProperty(dataTransfer, 'files', { configurable: true, value: files });
+      return fireEvent.drop(target, { dataTransfer });
+    };
+
+    await dropFiles(new File(['first'], 'first.key'), new File(['second'], 'second.key'));
+    await expect(body.getByRole('alert')).toHaveTextContent('one recovery-key file at a time');
+
+    await dropFiles(new File(['notes'], 'notes.txt'));
+    await expect(body.getByRole('alert')).toHaveTextContent('Overlook .key recovery file');
+
+    await dropFiles(new File(['key'], 'overlook-recovery.key'));
+    await expect(body.getByText('overlook-recovery.key')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Choose recovery key overlook-recovery.key' })).toBeVisible();
+    await expect(body.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 

@@ -14,9 +14,11 @@ keychain loss or device migration never costs me my encrypted photos.
   Import…). Backup gates on password + confirmation + strength ≥ Fair + the
   explicit cannot-be-reset acknowledgment; success shows the saved-file card
   and the store-it-safely warning.
-- Import accepts a `.key` file (picker or drop) + password; wrong password
-  fails closed on the designed copy; a key that doesn't match the library's
-  stored key rows is refused.
+- Import and cloud restore accept exactly one local `.key` file through the
+  picker or an accessible drop target. Empty, multi-file, wrong-extension, and
+  pathless drops stay local and explain the refusal; exact size, format, and
+  authentication remain main-process checks. Wrong passwords and keys that do
+  not match the library's stored key rows fail closed.
 - Cross-profile round trip proven in CI: export on A, restore A's encrypted
   files to B, import the key, relaunch — A's photos decrypt with A's
   fingerprint (`tests/e2e/keys-recovery.spec.ts`).
