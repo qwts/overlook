@@ -60,6 +60,7 @@ const backupProviders = createInvoker(channels.backupProviders, invokeTransport)
 const backupProviderStatus = createInvoker(channels.backupProviderStatus, invokeTransport);
 const backupProviderStorage = createInvoker(channels.backupProviderStorage, invokeTransport);
 const backupConnect = createInvoker(channels.backupConnect, invokeTransport);
+const backupDisconnectPreflight = createInvoker(channels.backupDisconnectPreflight, invokeTransport);
 const backupDisconnect = createInvoker(channels.backupDisconnect, invokeTransport);
 const backupOpenCapacitySettings = createInvoker(channels.backupOpenCapacitySettings, invokeTransport);
 const libraryAlbums = createInvoker(channels.libraryAlbums, invokeTransport);
@@ -282,6 +283,7 @@ const overlook: OverlookApi = {
     providerStatus: backupProviderStatus,
     providerStorage: backupProviderStorage,
     connect: backupConnect,
+    disconnectPreflight: backupDisconnectPreflight,
     disconnect: backupDisconnect,
     removeAuthorizationAnyway: createInvoker(channels.backupRemoveAuthorizationAnyway, invokeTransport),
     openCapacitySettings: backupOpenCapacitySettings,

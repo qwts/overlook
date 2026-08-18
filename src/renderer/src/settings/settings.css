@@ -321,6 +321,48 @@
   color: var(--accent-red);
 }
 
+.ovl-settings__disconnectState {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ovl-settings__disconnectState p {
+  margin: 0;
+}
+
+.ovl-settings__disconnectRisk,
+.ovl-settings__custodyRequirement {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--accent-amber);
+  background: var(--accent-amber-dim);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-2);
+}
+
+.ovl-settings__disconnectLibraries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--text-muted);
+}
+
+.ovl-settings__custodyRequirement div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-settings__custodyRequirement span {
+  color: var(--text-muted);
+}
+
 .ovl-settings__restoreOriginals {
   display: flex;
   flex-direction: column;

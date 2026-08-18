@@ -171,6 +171,12 @@ describe('provider custody-change policy (#732)', () => {
     r.tokenStore().save(record);
     r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-custody-gate'), fault: undefined });
 
+    const preflight = await r.disconnectPreflight('pcloud');
+    assert.equal(preflight.code, 'custody-restore-required');
+    assert.equal(preflight.custody?.totalItems, 2);
+    assert.deepEqual(r.tokenStore().load(), record, 'read-only preflight keeps authorization');
+    assert.equal(providerId, 'pcloud');
+
     const disconnected = await r.disconnect('pcloud');
     assert.equal(disconnected.code, 'custody-restore-required');
     assert.equal(disconnected.custody?.totalItems, 2);
@@ -183,7 +189,40 @@ describe('provider custody-change policy (#732)', () => {
     assert.deepEqual(preflights, [
       { providerId: 'pcloud', accountId: '1001' },
       { providerId: 'pcloud', accountId: '1001' },
+      { providerId: 'pcloud', accountId: '1001' },
     ]);
+  });
+
+  test('a zero-risk disconnect preflight returns exact empty custody without mutation', async () => {
+    let providerId: string | null = 'pcloud';
+    const r = runtime({
+      providerId: () => providerId,
+      setProviderId: (id) => {
+        providerId = id;
+      },
+      custodyPreflight: (credential) => ({ credential, totalItems: 0, totalBytes: 0, libraries: [] }),
+    });
+    r.tokenStore().save({
+      accessToken: 'preflight-token',
+      apiHost: 'api.pcloud.com',
+      connectedAt: '2026-08-06T00:00:00.000Z',
+      accountId: '1001',
+      accountLabel: 'owner@pcloud.test',
+    });
+    r.buildProvider({ mockRootDir: join(tmpdir(), 'overlook-runtime-empty-preflight'), fault: undefined });
+
+    assert.deepEqual(await r.disconnectPreflight('pcloud'), {
+      ok: true,
+      reason: null,
+      custody: {
+        credential: { providerId: 'pcloud', accountId: '1001' },
+        totalItems: 0,
+        totalBytes: 0,
+        libraries: [],
+      },
+    });
+    assert.equal(providerId, 'pcloud');
+    assert.equal(r.tokenStore().load()?.accountId, '1001');
   });
 
   test('emergency removal marks the exact account provider-required before clearing credentials', async () => {

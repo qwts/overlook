@@ -48,6 +48,7 @@ export function createBackupFacade(options: BackupFacadeOptions) {
     providerStatus: (providerId: string) => options.runtime().status(providerId),
     providerStorage: (providerId: string) => options.runtime().storage(providerId),
     connect: (providerId: string) => options.runtime().connect(providerId),
+    disconnectPreflight: (providerId: string) => options.runtime().disconnectPreflight(providerId),
     disconnect: (providerId: string) => options.runtime().disconnect(providerId),
     removeAuthorizationAnyway: (providerId: string) => options.runtime().removeAuthorizationAnyway(providerId),
     openCapacitySettings: (providerId: string) => options.runtime().openCapacitySettings(providerId),

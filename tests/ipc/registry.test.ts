@@ -189,6 +189,26 @@ describe('channel registry', () => {
     );
   });
 
+  test('disconnect custody preflight is read-only and provider-addressed (#734)', () => {
+    assert.deepEqual(channels.backupDisconnectPreflight.request.parse({ providerId: 'pcloud' }), { providerId: 'pcloud' });
+    assert.throws(() => channels.backupDisconnectPreflight.request.parse({ providerId: '../pcloud' }));
+    assert.deepEqual(
+      channels.backupDisconnectPreflight.response.parse({
+        ok: false,
+        reason: 'Restore required.',
+        code: 'custody-restore-required',
+        retryable: false,
+        custody: {
+          credential: { providerId: 'pcloud', accountId: 'account-1' },
+          totalItems: 1,
+          totalBytes: 42,
+          libraries: [{ libraryId: 'library-1', name: 'Archive', items: 1, bytes: 42, legacyUnbound: false }],
+        },
+      }).code,
+      'custody-restore-required',
+    );
+  });
+
   test('clipboard writes are bounded and registry-validated (#805)', () => {
     assert.deepEqual(channels.clipboardWrite.request.parse({ text: 'copy me' }), { text: 'copy me' });
     assert.throws(() => channels.clipboardWrite.request.parse({ text: 'x'.repeat(1_000_001) }));

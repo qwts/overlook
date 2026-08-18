@@ -747,6 +747,11 @@ export const channels = {
   // interactive providers open a system-browser OAuth flow. Tokens never cross
   // this boundary; the renderer only learns ok/reason.
   backupConnect: defineChannel('backup:connect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
+  backupDisconnectPreflight: defineChannel(
+    'backup:disconnect-preflight',
+    z.object({ providerId: providerIdSchema }),
+    providerConnectResultSchema,
+  ),
   backupDisconnect: defineChannel('backup:disconnect', z.object({ providerId: providerIdSchema }), providerConnectResultSchema),
   backupRemoveAuthorizationAnyway: defineChannel(
     'backup:remove-authorization-anyway',

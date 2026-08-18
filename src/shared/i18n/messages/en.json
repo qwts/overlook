@@ -1769,17 +1769,41 @@
   "settings.storage.connect.failed": {
     "defaultMessage": "Connection failed. Try again."
   },
-  "settings.storage.disconnect.action": {
-    "defaultMessage": "Disconnect provider"
+  "settings.storage.custody.countAndBytes": {
+    "defaultMessage": "{count} · {bytes}"
+  },
+  "settings.storage.custody.recoveryRequirement": {
+    "defaultMessage": "Reconnect {name} as {account} to recover access to {count, plural, one {# cloud-only original} other {# cloud-only originals}}."
+  },
+  "settings.storage.custody.required": {
+    "defaultMessage": "{name} required"
   },
   "settings.storage.disconnect.cancel": {
     "defaultMessage": "Cancel"
   },
-  "settings.storage.disconnect.copy": {
-    "defaultMessage": "This removes this device’s saved {name} authorization."
+  "settings.storage.disconnect.checking": {
+    "defaultMessage": "Checking cloud-only originals…"
+  },
+  "settings.storage.disconnect.emergencyCopy": {
+    "defaultMessage": "Overlook will keep every cloud-only original bound to {name}. Reconnect {name} as {account} to open, restore, or export them."
+  },
+  "settings.storage.disconnect.emergencyMenuAction": {
+    "defaultMessage": "{action}…"
+  },
+  "settings.storage.disconnect.emergencyTitle": {
+    "defaultMessage": "Remove {name} authorization anyway?"
   },
   "settings.storage.disconnect.failed": {
     "defaultMessage": "Disconnect failed. Check status and try again."
+  },
+  "settings.storage.disconnect.legacy": {
+    "defaultMessage": "not yet verified"
+  },
+  "settings.storage.disconnect.libraryRisk": {
+    "defaultMessage": "{name}: {count, plural, one {# original} other {# originals}} · {bytes}"
+  },
+  "settings.storage.disconnect.libraryWithLegacy": {
+    "defaultMessage": "{library} · {legacy}"
   },
   "settings.storage.disconnect.progress": {
     "defaultMessage": "Disconnecting…"
@@ -1788,10 +1812,40 @@
     "defaultMessage": "Encrypted data already stored in {name} is not deleted."
   },
   "settings.storage.disconnect.removing": {
-    "defaultMessage": "Removing this device’s saved authorization…"
+    "defaultMessage": "Removing authorization…"
+  },
+  "settings.storage.disconnect.restoreFailed": {
+    "defaultMessage": "Restore failed — authorization remains connected."
+  },
+  "settings.storage.disconnect.restoreFirst": {
+    "defaultMessage": "Restore all originals first"
+  },
+  "settings.storage.disconnect.restoreSummary": {
+    "defaultMessage": "{restored} restored · {skipped} skipped · {failed} failed"
+  },
+  "settings.storage.disconnect.restoring": {
+    "defaultMessage": "Restoring…"
+  },
+  "settings.storage.disconnect.retry": {
+    "defaultMessage": "Try again"
+  },
+  "settings.storage.disconnect.riskCopy": {
+    "defaultMessage": "{count, plural, one {# cloud-only original} other {# cloud-only originals}} ({bytes}) will be unavailable until you reconnect {name} as {account}."
+  },
+  "settings.storage.disconnect.safeCopy": {
+    "defaultMessage": "This removes this device’s saved {name} authorization."
+  },
+  "settings.storage.disconnect.sameAccount": {
+    "defaultMessage": "the same account"
   },
   "settings.storage.disconnect.title": {
     "defaultMessage": "Disconnect {name}?"
+  },
+  "settings.storage.disconnect.unavailable": {
+    "defaultMessage": "Overlook could not verify cloud-only custody. Authorization remains connected."
+  },
+  "settings.storage.disconnect.unverified": {
+    "defaultMessage": "Open {libraries} before disconnecting so Overlook can verify their cloud-only custody."
   },
   "settings.title": {
     "defaultMessage": "Settings"

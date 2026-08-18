@@ -9,6 +9,8 @@ import { RestoreWorkflow } from '../restore/RestoreWorkflow';
 import { SettingsDialog, type SettingsDialogProps } from './SettingsDialog';
 import { defaultSettings, mergeSettings, type AppSettings } from '../../../shared/settings/settings.js';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
+import type { ProviderConnectResult, ProviderConnectionStatus } from '../../../shared/backup/provider-descriptor.js';
+import { PROVIDER_AUTHORIZATION_REMOVAL } from '../../../shared/destructive-actions.js';
 import { AppStateProvider } from '../state/app-state-context';
 import type { QuickActionCommandId } from '../../../shared/commands/registry.js';
 import { createEmbeddingStoryController } from '../../../../.storybook/embedding-story-controller';
@@ -23,6 +25,7 @@ import { createEmbeddingStoryController } from '../../../../.storybook/embedding
 interface StoryWindow extends Window {
   backupCompletedListener: Parameters<OverlookApi['backup']['onCompleted']>[0] | undefined;
   disconnectCalls?: number;
+  removeAuthorizationRequests?: readonly { readonly providerId: string; readonly authorization: string }[];
   providerStorageCalls?: Readonly<Record<string, number>>;
   quickActionPatches?: readonly (readonly QuickActionCommandId[])[];
   releaseInitialProviderStatus?: () => void;
@@ -37,6 +40,9 @@ function installStub(options?: {
   readonly deferInteropUnlock?: boolean;
   readonly iCloudAvailable?: boolean;
   readonly appLockConfigured?: boolean;
+  readonly accountLabel?: string | null;
+  readonly custodyRequirements?: ProviderConnectionStatus['custodyRequirements'];
+  readonly disconnectPreflight?: ProviderConnectResult;
 }): void {
   let current: AppSettings = { ...defaultSettings };
   const nonInteractiveIdentity = { interactiveAuth: false, reconnectRequired: false, accountIdentity: 'stable-subject' } as const;
@@ -121,6 +127,7 @@ function installStub(options?: {
   const storyWindow = globalThis as unknown as StoryWindow;
   storyWindow.backupCompletedListener = undefined;
   storyWindow.disconnectCalls = 0;
+  storyWindow.removeAuthorizationRequests = [];
   storyWindow.providerStorageCalls = {};
   storyWindow.quickActionPatches = [];
   let providerStatusRequests = 0;
@@ -183,7 +190,8 @@ function installStub(options?: {
               ? 'm.rivera@icloud.com'
               : providerId === googleDriveProvider.id
                 ? 'm.rivera@gmail.com'
-                : null,
+                : (options?.accountLabel ?? null),
+        ...(options?.custodyRequirements === undefined ? {} : { custodyRequirements: options.custodyRequirements }),
       };
     },
     providerStorage: ({ providerId }) => {
@@ -213,13 +221,30 @@ function installStub(options?: {
       apply({ providerId });
       return Promise.resolve({ ok: true, reason: null });
     },
+    disconnectPreflight: () =>
+      Promise.resolve(
+        options?.disconnectPreflight ?? {
+          ok: true,
+          reason: null,
+          custody: {
+            credential: { providerId: 'mock', accountId: 'mock-account' },
+            totalItems: 0,
+            totalBytes: 0,
+            libraries: [],
+          },
+        },
+      ),
     disconnect: async () => {
       storyWindow.disconnectCalls = (storyWindow.disconnectCalls ?? 0) + 1;
       await providerDisconnect;
       apply({ providerId: null });
       return { ok: true, reason: null };
     },
-    removeAuthorizationAnyway: () => Promise.resolve({ ok: true, reason: null }),
+    removeAuthorizationAnyway: (request) => {
+      storyWindow.removeAuthorizationRequests = [...(storyWindow.removeAuthorizationRequests ?? []), request];
+      apply({ providerId: null });
+      return Promise.resolve({ ok: true, reason: null });
+    },
     openCapacitySettings: () => Promise.resolve({ ok: true }),
   };
   const keysApi = {
@@ -610,6 +635,85 @@ export const DisconnectHidesBackupControls: Story = {
     await waitFor(() => expect(body.getByText('Connected')).toBeVisible());
     await expect(body.getByText('380 GB of 500 GB used')).toBeVisible();
     await expect(body.getByRole('switch', { name: 'Back up new imports automatically' })).toBeVisible();
+  },
+};
+
+export const DisconnectBlockedByCloudOnlyCustody: Story = {
+  decorators: [
+    (Story) => {
+      installStub({
+        accountLabel: 'm.rivera@example.com',
+        disconnectPreflight: {
+          ok: false,
+          reason: 'Restore cloud-only originals before disconnecting.',
+          code: 'custody-restore-required',
+          retryable: false,
+          custody: {
+            credential: { providerId: 'mock', accountId: 'mock-account' },
+            totalItems: 3,
+            totalBytes: 6_300_000_000,
+            libraries: [
+              {
+                libraryId: 'library-main',
+                name: 'Rivera Archive',
+                items: 3,
+                bytes: 6_300_000_000,
+                legacyUnbound: false,
+              },
+            ],
+          },
+        },
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('button', { name: 'Disconnect provider' }));
+    const confirmation = body.getByRole('dialog', { name: 'Disconnect Local mock?' });
+    await waitFor(() => expect(confirmation).toHaveTextContent('3 cloud-only originals (6.3 GB)'));
+    await expect(confirmation).toHaveTextContent('Rivera Archive: 3 originals · 6.3 GB');
+    await expect(confirmation).toHaveTextContent('m.rivera@example.com');
+    await expect(confirmation.querySelector('.mono-data')).not.toBeNull();
+    await expect(confirmation).not.toHaveTextContent('Encrypted data already stored in Local mock is not deleted.');
+    await expect(within(confirmation).getByRole('button', { name: 'Restore all originals first' })).toBeEnabled();
+    await expect(within(confirmation).getByRole('button', { name: 'Remove authorization anyway…' })).toBeEnabled();
+
+    await userEvent.click(within(confirmation).getByRole('button', { name: 'Remove authorization anyway…' }));
+    const emergency = body.getByRole('dialog', { name: 'Remove Local mock authorization anyway?' });
+    await expect(emergency).toHaveTextContent('Reconnect Local mock as m.rivera@example.com');
+    await expect(emergency).toHaveTextContent('cloud-only originals require reconnecting the same provider account');
+    await userEvent.click(within(emergency).getByRole('button', { name: 'Remove authorization anyway' }));
+    await expect((globalThis as unknown as StoryWindow).removeAuthorizationRequests).toEqual([
+      { providerId: 'mock', authorization: PROVIDER_AUTHORIZATION_REMOVAL },
+    ]);
+  },
+};
+
+export const ProviderRequiredRecoveryBanner: Story = {
+  decorators: [
+    (Story) => {
+      installStub({
+        custodyRequirements: [
+          {
+            providerId: 'google-drive',
+            accountId: 'google-account',
+            accountLabel: 'm.rivera@gmail.com',
+            items: 4,
+            bytes: 8_400_000_000,
+          },
+        ],
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const banner = await body.findByRole('status');
+    await expect(banner).toHaveTextContent('Google Drive required');
+    await expect(banner).toHaveTextContent('Reconnect Google Drive as m.rivera@gmail.com');
+    await expect(banner).toHaveTextContent('4 · 8.4 GB');
+    await expect(banner).toHaveClass('ovl-settings__custodyRequirement');
   },
 };
 
