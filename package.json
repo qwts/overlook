@@ -170,13 +170,12 @@
     "@overlook/touch-id@0.1.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
-    "better-sqlite3-multiple-ciphers@12.11.1": true,
     "electron@42.6.1": true,
     "onnxruntime-node@1.27.0": true
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
-    "better-sqlite3-multiple-ciphers": "12.11.1",
+    "better-sqlite3-multiple-ciphers": "13.0.3",
     "exifr": "7.1.3",
     "mpegts.js": "1.8.0",
     "onnxruntime-node": "1.27.0",
