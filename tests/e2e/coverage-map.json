@@ -2229,6 +2229,7 @@
     {
       "id": "796-native-drag-out",
       "wiki": "Acceptance-Test-Native-Drag-Out",
+      "$note": "The signed production bridge reports disabled after native AppKit session startup was found to crash at in-window drag initiation (#1027). The harness retains bounded materialization coverage for a future safe redesign.",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -2240,7 +2241,7 @@
         },
         {
           "type": "manual",
-          "reason": "The signed packaged check proves real AppKit file promises across Finder, browsers, and native apps; automated tests cover renderer selection, bounded materialization, lock cancellation, naming, custody release, and native-source policy."
+          "reason": "The signed packaged check proves repeated in-window and outbound drag starts remain responsive with the native bridge disabled, internal album drag still works, and independent Finder/recovery-key inbound drops remain responsive."
         }
       ]
     },
