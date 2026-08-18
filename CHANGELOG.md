@@ -1,5 +1,11 @@
 # photos
 
+## 0.70.6
+
+### Patch Changes
+
+- 383b2ac: Accept recovery-key files by drag and drop during cloud restore with explicit invalid and multi-file feedback.
+
 ## 0.70.5
 
 ### Patch Changes
