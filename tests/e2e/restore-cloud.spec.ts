@@ -1,7 +1,7 @@
 import { cpSync, existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test';
+import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import type { OverlookApi } from '../../src/shared/ipc/api.js';
 import type { PhotoRecord } from '../../src/shared/library/types.js';
 
@@ -54,6 +54,36 @@ function launch(userData: string, extra: Record<string, string> = {}): Promise<E
   });
 }
 
+async function stageRecoveryKeyFiles(page: Page, paths: readonly string[]): Promise<void> {
+  await page.evaluate(`(() => {
+    document.querySelector('[data-testid="recovery-key-drop-files"]')?.remove();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.dataset['testid'] = 'recovery-key-drop-files';
+    input.hidden = true;
+    document.body.append(input);
+  })()`);
+  await page.getByTestId('recovery-key-drop-files').setInputFiles([...paths]);
+}
+
+async function dropRecoveryKeyFiles(page: Page): Promise<void> {
+  await page.evaluate(`(() => {
+    const input = document.querySelector('[data-testid="recovery-key-drop-files"]');
+    const target = document.querySelector('[data-testid="recovery-key-drop-target"]');
+    if (!input?.files || !target) throw new Error('recovery-key drop fixture is unavailable');
+    const transfer = {
+      files: input.files,
+      items: Array.from(input.files).map((file) => ({ kind: 'file', type: file.type, getAsFile: () => file })),
+      types: ['public.file-url'],
+      dropEffect: 'none',
+    };
+    const event = new DragEvent('drop', { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperty(event, 'dataTransfer', { value: transfer });
+    target.dispatchEvent(event);
+  })()`);
+}
+
 async function backupSimpleSource(source: string, keyPath: string): Promise<readonly string[]> {
   const app = await launch(source, { OVERLOOK_SEED: '2', OVERLOOK_KEY_EXPORT_DESTINATION: keyPath });
   try {
@@ -83,6 +113,8 @@ test('fresh profile restores complete state; wrong password is isolated and canc
   const source = mkE2eTmpDir('overlook-e2e-restore-source-');
   const target = mkE2eTmpDir('overlook-e2e-restore-target-');
   const keyPath = join(mkE2eTmpDir('overlook-e2e-restore-key-'), 'overlook-recovery.key');
+  const wrongTypePath = join(target, 'not-a-recovery-key.txt');
+  writeFileSync(wrongTypePath, 'not a recovery key');
   const expected = await (async (): Promise<RecoverableSnapshot> => {
     const sourceApp = await launch(source, { OVERLOOK_SEED: String(PHOTO_COUNT), OVERLOOK_KEY_EXPORT_DESTINATION: keyPath });
     try {
@@ -128,7 +160,17 @@ test('fresh profile restores complete state; wrong password is isolated and canc
   try {
     const page = await targetApp.firstWindow();
     await expect(page.getByTestId('restore-onboarding')).toBeVisible();
-    await page.getByRole('button', { name: 'Choose recovery key' }).click();
+    await stageRecoveryKeyFiles(page, [keyPath, wrongTypePath]);
+    await dropRecoveryKeyFiles(page);
+    await expect(page.getByRole('alert')).toContainText('one recovery-key file at a time');
+
+    await stageRecoveryKeyFiles(page, [wrongTypePath]);
+    await dropRecoveryKeyFiles(page);
+    await expect(page.getByRole('alert')).toContainText('Overlook .key recovery file');
+
+    await stageRecoveryKeyFiles(page, [keyPath]);
+    await dropRecoveryKeyFiles(page);
+    await expect(page.getByTestId('recovery-key-drop-target')).toContainText('overlook-recovery.key');
     await page.getByLabel('Recovery-key password').fill('wrong password');
     await page.getByRole('button', { name: 'Discover backups' }).click();
     await expect(page.getByRole('alert')).toContainText('password is incorrect');

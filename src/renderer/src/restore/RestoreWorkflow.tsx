@@ -14,6 +14,7 @@ import { Button } from '../components/Button.js';
 import { Checkbox } from '../components/Checkbox.js';
 import { Icon } from '../components/Icon.js';
 import { ProgressBar } from '../components/ProgressBar.js';
+import { RecoveryKeyDropTarget } from './RecoveryKeyDropTarget.js';
 import { RestoreLibraryCard } from './restore-library-card.js';
 import { restoreProgressDetail, restoreStageLabel, restoreStepFromStatus, type RestoreWorkflowStep } from './restore-progress.js';
 
@@ -111,10 +112,6 @@ const messages = defineMessages({
   details: { id: 'restore.error.details', defaultMessage: 'Details' },
   copyError: { id: 'restore.error.copy', defaultMessage: 'Copy error' },
 });
-
-function fileName(path: string): string {
-  return path.split(/[\\/]/u).at(-1) ?? path;
-}
 
 export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): ReactElement {
   const intl = useIntl();
@@ -470,17 +467,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
               ) : null}
             </>
           ) : null}
-          <div className="ovl-restore__keyrow">
-            <Button
-              icon="key-round"
-              onClick={() => {
-                void window.overlook.restore.pickKey().then(({ path }) => setKeyPath(path));
-              }}
-            >
-              Choose recovery key
-            </Button>
-            <span className="mono-data">{keyPath === null ? 'No key selected' : fileName(keyPath)}</span>
-          </div>
+          <RecoveryKeyDropTarget path={keyPath} onPathChange={setKeyPath} />
           <label className="ovl-restore__field">
             <span>Recovery-key password</span>
             <input

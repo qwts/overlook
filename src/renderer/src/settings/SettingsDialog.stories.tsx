@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 /* eslint-disable max-lines -- story stub file, large setup */
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { useState, type ReactElement } from 'react';
 
@@ -457,6 +457,9 @@ function installStub(options?: {
     diagnostics: diagnosticsApi,
     fileProvider: fileProviderApi,
     interop: interopApi,
+    import: {
+      pathForFile: (file: File) => `/Users/ansel/Desktop/${file.name}`,
+    } as unknown as OverlookApi['import'],
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
       stats: () => Promise.resolve({ photos: 1542, bytes: 48_000_000_000, pending: 0, lastBackupAt: null, offloadedBytes: 12_600_000_000 }),
@@ -701,6 +704,31 @@ export const RestoreDiscoveryAndWarnings: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Restore 1,542 photos' }));
     await waitFor(() => expect(body.getByText('Restore complete')).toBeVisible());
     await expect(body.getByText('Generation 9 failed validation; restored generation 7.')).toBeVisible();
+  },
+};
+
+export const RestoreRecoveryKeyDrop: Story = {
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await waitFor(() => body.getByRole('button', { name: 'Restore library…' })));
+    const target = body.getByTestId('recovery-key-drop-target');
+
+    const multiple = new DataTransfer();
+    multiple.items.add(new File(['first'], 'first.key'));
+    multiple.items.add(new File(['second'], 'second.key'));
+    await fireEvent.drop(target, { dataTransfer: multiple });
+    await expect(body.getByRole('alert')).toHaveTextContent('one recovery-key file at a time');
+
+    const wrongType = new DataTransfer();
+    wrongType.items.add(new File(['notes'], 'notes.txt'));
+    await fireEvent.drop(target, { dataTransfer: wrongType });
+    await expect(body.getByRole('alert')).toHaveTextContent('Overlook .key recovery file');
+
+    const valid = new DataTransfer();
+    valid.items.add(new File(['key'], 'overlook-recovery.key'));
+    await fireEvent.drop(target, { dataTransfer: valid });
+    await expect(body.getByText('overlook-recovery.key')).toBeVisible();
+    await expect(body.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 

@@ -86,10 +86,47 @@
   justify-content: flex-start;
 }
 
-.ovl-restore__keyrow .mono-data {
+.ovl-restore__keyrow .mono-data,
+.ovl-restore__keydrop .mono-data {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ovl-restore__keydrop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--border-mid);
+  border-radius: var(--radius-md);
+  background: var(--gray-2);
+  color: var(--text-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.ovl-restore__keydrop:hover,
+.ovl-restore__keydrop:focus-visible {
+  border-color: var(--accent-cyan);
+}
+
+.ovl-restore__keydropText {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.ovl-restore__keydropHint {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.ovl-restore__fileError {
+  color: var(--accent-red);
+  font-size: var(--text-sm);
 }
 
 .ovl-restore__actions {

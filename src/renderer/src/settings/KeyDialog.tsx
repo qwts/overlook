@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { PasswordField } from '../components/PasswordField';
 import { strengthOf } from '../../../shared/crypto/password-strength.js';
 import { CopyableValue } from '../components/CopyableValue';
+import { admitRecoveryKeyDrop, type RecoveryKeyDropFailure } from '../recovery-key-drop';
 
 import './settings.css';
 
@@ -24,7 +25,27 @@ export type KeyDialogMode = 'backup' | 'import';
 const messages = defineMessages({
   copyFingerprint: { id: 'settings.keys.copyFingerprint', defaultMessage: 'library key fingerprint' },
   copyFileName: { id: 'settings.keys.copyFileName', defaultMessage: 'recovery key filename' },
+  dropEmpty: { id: 'recoveryKey.drop.empty', defaultMessage: 'Drop one Overlook recovery-key file.' },
+  dropMultiple: { id: 'recoveryKey.drop.multiple', defaultMessage: 'Choose or drop one recovery-key file at a time.' },
+  dropWrongType: { id: 'recoveryKey.drop.wrongType', defaultMessage: 'Choose an Overlook .key recovery file.' },
+  dropUnavailable: {
+    id: 'recoveryKey.drop.unavailable',
+    defaultMessage: 'This dropped file has no readable local path. Use the file picker instead.',
+  },
 });
+
+function dropFailureMessage(reason: RecoveryKeyDropFailure, formatMessage: ReturnType<typeof useIntl>['formatMessage']): string {
+  switch (reason) {
+    case 'empty':
+      return formatMessage(messages.dropEmpty);
+    case 'multiple':
+      return formatMessage(messages.dropMultiple);
+    case 'wrong-type':
+      return formatMessage(messages.dropWrongType);
+    case 'unavailable':
+      return formatMessage(messages.dropUnavailable);
+  }
+}
 
 export interface KeyDialogProps {
   readonly open: boolean;
@@ -179,15 +200,14 @@ export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialo
   };
   const onDropFile = (event: DragEvent): void => {
     event.preventDefault();
-    const dropped = event.dataTransfer.files[0];
-    if (dropped === undefined) {
+    const admission = admitRecoveryKeyDrop(event.dataTransfer.files, window.overlook.import.pathForFile);
+    if (admission.reason !== null) {
+      setFile(null);
+      setError(dropFailureMessage(admission.reason, intl.formatMessage));
       return;
     }
-    const path = window.overlook.import.pathForFile(dropped);
-    if (path !== '') {
-      setFile(path);
-      setError(null);
-    }
+    setFile(admission.path);
+    setError(null);
   };
 
   return (
@@ -350,6 +370,7 @@ export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialo
                 onClick={chooseFile}
                 onDragOver={(event) => {
                   event.preventDefault();
+                  event.dataTransfer.dropEffect = 'copy';
                 }}
                 onDrop={onDropFile}
               >
