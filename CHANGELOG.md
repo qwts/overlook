@@ -1,5 +1,11 @@
 # photos
 
+## 0.71.0
+
+### Minor Changes
+
+- 1dea4dd: Surface exact provider custody requirements before disconnect and wherever cloud-only original access fails.
+
 ## 0.70.6
 
 ### Patch Changes
