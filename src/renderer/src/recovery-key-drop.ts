@@ -14,7 +14,7 @@ export function admitRecoveryKeyDrop(files: FileList | readonly File[], pathForF
   if (dropped.length !== 1) return { path: null, reason: 'multiple' };
 
   const file = dropped[0];
-  if (file === undefined || !file.name.toLocaleLowerCase().endsWith('.key')) {
+  if (file === undefined || !file.name.toLocaleLowerCase('en-US').endsWith('.key')) {
     return { path: null, reason: 'wrong-type' };
   }
 

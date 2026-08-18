@@ -728,6 +728,7 @@ export const RestoreRecoveryKeyDrop: Story = {
     valid.items.add(new File(['key'], 'overlook-recovery.key'));
     await fireEvent.drop(target, { dataTransfer: valid });
     await expect(body.getByText('overlook-recovery.key')).toBeVisible();
+    await expect(body.getByRole('button', { name: 'Choose recovery key overlook-recovery.key' })).toBeVisible();
     await expect(body.queryByRole('alert')).not.toBeInTheDocument();
   },
 };

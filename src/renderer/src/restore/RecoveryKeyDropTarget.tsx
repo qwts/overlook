@@ -29,6 +29,8 @@ export function RecoveryKeyDropTarget({
   readonly onPathChange: (path: string | null) => void;
 }): ReactElement {
   const intl = useIntl();
+  const labelId = useId();
+  const selectionId = useId();
   const hintId = useId();
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +61,7 @@ export function RecoveryKeyDropTarget({
       <button
         type="button"
         className="ovl-restore__keydrop"
-        aria-label={intl.formatMessage(messages.choose)}
+        aria-labelledby={`${labelId} ${selectionId}`}
         aria-describedby={hintId}
         data-testid="recovery-key-drop-target"
         data-overlook-file-drop-target="recovery-key"
@@ -79,8 +81,10 @@ export function RecoveryKeyDropTarget({
       >
         <Icon name="key-round" size={16} />
         <span className="ovl-restore__keydropText">
-          <span>{intl.formatMessage(messages.choose)}</span>
-          <span className="mono-data">{path === null ? intl.formatMessage(messages.none) : fileName(path)}</span>
+          <span id={labelId}>{intl.formatMessage(messages.choose)}</span>
+          <span id={selectionId} className="mono-data" aria-live="polite" aria-atomic="true">
+            {path === null ? intl.formatMessage(messages.none) : fileName(path)}
+          </span>
           <span id={hintId} className="ovl-restore__keydropHint">
             {intl.formatMessage(messages.dropHint)}
           </span>
