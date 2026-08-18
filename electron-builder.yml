@@ -40,18 +40,22 @@ files:
   - '!node_modules/@overlook/touch-id/photokit.mm'
   - '!node_modules/@overlook/touch-id/file_provider.mm'
 # Everything ships bundled by electron-vite (no runtime node_modules yet);
-# native modules must land in "dependencies" so npmRebuild picks them up
-# (ADR-0006's prebuilt-only policy — better-sqlite3/sharp arrive with M03).
-npmRebuild: true
+# native modules must land in "dependencies" so electron-builder includes and
+# verifies them. Every shipped native dependency is Node-API or a loadable
+# extension: npm ci installs its reviewed prebuild, SQLite's inferred install
+# script is explicitly denied, and the root postinstall does not invoke
+# install-app-deps. Rebuilding here would make electron-rebuild treat SQLite
+# v13's bundled binding.gyp as an ABI module.
+npmRebuild: false
 # Native Node-API binaries cannot execute from inside app.asar. Keep those
 # bindings beside the archive, but unpack shared libraries only for the two
 # exact-pinned runtimes that dlopen them.
-# onnxruntime-node bundles every platform in one package, so each build would
-# otherwise ship five foreign binaries it can never load — and on Windows that
-# fails verify-windows-arch (#683). The hook takes the target from the packer,
-# which a static `files` pattern cannot do: the cross-compiled Windows arm64
-# build runs on an x64 runner and needs the opposite exclusion from the x64
-# build beside it.
+# onnxruntime-node and better-sqlite3-multiple-ciphers v13 bundle every platform
+# in one package, so each build would otherwise ship foreign binaries it can
+# never load — and on Windows that fails verify-windows-arch (#683). The hook
+# takes the target from the packer, which a static `files` pattern cannot do:
+# cross-compiled Windows arm64 needs the opposite exclusion from x64 on the
+# same runner.
 afterPack: scripts/prune-foreign-binaries.mjs
 asarUnpack:
   - '**/*.node'

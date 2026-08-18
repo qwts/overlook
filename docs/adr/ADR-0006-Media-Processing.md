@@ -103,3 +103,14 @@ iconography), never a failed import.
 - Deferring libraw means RAW rendering fidelity is preview-limited in v1;
   photographers get the camera's own JPEG interpretation, stated honestly in
   any copy that touches RAW support.
+
+## Accepted clarification — Node-API prebuilds (#1020)
+
+The prebuilt-only rule permits stable Node-API binaries as well as artifacts
+published for one Electron ABI. A Node-API migration remains compliant when its
+declared runtime floor covers Overlook's Electron version, every shipped target
+has a reviewed prebuild, no source compilation occurs, foreign bundled targets
+are removed during packaging, and the package matrix verifies the resulting
+native payload architecture. `better-sqlite3-multiple-ciphers` v13 is the first
+driver using this path; its bundled prebuilds remove the former Electron-major
+cap without weakening target or package verification.

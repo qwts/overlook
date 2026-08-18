@@ -163,6 +163,11 @@ Windows ships two architecture-qualified NSIS installers — `overlook-windows-x
 and `overlook-windows-arm64` (arm64 cross-compiled on the x64 runner) — each gated
 post-build by `verify-windows-arch.mjs`, which fails the leg if any payload
 (`Overlook.exe` or a shipped `*.node`) is not the target PE machine type.
+`prune-foreign-binaries.mjs` runs inside electron-builder before that gate and
+keeps only the target payload from packages that bundle multiple platforms:
+onnxruntime-node's nested directories and better-sqlite3-multiple-ciphers v13's
+flat `prebuilds/<platform>-<arch>.node` set. Universal macOS keeps both Darwin
+slices; unmapped targets fail safe by pruning nothing.
 
 Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
 and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /

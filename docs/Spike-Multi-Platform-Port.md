@@ -90,8 +90,8 @@ and `interop/` import Electron zero times.
 `src/main/db/database.ts:29-36` sets only `cipher='sqlcipher'`, a raw 32-byte
 hex key, WAL, and foreign keys. Every other cipher parameter rides on library
 defaults and is recorded nowhere. Probing a freshly created database through
-the pinned `better-sqlite3-multiple-ciphers` (SQLite3 Multiple Ciphers 2.3.5,
-SQLite 3.53.2) returns:
+the pinned `better-sqlite3-multiple-ciphers` (SQLite3 Multiple Ciphers 2.4.0,
+SQLite 3.53.4) returns:
 
 | Parameter                        | Value     | Meaning                                        |
 | -------------------------------- | --------- | ---------------------------------------------- |
