@@ -1,5 +1,12 @@
 # photos
 
+## 0.70.5
+
+### Patch Changes
+
+- 5445dad: Disable the crash-prone native macOS photo drag session while preserving internal album dragging and inbound file drops.
+- 584fce8: Migrate encrypted SQLite to its Node-API v13 runtime while preserving resolved types and target-pure native packages.
+
 ## 0.70.4
 
 ### Patch Changes
