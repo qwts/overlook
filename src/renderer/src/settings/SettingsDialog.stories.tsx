@@ -712,21 +712,15 @@ export const RestoreRecoveryKeyDrop: Story = {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(await waitFor(() => body.getByRole('button', { name: 'Restore library…' })));
     const target = body.getByTestId('recovery-key-drop-target');
+    const dropFiles = (...files: File[]): Promise<boolean> => fireEvent.drop(target, { dataTransfer: { files } });
 
-    const multiple = new DataTransfer();
-    multiple.items.add(new File(['first'], 'first.key'));
-    multiple.items.add(new File(['second'], 'second.key'));
-    await fireEvent.drop(target, { dataTransfer: multiple });
+    await dropFiles(new File(['first'], 'first.key'), new File(['second'], 'second.key'));
     await expect(body.getByRole('alert')).toHaveTextContent('one recovery-key file at a time');
 
-    const wrongType = new DataTransfer();
-    wrongType.items.add(new File(['notes'], 'notes.txt'));
-    await fireEvent.drop(target, { dataTransfer: wrongType });
+    await dropFiles(new File(['notes'], 'notes.txt'));
     await expect(body.getByRole('alert')).toHaveTextContent('Overlook .key recovery file');
 
-    const valid = new DataTransfer();
-    valid.items.add(new File(['key'], 'overlook-recovery.key'));
-    await fireEvent.drop(target, { dataTransfer: valid });
+    await dropFiles(new File(['key'], 'overlook-recovery.key'));
     await expect(body.getByText('overlook-recovery.key')).toBeVisible();
     await expect(body.getByRole('button', { name: 'Choose recovery key overlook-recovery.key' })).toBeVisible();
     await expect(body.queryByRole('alert')).not.toBeInTheDocument();
