@@ -111,6 +111,18 @@ describe('sync ledger machine (#104)', () => {
     assert.equal(ledger.pendingCount(), 1, 'an errored row STAYS dirty (will retry)');
   });
 
+  test('remote custody includes offloaded and clean integrity-error rows, never dirty upload errors', () => {
+    const { db, ledger, insert } = world();
+    insert('A');
+    ledger.setStatus('A', 'syncing');
+    ledger.markError('A');
+    assert.equal(ledger.requiresRemoteCustody('A'), false);
+    run(db, `UPDATE sync_ledger SET dirty = 0 WHERE photo_id = 'A'`);
+    assert.equal(ledger.requiresRemoteCustody('A'), true);
+    ledger.repairStatus('A', 'offloaded');
+    assert.equal(ledger.requiresRemoteCustody('A'), true);
+  });
+
   test('integrity healing reports only the error to offloaded transition', () => {
     const { ledger, insert } = world();
     insert('A');

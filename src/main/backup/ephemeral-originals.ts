@@ -31,6 +31,7 @@ export interface EphemeralOriginalDeps {
   readonly custodyChanged: () => void;
   readonly ledger: {
     readonly status: (photoId: string) => SyncStatus | undefined;
+    readonly requiresRemoteCustody: (photoId: string) => boolean;
     readonly setStatus: (photoId: string, status: SyncStatus) => void;
   };
   readonly repo: {
@@ -97,7 +98,7 @@ export class EphemeralOriginalService {
   async prepare(photoId: string, purpose: OriginalPurpose): Promise<OriginalCustody> {
     const photo = this.deps.repo.get(photoId);
     if (photo === undefined) throw new EphemeralOriginalError(`photo ${photoId} does not exist`, 'not-found');
-    if (this.deps.ledger.status(photoId) !== 'offloaded') {
+    if (!this.deps.ledger.requiresRemoteCustody(photoId)) {
       if (!this.deps.blobs.hasOriginal(photo.contentHash)) {
         throw new EphemeralOriginalError(`photo ${photoId} has no local original`, 'not-found');
       }
@@ -154,7 +155,7 @@ export class EphemeralOriginalService {
     const status = await this.deps.custodyStatus(photoId);
     const failure = this.states.get(photoId)?.reason;
     const failureState = failure === undefined ? null : custodyStateFromFailure(failure);
-    return failureState === 'missing-corrupt' ? { ...status, state: failureState } : status;
+    return failureState === null ? status : { ...status, state: failureState };
   }
 
   async release(photoId: string, purpose: Exclude<OriginalPurpose, 'prefetch'> = 'view'): Promise<void> {

@@ -39,6 +39,7 @@ test('original custody runtime composes offload and ephemeral policy around one 
     custodyChanged: () => undefined,
     ledger: {
       status: (photoId: string) => statuses.get(photoId),
+      requiresRemoteCustody: (photoId: string) => statuses.get(photoId) === 'offloaded',
       setStatus: () => undefined,
       isDirty: () => false,
     } as unknown as SyncLedger,

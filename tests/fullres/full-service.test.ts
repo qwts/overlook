@@ -85,9 +85,10 @@ describe('RAF preview extraction', () => {
 });
 
 describe('FullService (#91)', () => {
-  test('runtime reads durable and offloaded originals through their distinct custody paths (#306)', async () => {
+  test('runtime delegates offloaded and integrity-error originals to exact custody policy (#306, #734)', async () => {
     const bytes = sampleJpeg(42);
-    let offloaded = false;
+    let syncState: PhotoRecord['syncState'] = 'local';
+    let custodyOpens = 0;
     const photo = {
       id: 'P0',
       contentHash: 'hash',
@@ -96,7 +97,7 @@ describe('FullService (#91)', () => {
     } as PhotoRecord;
     const runtime = createFullRuntime({
       repo: {
-        get: (photoId: string) => (photoId === photo.id ? { ...photo, syncState: offloaded ? 'offloaded' : 'local' } : undefined),
+        get: (photoId: string) => (photoId === photo.id ? { ...photo, syncState } : undefined),
       } as unknown as PhotosRepository,
       blobs: {
         getStream: () => Readable.from([bytes]),
@@ -104,15 +105,22 @@ describe('FullService (#91)', () => {
       resolveKey: () => undefined,
       ephemeral: () =>
         ({
-          open: () => Promise.resolve({ stream: Readable.from([bytes]), custody: 'ephemeral' }),
+          open: () => {
+            custodyOpens += 1;
+            return Promise.resolve({ stream: Readable.from([bytes]), custody: 'ephemeral' });
+          },
         }) as unknown as EphemeralOriginalService,
       cacheMb: '1',
     });
 
     assert.deepEqual((await runtime.getFull('P0'))?.bytes, bytes);
     runtime.invalidate('P0');
-    offloaded = true;
+    syncState = 'offloaded';
     assert.deepEqual((await runtime.getFull('P0'))?.bytes, bytes);
+    runtime.invalidate('P0');
+    syncState = 'error';
+    assert.deepEqual((await runtime.getFull('P0'))?.bytes, bytes);
+    assert.equal(custodyOpens, 2);
     assert.equal(await runtime.getFull('missing'), null);
   });
 

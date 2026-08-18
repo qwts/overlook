@@ -22,7 +22,7 @@ export function createFullRuntime(options: FullRuntimeOptions): FullService {
     loadOriginal: async (photoId, purpose) => {
       const photo = options.repo.get(photoId);
       if (photo === undefined) return null;
-      if (photo.syncState === 'offloaded') {
+      if (photo.syncState === 'offloaded' || photo.syncState === 'error') {
         try {
           const opened = await options.ephemeral().open(photoId, purpose);
           return { bytes: await buffer(opened.stream), contentHash: photo.contentHash, fileKind: photo.fileKind };
@@ -45,7 +45,7 @@ export function createFullRuntime(options: FullRuntimeOptions): FullService {
       const photo = options.repo.get(photoId);
       if (photo === undefined || photo.fileKind !== 'video') return null;
       const mime = videoMimeFor(photo.mediaInfo?.container);
-      if (photo.syncState === 'offloaded') {
+      if (photo.syncState === 'offloaded' || photo.syncState === 'error') {
         try {
           const opened = await options.ephemeral().open(photoId, 'view');
           return { stream: opened.stream, totalBytes: photo.bytes, mime };

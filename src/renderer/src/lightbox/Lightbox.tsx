@@ -111,7 +111,8 @@ export function Lightbox({
     useLightboxChrome(photo.id);
 
   const offloaded = photo.syncState === 'offloaded';
-  const custodyStatus = usePhotoCustodyStatus(photo.id, offloaded);
+  const remoteCustodyCandidate = offloaded || photo.syncState === 'error';
+  const custodyStatus = usePhotoCustodyStatus(photo.id, remoteCustodyCandidate);
   const custody = custodyStatus === null ? null : custodyPresentation(intl, custodyStatus);
   const rehydrateErrorRef = useRef(onRehydrateError);
   useEffect(() => {
@@ -127,7 +128,7 @@ export function Lightbox({
     void window.overlook.backup.ephemeralStatus({ photoId: photo.id }).then(({ stage }) => {
       if (active && stage !== null) setEphemeralState({ photoId: photo.id, stage });
     });
-    if (offloaded && !suppressRehydrate) {
+    if (remoteCustodyCandidate && !suppressRehydrate) {
       void window.overlook.backup.prepareEphemeral({ photoId: photo.id }).catch(() => rehydrateErrorRef.current?.());
     }
     return () => {
@@ -135,7 +136,7 @@ export function Lightbox({
       unsubscribe();
       void window.overlook.backup.releaseEphemeral({ photoId: photo.id });
     };
-  }, [offloaded, photo.id, suppressRehydrate]);
+  }, [photo.id, remoteCustodyCandidate, suppressRehydrate]);
 
   const ephemeralStage = ephemeralState?.photoId === photo.id ? ephemeralState.stage : null;
 
@@ -152,7 +153,7 @@ export function Lightbox({
   const posterHeld = animated && reducedMotion && !animationStarted;
   const animatedSource = imageSrc ?? fullUrl(photo.id);
   const source = posterHeld ? (posterSrc ?? thumbUrl(photo.id, 'mid')) : animatedSource;
-  const sourceCustody = offloaded && !suppressRehydrate ? 'offloaded' : 'local';
+  const sourceCustody = remoteCustodyCandidate && !suppressRehydrate ? 'offloaded' : 'local';
   const requestKey = `${photo.id}:${sourceCustody}:${source}`;
 
   const taken = photo.takenAt ?? photo.importedAt;
@@ -264,13 +265,13 @@ export function Lightbox({
       </div>
       <div className={`ovl-lightbox__strip ovl-lightbox__chrome${chromeClass}`}>
         {isVideo ? null : <span className="ovl-lightbox__exif mono-data">{exifStrip(photo)}</span>}
-        {offloaded && ephemeralStage !== null && ephemeralStage !== 'released' ? (
+        {remoteCustodyCandidate && ephemeralStage !== null && ephemeralStage !== 'released' ? (
           <div className="ovl-lightbox__custody">
             {ephemeralStage === 'fetching' ? <span className="mono-data">Fetching original…</span> : null}
             {ephemeralStage === 'verifying' ? <span className="mono-data">Verifying original…</span> : null}
             {ephemeralStage === 'ready' ? <span className="mono-data">Streaming original · re-offloads on close</span> : null}
             {ephemeralStage === 'error' ? <span className="mono-data">{custody?.text ?? 'Original unavailable'}</span> : null}
-            {ephemeralStage === 'ready' ? (
+            {ephemeralStage === 'ready' && offloaded ? (
               <Button
                 size="sm"
                 icon="cloud-download"

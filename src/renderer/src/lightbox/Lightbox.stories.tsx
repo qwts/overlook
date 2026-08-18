@@ -630,6 +630,28 @@ export const OffloadedMissingOrCorrupt: Story = {
   },
 };
 
+export const BoundIntegrityError: Story = {
+  args: { photo: { ...PHOTO, syncState: 'error' } },
+  parameters: {
+    ephemeralStage: 'error',
+    custodyStatus: {
+      state: 'missing-corrupt',
+      providerId: 'pcloud',
+      providerLabel: 'pCloud',
+      accountLabel: 'owner@pcloud.test',
+    } satisfies PhotoCustodyStatus,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText(
+        'Original missing or corrupt in pCloud — custody remains bound and recovery could not complete.',
+      ),
+    ).toBeVisible();
+    await waitFor(() => expect(backupStubCalls.prepare).toBe(1));
+    await expect(within(canvasElement).queryByRole('button', { name: 'Keep downloaded' })).not.toBeInTheDocument();
+  },
+};
+
 function OffloadTransitionHarness(args: LightboxProps) {
   const [offloading, setOffloading] = useState(false);
   return (

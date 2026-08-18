@@ -62,6 +62,7 @@ async function world(
     ['P3', { contentHash: HASH_C }],
   ]);
   const statuses = new Map<string, SyncStatus>([...photos.keys()].map((id) => [id, 'offloaded']));
+  const cleanRemoteErrors = new Set<string>();
   const ephemeral = new Map<string, Buffer>();
   const durable = new Set<string>();
   const states: EphemeralOriginalState[] = [];
@@ -96,6 +97,7 @@ async function world(
     custodyChanged: () => undefined,
     ledger: {
       status: (id) => statuses.get(id),
+      requiresRemoteCustody: (id) => statuses.get(id) === 'offloaded' || cleanRemoteErrors.has(id),
       setStatus: (id, status) => statuses.set(id, status),
     },
     repo: { get: (id) => photos.get(id) },
@@ -150,6 +152,11 @@ async function world(
     permanentRestores: () => permanentRestores,
     setPolicy: (next: boolean) => (policy = next),
     setProviderConnected: (next: boolean) => (providerConnected = next),
+    setErrorState: (photoId: string, cleanRemote: boolean) => {
+      statuses.set(photoId, 'error');
+      if (cleanRemote) cleanRemoteErrors.add(photoId);
+      else cleanRemoteErrors.delete(photoId);
+    },
   };
 }
 
@@ -180,6 +187,17 @@ describe('ephemeral originals (#306)', () => {
     assert.deepEqual(w.syncUpdates, [[{ id: 'P0', syncState: 'synced' }]]);
     assert.equal(w.storageChanges(), 1);
     assert.equal(w.ephemeral.has(HASH_A), false);
+  });
+
+  test('clean integrity errors retain remote custody while dirty upload errors use durable bytes (#734 review)', async () => {
+    const w = await world();
+    w.setErrorState('P0', true);
+    assert.equal((await w.service.open('P0', 'view')).custody, 'ephemeral');
+    await w.service.release('P0');
+
+    w.setErrorState('P2', false);
+    w.durable.add(HASH_B);
+    assert.equal((await w.service.open('P2', 'view')).custody, 'durable');
   });
 
   test('view and same-photo exports hold independent reference-counted custody (#306 review)', async () => {
@@ -227,6 +245,12 @@ describe('ephemeral originals (#306)', () => {
       (error: unknown) => error instanceof EphemeralOriginalError && error.reason === 'cache-full',
     );
     assert.equal(oversized.ephemeral.size, 0);
+    assert.deepEqual(await oversized.service.custodyStatus('P0'), {
+      state: 'unavailable',
+      providerId: 'mock',
+      providerLabel: 'Local mock',
+      accountLabel: 'Mock account',
+    });
 
     const missing = await world();
     await missing.provider.delete(`blobs/${HASH_A.slice(0, 2)}/${HASH_A}`);
