@@ -684,7 +684,7 @@ export const RestoreDiscoveryAndWarnings: Story = {
     const restoreButton = await waitFor(() => body.getByRole('button', { name: 'Restore library…' }));
     await userEvent.click(restoreButton);
     await expect(body.getByRole('dialog', { name: 'Restore from cloud backup' })).toBeVisible();
-    await userEvent.click(body.getByRole('button', { name: 'Choose recovery key' }));
+    await userEvent.click(body.getByRole('button', { name: /^Choose recovery key/u }));
     await userEvent.type(body.getByLabelText('Recovery-key password'), 'correct horse battery staple');
     await userEvent.click(body.getByRole('button', { name: 'Discover backups' }));
     await waitFor(() => expect(body.getByTestId('restore-library-card')).toHaveTextContent('1,542 photos'));
@@ -712,7 +712,11 @@ export const RestoreRecoveryKeyDrop: Story = {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(await waitFor(() => body.getByRole('button', { name: 'Restore library…' })));
     const target = body.getByTestId('recovery-key-drop-target');
-    const dropFiles = (...files: File[]): Promise<boolean> => fireEvent.drop(target, { dataTransfer: { files } });
+    const dropFiles = (...files: File[]): Promise<boolean> => {
+      const dataTransfer = new DataTransfer();
+      Object.defineProperty(dataTransfer, 'files', { configurable: true, value: files });
+      return fireEvent.drop(target, { dataTransfer });
+    };
 
     await dropFiles(new File(['first'], 'first.key'), new File(['second'], 'second.key'));
     await expect(body.getByRole('alert')).toHaveTextContent('one recovery-key file at a time');
