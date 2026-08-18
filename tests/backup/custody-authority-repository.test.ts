@@ -108,13 +108,19 @@ describe('custody authority provenance (#729)', () => {
   });
 
   test('legacy unbound offloaded rows are counted separately and never assigned to a new authority', () => {
-    const { insert, ledger, authorities } = world();
+    const { db, insert, ledger, authorities } = world();
     insert('A', 17);
     ledger.setStatus('A', 'syncing');
     ledger.markBackedUp('A', '2026-07-25T01:00:00.000Z');
     ledger.setStatus('A', 'offloaded');
 
     assert.deepEqual(authorities.legacyUnboundCount(), { items: 1, bytes: 17 });
+    assert.equal(authorities.isLegacyUnbound('A'), true);
+    assert.equal(authorities.isLegacyUnbound('missing'), false);
+    run(db, `UPDATE sync_ledger SET status = 'error', dirty = 0 WHERE photo_id = 'A'`);
+    assert.equal(authorities.isLegacyUnbound('A'), true, 'clean integrity errors retain legacy custody truth');
+    run(db, `UPDATE sync_ledger SET dirty = 1 WHERE photo_id = 'A'`);
+    assert.equal(authorities.isLegacyUnbound('A'), false, 'dirty upload errors are not cloud-only legacy rows');
     assert.deepEqual(authorities.soleCustodyCounts(), []);
   });
 });

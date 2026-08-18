@@ -60,6 +60,7 @@ const backupProviders = createInvoker(channels.backupProviders, invokeTransport)
 const backupProviderStatus = createInvoker(channels.backupProviderStatus, invokeTransport);
 const backupProviderStorage = createInvoker(channels.backupProviderStorage, invokeTransport);
 const backupConnect = createInvoker(channels.backupConnect, invokeTransport);
+const backupDisconnectPreflight = createInvoker(channels.backupDisconnectPreflight, invokeTransport);
 const backupDisconnect = createInvoker(channels.backupDisconnect, invokeTransport);
 const backupOpenCapacitySettings = createInvoker(channels.backupOpenCapacitySettings, invokeTransport);
 const libraryAlbums = createInvoker(channels.libraryAlbums, invokeTransport);
@@ -275,6 +276,7 @@ const overlook: OverlookApi = {
     keepDownloaded: createInvoker(channels.backupKeepDownloaded, invokeTransport),
     releaseEphemeral: createInvoker(channels.backupReleaseEphemeral, invokeTransport),
     ephemeralStatus: createInvoker(channels.backupEphemeralStatus, invokeTransport),
+    photoCustodyStatus: createInvoker(channels.backupPhotoCustodyStatus, invokeTransport),
     prepareEphemeral: createInvoker(channels.backupPrepareEphemeral, invokeTransport),
     onEphemeralState: createSubscriber(events.ephemeralOriginalState, subscribeTransport),
     restoreOriginals: createInvoker(channels.backupRestoreOriginals, invokeTransport),
@@ -282,6 +284,7 @@ const overlook: OverlookApi = {
     providerStatus: backupProviderStatus,
     providerStorage: backupProviderStorage,
     connect: backupConnect,
+    disconnectPreflight: backupDisconnectPreflight,
     disconnect: backupDisconnect,
     removeAuthorizationAnyway: createInvoker(channels.backupRemoveAuthorizationAnyway, invokeTransport),
     openCapacitySettings: backupOpenCapacitySettings,

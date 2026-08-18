@@ -12,6 +12,8 @@ import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { PhotoMetadataEditor } from './PhotoMetadataEditor.js';
+import { custodyPresentation } from '../backup/custody-presentation.js';
+import { usePhotoCustodyStatus } from '../backup/use-photo-custody-status.js';
 
 import './inspector.css';
 
@@ -73,11 +75,20 @@ export function Inspector({
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const { formatBytes, formatCalendarDate } = useFormats();
+  const custodyStatus = usePhotoCustodyStatus(photo?.id ?? '', photo?.syncState === 'offloaded' || photo?.syncState === 'error');
+  const custody =
+    custodyStatus === null || (photo?.syncState === 'error' && custodyStatus.state === 'available')
+      ? null
+      : custodyPresentation(intl, custodyStatus);
   useEffect(() => {
     if (photo === null) return;
     const date = formatCalendarDate(photo.takenAt ?? photo.importedAt);
     announce([photo.fileName, date, photo.place].filter((part) => part !== null).join(', '), 'polite', 'inspector-photo');
   }, [announce, formatCalendarDate, photo?.fileName, photo?.importedAt, photo?.place, photo?.takenAt]);
+  useEffect(() => {
+    if (custody?.assertive !== true) return;
+    announce(custody.text, 'assertive', 'inspector-custody');
+  }, [announce, custody?.assertive, custody?.text]);
   if (photo === null) {
     return (
       <div className="ovl-inspector ovl-inspector--empty" data-testid="inspector">
@@ -105,7 +116,6 @@ export function Inspector({
     offloaded: `Offloaded — original in ${provider}`,
     error: 'Sync failed — will retry',
   };
-
   return (
     <div className="ovl-inspector" data-testid="inspector">
       <h2 className="ovl-sr-only">{intl.formatMessage(messages.title)}</h2>
@@ -138,7 +148,7 @@ export function Inspector({
           />
           <div className="ovl-inspector__date mono-data">{dateLine}</div>
         </div>
-        <StatusGlyph state={photo.syncState} />
+        <StatusGlyph state={photo.syncState} {...(custody === null ? {} : { title: custody.text })} />
       </div>
       <PhotoMetadataEditor photo={photo} photoIds={photoIds ?? [photo.id]} />
       <Section title="Badges">
@@ -185,7 +195,11 @@ export function Inspector({
         <MetadataRow label="Imported" value={`${formatCalendarDate(photo.importedAt)} · ${photo.importSource}`} />
       </Section>
       <Section title="Backup">
-        <MetadataRow label="State" value={statusText[photo.syncState]} tone={STATUS_TONE[photo.syncState]} />
+        <MetadataRow
+          label="State"
+          value={custody?.text ?? statusText[photo.syncState]}
+          tone={custody?.tone ?? STATUS_TONE[photo.syncState]}
+        />
         <MetadataRow
           label="Cipher"
           value={`AES-256-GCM · KEY #${String(photo.keyId)}`}

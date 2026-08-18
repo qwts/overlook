@@ -205,6 +205,20 @@ export class CustodyAuthorityRepository {
     );
   }
 
+  isLegacyUnbound(photoId: string): boolean {
+    return (
+      queryGet<{ found: number }>(
+        this.db,
+        `SELECT 1 AS found
+           FROM sync_ledger
+          WHERE photo_id = ?
+            AND custody_authority_id IS NULL
+            AND (status = 'offloaded' OR (status = 'error' AND dirty = 0))`,
+        photoId,
+      ) !== undefined
+    );
+  }
+
   /** Reconnect starts by closing the bound-but-disconnected race: every
    * dependent authority for this provider becomes unavailable until the
    * exact account and namespace have been proven again. */

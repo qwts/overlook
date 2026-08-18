@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ChannelDefinition } from './channels.js';
 import { boardExportIntentSchema, boardExportResultSchema } from '../moodboard/export-contract.js';
+import { photoCustodyStatusSchema } from '../backup/custody-status.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   name: string,
@@ -27,7 +28,9 @@ const result = z.object({
   failed: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
   previewTranscodes: z.number().int().nonnegative(),
-  failures: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
+  failures: z.array(
+    z.object({ photoId: z.string(), fileName: z.string(), reason: z.string(), custody: photoCustodyStatusSchema.optional() }),
+  ),
 });
 
 export const exportChannels = {

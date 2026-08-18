@@ -8,6 +8,7 @@ import { OffloadService } from './offload.js';
 import type { StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import type { SyncStatus } from '../../shared/library/types.js';
+import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 export interface OriginalCustodyRuntimeOptions {
   readonly provider: StorageProvider;
@@ -15,6 +16,7 @@ export interface OriginalCustodyRuntimeOptions {
   readonly offloadAuthority: (bytes: number) => Promise<number>;
   readonly custodyChanged: () => void;
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyStatus: (photoId: string) => Promise<PhotoCustodyStatus>;
   readonly ledger: SyncLedger;
   readonly repo: PhotosRepository;
   readonly blobs: BlobStore;
@@ -63,6 +65,7 @@ export function createOriginalCustodyRuntime(options: OriginalCustodyRuntimeOpti
   });
   const ephemeral = createEphemeralRuntime({
     custody: options.custody,
+    custodyStatus: options.custodyStatus,
     custodyChanged: options.custodyChanged,
     ledger: options.ledger,
     repo: options.repo,

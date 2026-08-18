@@ -5,9 +5,11 @@ import { EphemeralOriginalService, type EphemeralStage } from './ephemeral-origi
 import type { CustodyHandleResolver } from './custody-handle.js';
 import type { SyncLedger } from './sync-ledger.js';
 import type { SyncStatus } from '../../shared/library/types.js';
+import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 export interface EphemeralRuntimeOptions {
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
+  readonly custodyStatus: (photoId: string) => Promise<PhotoCustodyStatus>;
   readonly custodyChanged: () => void;
   readonly ledger: SyncLedger;
   readonly repo: PhotosRepository;
@@ -26,6 +28,7 @@ export interface EphemeralRuntimeOptions {
 export function createEphemeralRuntime(options: EphemeralRuntimeOptions): EphemeralOriginalService {
   return new EphemeralOriginalService({
     custody: options.custody,
+    custodyStatus: options.custodyStatus,
     custodyChanged: options.custodyChanged,
     ledger: options.ledger,
     repo: { get: (id) => options.repo.get(id) },

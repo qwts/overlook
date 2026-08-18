@@ -180,6 +180,36 @@ describe('custody reconnect verification (#733)', () => {
   });
 });
 
+test('custody status distinguishes provider-required and legacy-unbound originals (#734)', async () => {
+  const w = world();
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: () => undefined,
+    backupTargetConnected: () => false,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    masterKey: () => Buffer.from(w.masterKey),
+  });
+
+  assert.deepEqual(await routing.custodyStatus('P1'), {
+    state: 'provider-required',
+    providerId: 'mock',
+    providerLabel: 'mock',
+    accountLabel: 'Account A',
+  });
+  run(w.db, `UPDATE sync_ledger SET custody_authority_id = NULL WHERE photo_id = 'P1'`);
+  assert.deepEqual(await routing.custodyStatus('P1'), {
+    state: 'legacy-unbound',
+    providerId: null,
+    providerLabel: null,
+    accountLabel: null,
+  });
+  await routing.close();
+  w.db.close();
+});
+
 test('an account change during namespace proof cannot bind the earlier subject (#733)', async () => {
   const w = world();
   await putBootstrap(w.provider, w.masterKey);

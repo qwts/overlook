@@ -492,8 +492,8 @@ export class ProviderRuntime {
     const providerState = await provider.authState();
     const activeProviderId = this.activeId();
     if (activeProviderId !== null && (activeProviderId !== providerId || providerState !== 'connected')) {
-      const blocked = await this.custodyChangeBlocked(activeProviderId);
-      if (blocked !== null) return blocked;
+      const custody = await this.custodyPreflightResult(activeProviderId);
+      if (!custody.ok) return custody;
     }
     // Selecting a provider with existing sealed authority is activation, not a
     // new OAuth grant.
@@ -536,6 +536,13 @@ export class ProviderRuntime {
       });
     this.disconnectInFlight.set(providerId, operation);
     return operation;
+  }
+
+  /** Read-only custody gate used to render the exact disconnect consequence
+   * before the user chooses an ordinary or emergency path. */
+  async disconnectPreflight(providerId: string): Promise<PCloudConnectResult> {
+    if (this.options.isWorkActive?.() === true) return { ok: false, reason: ACTIVE_WORK_DISCONNECT_REASON };
+    return this.custodyPreflightResult(providerId);
   }
 
   private async disconnectOnce(providerId: string): Promise<PCloudConnectResult> {
@@ -604,12 +611,12 @@ export class ProviderRuntime {
     }
   }
 
-  private async custodyChangeBlocked(providerId: string): Promise<PCloudConnectResult | null> {
-    if (this.options.custodyPreflight === undefined) return null;
+  private async custodyPreflightResult(providerId: string): Promise<PCloudConnectResult> {
+    if (this.options.custodyPreflight === undefined) return { ok: true, reason: null };
     const credential = await this.custodyCredential(providerId);
     if (credential === null) return custodyUnavailable();
     const custody = this.options.custodyPreflight(credential);
-    return custodyBlocked(custody);
+    return custodyBlocked(custody) ?? { ok: true, reason: null, custody };
   }
 
   private async custodyCredential(providerId: string): Promise<CustodyCredential | null> {

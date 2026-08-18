@@ -17,6 +17,7 @@ import type {
   ProviderConnectResult,
   ProviderDescriptor,
 } from '../shared/backup/provider-descriptor.js';
+import type { EphemeralFailureReason, PhotoCustodyStatus } from '../shared/backup/custody-status.js';
 import type {
   RestoreDiscoverResponse,
   RestoreRunResponse,
@@ -915,7 +916,11 @@ export interface BackupFacade {
   rehydrate(photoId: string): Promise<void>;
   keepDownloaded(photoId: string): Promise<void>;
   releaseEphemeral(photoId: string): Promise<void>;
-  ephemeralStatus(photoId: string): 'fetching' | 'verifying' | 'ready' | 'released' | 'error' | null;
+  ephemeralStatus(photoId: string): {
+    readonly stage: 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
+    readonly reason?: EphemeralFailureReason | undefined;
+  } | null;
+  photoCustodyStatus(photoId: string): Promise<PhotoCustodyStatus>;
   prepareEphemeral(photoId: string): Promise<'durable' | 'ephemeral'>;
   restoreOriginals(photoIds?: readonly string[]): Promise<RestoreOriginalsSummary>;
   providers(): Promise<{ providers: readonly ProviderDescriptor[]; defaultProviderId: string }>;
@@ -923,6 +928,7 @@ export interface BackupFacade {
   providerStorage(providerId: string): Promise<ProviderCapacityStatus>;
   /** Runs the addressed provider's instant or interactive handshake. */
   connect(providerId: string): Promise<ProviderConnectResult>;
+  disconnectPreflight(providerId: string): Promise<ProviderConnectResult>;
   disconnect(providerId: string): Promise<{ ok: boolean; reason: string | null }>;
   removeAuthorizationAnyway(providerId: string): Promise<ProviderConnectResult>;
   openCapacitySettings(providerId: string): Promise<{ ok: boolean }>;
@@ -957,7 +963,10 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
     })(request),
   );
   ipcMain.handle(channels.backupEphemeralStatus.name, (_event, request: unknown) =>
-    wrapHandler(channels.backupEphemeralStatus, ({ photoId }) => ({ stage: getFacade().ephemeralStatus(photoId) }))(request),
+    wrapHandler(channels.backupEphemeralStatus, ({ photoId }) => getFacade().ephemeralStatus(photoId) ?? { stage: null })(request),
+  );
+  ipcMain.handle(channels.backupPhotoCustodyStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupPhotoCustodyStatus, async ({ photoId }) => getFacade().photoCustodyStatus(photoId))(request),
   );
   ipcMain.handle(channels.backupPrepareEphemeral.name, (_event, request: unknown) =>
     wrapHandler(channels.backupPrepareEphemeral, async ({ photoId }) => ({ custody: await getFacade().prepareEphemeral(photoId) }))(
@@ -978,6 +987,9 @@ export function registerBackupHandlers(getFacade: () => BackupFacade): void {
   );
   ipcMain.handle(channels.backupConnect.name, (_event, request: unknown) =>
     wrapHandler(channels.backupConnect, async ({ providerId }) => getFacade().connect(providerId))(request),
+  );
+  ipcMain.handle(channels.backupDisconnectPreflight.name, (_event, request: unknown) =>
+    wrapHandler(channels.backupDisconnectPreflight, async ({ providerId }) => getFacade().disconnectPreflight(providerId))(request),
   );
   ipcMain.handle(channels.backupDisconnect.name, (_event, request: unknown) =>
     wrapHandler(channels.backupDisconnect, async ({ providerId }) => getFacade().disconnect(providerId))(request),

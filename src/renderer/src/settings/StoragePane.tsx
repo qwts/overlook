@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '../components/Button';
-import { Dialog } from '../components/Dialog';
-import { Icon } from '../components/Icon';
 import { Segmented } from '../components/Segmented';
 import { Slider } from '../components/Slider';
 import { Switch } from '../components/Switch';
@@ -12,9 +10,16 @@ import { OffloadedStorage } from './OffloadedStorage';
 import { ProviderCard, type ProviderCapacityView, type ProviderConnectionState } from './ProviderCard';
 import { resolveProviderTargetId } from './provider-presentation.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
-import type { ProviderCapacityStatus, ProviderConnectionStatus, ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
-import { destructiveActions } from '../../../shared/destructive-actions.js';
+import type {
+  ProviderCapacityStatus,
+  ProviderConnectResult,
+  ProviderConnectionStatus,
+  ProviderDescriptor,
+} from '../../../shared/backup/provider-descriptor.js';
+import { destructiveActions, PROVIDER_AUTHORIZATION_REMOVAL } from '../../../shared/destructive-actions.js';
 import { FileProviderSettings } from './FileProviderSettings';
+import { CustodyRequirementBanner, DisconnectProviderDialog } from './DisconnectProviderDialog.js';
+import { useFormats } from '../i18n/use-formats.js';
 
 // Storage & Backup section (#114, updated by #239, #254): the provider
 // connection card + backup knobs. Disconnected now HIDES the backup-specific
@@ -36,7 +41,11 @@ type ProviderStorageLoad =
   | { readonly targetId: string; readonly state: 'ready'; readonly value: ProviderCapacityStatus }
   | { readonly targetId: string; readonly state: 'error' };
 
-type ConnectionOperation = 'connect' | 'disconnect';
+type ConnectionOperation = 'connect' | 'disconnect' | 'restore' | 'remove-authorization';
+
+type DisconnectPreflightLoad =
+  | { readonly targetId: string; readonly state: 'loading' }
+  | { readonly targetId: string; readonly state: 'ready'; readonly value: ProviderConnectResult };
 
 const messages = defineMessages({
   disconnectFailed: {
@@ -45,20 +54,13 @@ const messages = defineMessages({
   },
   connectFailed: { id: 'settings.storage.connect.failed', defaultMessage: 'Connection failed. Try again.' },
   disconnecting: { id: 'settings.storage.disconnect.progress', defaultMessage: 'Disconnecting…' },
-  removingAuthorization: {
-    id: 'settings.storage.disconnect.removing',
-    defaultMessage: 'Removing this device’s saved authorization…',
+  restoreFailed: {
+    id: 'settings.storage.disconnect.restoreFailed',
+    defaultMessage: 'Restore failed — authorization remains connected.',
   },
-  disconnectTitle: { id: 'settings.storage.disconnect.title', defaultMessage: 'Disconnect {name}?' },
-  cancel: { id: 'settings.storage.disconnect.cancel', defaultMessage: 'Cancel' },
-  disconnectProvider: { id: 'settings.storage.disconnect.action', defaultMessage: 'Disconnect provider' },
-  disconnectCopy: {
-    id: 'settings.storage.disconnect.copy',
-    defaultMessage: 'This removes this device’s saved {name} authorization.',
-  },
-  disconnectReassurance: {
-    id: 'settings.storage.disconnect.reassurance',
-    defaultMessage: 'Encrypted data already stored in {name} is not deleted.',
+  restoreSummary: {
+    id: 'settings.storage.disconnect.restoreSummary',
+    defaultMessage: '{restored} restored · {skipped} skipped · {failed} failed',
   },
 });
 
@@ -84,16 +86,20 @@ export function StoragePane({
   preferredProviderId = null,
 }: StoragePaneProps): ReactElement {
   const intl = useIntl();
+  const { formatCount } = useFormats();
   const [statusLoad, setStatusLoad] = useState<ProviderStatusLoad | null>(null);
   const [storageLoad, setStorageLoad] = useState<ProviderStorageLoad | null>(null);
   const [providers, setProviders] = useState<readonly ProviderDescriptor[]>([]);
   const [targetId, setTargetId] = useState<string | null>(preferredProviderId ?? settings.providerId);
   const [connectionOperation, setConnectionOperation] = useState<ConnectionOperation | null>(null);
   const [disconnectConfirmation, setDisconnectConfirmation] = useState(false);
+  const [disconnectPreflight, setDisconnectPreflight] = useState<DisconnectPreflightLoad | null>(null);
+  const [disconnectRestoreSummary, setDisconnectRestoreSummary] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const statusRequestRef = useRef(0);
   const storageRequestRef = useRef(0);
   const providerCatalogRequestRef = useRef(0);
+  const disconnectRequestRef = useRef(0);
   const operationRef = useRef<ConnectionOperation | null>(null);
 
   const loadCapacity = useCallback((providerId: string) => {
@@ -130,12 +136,12 @@ export function StoragePane({
   }, [loadCapacity, targetId]);
 
   const changeConnection = useCallback(
-    (operation: ConnectionOperation) => {
+    (operation: Extract<ConnectionOperation, 'connect' | 'disconnect'>) => {
       if (operationRef.current !== null || targetId === null) return;
       operationRef.current = operation;
       setConnectionOperation(operation);
       setConnectError(null);
-      setStatusLoad(null);
+      if (operation === 'connect') setStatusLoad(null);
       statusRequestRef.current += 1;
       storageRequestRef.current += 1;
       const request =
@@ -167,6 +173,85 @@ export function StoragePane({
     },
     [intl, onProviderSelection, providers, refresh, targetId],
   );
+
+  const loadDisconnectPreflight = useCallback(
+    (providerId: string): Promise<void> => {
+      const request = disconnectRequestRef.current + 1;
+      disconnectRequestRef.current = request;
+      setDisconnectPreflight({ targetId: providerId, state: 'loading' });
+      return window.overlook.backup
+        .disconnectPreflight({ providerId })
+        .then((value) => {
+          if (disconnectRequestRef.current === request) setDisconnectPreflight({ targetId: providerId, state: 'ready', value });
+        })
+        .catch(() => {
+          if (disconnectRequestRef.current === request) {
+            setDisconnectPreflight({
+              targetId: providerId,
+              state: 'ready',
+              value: { ok: false, reason: intl.formatMessage(messages.disconnectFailed), code: 'custody-unavailable', retryable: true },
+            });
+          }
+        });
+    },
+    [intl],
+  );
+
+  const beginDisconnect = useCallback(() => {
+    if (targetId === null || operationRef.current !== null) return;
+    setConnectError(null);
+    setDisconnectRestoreSummary(null);
+    setDisconnectConfirmation(true);
+    void loadDisconnectPreflight(targetId);
+  }, [loadDisconnectPreflight, targetId]);
+
+  const restoreBeforeDisconnect = useCallback(() => {
+    if (targetId === null || operationRef.current !== null) return;
+    operationRef.current = 'restore';
+    setConnectionOperation('restore');
+    setConnectError(null);
+    void window.overlook.backup
+      .restoreOriginals({})
+      .then(({ restored, skipped, failed }) => {
+        setDisconnectRestoreSummary(
+          intl.formatMessage(messages.restoreSummary, {
+            restored: formatCount(restored),
+            skipped: formatCount(skipped),
+            failed: formatCount(failed),
+          }),
+        );
+        return loadDisconnectPreflight(targetId);
+      })
+      .catch(() => setConnectError(intl.formatMessage(messages.restoreFailed)))
+      .finally(() => {
+        operationRef.current = null;
+        setConnectionOperation(null);
+      });
+  }, [formatCount, intl, loadDisconnectPreflight, targetId]);
+
+  const removeAuthorizationAnyway = useCallback(() => {
+    if (targetId === null || operationRef.current !== null) return;
+    operationRef.current = 'remove-authorization';
+    setConnectionOperation('remove-authorization');
+    setConnectError(null);
+    void window.overlook.backup
+      .removeAuthorizationAnyway({ providerId: targetId, authorization: PROVIDER_AUTHORIZATION_REMOVAL })
+      .then((result) => {
+        if (!result.ok) {
+          setConnectError(result.reason ?? intl.formatMessage(messages.disconnectFailed));
+          return;
+        }
+        setDisconnectConfirmation(false);
+        const provider = providers.find((candidate) => candidate.id === targetId);
+        if (provider !== undefined) onProviderSelection?.(provider);
+        refresh();
+      })
+      .catch(() => setConnectError(intl.formatMessage(messages.disconnectFailed)))
+      .finally(() => {
+        operationRef.current = null;
+        setConnectionOperation(null);
+      });
+  }, [intl, onProviderSelection, providers, refresh, targetId]);
 
   // providerId is part of `settings`, so a connect/disconnect patch
   // re-renders this pane and the effect refetches the card's truth.
@@ -246,14 +331,25 @@ export function StoragePane({
       setConnectError(null);
       refresh();
     } else if (connected) {
-      setDisconnectConfirmation(true);
+      beginDisconnect();
     } else {
       changeConnection('connect');
     }
   };
 
+  const disconnectLoad = disconnectPreflight?.targetId === targetId ? disconnectPreflight : null;
+  const disconnectResult = disconnectLoad?.state === 'ready' ? disconnectLoad.value : null;
+
   return (
     <div className="ovl-settings__fields">
+      {status?.custodyRequirements?.map((requirement) => (
+        <CustodyRequirementBanner
+          key={`${requirement.providerId}:${requirement.accountId}`}
+          name={providers.find((provider) => provider.id === requirement.providerId)?.label ?? requirement.providerId}
+          requirement={requirement}
+        />
+      ))}
+
       <ProviderCard
         name={name}
         connection={connection}
@@ -270,30 +366,28 @@ export function StoragePane({
 
       <FileProviderSettings />
 
-      <Dialog
+      <DisconnectProviderDialog
+        key={`${targetId ?? 'none'}:${disconnectConfirmation ? 'open' : 'closed'}`}
         open={disconnectConfirmation}
-        title={intl.formatMessage(messages.disconnectTitle, { name })}
-        icon="cloud"
-        width={420}
-        {...(disconnecting ? {} : { onClose: () => setDisconnectConfirmation(false) })}
-        footer={
-          <>
-            <Button variant="ghost" disabled={disconnecting} onClick={() => setDisconnectConfirmation(false)}>
-              {intl.formatMessage(messages.cancel)}
-            </Button>
-            <Button disabled={disconnecting} onClick={() => changeConnection('disconnect')}>
-              {disconnecting ? intl.formatMessage(messages.disconnecting) : intl.formatMessage(messages.disconnectProvider)}
-            </Button>
-          </>
+        name={name}
+        accountLabel={status?.accountLabel ?? null}
+        loading={disconnectLoad?.state === 'loading'}
+        result={disconnectResult}
+        operation={
+          connectionOperation === 'disconnect' || connectionOperation === 'restore' || connectionOperation === 'remove-authorization'
+            ? connectionOperation
+            : null
         }
-      >
-        <p className="ovl-settings__disconnectCopy">{intl.formatMessage(messages.disconnectCopy, { name })}</p>
-        <div className="ovl-settings__disconnectReassure">
-          <Icon name="shield-check" size={16} color="var(--accent-green)" />
-          <span>{intl.formatMessage(messages.disconnectReassurance, { name })}</span>
-        </div>
-        {connectError === null ? null : <p className="ovl-settings__disconnectError">{connectError}</p>}
-      </Dialog>
+        restoreSummary={disconnectRestoreSummary}
+        error={connectError}
+        onClose={() => setDisconnectConfirmation(false)}
+        onRetry={() => {
+          if (targetId !== null) void loadDisconnectPreflight(targetId);
+        }}
+        onDisconnect={() => changeConnection('disconnect')}
+        onRestoreAll={restoreBeforeDisconnect}
+        onRemoveAuthorization={removeAuthorizationAnyway}
+      />
 
       {!connected && providers.length > 1 && targetId !== null ? (
         <Field label="Backup provider" hint="Choose where encrypted library data is stored.">

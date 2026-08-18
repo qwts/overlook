@@ -1538,8 +1538,12 @@
           "path": "src/renderer/src/lightbox/Lightbox.stories.tsx"
         },
         {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/export/ExportDialog.stories.tsx"]
+        },
+        {
           "type": "unit-dom",
-          "path": "tests/backup/ephemeral-originals.test.ts"
+          "paths": ["tests/backup/ephemeral-originals.test.ts", "tests/backup/custody-presentation.test.ts"]
         }
       ]
     },

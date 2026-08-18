@@ -10,6 +10,7 @@ import { transcodeToJpeg } from './transcode.js';
 import { BoardExportCancelledError, exportBoardPng } from './board-export.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 import type { BoardExportRequest, BoardExportResult } from '../../shared/moodboard/export-contract.js';
+import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 export type DrainableExportFacade = ExportFacade & { close(): void; drain(): Promise<void> };
 
@@ -24,6 +25,7 @@ export interface ExportRuntimeOptions {
     readonly stream: Readable;
     readonly release?: (() => Promise<void>) | undefined;
   }>;
+  readonly custodyStatus?: ((photoId: string, error: unknown) => Promise<PhotoCustodyStatus | undefined>) | undefined;
   /** Encrypted companion custody (#484); absent = no sidecar export. */
   readonly sidecarsFor?:
     ((photoId: string) => readonly { readonly fileName: string; readonly contentHash: string; readonly bytes: number }[]) | undefined;
@@ -38,6 +40,7 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     blobs: options.blobs,
     resolveKey: options.resolveKey,
     openOriginal: options.openOriginal,
+    ...(options.custodyStatus === undefined ? {} : { custodyStatus: options.custodyStatus }),
     ...(options.sidecarsFor === undefined ? {} : { sidecarsFor: options.sidecarsFor }),
     ...(options.sidecarStream === undefined ? {} : { sidecarStream: options.sidecarStream }),
     writeFile: writeFileCleanly,

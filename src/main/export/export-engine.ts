@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import type { KeyResolver } from '../crypto/envelope.js';
 import type { TranscodeResult } from './transcode.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
+import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 
 // Export engine (#97): the decrypt counterpart to import — selected photos
 // become real files in a chosen folder. Streaming decrypt straight to the
@@ -71,6 +72,7 @@ export interface ExportFailure {
   readonly photoId: string;
   readonly fileName: string;
   readonly reason: string;
+  readonly custody?: PhotoCustodyStatus | undefined;
 }
 
 export class ExportPreflightError extends Error {
@@ -106,6 +108,19 @@ export interface ExportEngineDeps {
   /** Protected domains supply a redacted sink; ordinary exports retain the
    * existing filename/error diagnostics. */
   readonly failure?: ((photoId: string, error: unknown) => void) | undefined;
+  readonly custodyStatus?: ((photoId: string, error: unknown) => Promise<PhotoCustodyStatus | undefined>) | undefined;
+}
+
+async function failureCustody(
+  resolver: ExportEngineDeps['custodyStatus'],
+  photoId: string,
+  error: unknown,
+): Promise<PhotoCustodyStatus | undefined> {
+  try {
+    return await resolver?.(photoId, error);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -209,7 +224,8 @@ export class ExportEngine {
       } catch (error) {
         failed += 1;
         const reason = error instanceof Error ? error.message : String(error);
-        failures.push({ photoId: id, fileName: photo?.fileName ?? id, reason });
+        const custody = photo === undefined ? undefined : await failureCustody(this.deps.custodyStatus, photo.id, error);
+        failures.push({ photoId: id, fileName: photo?.fileName ?? id, reason, ...(custody === undefined ? {} : { custody }) });
         if (this.deps.failure === undefined) {
           console.error(`[overlook] export failed for ${photo?.fileName ?? id}: ${reason}`);
         } else {

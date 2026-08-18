@@ -11,6 +11,8 @@ import { Switch } from '../components/Switch';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { CopyableValue } from '../components/CopyableValue';
+import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
+import { custodyPresentation } from '../backup/custody-presentation.js';
 
 import './export.css';
 
@@ -103,7 +105,9 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const [bar, setBar] = useState<Bar>({ done: 0, total: allPhotos ? 0 : photoIds.length });
   const [exported, setExported] = useState(0);
   const [failed, setFailed] = useState(0);
-  const [failures, setFailures] = useState<readonly { readonly fileName: string; readonly reason: string }[]>([]);
+  const [failures, setFailures] = useState<
+    readonly { readonly fileName: string; readonly reason: string; readonly custody?: PhotoCustodyStatus | undefined }[]
+  >([]);
   const [cancelled, setCancelled] = useState(0);
   const [previewTranscodes, setPreviewTranscodes] = useState(0);
   const [runError, setRunError] = useState(false);
@@ -184,7 +188,15 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
         );
         setPhase('done');
         if (summary.failed > 0) {
-          announce(`Export finished with ${formatCount(summary.failed)} ${summary.failed === 1 ? 'failure' : 'failures'}`, 'assertive');
+          const custodyFailure = summary.failures
+            .map((failure) => ('custody' in failure ? (failure as { readonly custody?: PhotoCustodyStatus }).custody : undefined))
+            .find((custody): custody is PhotoCustodyStatus => custody !== undefined);
+          announce(
+            custodyFailure === undefined
+              ? `Export finished with ${formatCount(summary.failed)} ${summary.failed === 1 ? 'failure' : 'failures'}`
+              : custodyPresentation(intl, custodyFailure).text,
+            'assertive',
+          );
         } else if (summary.cancelled > 0) {
           announce(`Export cancelled after ${formatCount(summary.exported)} ${summary.exported === 1 ? 'photo' : 'photos'}`);
         } else {
@@ -397,15 +409,18 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                   <details>
                     <summary>{intl.formatMessage(messages.itemFailures)}</summary>
                     <ul>
-                      {failures.map(({ fileName, reason }) => (
-                        <li key={`${fileName}:${reason}`}>
-                          <CopyableValue
-                            value={`${fileName}: ${reason}`}
-                            label={intl.formatMessage(messages.copyFailure)}
-                            className="ovl-export__failureValue"
-                          />
-                        </li>
-                      ))}
+                      {failures.map(({ fileName, reason, custody }) => {
+                        const detail = custody === undefined ? reason : custodyPresentation(intl, custody).text;
+                        return (
+                          <li key={`${fileName}:${reason}`}>
+                            <CopyableValue
+                              value={`${fileName}: ${detail}`}
+                              label={intl.formatMessage(messages.copyFailure)}
+                              className="ovl-export__failureValue"
+                            />
+                          </li>
+                        );
+                      })}
                     </ul>
                   </details>
                 ) : null}

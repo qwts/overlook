@@ -207,6 +207,9 @@ export interface OverlookApi {
       request: Req<typeof channels.backupReleaseEphemeral>,
     ) => Promise<Res<typeof channels.backupReleaseEphemeral>>;
     readonly ephemeralStatus: (request: Req<typeof channels.backupEphemeralStatus>) => Promise<Res<typeof channels.backupEphemeralStatus>>;
+    readonly photoCustodyStatus: (
+      request: Req<typeof channels.backupPhotoCustodyStatus>,
+    ) => Promise<Res<typeof channels.backupPhotoCustodyStatus>>;
     readonly prepareEphemeral: (
       request: Req<typeof channels.backupPrepareEphemeral>,
     ) => Promise<Res<typeof channels.backupPrepareEphemeral>>;
@@ -218,6 +221,9 @@ export interface OverlookApi {
     readonly providerStatus: (request: Req<typeof channels.backupProviderStatus>) => Promise<Res<typeof channels.backupProviderStatus>>;
     readonly providerStorage: (request: Req<typeof channels.backupProviderStorage>) => Promise<Res<typeof channels.backupProviderStorage>>;
     readonly connect: (request: Req<typeof channels.backupConnect>) => Promise<Res<typeof channels.backupConnect>>;
+    readonly disconnectPreflight: (
+      request: Req<typeof channels.backupDisconnectPreflight>,
+    ) => Promise<Res<typeof channels.backupDisconnectPreflight>>;
     readonly disconnect: (request: Req<typeof channels.backupDisconnect>) => Promise<Res<typeof channels.backupDisconnect>>;
     readonly removeAuthorizationAnyway: (
       request: Req<typeof channels.backupRemoveAuthorizationAnyway>,
