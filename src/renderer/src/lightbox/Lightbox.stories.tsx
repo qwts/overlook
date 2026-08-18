@@ -584,7 +584,9 @@ export const OffloadedUnavailable: Story = {
   play: async ({ canvasElement }) => {
     await waitFor(() =>
       expect(
-        within(canvasElement).getByText('Local mock unavailable — try again without changing the original’s recorded custody.'),
+        within(canvasElement).getByText('Local mock unavailable — try again without changing the original’s recorded custody.', {
+          selector: '.ovl-lightbox__custody .mono-data',
+        }),
       ).toBeVisible(),
     );
   },
@@ -605,6 +607,7 @@ export const OffloadedWrongAccount: Story = {
     await expect(
       await within(canvasElement).findByText(
         'Wrong Google Drive account — reconnect as m.rivera@gmail.com; this account cannot satisfy the recorded custody.',
+        { selector: '.ovl-lightbox__custody .mono-data' },
       ),
     ).toBeVisible();
   },
@@ -625,6 +628,7 @@ export const OffloadedMissingOrCorrupt: Story = {
     await expect(
       await within(canvasElement).findByText(
         'Original missing or corrupt in pCloud — custody remains bound and recovery could not complete.',
+        { selector: '.ovl-lightbox__custody .mono-data' },
       ),
     ).toBeVisible();
   },
@@ -645,6 +649,7 @@ export const BoundIntegrityError: Story = {
     await expect(
       await within(canvasElement).findByText(
         'Original missing or corrupt in pCloud — custody remains bound and recovery could not complete.',
+        { selector: '.ovl-lightbox__custody .mono-data' },
       ),
     ).toBeVisible();
     await waitFor(() => expect(backupStubCalls.prepare).toBe(1));

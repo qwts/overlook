@@ -145,6 +145,10 @@ export const ProviderRequiredFailure: Story = {
     await userEvent.click(body.getByRole('button', { name: /Export 3 photos/u }));
     await expect(await body.findByText(/2 exported · 1 failed/u)).toBeVisible();
     await userEvent.click(body.getByText('View item failures'));
-    await expect(body.getByText(/Google Drive required — reconnect as m\.rivera@gmail\.com to recover this original\./u)).toBeVisible();
+    await expect(
+      body.getByText(/IMG_4021\.RAF: Google Drive required — reconnect as m\.rivera@gmail\.com to recover this original\./u, {
+        selector: '.ovl-copyable-value__text',
+      }),
+    ).toBeVisible();
   },
 };

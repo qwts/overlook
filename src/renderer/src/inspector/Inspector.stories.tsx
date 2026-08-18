@@ -156,7 +156,9 @@ export const ProviderRequiredCustody: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      await canvas.findByText('Google Drive required — reconnect as m.rivera@gmail.com to recover this original.'),
+      await canvas.findByText('Google Drive required — reconnect as m.rivera@gmail.com to recover this original.', {
+        selector: 'dd.ovl-metadata-row__value',
+      }),
     ).toBeVisible();
     await expect(
       canvas.getByRole('img', { name: 'Google Drive required — reconnect as m.rivera@gmail.com to recover this original.' }),
@@ -178,6 +180,7 @@ export const LegacyUnboundCustody: Story = {
     await expect(
       await within(canvasElement).findByText(
         'Recovery required — this legacy cloud-only original is not yet bound to a verified provider account.',
+        { selector: 'dd.ovl-metadata-row__value' },
       ),
     ).toBeVisible();
   },
