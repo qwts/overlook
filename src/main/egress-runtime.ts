@@ -62,7 +62,7 @@ export class EgressRuntime {
     this.dragOut = new NativeDragOutService({
       bridge:
         testDestination === undefined
-          ? createNativeDragBridge({ platform: process.platform, packaged: app.isPackaged })
+          ? createNativeDragBridge({ platform: process.platform, packaged: app.isPackaged, enabled: false })
           : new TestNativeDragBridge(testDestination),
       getPhoto: (photoId) => repo.get(photoId),
       isMigrating: (photoId) => repo.isInProtectedMigration(photoId),

@@ -7,8 +7,8 @@ import { describe, test } from 'node:test';
 import { createNativeDragBridge } from '../../src/main/native-drag/native-drag-bridge.js';
 import { TestNativeDragBridge } from '../../src/main/native-drag/test-native-drag-bridge.js';
 
-describe('native macOS file-promise bridge (#796)', () => {
-  test('uses signed NSFilePromiseProvider custody and keeps internal drag data on the pasteboard', () => {
+describe('native macOS file-promise bridge (#796/#1027)', () => {
+  test('retains the dormant NSFilePromiseProvider custody contract for a safe redesign', () => {
     const source = readFileSync(join(process.cwd(), 'native/touch-id/native_drag.mm'), 'utf8');
     for (const contract of [
       'NSFilePromiseProvider',
@@ -34,19 +34,39 @@ describe('native macOS file-promise bridge (#796)', () => {
       loads += 1;
       return {};
     };
-    assert.deepEqual(createNativeDragBridge({ platform: 'win32', packaged: true, loadBinding }).status(), {
+    assert.deepEqual(createNativeDragBridge({ platform: 'win32', packaged: true, enabled: true, loadBinding }).status(), {
       available: false,
       reason: 'unsupported-platform',
     });
-    assert.deepEqual(createNativeDragBridge({ platform: 'darwin', packaged: false, loadBinding }).status(), {
+    assert.deepEqual(createNativeDragBridge({ platform: 'darwin', packaged: false, enabled: true, loadBinding }).status(), {
       available: false,
       reason: 'unsigned-build',
     });
     assert.equal(loads, 0);
-    assert.deepEqual(createNativeDragBridge({ platform: 'darwin', packaged: true, loadBinding }).status(), {
+    assert.deepEqual(createNativeDragBridge({ platform: 'darwin', packaged: true, enabled: true, loadBinding }).status(), {
       available: false,
       reason: 'native-unavailable',
     });
+  });
+
+  test('keeps the signed production session disabled without loading native code (#1027)', () => {
+    let loads = 0;
+    const bridge = createNativeDragBridge({
+      platform: 'darwin',
+      packaged: true,
+      enabled: false,
+      loadBinding: () => {
+        loads += 1;
+        throw new Error('must not load');
+      },
+    });
+
+    assert.deepEqual(bridge.status(), { available: false, reason: 'disabled' });
+    assert.equal(loads, 0);
+    assert.match(
+      readFileSync(join(process.cwd(), 'src/main/egress-runtime.ts'), 'utf8'),
+      /createNativeDragBridge\(\{ platform: process\.platform, packaged: app\.isPackaged, enabled: false \}\)/u,
+    );
   });
 
   test('completes receiver promises only after the bounded materializer settles', async () => {
@@ -68,7 +88,7 @@ describe('native macOS file-promise bridge (#796)', () => {
       complete: (requestId: string, error: string | null) => completions.push([requestId, error]),
       cancelAll: () => undefined,
     };
-    const bridge = createNativeDragBridge({ platform: 'darwin', packaged: true, loadBinding: () => binding });
+    const bridge = createNativeDragBridge({ platform: 'darwin', packaged: true, enabled: true, loadBinding: () => binding });
     let materialized = '';
     assert.equal(
       bridge.start({

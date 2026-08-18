@@ -10,7 +10,7 @@ function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   return { name, request, response };
 }
 
-const unavailableReason = z.enum(['unsupported-platform', 'unsigned-build', 'native-unavailable', 'content-unavailable']);
+const unavailableReason = z.enum(['unsupported-platform', 'unsigned-build', 'native-unavailable', 'disabled', 'content-unavailable']);
 
 export const nativeDragChannels = {
   nativeDragStatus: channel('native-drag:status', z.object({}), z.object({ available: z.boolean(), reason: unavailableReason.nullable() })),
