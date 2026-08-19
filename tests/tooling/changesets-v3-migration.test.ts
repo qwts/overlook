@@ -64,7 +64,15 @@ describe('Changesets v3 migration (#1018)', () => {
 
       execFileSync(process.execPath, [cli, 'status', '--output', statusPath], { cwd: fixture, env: environment, stdio: 'pipe' });
       const status = json(statusPath);
-      assert.deepEqual(status['releases'], [{ name: 'fixture-private-app', type: 'patch', oldVersion: '1.0.0', newVersion: '1.0.1' }]);
+      assert.deepEqual(status['releases'], [
+        {
+          name: 'fixture-private-app',
+          type: 'patch',
+          oldVersion: '1.0.0',
+          changesets: ['private-app'],
+          newVersion: '1.0.1',
+        },
+      ]);
 
       execFileSync(process.execPath, [cli, 'version'], { cwd: fixture, env: environment, stdio: 'pipe' });
       assert.equal(json(join(fixture, 'package.json'))['version'], '1.0.1');
