@@ -33,11 +33,14 @@ on:
     # millions of reasoning tokens (measured 2026-08-19: one sequential run
     # consumed a large fraction of the weekly token-plan quota), and judging
     # every push multiplies that by push count and by the auto-updater's
-    # merge cadence. A PR is judged once when it becomes reviewable — opened
-    # non-draft, reopened, or flipped ready — and on demand via the Actions
-    # re-run button after meaningful revisions. `ready_for_review` is listed
-    # explicitly because the defaults omit it.
-    types: [opened, reopened, ready_for_review]
+    # merge cadence. A PR is judged when it becomes reviewable — opened
+    # non-draft, reopened, or flipped ready — and again on demand by applying
+    # the `aca` label (remove and re-apply to repeat). The label, not the
+    # re-run button, is the fresh-head path: a re-run replays the workflow at
+    # the run's original head sha, so a revised PR would never get its new
+    # delta judged that way. `ready_for_review` is listed explicitly because
+    # the defaults omit it.
+    types: [opened, reopened, ready_for_review, labeled]
 permissions:
   contents: read
 # One advisory run per PR; a newer push obsoletes the in-flight judgment.
@@ -51,29 +54,54 @@ jobs:
   # exposed to a step.
   policy:
     name: Action Policy
-    # Draft guard (ci.yml's), plus: skip synchronize events pushed by the
-    # auto-updater. Its merge of main moves every open PR's merge-base, which
-    # invalidates the content-addressed verdicts (base content is part of the
-    # cache key) and re-judges near-from-scratch — open PRs × main merges ×
-    # a full suite of reasoning calls is the token meter's worst case, and
-    # the PR's own delta was already judged. A human push still re-runs
-    # everything.
+    # Draft guard (ci.yml's); a `labeled` event judges only when the label is
+    # `aca` (any other label application is noise, not intent); and a diff
+    # budget: a PR past 25 changed files is not judged at all — per-file
+    # reasoning calls across ten checks on a sweeping refactor is the exact
+    # multi-million-token burn measured on 2026-08-19, and "this PR is too
+    # large to judge economically" is itself the first review finding. The
+    # skip is loud (see the over-budget job), never a silent partial:
+    # judging a truncated subset would present a partial verdict as a whole
+    # one. `changed_files` comes free with the event — no checkout spent
+    # deciding.
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-      && !(github.event.action == 'synchronize' && github.actor == 'chores-dumb[bot]')
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
     steps:
       - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
         with:
           authorization-only: 'true'
+  over-budget:
+    name: aca skipped — diff exceeds judgment budget
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files > 25
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHANGED: ${{ github.event.pull_request.changed_files }}
+        run: |
+          {
+            echo "## aca: not judged"
+            echo ""
+            echo "This PR changes ${CHANGED} files — past the 25-file judgment budget."
+            echo "Per-file reasoning across ten checks on a diff this size costs a"
+            echo "meaningful fraction of the weekly judge quota, and the size itself"
+            echo "is the first review finding. Split the PR, or accept that this"
+            echo "change ships without semantic advisory coverage."
+          } >> "$GITHUB_STEP_SUMMARY"
   check:
     name: aca ${{ matrix.check }}
     needs: policy
-    # Same guard as policy: needs alone would also skip when policy skips,
-    # but stating it keeps the condition readable where the matrix lives.
+    # Same guards as policy: needs alone would also skip when policy skips,
+    # but stating them keeps the conditions readable where the matrix lives.
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-      && !(github.event.action == 'synchronize' && github.actor == 'chores-dumb[bot]')
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
     strategy:
       # Advisory: every check reports; one check's findings must not silence
