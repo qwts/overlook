@@ -29,10 +29,15 @@
 name: aca
 on:
   pull_request:
-    # ready_for_review included explicitly (the default types omit it): a
-    # draft-first PR already current with main gets no synchronize event when
-    # it flips ready, and would otherwise never receive the advisory suite.
-    types: [opened, synchronize, reopened, ready_for_review]
+    # Deliberately NO `synchronize`: a full-suite judgment on a real PR costs
+    # millions of reasoning tokens (measured 2026-08-19: one sequential run
+    # consumed a large fraction of the weekly token-plan quota), and judging
+    # every push multiplies that by push count and by the auto-updater's
+    # merge cadence. A PR is judged once when it becomes reviewable — opened
+    # non-draft, reopened, or flipped ready — and on demand via the Actions
+    # re-run button after meaningful revisions. `ready_for_review` is listed
+    # explicitly because the defaults omit it.
+    types: [opened, reopened, ready_for_review]
 permissions:
   contents: read
 # One advisory run per PR; a newer push obsoletes the in-flight judgment.
@@ -46,7 +51,16 @@ jobs:
   # exposed to a step.
   policy:
     name: Action Policy
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Draft guard (ci.yml's), plus: skip synchronize events pushed by the
+    # auto-updater. Its merge of main moves every open PR's merge-base, which
+    # invalidates the content-addressed verdicts (base content is part of the
+    # cache key) and re-judges near-from-scratch — open PRs × main merges ×
+    # a full suite of reasoning calls is the token meter's worst case, and
+    # the PR's own delta was already judged. A human push still re-runs
+    # everything.
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && !(github.event.action == 'synchronize' && github.actor == 'chores-dumb[bot]')
     runs-on: ubuntu-latest
     steps:
       - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
@@ -55,8 +69,11 @@ jobs:
   check:
     name: aca ${{ matrix.check }}
     needs: policy
-    # Repo policy: draft PRs start no Actions jobs (same guard as ci.yml).
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Same guard as policy: needs alone would also skip when policy skips,
+    # but stating it keeps the condition readable where the matrix lives.
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && !(github.event.action == 'synchronize' && github.actor == 'chores-dumb[bot]')
     runs-on: ubuntu-latest
     strategy:
       # Advisory: every check reports; one check's findings must not silence
