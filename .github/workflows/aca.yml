@@ -1,0 +1,122 @@
+# Advisory semantic checks (agentic-code-analysis, issue qwts/agentic-code-analysis#6;
+# mirrors qwts/image-trail#841). Advisory only — findings are informational;
+# promotion to --enforce is a separate owner decision.
+#
+# Judge routing policy (owner, 2026-08-18): CI screening spends the Qwen
+# token plan (prepaid credits, service pauses at quota — never surprise
+# billing). Anthropic is reserved for qualification/adjudication via
+# agentic-code-analysis's dispatch-only calibrate workflow; the HF router
+# stays the experimentation lane. A depleted plan surfaces as
+# judge-unavailable, never as findings.
+#
+# Per-check model assignment comes from the 2026-08-18 qualification bake-off
+# (calibrate runs 32193373281, 32194066092, 32194309317, 32194311744): a
+# qualification is a tuple — check + prompt version + fixture suite +
+# provider + model — and no single on-plan model qualified for the whole
+# suite. Each check below runs on a route that passed its graded exam at the
+# required level; the receipts are on the fleet dashboard's qualifications
+# page. agent-context-cost and skill-information-architecture have no
+# qualified on-plan route and are deliberately absent. Re-shop before
+# changing a model here: a route swap without a passing exam publishes
+# verdicts nothing vouches for.
+name: aca
+on:
+  pull_request:
+    # ready_for_review included explicitly (the default types omit it): a
+    # draft-first PR already current with main gets no synchronize event when
+    # it flips ready, and would otherwise never receive the advisory suite.
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+# One advisory run per PR; a newer push obsoletes the in-flight judgment.
+concurrency:
+  group: aca-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  # Repo boundary: every direct non-CI trigger runs the immutable policy
+  # action in authorization-only mode before any repository work — actor and
+  # fork policy are enforced before checkout, and before the judge secret is
+  # exposed to a step.
+  policy:
+    name: Action Policy
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+        with:
+          authorization-only: 'true'
+  suite:
+    name: aca suite
+    needs: policy
+    # Repo policy: draft PRs start no Actions jobs (same guard as ci.yml).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # merge-base with origin/main needs history
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qwts/agentic-code-analysis
+          ref: 60be121a7b27c94c56f85ac61c20ea61ab1d5d0f # main 2026-08-18 (first pin with the qwen adapter); bump deliberately
+          path: .aca
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm --prefix .aca clean-install
+      # A pull request can commit a file under .cache/aca whose name matches a
+      # real content-addressed verdict. Remove caller-controlled entries before
+      # restoring the trusted Actions cache so they cannot suppress a judge
+      # call (same guard as playbook-engineering's semantic-ratchet).
+      - name: Discard checked-out semantic verdicts
+        run: rm -rf -- .cache/aca
+      - name: Restore semantic verdicts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/aca
+          key: aca-suite-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            aca-suite-${{ runner.os }}-
+            aca-context-footprint-${{ runner.os }}-
+      # Every check runs even after one finds problems: a PR should get its
+      # whole advisory picture in one pass, not one finding per push. Exit 78
+      # is the suite saying "nothing in this diff for me" and is not a
+      # failure; anything else non-zero (findings or a judge error) turns the
+      # advisory check red at the end.
+      - name: Run the qualified suite
+        env:
+          ACA_PROVIDER: qwen
+          QWEN_BASE_URL: https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+        run: |
+          set -uo pipefail
+          overall=0
+          run_check() {
+            check="$1"
+            model="$2"
+            # `|| rc=$?` keeps the loop alive under the runner's inherited
+            # errexit (`bash -e {0}`): a failing check must not stop the
+            # checks after it, or a PR gets one finding per push instead of
+            # its whole advisory picture.
+            rc=0
+            echo "::group::${check} (qwen/${model})"
+            ACA_MODEL="$model" node .aca/src/cli.ts "$check" --base origin/main || rc=$?
+            echo "::endgroup::"
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 78 ]; then
+              echo "${check}: exit ${rc}"
+              overall=1
+            fi
+          }
+          run_check context-footprint qwen3.7-max
+          run_check failure-posture qwen3.7-max
+          run_check seam-audit qwen3.7-max
+          run_check review-readiness qwen3.7-max
+          run_check test-honesty qwen3.7-max
+          run_check naming-truth qwen3.7-max
+          run_check commit-coherence qwen3.8-max
+          run_check doc-drift qwen3.8-max
+          run_check agent-rule-conflict deepseek-v4-pro
+          run_check single-responsibility deepseek-v4-pro
+          exit "$overall"
