@@ -44,6 +44,12 @@ updates:
           - 'type-coverage'
           - 'madge'
           - 'knip'
+      # Release planning is a production-delivery contract even though the CLI
+      # is a devDependency. Keep Changesets migrations isolated so a semantic
+      # default change cannot block or silently alter the low-risk catch-all.
+      release-versioning:
+        patterns:
+          - '@changesets/*'
       # Everything else: low peer-constraint risk, keeps flowing as one PR.
       dev-tooling:
         patterns:
