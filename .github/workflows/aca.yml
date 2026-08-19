@@ -16,16 +16,31 @@
 # suite. Each check below runs on a route that passed its graded exam at the
 # required level; the receipts are on the fleet dashboard's qualifications
 # page. agent-context-cost and skill-information-architecture have no
-# qualified on-plan route and are deliberately absent. Re-shop before
-# changing a model here: a route swap without a passing exam publishes
-# verdicts nothing vouches for.
+# qualified on-plan route and are deliberately absent (tracked in
+# qwts/agentic-code-analysis#80). Re-shop before changing a model here: a
+# route swap without a passing exam publishes verdicts nothing vouches for.
+#
+# The checks fan out as a matrix, one runner each: a sequential loop measured
+# over an hour of wall-clock on a real PR (each judged file is a reasoning
+# call), which is useless as review-time feedback. Parallel jobs cost only
+# runner minutes (free on a public repo) — the judge spend is identical, and
+# the per-PR concurrency group still cancels the whole set when a newer push
+# obsoletes the judgment.
 name: aca
 on:
   pull_request:
-    # ready_for_review included explicitly (the default types omit it): a
-    # draft-first PR already current with main gets no synchronize event when
-    # it flips ready, and would otherwise never receive the advisory suite.
-    types: [opened, synchronize, reopened, ready_for_review]
+    # Deliberately NO `synchronize`: a full-suite judgment on a real PR costs
+    # millions of reasoning tokens (measured 2026-08-19: one sequential run
+    # consumed a large fraction of the weekly token-plan quota), and judging
+    # every push multiplies that by push count and by the auto-updater's
+    # merge cadence. A PR is judged when it becomes reviewable — opened
+    # non-draft, reopened, or flipped ready — and again on demand by applying
+    # the `aca` label (remove and re-apply to repeat). The label, not the
+    # re-run button, is the fresh-head path: a re-run replays the workflow at
+    # the run's original head sha, so a revised PR would never get its new
+    # delta judged that way. `ready_for_review` is listed explicitly because
+    # the defaults omit it.
+    types: [opened, reopened, ready_for_review, labeled]
 permissions:
   contents: read
 # One advisory run per PR; a newer push obsoletes the in-flight judgment.
@@ -39,18 +54,71 @@ jobs:
   # exposed to a step.
   policy:
     name: Action Policy
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Draft guard (ci.yml's); a `labeled` event judges only when the label is
+    # `aca` (any other label application is noise, not intent); and a diff
+    # budget: a PR past 25 changed files is not judged at all — per-file
+    # reasoning calls across ten checks on a sweeping refactor is the exact
+    # multi-million-token burn measured on 2026-08-19, and "this PR is too
+    # large to judge economically" is itself the first review finding. The
+    # skip is loud (see the over-budget job), never a silent partial:
+    # judging a truncated subset would present a partial verdict as a whole
+    # one. `changed_files` comes free with the event — no checkout spent
+    # deciding.
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
     steps:
       - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
         with:
           authorization-only: 'true'
-  suite:
-    name: aca suite
-    needs: policy
-    # Repo policy: draft PRs start no Actions jobs (same guard as ci.yml).
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+  over-budget:
+    name: aca skipped — diff exceeds judgment budget
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files > 25
     runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHANGED: ${{ github.event.pull_request.changed_files }}
+        run: |
+          {
+            echo "## aca: not judged"
+            echo ""
+            echo "This PR changes ${CHANGED} files — past the 25-file judgment budget."
+            echo "Per-file reasoning across ten checks on a diff this size costs a"
+            echo "meaningful fraction of the weekly judge quota, and the size itself"
+            echo "is the first review finding. Split the PR, or accept that this"
+            echo "change ships without semantic advisory coverage."
+          } >> "$GITHUB_STEP_SUMMARY"
+  check:
+    name: aca ${{ matrix.check }}
+    needs: policy
+    # Same guards as policy: needs alone would also skip when policy skips,
+    # but stating them keeps the conditions readable where the matrix lives.
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      && (github.event.action != 'labeled' || github.event.label.name == 'aca')
+      && github.event.pull_request.changed_files <= 25
+    runs-on: ubuntu-latest
+    strategy:
+      # Advisory: every check reports; one check's findings must not silence
+      # another's runner.
+      fail-fast: false
+      matrix:
+        include:
+          - { check: context-footprint, model: qwen3.7-max }
+          - { check: failure-posture, model: qwen3.7-max }
+          - { check: seam-audit, model: qwen3.7-max }
+          - { check: review-readiness, model: qwen3.7-max }
+          - { check: test-honesty, model: qwen3.7-max }
+          - { check: naming-truth, model: qwen3.7-max }
+          - { check: commit-coherence, model: qwen3.8-max }
+          - { check: doc-drift, model: qwen3.8-max }
+          - { check: agent-rule-conflict, model: deepseek-v4-pro }
+          - { check: single-responsibility, model: deepseek-v4-pro }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,51 +140,28 @@ jobs:
       # call (same guard as playbook-engineering's semantic-ratchet).
       - name: Discard checked-out semantic verdicts
         run: rm -rf -- .cache/aca
+      # Per-check cache keys: matrix jobs saving one shared key would race,
+      # and the first saver would evict every other check's verdicts.
       - name: Restore semantic verdicts
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/aca
-          key: aca-suite-${{ runner.os }}-${{ github.sha }}
+          key: aca-${{ matrix.check }}-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            aca-suite-${{ runner.os }}-
-            aca-context-footprint-${{ runner.os }}-
-      # Every check runs even after one finds problems: a PR should get its
-      # whole advisory picture in one pass, not one finding per push. Exit 78
-      # is the suite saying "nothing in this diff for me" and is not a
-      # failure; anything else non-zero (findings or a judge error) turns the
-      # advisory check red at the end.
-      - name: Run the qualified suite
+            aca-${{ matrix.check }}-${{ runner.os }}-
+      # Exit 78 is the suite saying "nothing in this diff for me" and is not
+      # a failure; findings or a judge error turn this check's advisory job
+      # red without touching its siblings.
+      - name: Run ${{ matrix.check }}
         env:
           ACA_PROVIDER: qwen
+          ACA_MODEL: ${{ matrix.model }}
           QWEN_BASE_URL: https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          CHECK: ${{ matrix.check }}
         run: |
-          set -uo pipefail
-          overall=0
-          run_check() {
-            check="$1"
-            model="$2"
-            # `|| rc=$?` keeps the loop alive under the runner's inherited
-            # errexit (`bash -e {0}`): a failing check must not stop the
-            # checks after it, or a PR gets one finding per push instead of
-            # its whole advisory picture.
-            rc=0
-            echo "::group::${check} (qwen/${model})"
-            ACA_MODEL="$model" node .aca/src/cli.ts "$check" --base origin/main || rc=$?
-            echo "::endgroup::"
-            if [ "$rc" -ne 0 ] && [ "$rc" -ne 78 ]; then
-              echo "${check}: exit ${rc}"
-              overall=1
-            fi
-          }
-          run_check context-footprint qwen3.7-max
-          run_check failure-posture qwen3.7-max
-          run_check seam-audit qwen3.7-max
-          run_check review-readiness qwen3.7-max
-          run_check test-honesty qwen3.7-max
-          run_check naming-truth qwen3.7-max
-          run_check commit-coherence qwen3.8-max
-          run_check doc-drift qwen3.8-max
-          run_check agent-rule-conflict deepseek-v4-pro
-          run_check single-responsibility deepseek-v4-pro
-          exit "$overall"
+          rc=0
+          node .aca/src/cli.ts "$CHECK" --base origin/main || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 78 ]; then
+            exit "$rc"
+          fi
