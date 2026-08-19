@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, test } from 'node:test';
+
+const dependabot = readFileSync(join(process.cwd(), '.github/dependabot.yml'), 'utf8');
+
+function groupBody(name: string): string {
+  const marker = `      ${name}:\n`;
+  const start = dependabot.indexOf(marker);
+  assert.ok(start >= 0, `missing Dependabot group: ${name}`);
+
+  const remainder = dependabot.slice(start + marker.length);
+  const nextGroup = remainder.search(/\n {6}[a-z][a-z0-9-]*:\n/u);
+  return nextGroup >= 0 ? remainder.slice(0, nextGroup) : remainder;
+}
+
+describe('Dependabot major isolation (#1018)', () => {
+  test('routes native database and macOS signing updates before the catch-all', () => {
+    const catchAll = dependabot.indexOf('      dev-tooling:\n');
+    assert.ok(catchAll >= 0);
+
+    for (const group of ['native-database', 'macos-signing']) {
+      const start = dependabot.indexOf(`      ${group}:\n`);
+      assert.ok(start >= 0 && start < catchAll, `${group} must precede dev-tooling`);
+    }
+  });
+
+  test('keeps the risky packages out of the low-risk wildcard group', () => {
+    assert.match(groupBody('native-database'), /- 'better-sqlite3-multiple-ciphers'/u);
+    assert.match(groupBody('macos-signing'), /- '@electron\/osx-sign'/u);
+    assert.match(groupBody('dev-tooling'), /- '\*'/u);
+  });
+});
