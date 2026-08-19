@@ -22,6 +22,10 @@
 name: aca
 on:
   pull_request:
+    # ready_for_review included explicitly (the default types omit it): a
+    # draft-first PR already current with main gets no synchronize event when
+    # it flips ready, and would otherwise never receive the advisory suite.
+    types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
 # One advisory run per PR; a newer push obsoletes the in-flight judgment.
@@ -29,8 +33,21 @@ concurrency:
   group: aca-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
+  # Repo boundary: every direct non-CI trigger runs the immutable policy
+  # action in authorization-only mode before any repository work — actor and
+  # fork policy are enforced before checkout, and before the judge secret is
+  # exposed to a step.
+  policy:
+    name: Action Policy
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+        with:
+          authorization-only: 'true'
   suite:
     name: aca suite
+    needs: policy
     # Repo policy: draft PRs start no Actions jobs (same guard as ci.yml).
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
