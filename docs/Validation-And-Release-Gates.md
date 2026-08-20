@@ -15,6 +15,24 @@ acceptance → the lint chain → `format:check` → `check:changesets` →
 `build`. Browser lanes (`test:e2e`, `test:stories:ci`) run separately and are
 required for E2E- and renderer-relevant changes.
 
+## Workflow runtime policy
+
+Every GitHub Actions job has a finite `timeout-minutes` bound. CI also runs the
+required **Workflow runtime policy** job from a reviewed, commit-pinned
+`qwts/playbook-engineering` checker; the aggregate **CI** gate fails when that
+policy check fails. Direct packaging, release, versioning, performance, updater,
+approval, and issue-automation entrypoints use the same bounded contract even
+though they do not all flow through the aggregate CI job.
+
+Network-dependent setup commands use the commit-pinned
+`qwts/playbook-engineering/.github/actions/bounded-command` action. Dependency
+installs and Playwright or operating-system setup have explicit per-attempt
+timeouts, at most two attempts, and a short fixed retry delay. Tests, builds,
+signing, publishing, and other non-idempotent work are not retried by that
+contract; their step or job timeout remains the failure boundary. Keep the
+workflow definitions, runtime-policy pin, and tooling assertions in
+`tests/tooling/` synchronized when changing these limits.
+
 Two gates need an external checkout, both env-gated in the same shape:
 
 | Variable                   | Points at                                                             |
