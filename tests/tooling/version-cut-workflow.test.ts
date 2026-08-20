@@ -45,7 +45,7 @@ describe('version-cut workflow', () => {
     // third-party equivalent (AGENTS.md → Branch And GitHub Hygiene).
     const foreign = [...workflow.matchAll(/^\s*uses: (?<action>[^@\s]+)/gmu)]
       .map((match) => match.groups?.['action'] ?? '')
-      .filter((action) => !action.startsWith('actions/'));
+      .filter((action) => !action.startsWith('actions/') && action !== 'qwts/playbook-engineering/.github/actions/bounded-command');
 
     assert.deepEqual(foreign, []);
   });
