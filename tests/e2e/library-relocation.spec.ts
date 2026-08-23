@@ -113,7 +113,7 @@ test('ACCEPTANCE: rename a library folder in place — Finder name changes, iden
 
 test('ACCEPTANCE: the ACTIVE library moves (copy mode), reopens from the destination, and keeps its photos (#483 acceptance 2/5)', async ({
   launchOverlook,
-}) => {
+}, testInfo) => {
   // Budget: launch+ready (≤30s staged) + copy-mode move with an in-place
   // renderer reload (≤30s staged via expectRendererReload).
   test.setTimeout(90_000);
@@ -135,7 +135,13 @@ test('ACCEPTANCE: the ACTIVE library moves (copy mode), reopens from the destina
   // cannot be missed, then requires the grid to come back.
   await expectRendererReload(launched, () => moveLibrary(page, activeId, dest));
   await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
-  await expect.poll(() => libraryPath(page, activeId), { timeout: 30_000 }).toMatchObject({ path: dest, open: true });
+  await expect
+    .poll(() => libraryPath(page, activeId), { timeout: 30_000 })
+    .toMatchObject({ path: dest, open: true })
+    .catch(async (error: unknown) => {
+      await testInfo.attach('app-diagnostics', { body: launched.describe(), contentType: 'text/plain' });
+      throw error;
+    });
 });
 
 test('ACCEPTANCE: pre-commit crashes offer verified resume; post-commit recovery finishes automatically (#483/#559)', async ({

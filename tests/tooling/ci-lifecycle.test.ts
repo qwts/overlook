@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 const root = process.cwd();
+const aca = readFileSync(join(root, '.github/workflows/aca.yml'), 'utf8');
 const autoUpdate = readFileSync(join(root, '.github/workflows/auto-update-prs.yml'), 'utf8');
 const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
 const codeql = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8');
@@ -28,7 +29,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e/u);
+    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
   });
@@ -43,11 +44,11 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('authorizes every direct non-CI entrypoint before repository work', () => {
-    const workflows = [autoUpdate, packageWorkflow, perf, release, versionCut, closeLinkedIssues];
+    const workflows = [aca, autoUpdate, packageWorkflow, perf, release, versionCut, closeLinkedIssues];
     for (const workflow of workflows) {
       assert.match(workflow, /^ {2}policy:$/mu);
       assert.match(workflow, /authorization-only: 'true'/u);
-      assert.match(workflow, /ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e/u);
+      assert.match(workflow, /ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
     }
     for (const [workflow, jobs] of [
       [autoUpdate, ['update']],
@@ -74,7 +75,6 @@ describe('governed CI lifecycle (ENG-0004)', () => {
 
   test('retains every agreed complete-suite command and stable gate', () => {
     for (const command of [
-      'npm ci',
       'npm run check:interop-acceptance',
       'npm run lint',
       'npm run format:check',
@@ -92,6 +92,19 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /^ {2}e2e-gate:\n {4}name: E2E gate$/mu);
     assert.match(ci, /^ {2}gate:\n {4}name: CI$/mu);
     assert.match(ci, /git branch main origin\/main/u);
+    assert.match(ci, /arguments-json: '\["ci"\]'/u);
+    assert.match(ci, /arguments-json: '\["playwright","install","--with-deps","chromium"\]'/u);
+  });
+
+  test('enforces finite workflow runtime with the reviewed immutable contract', () => {
+    const sources = [aca, autoUpdate, ci, closeLinkedIssues, codeql, packageWorkflow, perf, release, versionCut].join('\n');
+    assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
+    assert.match(sources, /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
+    assert.match(ci, /name: Workflow runtime policy/u);
+    assert.match(ci, /ref: 5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
+    assert.match(ci, /runtime-policy\.mjs --root "\$GITHUB_WORKSPACE"/u);
+    assert.match(ci, /WORKFLOW_RUNTIME: \$\{\{ needs\.workflow-runtime\.result \}\}/u);
+    assert.match(ci, /test "\$WORKFLOW_RUNTIME" = success/u);
   });
 
   test('keeps required E2E runs on the measured one-worker, zero-retry baseline (#897)', () => {

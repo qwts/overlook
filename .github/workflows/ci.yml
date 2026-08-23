@@ -53,6 +53,7 @@ jobs:
     name: Action Policy
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.policy.outputs.mode }}
       run_full: ${{ steps.policy.outputs.run_full }}
@@ -60,13 +61,14 @@ jobs:
       release_gate_mode: ${{ steps.policy.outputs.release_gate_mode }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
 
   merge-evidence:
     name: Verify merged commit evidence
     needs: policy
     if: needs.policy.outputs.run_post_merge == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       validated: ${{ steps.evidence.outputs.validated }}
     steps:
@@ -93,6 +95,7 @@ jobs:
     needs: policy
     if: github.event_name == 'pull_request' && needs.policy.outputs.run_full == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       validated: ${{ steps.evidence.outputs.validated }}
     steps:
@@ -147,7 +150,14 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install locked dependencies
+          executable: npm
+          arguments-json: '["ci"]'
+          timeout-seconds: '900'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # Keep the companion checkout under the already-ignored dependency tree:
       # repo-wide Photos lint and package-pin scans must not treat Image Trail as
@@ -243,7 +253,14 @@ jobs:
       # The whole job is lifecycle-gated, so Storybook runs only as part of a
       # complete suite; draft events start no jobs.
       - name: Install Playwright browsers (interaction tests)
-        run: npx playwright install --with-deps chromium
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install Playwright Chromium for interaction tests
+          executable: npx
+          arguments-json: '["playwright","install","--with-deps","chromium"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # Step-level bound: the :inner entrypoint runs without the guard's --timeout-s 1800,
       # so without this a hung Storybook run would burn the whole job timeout instead of
@@ -286,15 +303,37 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install locked dependencies for E2E
+          executable: npm
+          arguments-json: '["ci"]'
+          timeout-seconds: '900'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # The lane drives the real Electron app (no downloaded browser): Electron
       # brings its own Chromium but needs the OS libraries and a display server.
       # install-deps covers the shared libraries; xvfb provides the display.
       - name: Install Electron system dependencies
-        run: |
-          npx playwright install-deps chromium
-          sudo apt-get install --yes xvfb
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install Electron Chromium system dependencies
+          executable: npx
+          arguments-json: '["playwright","install-deps","chromium"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
+
+      - name: Install Xvfb
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install Xvfb
+          executable: sudo
+          arguments-json: '["apt-get","-o","Acquire::Retries=3","install","--yes","xvfb"]'
+          timeout-seconds: '300'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # Materialize the Electron binary BEFORE tests: parallel workers racing
       # the lazy first-run download exec a half-written binary (ETXTBSY).
@@ -392,11 +431,37 @@ jobs:
       security-events: write
     uses: ./.github/workflows/codeql.yml
 
+  workflow-runtime:
+    name: Workflow runtime policy
+    needs: policy
+    if: needs.policy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact validation commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Checkout pinned runtime checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qwts/playbook-engineering
+          ref: 5455a3f5939369ea843b1bbb4d2573739f4381a6
+          path: .ci-runtime-policy
+          sparse-checkout: tools/ci-runtime
+          persist-credentials: false
+
+      - name: Enforce bounded workflow runtime
+        run: node .ci-runtime-policy/tools/ci-runtime/runtime-policy.mjs --root "$GITHUB_WORKSPACE"
+
   post-merge:
     name: Post-merge smoke
     needs: [policy, merge-evidence]
     if: needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/.interop-image-trail
     steps:
@@ -420,9 +485,10 @@ jobs:
 
   gate:
     name: CI
-    needs: [policy, merge-evidence, preflight-evidence, ci, e2e-gate, docs-gov, codeql, post-merge]
+    needs: [policy, merge-evidence, preflight-evidence, ci, e2e-gate, docs-gov, codeql, workflow-runtime, post-merge]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Enforce the selected lifecycle lane
         env:
@@ -432,12 +498,14 @@ jobs:
           E2E_GATE: ${{ needs.e2e-gate.result }}
           DOCS_GOV: ${{ needs.docs-gov.result }}
           CODEQL: ${{ needs.codeql.result }}
+          WORKFLOW_RUNTIME: ${{ needs.workflow-runtime.result }}
           PREFLIGHT: ${{ needs.preflight-evidence.result }}
           PREFLIGHT_VALIDATED: ${{ needs.preflight-evidence.outputs.validated }}
           MERGE_VALIDATED: ${{ needs.merge-evidence.outputs.validated }}
           POST_MERGE: ${{ needs.post-merge.result }}
         run: |
           test "$POLICY" = success
+          test "$WORKFLOW_RUNTIME" = success
           case "$MODE" in
             full)
               if [ "$PREFLIGHT_VALIDATED" = true ]; then
