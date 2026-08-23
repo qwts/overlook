@@ -39,11 +39,15 @@ updates:
       native-database:
         patterns:
           - 'better-sqlite3-multiple-ciphers'
+        update-types:
+          - 'major'
       # macOS signing is a release-packaging boundary. Keep its majors isolated so
       # package-format and install-script changes get signing-specific review (#1018).
       macos-signing:
         patterns:
           - '@electron/osx-sign'
+        update-types:
+          - 'major'
       # TypeScript + its lint/analysis tools; all gated on the TS major via
       # typescript-eslint's peer cap — the next likely wall as TS 7 lands.
       lint-and-types:
