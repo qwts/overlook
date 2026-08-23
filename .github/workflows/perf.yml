@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@f9c71a821589f6e83ea73a6ce03046169d5cfd76
         with:
           authorization-only: 'true'
 
@@ -39,7 +39,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9c71a821589f6e83ea73a6ce03046169d5cfd76
         with:
           task: Install locked performance dependencies
           executable: npm
@@ -49,7 +49,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Electron system dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9c71a821589f6e83ea73a6ce03046169d5cfd76
         with:
           task: Install Electron Chromium system dependencies
           executable: npx
@@ -59,7 +59,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Xvfb
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9c71a821589f6e83ea73a6ce03046169d5cfd76
         with:
           task: Install Xvfb
           executable: sudo
