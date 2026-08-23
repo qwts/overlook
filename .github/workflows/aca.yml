@@ -69,8 +69,9 @@ jobs:
       && (github.event.action != 'labeled' || github.event.label.name == 'aca')
       && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
         with:
           authorization-only: 'true'
   over-budget:
@@ -80,6 +81,7 @@ jobs:
       && (github.event.action != 'labeled' || github.event.label.name == 'aca')
       && github.event.pull_request.changed_files > 25
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - env:
           CHANGED: ${{ github.event.pull_request.changed_files }}
@@ -103,6 +105,7 @@ jobs:
       && (github.event.action != 'labeled' || github.event.label.name == 'aca')
       && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       # Advisory: every check reports; one check's findings must not silence
       # another's runner.
@@ -133,7 +136,16 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - run: npm --prefix .aca clean-install
+      - name: Install advisory checker dependencies
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install advisory checker dependencies
+          executable: npm
+          arguments-json: '["clean-install"]'
+          working-directory: .aca
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
       # A pull request can commit a file under .cache/aca whose name matches a
       # real content-addressed verdict. Remove caller-controlled entries before
       # restoring the trusted Actions cache so they cannot suppress a judge

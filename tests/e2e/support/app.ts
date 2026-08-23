@@ -38,6 +38,9 @@ class AppDiagnostics {
   constructor(private readonly app: ElectronApplication) {
     app.on('window', (page) => this.wire(page));
     for (const page of app.windows()) this.wire(page);
+    const child = app.process();
+    child.stdout?.on('data', (chunk: Buffer | string) => this.pushProcessOutput('main:stdout', chunk));
+    child.stderr?.on('data', (chunk: Buffer | string) => this.pushProcessOutput('main:stderr', chunk));
   }
 
   private wire(page: Page): void {
@@ -48,6 +51,12 @@ class AppDiagnostics {
   private push(entry: ConsoleEntry): void {
     this.entries.push(entry);
     if (this.entries.length > CONSOLE_TAIL) this.entries.shift();
+  }
+
+  private pushProcessOutput(kind: string, chunk: Buffer | string): void {
+    for (const text of String(chunk).split(/\r?\n/u)) {
+      if (text !== '') this.push({ kind, text });
+    }
   }
 
   describe(exited: boolean): string {
@@ -115,6 +124,8 @@ export interface LaunchedApp {
    * already-exited instances, so an explicit close is never double-closed.
    */
   readonly close: () => Promise<void>;
+  /** Recent renderer and Electron-main diagnostics for a failed lifecycle assertion. */
+  readonly describe: () => string;
 }
 
 interface TrackedApp {
@@ -168,6 +179,7 @@ async function launchStages(spec: LaunchSpec, track: (tracked: TrackedApp) => vo
     hasExited: () => exitedFlag,
     exited,
     close: () => closeApp(tracked, testInfo),
+    describe,
   };
   if (readyTestId !== null) {
     await stage(
