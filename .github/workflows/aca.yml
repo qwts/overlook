@@ -70,7 +70,7 @@ jobs:
       && github.event.pull_request.changed_files <= 25
     runs-on: ubuntu-latest
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@47072db9e8d400b4b444b562e85b606e53b57286
         with:
           authorization-only: 'true'
   over-budget:
