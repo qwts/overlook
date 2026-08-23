@@ -15,7 +15,7 @@ function groupBody(name: string): string {
   return nextGroup >= 0 ? remainder.slice(0, nextGroup) : remainder;
 }
 
-describe('Dependabot major isolation (#1018)', () => {
+describe('Dependabot update isolation (#1018, #1038)', () => {
   test('routes native database and macOS signing updates before the catch-all', () => {
     const catchAll = dependabot.indexOf('      dev-tooling:\n');
     assert.ok(catchAll >= 0);
@@ -36,5 +36,14 @@ describe('Dependabot major isolation (#1018)', () => {
     assert.match(groupBody('native-database'), /- 'better-sqlite3-multiple-ciphers'/u);
     assert.match(groupBody('macos-signing'), /- '@electron\/osx-sign'/u);
     assert.match(groupBody('dev-tooling'), /- '\*'/u);
+  });
+
+  test('excludes only the governed CI policy from action automation', () => {
+    const githubActionsStart = dependabot.indexOf('  - package-ecosystem: github-actions\n');
+    assert.ok(githubActionsStart >= 0);
+    const githubActions = dependabot.slice(githubActionsStart);
+
+    assert.match(githubActions, /dependency-name: 'qwts\/playbook-engineering\/\.github\/actions\/ci-policy'/u);
+    assert.doesNotMatch(githubActions, /dependency-name: 'qwts\/playbook-engineering\/\.github\/actions\/bounded-command'/u);
   });
 });
