@@ -22,8 +22,9 @@ surfaces ([#305](https://github.com/qwts/photos/issues/305)).
 
 Two methods, because neither is sufficient alone:
 
-1. **Automated** — axe-core 4.12.1 against the `wcag2a`, `wcag2aa`, `wcag21a`,
-   `wcag21aa`, `wcag22aa` tags, over all 107 stories and 5 composed E2E flows.
+1. **Automated** — axe-core 4.13.0 against the `wcag2a`, `wcag2aa`, `wcag21a`,
+   `wcag21aa`, `wcag22aa` tags, over every checked-in story and 5 composed E2E
+   flows.
 2. **Manual source + interaction audit** — the criteria axe cannot test. In practice axe
    detects roughly a third of WCAG issues; every finding in
    [Severity ranking](#severity-ranking) below that is not tied to an axe rule is
@@ -41,7 +42,13 @@ semantic token-pair contrast gate backed by shared WCAG luminance math, and
 added composed Electron coverage at 200% zoom. #409 had already removed the 61
 baseline contrast violations. Text over user photos remains explicitly manual.
 
-## Baseline: 103 automated violations
+**Revalidated 2026-08-23** — #1046 bumped axe-core from 4.12.1 to 4.13.0. The
+hosted Storybook and composed E2E accessibility lanes both passed at exact head
+`952f592e`; the empty per-rule violation budget remained empty. This rerun covers
+the changed automated rule set. The dependency-only diff did not change rendered
+surfaces, so the manual source and interaction findings below are unchanged.
+
+## Historical baseline: 103 automated violations
 
 |                                  | Violations | Surfaces          |
 | -------------------------------- | ---------- | ----------------- |
@@ -230,7 +237,7 @@ active collection, including unloaded virtualized rows** (#884).
 
 ## Method
 
-- axe-core 4.12.1, pinned exact and overridden into `axe-playwright`'s floating
+- axe-core 4.13.0, pinned exact and overridden into `axe-playwright`'s floating
   `^4.10.1`: its rule set _defines_ every count here, so it must not drift silently.
   A bump is expected to move numbers — re-audit in that PR.
 - The budget records counts **per axe rule**, so the tables above are not just totals:
