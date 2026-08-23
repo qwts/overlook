@@ -13,7 +13,7 @@ components; their full license texts ship inside the Electron distribution at
 
 | Package | Version | License |
 | ------- | ------- | ------- |
-| `@anthropic-ai/sdk` | 0.115.0 | MIT |
+| `@anthropic-ai/sdk` | 0.120.0 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
 | `@emnapi/runtime` | 1.11.2 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
@@ -54,6 +54,7 @@ components; their full license texts ship inside the Electron distribution at
 | `es-errors` | 1.3.0 | MIT |
 | `es6-promise` | 4.2.8 | MIT |
 | `escape-string-regexp` | 4.0.0 | MIT |
+| `events` | 3.3.0 | MIT |
 | `exifr` | 7.1.3 | MIT |
 | `fast-sha256` | 1.3.0 | Unlicense |
 | `global-agent` | 4.1.3 | BSD-3-Clause |
@@ -62,12 +63,12 @@ components; their full license texts ship inside the Electron distribution at
 | `has-property-descriptors` | 1.0.2 | MIT |
 | `json-schema-to-ts` | 3.1.1 | MIT |
 | `matcher` | 4.0.0 | MIT |
-| `mpegts.js` | 1.8.0 | Apache-2.0 |
+| `mpegts.js` | 1.8.2 | Apache-2.0 |
 | `node-addon-api` | 8.9.0 | MIT |
 | `object-keys` | 1.1.1 | MIT |
 | `onnxruntime-common` | 1.27.0 | MIT |
 | `onnxruntime-node` | 1.27.0 | MIT |
-| `openai` | 7.1.0 | Apache-2.0 |
+| `openai` | 7.5.0 | Apache-2.0 |
 | `semver` | 7.8.5 | ISC |
 | `serialize-error` | 8.1.0 | MIT |
 | `sharp` | 0.35.3 | Apache-2.0 |
@@ -81,13 +82,12 @@ components; their full license texts ship inside the Electron distribution at
 | `ts-algebra` | 2.0.0 | MIT |
 | `tslib` | 2.8.1 | 0BSD |
 | `type-fest` | 0.20.2 | (MIT OR CC0-1.0) |
-| `webworkify-webpack` | 2.1.5 | MIT |
 | `ws` | 8.21.1 | MIT |
 | `zod` | 4.4.3 | MIT |
 
 ---
 
-## @anthropic-ai/sdk 0.115.0
+## @anthropic-ai/sdk 0.120.0
 
 License: MIT
 
@@ -938,6 +938,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
+## events 3.3.0
+
+License: MIT
+
+```
+MIT
+
+Copyright Joyent, Inc. and other Node contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+---
+
 ## exifr 7.1.3
 
 License: MIT
@@ -1172,7 +1203,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## mpegts.js 1.8.0
+## mpegts.js 1.8.2
 
 License: Apache-2.0
 
@@ -1446,7 +1477,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## openai 7.1.0
+## openai 7.5.0
 
 License: Apache-2.0
 
@@ -2020,14 +2051,6 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
-
----
-
-## webworkify-webpack 2.1.5
-
-License: MIT
-
-_No license text file was found in the published package._
 
 ---
 
