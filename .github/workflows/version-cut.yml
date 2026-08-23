@@ -50,8 +50,9 @@ permissions:
 jobs:
   policy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
         with:
           authorization-only: 'true'
 
@@ -59,6 +60,7 @@ jobs:
     needs: policy
     name: Version packages PR
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       has-releases: ${{ steps.version.outputs.has-releases }}
     env:
@@ -81,7 +83,14 @@ jobs:
       # The changeset CLI is plain JS — skip postinstall (Electron binary
       # download + native rebuild) that versioning never needs.
       - name: Install dependencies (scripts skipped)
-        run: npm ci --ignore-scripts
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install locked version tooling
+          executable: npm
+          arguments-json: '["ci","--ignore-scripts"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # Done in-repo rather than by changesets/action. `changeset version` runs
       # without repository credentials; only the first-party push/PR step below
@@ -172,6 +181,7 @@ jobs:
     needs: [policy, version-pr]
     name: Tag version merges
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     env:
       HAS_CHORES_DUMB: ${{ secrets.CHORES_DUMB_CLIENT_ID != '' && secrets.CHORES_DUMB_PRIVATE_KEY != '' }}
     steps:

@@ -20,7 +20,11 @@ describe('release workflow publication', () => {
     const installIndex = workflow.indexOf('- name: Install release verification dependencies');
     const semanticVerify = workflow.split('- name: Verify semantic changeset state')[1]?.split('\n  build:')[0] ?? '';
 
-    assert.match(workflow, /npm ci --ignore-scripts/u);
+    assert.match(
+      workflow,
+      /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0/u,
+    );
+    assert.match(workflow, /arguments-json: '\["ci","--ignore-scripts"\]'/u);
     assert.ok(evidenceIndex >= 0 && installIndex > evidenceIndex, 'release dependencies execute only after evidence verification');
     assert.match(semanticVerify, /npx changeset status --output/u);
     assert.match(semanticVerify, /\.releases\.length/u);

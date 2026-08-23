@@ -13,8 +13,9 @@ permissions:
 jobs:
   policy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
         with:
           authorization-only: 'true'
 
@@ -38,12 +39,34 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install locked performance dependencies
+          executable: npm
+          arguments-json: '["ci"]'
+          timeout-seconds: '900'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       - name: Install Electron system dependencies
-        run: |
-          npx playwright install-deps chromium
-          sudo apt-get install --yes xvfb
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install Electron Chromium system dependencies
+          executable: npx
+          arguments-json: '["playwright","install-deps","chromium"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
+
+      - name: Install Xvfb
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install Xvfb
+          executable: sudo
+          arguments-json: '["apt-get","-o","Acquire::Retries=3","install","--yes","xvfb"]'
+          timeout-seconds: '300'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
