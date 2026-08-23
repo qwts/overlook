@@ -33,8 +33,9 @@ concurrency:
 jobs:
   policy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
         with:
           authorization-only: 'true'
 
@@ -42,6 +43,7 @@ jobs:
     needs: policy
     name: Verify release evidence
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -108,7 +110,14 @@ jobs:
           cache: npm
 
       - name: Install release verification dependencies (scripts skipped)
-        run: npm ci --ignore-scripts
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install locked release verification dependencies
+          executable: npm
+          arguments-json: '["ci","--ignore-scripts"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       - name: Verify semantic changeset state
         run: |
@@ -144,6 +153,7 @@ jobs:
     name: Publish prerelease
     needs: [verify, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     env:

@@ -60,8 +60,9 @@ permissions:
 jobs:
   policy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@72fbb38825295be7d7fc870545a0072a5b00fa9e
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
         with:
           authorization-only: 'true'
 
@@ -81,6 +82,7 @@ jobs:
           - os: windows-latest
             win-arch: arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,7 +96,14 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        with:
+          task: Install locked packaging dependencies
+          executable: ${{ runner.os == 'Windows' && 'npm.cmd' || 'npm' }}
+          arguments-json: '["ci"]'
+          timeout-seconds: '900'
+          attempts: '2'
+          retry-delay-seconds: '5'
 
       # Build in a step whose env carries no signing secrets (#855): the
       # compound package* scripts used to run `npm run build` under the full
@@ -121,11 +130,11 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ] && [ -n "$WIN_ARCH" ] && [ "$WIN_ARCH" != "x64" ]; then
             # sharp ships its native binary as per-arch @img/sharp-win32-<arch>
-            # optional deps; npm ci on the x64 runner installs only the host
+            # optional deps; the x64 runner installs only its host
             # (x64) one, so a cross-compiled arm64 build would bundle the x64
             # sharp binary (caught by verify-windows-arch). Fetch ONLY the
-            # target-arch binary and swap it in: a plain `npm install --cpu/--os
-            # sharp` re-resolves the whole tree's optional deps for the target
+            # target-arch binary and swap it in. A target-flagged registry install of
+            # sharp re-resolves the whole tree's optional deps for the target
             # and prunes the x64 build toolchain (@rollup/rollup-win32-x64-msvc,
             # swc, …) that must run natively on this x64 runner. npm pack +
             # extract touches nothing else. better-sqlite3 v13 bundles both
