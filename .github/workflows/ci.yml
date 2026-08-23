@@ -150,7 +150,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
         with:
           task: Install locked dependencies
           executable: npm
@@ -253,7 +253,7 @@ jobs:
       # The whole job is lifecycle-gated, so Storybook runs only as part of a
       # complete suite; draft events start no jobs.
       - name: Install Playwright browsers (interaction tests)
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
         with:
           task: Install Playwright Chromium for interaction tests
           executable: npx
@@ -303,7 +303,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
         with:
           task: Install locked dependencies for E2E
           executable: npm
@@ -316,7 +316,7 @@ jobs:
       # brings its own Chromium but needs the OS libraries and a display server.
       # install-deps covers the shared libraries; xvfb provides the display.
       - name: Install Electron system dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
         with:
           task: Install Electron Chromium system dependencies
           executable: npx
@@ -326,7 +326,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Xvfb
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
         with:
           task: Install Xvfb
           executable: sudo
