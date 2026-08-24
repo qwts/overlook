@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { signAsync } from '@electron/osx-sign';
+import { sign } from '@electron/osx-sign';
 
 const EXTENSION_BUNDLE = `${path.sep}OverlookFileProvider.appex${path.sep}`;
 const QUICK_LOOK_BUNDLE = `${path.sep}OverlookQuickLook.appex${path.sep}`;
@@ -86,7 +86,7 @@ export default async function signMacApp(configuration) {
     signNestedBundle(configuration, bundlePath, entitlements);
     if (bundlePath === extension) verifyFileProviderIdentity(extension);
   }
-  await signAsync({
+  await sign({
     ...configuration,
     // Profiles are embedded and validated by our provisioned packaging path.
     // osx-sign has only one profile input and would otherwise apply the main
