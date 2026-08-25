@@ -150,11 +150,13 @@ test('purge: confirm ceremony removes DB row, local blob, and remote copy', asyn
     await page.keyboard.press('ControlOrMeta+a');
     await expect(page.getByTestId('selection-pill')).toContainText('1 selected');
 
-    // A stale or direct renderer cannot bypass the main-process ceremony.
-    const rejectedWithoutAuthorization = await page.evaluate<boolean>(
-      `window.overlook.library.purge({ photoIds: ['${target?.id ?? ''}'] }).then(() => false, () => true)`,
+    // The former renderer acknowledgement is rejected as stale request data.
+    // The trusted E2E main-process harness approves the native ceremony used by
+    // the valid request below so browser automation remains non-interactive.
+    const rejectedStaleAuthorization = await page.evaluate<boolean>(
+      `window.overlook.library.purge({ photoIds: ['${target?.id ?? ''}'], authorization: 'photos.delete-permanently.v1' }).then(() => false, () => true)`,
     );
-    expect(rejectedWithoutAuthorization).toBe(true);
+    expect(rejectedStaleAuthorization).toBe(true);
 
     // The ceremony: permanent delete in the pill → exact-count dialog →
     // count → the destructive button.

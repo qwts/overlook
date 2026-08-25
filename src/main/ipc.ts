@@ -49,6 +49,7 @@ import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
 import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './library/favorite-mutation-handler.js';
 import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
+import { purgeAfterAuthorization, type PurgeAuthorizer, type PurgeFacade } from './library/purge-authorization.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -413,23 +414,11 @@ export function registerProtectedAlbumHandlers(
   registerProtectedAlbumExportHandlers(getExport, destinationAuthority);
 }
 
-export interface PurgeFacade {
-  purge(photoIds: readonly string[]): Promise<{ purged: number; skipped: number; protected: number; remoteFailures: number }>;
-}
-
-export function registerPurgeHandlers(getFacade: () => PurgeFacade, getActivity?: () => ActivityFacade): void {
-  ipcMain.handle(channels.libraryPurge.name, (_event, request: unknown) =>
-    wrapHandler(channels.libraryPurge, async ({ photoIds }) => {
-      const result = await getFacade().purge(photoIds);
-      if (result.purged > 0 || result.remoteFailures > 0) {
-        getActivity?.().record({
-          eventType: 'photo.purged',
-          outcome: result.remoteFailures > 0 || result.skipped > 0 ? 'partial' : 'succeeded',
-          payload: { count: result.purged, skipped: result.skipped, remoteFailures: result.remoteFailures },
-        });
-      }
-      return result;
-    })(request),
+export function registerPurgeHandlers(getFacade: () => PurgeFacade, authorize: PurgeAuthorizer, getActivity?: () => ActivityFacade): void {
+  ipcMain.handle(channels.libraryPurge.name, (event, request: unknown) =>
+    wrapHandler(channels.libraryPurge, ({ photoIds }) =>
+      purgeAfterAuthorization(photoIds, BrowserWindow.fromWebContents(event.sender), getFacade, authorize, getActivity),
+    )(request),
   );
 }
 
