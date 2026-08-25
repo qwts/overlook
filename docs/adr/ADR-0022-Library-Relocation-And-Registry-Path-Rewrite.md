@@ -22,6 +22,13 @@ deleting its source) must not proceed on advisory lock alone. An unreadable
 custody probe maps to the stable `source-unreadable` refusal, never an
 opaque failure. All other §4/§5 semantics stand.
 
+**Amended and accepted 2026-08-24 by
+[#991](https://github.com/qwts/overlook/issues/991):** §8 makes a dedicated
+main-owned native-picker grant the relocation destination authority. Grants
+bind to the issuing renderer, canonical filesystem containment, and one
+multi-library batch with active-operation leases, idle renewal, and explicit
+revocation. The create-library save picker and its contract are unchanged.
+
 Section map for [#483](https://github.com/qwts/photos/issues/483): §1–§2 govern
 the relocation service and its journal, §3–§4 the staging identity rule and the
 copy/verify/commit protocol, §5 preflight and refusals, §6 external-volume
@@ -208,6 +215,43 @@ library, independent progress and per-library results. There is no
 cross-library transaction: one library's failure never rolls back another's
 commit.
 
+### 8. Native-picker destination authority
+
+Renderer paths are requests, never authority to write, move, or delete library
+data. Relocation therefore has a dedicated native directory-picker channel in
+main. A successful pick returns an unguessable grant; cancellation returns no
+grant. The existing create-library save picker and registry add/Locate picker
+remain separate and unchanged.
+
+- **Canonical containment:** main resolves the selected root with `realpath`.
+  For each requested destination it resolves the nearest existing ancestor
+  with `realpath`, appends only the normalized non-existing suffix, and checks
+  containment with the platform path rules. Existing symlinks therefore cannot
+  escape the selected tree. Main passes this canonical destination—not the
+  renderer spelling—to preflight and move, keeping authorization and filesystem
+  effects on the same target.
+- **Sender binding:** the grant records the issuing `webContents` identity.
+  Only that sender may use or revoke it; a copied token from another renderer
+  has no authority. Destroying the sender revokes all of its grants.
+- **Batch lifetime:** one grant covers the child destinations, concurrent
+  preflights, collision-safe retries, and sequential moves of one wizard batch.
+  It is non-consuming: completing one library never spends authority needed by
+  the next.
+- **Active leases and renewal:** each authorized preflight or move acquires an
+  active lease before entering the runtime. An active lease does not expire
+  mid-operation. When the operation settles—success, designed refusal, or
+  error—main releases the lease and renews the grant for a fresh 15-minute idle
+  window. Thus a long first move cannot expire the next library; an actually
+  abandoned wizard eventually loses authority.
+- **Revocation:** selecting a replacement root revokes the sender's prior
+  grant. The wizard explicitly revokes on close and after a batch that has no
+  retryable rows. Idle expiry and sender destruction also revoke. Revocation
+  prevents new operations but does not pretend to cancel work already holding
+  a lease; the existing relocation cancel channel owns in-flight cancellation.
+- **Failure boundary:** unknown, expired, revoked, wrong-sender, or
+  out-of-tree grants fail before runtime preflight, journal creation, staging,
+  registry mutation, or source cleanup.
+
 ## Consequences
 
 - **Easier**: relocation composes already-accepted machinery — identity (§2),
@@ -219,7 +263,9 @@ commit.
   exists beside restore staging and must be honored at startup; the §3 staging
   exemption must be enforced everywhere directories are scanned (picker
   add/locate, startup selection); the two-verified-copies end state needs
-  honest UX, not auto-deletion.
+  honest UX, not auto-deletion. Destination authorization also owns ephemeral
+  per-renderer lease state and canonical path resolution, so lifecycle and
+  symlink regressions join the relocation test matrix.
 - **Deferred, with owners**:
   - Moving the profile itself (`userData`, registry included) — out of scope;
     a new decision if ever wanted.
