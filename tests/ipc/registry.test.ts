@@ -168,6 +168,7 @@ describe('channel registry', () => {
 
   test('permanent purge request data is not authorization and cancellation is typed', () => {
     assert.deepEqual(channels.libraryPurge.request.parse({ photoIds: ['P1'] }), { photoIds: ['P1'] });
+    assert.throws(() => channels.libraryPurge.request.parse({ photoIds: ['P1', 'P1'] }), /photo IDs must be unique/u);
     assert.throws(() => channels.libraryPurge.request.parse({ photoIds: ['P1'], authorization: 'stale-confirmation' }));
     assert.deepEqual(channels.libraryPurge.response.parse({ status: 'cancelled' }), { status: 'cancelled' });
     assert.deepEqual(

@@ -532,7 +532,14 @@ export const channels = {
   // exact validated snapshot and reports denial as typed cancellation.
   libraryPurge: defineChannel(
     'library:purge',
-    z.object({ photoIds: z.array(z.string()).min(1) }).strict(),
+    z
+      .object({
+        photoIds: z
+          .array(z.string())
+          .min(1)
+          .refine((photoIds) => new Set(photoIds).size === photoIds.length, 'photo IDs must be unique'),
+      })
+      .strict(),
     z.discriminatedUnion('status', [
       z.object({ status: z.literal('cancelled') }),
       z.object({ status: z.literal('completed'), result: originalPolicy.purgeSummarySchema }),
