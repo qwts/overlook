@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -92,6 +92,8 @@ async function world(): Promise<{ provider: MockProvider; keyStore: KeyStore; ma
 async function putV2Bootstrap(
   value: Awaited<ReturnType<typeof world>>,
   manifestGeneration: number,
+  sealedManifest: Buffer,
+  previousManifest: { readonly generation: number; readonly sealed: Buffer } | null,
   generatedAt = GENERATED_AT,
 ): Promise<void> {
   await put(
@@ -103,6 +105,14 @@ async function putV2Bootstrap(
         libraryId: LIBRARY_ID,
         generatedAt,
         manifestGeneration,
+        manifestSha256: createHash('sha256').update(sealedManifest).digest('hex'),
+        previousManifest:
+          previousManifest === null
+            ? null
+            : {
+                generation: previousManifest.generation,
+                sha256: createHash('sha256').update(previousManifest.sealed).digest('hex'),
+              },
         keys: value.keyStore.exportWrappedKeys(),
       },
       value.masterKey,
@@ -148,9 +158,11 @@ describe('restore discovery (#288)', () => {
 
   test('an older v2 bootstrap replay fails before any manifest is decrypted (#996)', async () => {
     const w = await world();
-    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
-    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(1), w.keyStore));
-    await putV2Bootstrap(w, 1);
+    const first = await sealManifest(manifest(1), w.keyStore);
+    const second = await sealManifest(manifest(1), w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await put(w.provider, 'manifest/gen-2.ovlk', second);
+    await putV2Bootstrap(w, 1, first, null);
     const getStream = w.provider.getStream.bind(w.provider);
     const opened: string[] = [];
     w.provider.getStream = (path) => {
@@ -167,8 +179,9 @@ describe('restore discovery (#288)', () => {
 
   test('a v2 bootstrap one generation ahead preserves the prior manifest after interruption (#996)', async () => {
     const w = await world();
-    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
-    await putV2Bootstrap(w, 2, '2025-01-01T00:00:00.000Z');
+    const first = await sealManifest(manifest(1), w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await putV2Bootstrap(w, 2, Buffer.from('not-yet-published'), { generation: 1, sealed: first }, '2025-01-01T00:00:00.000Z');
 
     const found = await discoverRestore(w.provider, w.masterKey);
     assert.equal(found.bootstrap.schema, 2);
@@ -181,9 +194,11 @@ describe('restore discovery (#288)', () => {
   test('generation binding ignores rolled-back and identical wall-clock timestamps (#996)', async () => {
     const w = await world();
     const rolledBack = { ...manifest(1), generatedAt: '2025-01-01T00:00:00.000Z' };
-    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
-    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(rolledBack, w.keyStore));
-    await putV2Bootstrap(w, 2, GENERATED_AT);
+    const first = await sealManifest(manifest(1), w.keyStore);
+    const second = await sealManifest(rolledBack, w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await put(w.provider, 'manifest/gen-2.ovlk', second);
+    await putV2Bootstrap(w, 2, second, { generation: 1, sealed: first }, GENERATED_AT);
 
     const found = await discoverRestore(w.provider, w.masterKey);
     assert.deepEqual(
@@ -192,10 +207,42 @@ describe('restore discovery (#288)', () => {
     );
   });
 
+  test('an older same-generation bootstrap cannot authenticate replacement ciphertext (#996 security review)', async () => {
+    const w = await world();
+    const first = await sealManifest(manifest(1), w.keyStore);
+    const earlierSecond = await sealManifest(manifest(1), w.keyStore);
+    const replacementSecond = await sealManifest({ ...manifest(1), generatedAt: '2026-07-15T00:00:00.000Z' }, w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await put(w.provider, 'manifest/gen-2.ovlk', replacementSecond);
+    await putV2Bootstrap(w, 2, earlierSecond, { generation: 1, sealed: first });
+
+    const found = await discoverRestore(w.provider, w.masterKey);
+    assert.deepEqual(
+      found.candidates.map((candidate) => candidate.generation),
+      [1],
+    );
+  });
+
+  test('a manifest copied under another generation cannot satisfy its exact binding (#996 security review)', async () => {
+    const w = await world();
+    const first = await sealManifest(manifest(1), w.keyStore);
+    const second = await sealManifest(manifest(1), w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await put(w.provider, 'manifest/gen-2.ovlk', first);
+    await putV2Bootstrap(w, 2, second, { generation: 1, sealed: first });
+
+    const found = await discoverRestore(w.provider, w.masterKey);
+    assert.deepEqual(
+      found.candidates.map((candidate) => candidate.generation),
+      [1],
+    );
+  });
+
   test('a v2 bootstrap gap larger than the bootstrap-first window fails closed (#996)', async () => {
     const w = await world();
-    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
-    await putV2Bootstrap(w, 3);
+    const first = await sealManifest(manifest(1), w.keyStore);
+    await put(w.provider, 'manifest/gen-1.ovlk', first);
+    await putV2Bootstrap(w, 3, Buffer.from('not-yet-published'), { generation: 2, sealed: Buffer.from('missing') });
 
     await assert.rejects(
       discoverRestore(w.provider, w.masterKey),

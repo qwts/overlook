@@ -20,6 +20,7 @@ const DERIVATION_INFO = {
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const isoTimestampSchema = z.iso.datetime({ offset: true });
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
 const wrappedKeySchema = z
   .string()
   .min(1)
@@ -58,6 +59,13 @@ export const recoveryBootstrapSchema = z
       libraryId: ulidSchema,
       generatedAt: isoTimestampSchema,
       manifestGeneration: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      manifestSha256: sha256Schema,
+      previousManifest: z
+        .strictObject({
+          generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+          sha256: sha256Schema,
+        })
+        .nullable(),
       keys: wrappedKeysSchema,
     }),
   ])
@@ -76,6 +84,18 @@ export const recoveryBootstrapSchema = z
     if (active !== 1) {
       context.addIssue({ code: 'custom', path: ['keys'], message: 'exactly one key must be active' });
     }
+    if (bootstrap.schema === 2) {
+      const expectedPrevious = bootstrap.manifestGeneration - 1;
+      if (expectedPrevious === 0 && bootstrap.previousManifest !== null) {
+        context.addIssue({ code: 'custom', path: ['previousManifest'], message: 'generation 1 cannot bind a previous manifest' });
+      } else if (expectedPrevious > 0 && bootstrap.previousManifest?.generation !== expectedPrevious) {
+        context.addIssue({
+          code: 'custom',
+          path: ['previousManifest', 'generation'],
+          message: 'previous manifest must immediately precede the current generation',
+        });
+      }
+    }
   });
 
 export interface RecoveryBootstrapV1 {
@@ -90,10 +110,24 @@ export interface RecoveryBootstrapV2 {
   readonly libraryId: string;
   readonly generatedAt: string;
   readonly manifestGeneration: number;
+  readonly manifestSha256: string;
+  readonly previousManifest: RecoveryManifestBinding | null;
   readonly keys: readonly WrappedKeyRecord[];
 }
 
 export type RecoveryBootstrap = RecoveryBootstrapV1 | RecoveryBootstrapV2;
+
+export interface RecoveryManifestBinding {
+  readonly generation: number;
+  readonly sha256: string;
+}
+
+export interface RecoveryBootstrapPublication {
+  readonly generatedAt: string;
+  readonly manifestGeneration: number;
+  readonly manifestSha256: string;
+  readonly previousManifest: RecoveryManifestBinding | null;
+}
 
 export class RecoveryBootstrapError extends Error {
   override readonly name = 'RecoveryBootstrapError';
@@ -129,12 +163,12 @@ export function sealRecoveryBootstrap(input: RecoveryBootstrap, masterKey: Buffe
 
 /** Composition-root helper that limits the lifetime of the copied master
  * key and guarantees it is wiped after the bootstrap is sealed. */
-export function sealKeyStoreRecoveryBootstrap(input: {
-  readonly keyStore: Pick<KeyStore, 'exportWrappedKeys' | 'masterKeyBytes'>;
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly manifestGeneration: number;
-}): Buffer {
+export function sealKeyStoreRecoveryBootstrap(
+  input: {
+    readonly keyStore: Pick<KeyStore, 'exportWrappedKeys' | 'masterKeyBytes'>;
+    readonly libraryId: string;
+  } & RecoveryBootstrapPublication,
+): Buffer {
   const masterKey = input.keyStore.masterKeyBytes();
   try {
     return sealRecoveryBootstrap(
@@ -143,6 +177,8 @@ export function sealKeyStoreRecoveryBootstrap(input: {
         libraryId: input.libraryId,
         generatedAt: input.generatedAt,
         manifestGeneration: input.manifestGeneration,
+        manifestSha256: input.manifestSha256,
+        previousManifest: input.previousManifest,
         keys: input.keyStore.exportWrappedKeys(),
       },
       masterKey,
@@ -157,9 +193,8 @@ export function sealKeyStoreRecoveryBootstrap(input: {
 export function createRecoveryBootstrapSealer(
   keyStore: Pick<KeyStore, 'exportWrappedKeys' | 'masterKeyBytes'>,
   libraryId: () => string,
-): (generatedAt: string, manifestGeneration: number) => Buffer {
-  return (generatedAt, manifestGeneration) =>
-    sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: libraryId(), generatedAt, manifestGeneration });
+): (publication: RecoveryBootstrapPublication) => Buffer {
+  return (publication) => sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: libraryId(), ...publication });
 }
 
 /** Opens and validates a bootstrap using only the recovered master key. */

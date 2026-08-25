@@ -89,8 +89,7 @@ test('repaired bootstrap and manifest restore the complete library into a fresh 
       dirtyPhotos: () => repo.dirtyPhotos(),
       encryptedStream: (hash) => store.getEncryptedStream(hash),
       sealManifest: (json) => sealManifestJson(json, keyStore.currentKey()),
-      sealRecoveryBootstrap: (generatedAt, manifestGeneration) =>
-        sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: LIBRARY_ID, generatedAt, manifestGeneration }),
+      sealRecoveryBootstrap: (publication) => sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: LIBRARY_ID, ...publication }),
       libraryId: () => LIBRARY_ID,
       manifestSnapshot: () => repo.manifestSnapshot(),
       settings: () => ({ throttlePercent: null, wifiOnly: false, autoBackupOnImport: false }),

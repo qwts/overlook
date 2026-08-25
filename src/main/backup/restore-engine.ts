@@ -744,16 +744,17 @@ export class RestoreEngine {
     }
     const recovered = KeyStore.open({ safeStorage: this.deps.safeStorage, dataDir: paths.stagingDir });
     try {
-      if (discovery.bootstrap.schema === 1) {
-        const legacyActive = discovery.bootstrap.keys.find((key) => key.status === 'active');
-        if (legacyActive === undefined) throw new RestoreError('corrupt', 'legacy recovery bootstrap has no active key');
+      const requiresFreshWriteKey = discovery.bootstrap.schema === 1 || candidate.generation !== discovery.bootstrap.manifestGeneration;
+      if (requiresFreshWriteKey) {
+        const recoveredActive = discovery.bootstrap.keys.find((key) => key.status === 'active');
+        if (recoveredActive === undefined) throw new RestoreError('corrupt', 'recovery bootstrap has no active key');
         const activeId = recovered.currentKey().id;
-        if (activeId === legacyActive.id) {
+        if (activeId === recoveredActive.id) {
           recovered.rotate();
         } else {
           const expectedRotatedId = Math.max(...discovery.bootstrap.keys.map((key) => key.id)) + 1;
           if (activeId !== expectedRotatedId) {
-            throw new RestoreError('corrupt', 'legacy recovery staging has an unexpected active key');
+            throw new RestoreError('corrupt', 'recovery staging has an unexpected active key');
           }
         }
       }

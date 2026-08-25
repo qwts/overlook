@@ -67,6 +67,13 @@ function assertBootstrapGeneration(bootstrap: RecoveryBootstrap, newestGeneratio
   throw new RestoreError('corrupt', 'recovery bootstrap and manifest generations are not contiguous');
 }
 
+function expectedManifestSha256(bootstrap: RecoveryBootstrap, generation: number): string | null | undefined {
+  if (bootstrap.schema === 1) return undefined;
+  if (generation === bootstrap.manifestGeneration) return bootstrap.manifestSha256;
+  if (generation === bootstrap.previousManifest?.generation) return bootstrap.previousManifest.sha256;
+  return null;
+}
+
 function validateManifest(manifest: RestorableBackupManifest, bootstrap: RecoveryBootstrap, resolveKey: KeyResolver): void {
   if (manifest.libraryId !== bootstrap.libraryId) {
     throw new RestoreError('corrupt', 'manifest library id does not match the recovery bootstrap');
@@ -93,10 +100,15 @@ async function openCandidate(
   generation: number,
   bootstrap: RecoveryBootstrap,
   resolveKey: KeyResolver,
+  expectedSha256: string | undefined,
   signal?: AbortSignal,
 ): Promise<RestoreCandidate> {
   assertNotAborted(signal);
   const sealed = await readLimited(await provider.getStream(entry.path), MAX_MANIFEST_BYTES, signal);
+  const sealedSha256 = createHash('sha256').update(sealed).digest('hex');
+  if (expectedSha256 !== undefined && sealedSha256 !== expectedSha256) {
+    throw new RestoreError('corrupt', `${entry.path} does not match its authenticated recovery-bootstrap digest`);
+  }
   let unavailableKeyId: number | null = null;
   const trackedResolver: KeyResolver = (keyId) => {
     const key = resolveKey(keyId);
@@ -128,7 +140,7 @@ async function openCandidate(
   return {
     path: entry.path,
     generation,
-    sealedSha256: createHash('sha256').update(sealed).digest('hex'),
+    sealedSha256,
     manifest: parsed.manifest,
   };
 }
@@ -156,8 +168,10 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
     const resolveKey = recoveryBootstrapResolver(bootstrap, masterKey);
     const candidates: RestoreCandidate[] = [];
     for (const { entry, generation } of entries) {
+      const expectedSha256 = expectedManifestSha256(bootstrap, generation);
+      if (expectedSha256 === null) continue;
       try {
-        candidates.push(await openCandidate(provider, entry, generation, bootstrap, resolveKey, signal));
+        candidates.push(await openCandidate(provider, entry, generation, bootstrap, resolveKey, expectedSha256, signal));
       } catch (error) {
         const mapped = toRestoreError(error);
         if (

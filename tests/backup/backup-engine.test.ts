@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,7 @@ import { BackupEngine, type BackupEngineDeps, type BackupSettings, type NetworkK
 import { createManifestDebtStore } from '../../src/main/backup/manifest-debt.js';
 import { FaultInjectingProvider, MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
+import type { RecoveryBootstrapPublication } from '../../src/main/backup/recovery-bootstrap.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { claimsForContentHashes } from '../../src/main/db/backup-claims.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -77,6 +78,7 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
   const audits: string[] = [];
   const syncUpdates: { id: string; syncState: SyncStatus }[] = [];
   const bootstrapGenerations: number[] = [];
+  const bootstrapPublications: RecoveryBootstrapPublication[] = [];
   let clock = 0;
   const settings: BackupSettings = {
     throttlePercent: null,
@@ -90,9 +92,10 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     dirtyPhotos: () => repo.dirtyPhotos(),
     encryptedStream: (hash) => store.getEncryptedStream(hash),
     sealManifest: (json) => Promise.resolve(Buffer.from(json)),
-    sealRecoveryBootstrap: (_generatedAt, manifestGeneration) => {
-      bootstrapGenerations.push(manifestGeneration);
-      return Buffer.from(`recovery-bootstrap-${String(manifestGeneration)}`);
+    sealRecoveryBootstrap: (publication) => {
+      bootstrapGenerations.push(publication.manifestGeneration);
+      bootstrapPublications.push(publication);
+      return Buffer.from(`recovery-bootstrap-${String(publication.manifestGeneration)}`);
     },
     libraryId: () => '01JZZZZZZZZZZZZZZZZZZZZZZZ',
     manifestSnapshot: () => repo.manifestSnapshot(),
@@ -129,6 +132,7 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     audits,
     syncUpdates,
     bootstrapGenerations,
+    bootstrapPublications,
     engine: new BackupEngine(deps),
   };
 }
@@ -174,11 +178,17 @@ describe('backup engine (#105)', () => {
     // The manifest describes EVERY live photo, not the (now-clean) batch —
     // restore without a local DB depends on it (PR #203 review, P1).
     const sealed = await buffer(await w.provider.getStream('manifest/gen-1.ovlk'));
-    const manifest = JSON.parse(sealed.toString('utf8')) as { schema: number; photos: { id: string }[] };
+    const manifest = JSON.parse(sealed.toString('utf8')) as { schema: number; generatedAt: string; photos: { id: string }[] };
     assert.equal(manifest.schema, 6);
     assert.equal(manifest.photos.length, 3);
     assert.equal((await w.provider.list('recovery')).length, 1, 'the fresh-machine key bootstrap landed first');
     assert.deepEqual(w.bootstrapGenerations, [1]);
+    assert.deepEqual(w.bootstrapPublications[0], {
+      generatedAt: manifest.generatedAt,
+      manifestGeneration: 1,
+      manifestSha256: createHash('sha256').update(sealed).digest('hex'),
+      previousManifest: null,
+    });
     // Aggregate progress is ordered 0..3 over the batch.
     assert.deepEqual(w.progress[0], [0, 3]);
     assert.deepEqual(w.progress.at(-1), [3, 3]);
@@ -194,6 +204,8 @@ describe('backup engine (#105)', () => {
     const manifests = (await w.provider.list('manifest')).map((entry) => entry.path).sort();
     assert.deepEqual(manifests, ['manifest/gen-2.ovlk', 'manifest/gen-3.ovlk']);
     assert.deepEqual(w.bootstrapGenerations, [1, 2, 3]);
+    const second = await w.provider.verify('manifest/gen-2.ovlk');
+    assert.deepEqual(w.bootstrapPublications[2]?.previousManifest, { generation: 2, sha256: second.sha256 });
   });
 
   test('manifest generation—not wall time—binds bootstrap-first interruption and retry (#996)', async () => {

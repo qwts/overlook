@@ -188,6 +188,7 @@ async function restoreWorld(count = 1, bootstrapVersion: 1 | 2 = 1): Promise<Res
   }
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-restore-remote-')), libraryId: LIBRARY_ID });
   for (const photo of photos) await put(provider, photo.blobPath, await buffer(sourceStore.getEncryptedStream(photo.contentHash)));
+  const sealedManifest = await sealManifest(makeManifest(photos), keyStore);
   await put(
     provider,
     'recovery/bootstrap.ovrb',
@@ -199,12 +200,14 @@ async function restoreWorld(count = 1, bootstrapVersion: 1 | 2 = 1): Promise<Res
             libraryId: LIBRARY_ID,
             generatedAt: GENERATED_AT,
             manifestGeneration: 1,
+            manifestSha256: createHash('sha256').update(sealedManifest).digest('hex'),
+            previousManifest: null,
             keys: keyStore.exportWrappedKeys(),
           },
       masterKey,
     ),
   );
-  await put(provider, 'manifest/gen-1.ovlk', await sealManifest(makeManifest(photos), keyStore));
+  await put(provider, 'manifest/gen-1.ovlk', sealedManifest);
   const counting = new CountingProvider(provider);
   const progress: RestoreProgress[] = [];
   const deps: RestoreEngineDeps = {
@@ -283,6 +286,38 @@ test('restore engine: a generation-bound v2 bootstrap keeps its active key and a
   assert.equal(restored.currentKey().id, 1);
   assert.equal(restored.exportWrappedKeys().length, 1);
   assert.ok(BigInt(restored.exportWrappedKeys()[0]?.nonceHighWater ?? '0') > sourceHighWater);
+});
+
+test('restore engine: bootstrap-first fallback rotates a fresh write key exactly once (#996)', async () => {
+  const world = await restoreWorld(1, 2);
+  const first = await buffer(await world.provider.getStream('manifest/gen-1.ovlk'));
+  await put(
+    world.provider,
+    'recovery/bootstrap.ovrb',
+    sealRecoveryBootstrap(
+      {
+        schema: 2,
+        libraryId: LIBRARY_ID,
+        generatedAt: GENERATED_AT,
+        manifestGeneration: 2,
+        manifestSha256: 'ab'.repeat(32),
+        previousManifest: { generation: 1, sha256: createHash('sha256').update(first).digest('hex') },
+        keys: world.keyStore.exportWrappedKeys(),
+      },
+      world.masterKey,
+    ),
+  );
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.deepEqual(result, {
+    libraryId: LIBRARY_ID,
+    generation: 1,
+    photos: 1,
+    resumed: false,
+    missing: [],
+  });
+  const restored = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  assert.equal(restored.currentKey().id, 2);
 });
 
 test('restore engine: resumed v1 staging rotates exactly once after an interrupted thumbnail write (#996)', async () => {

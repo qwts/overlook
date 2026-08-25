@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -100,18 +101,27 @@ export async function exerciseDisasterRecoveryContract(
         albums: [{ id: 'A1', name: 'Recovered album', createdAt: GENERATED_AT, position: 0, photoIds: photos.map(({ id }) => id) }],
       },
     });
+    const sealedManifest = await sealManifest(manifest, keyStore);
     const bootstrapPath = 'recovery/bootstrap.ovrb';
     await put(
       scoped,
       bootstrapPath,
       sealRecoveryBootstrap(
-        { schema: 2, libraryId, generatedAt: GENERATED_AT, manifestGeneration: 1, keys: keyStore.exportWrappedKeys() },
+        {
+          schema: 2,
+          libraryId,
+          generatedAt: GENERATED_AT,
+          manifestGeneration: 1,
+          manifestSha256: createHash('sha256').update(sealedManifest).digest('hex'),
+          previousManifest: null,
+          keys: keyStore.exportWrappedKeys(),
+        },
         masterKey,
       ),
     );
     remotePaths.push(bootstrapPath);
     const manifestPath = 'manifest/gen-1.ovlk';
-    await put(scoped, manifestPath, await sealManifest(manifest, keyStore));
+    await put(scoped, manifestPath, sealedManifest);
     remotePaths.push(manifestPath);
 
     assert.ok((await browser.listLibraries()).includes(libraryId));

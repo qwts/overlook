@@ -84,7 +84,7 @@ async function dropRecoveryKeyFiles(page: Page): Promise<void> {
   })()`);
 }
 
-async function backupSimpleSource(source: string, keyPath: string): Promise<readonly string[]> {
+async function backupSimpleSource(source: string, keyPath: string, generations = 1): Promise<readonly string[]> {
   const app = await launch(source, { OVERLOOK_SEED: '2', OVERLOOK_KEY_EXPORT_DESTINATION: keyPath });
   try {
     const page = await app.firstWindow();
@@ -96,8 +96,18 @@ async function backupSimpleSource(source: string, keyPath: string): Promise<read
       return photos.map((photo) => photo.contentHash);
     });
     await page.evaluate((password) => (globalThis as unknown as { overlook: OverlookApi }).overlook.keys.export({ password }), PASSWORD);
-    const backup = await page.evaluate(() => (globalThis as unknown as { overlook: OverlookApi }).overlook.backup.run({}));
-    expect(backup).toMatchObject({ failed: 0, skipped: null });
+    for (let generation = 1; generation <= generations; generation += 1) {
+      const backup = await page.evaluate(() => (globalThis as unknown as { overlook: OverlookApi }).overlook.backup.run({}));
+      expect(backup).toMatchObject({ failed: 0, skipped: null });
+      if (generation < generations) {
+        await page.evaluate(async () => {
+          const api = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+          const { photos } = await api.library.page({ source: 'all', limit: 1 });
+          const first = photos[0];
+          if (first !== undefined) await api.library.toggleFavorite({ id: first.id });
+        });
+      }
+    }
     return hashes;
   } finally {
     await app.close();
@@ -237,11 +247,11 @@ test('corrupt newest manifest falls back and reports the rejected generation (#2
   const source = mkE2eTmpDir('overlook-e2e-fallback-source-');
   const target = mkE2eTmpDir('overlook-e2e-fallback-target-');
   const keyPath = join(mkE2eTmpDir('overlook-e2e-fallback-key-'), 'overlook-recovery.key');
-  await backupSimpleSource(source, keyPath);
+  await backupSimpleSource(source, keyPath, 2);
   cpSync(join(source, 'mock-remote'), join(target, 'mock-remote'), { recursive: true });
   const remote = join(target, 'mock-remote');
-  const validGeneration = highestManifestGeneration(remote);
-  const rejectedGeneration = validGeneration + 1;
+  const rejectedGeneration = highestManifestGeneration(remote);
+  const validGeneration = rejectedGeneration - 1;
   writeFileSync(join(remote, 'manifest', `gen-${String(rejectedGeneration)}.ovlk`), 'corrupt newest manifest');
 
   const app = await launch(target, { OVERLOOK_KEY_IMPORT_SOURCE: keyPath, OVERLOOK_RESTORE_NO_RELAUNCH: '1' });

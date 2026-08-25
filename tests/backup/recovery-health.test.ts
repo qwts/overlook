@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,11 +39,21 @@ async function recoveryWorld() {
       albums: [],
     },
   });
+  const sealedManifest = await sealManifestJson(JSON.stringify(manifest), keyStore.currentKey());
   await provider.put(
     'recovery/bootstrap.ovrb',
-    Readable.from([sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: LIBRARY_ID, generatedAt: GENERATED_AT, manifestGeneration: 1 })]),
+    Readable.from([
+      sealKeyStoreRecoveryBootstrap({
+        keyStore,
+        libraryId: LIBRARY_ID,
+        generatedAt: GENERATED_AT,
+        manifestGeneration: 1,
+        manifestSha256: createHash('sha256').update(sealedManifest).digest('hex'),
+        previousManifest: null,
+      }),
+    ]),
   );
-  await provider.put('manifest/gen-1.ovlk', Readable.from([await sealManifestJson(JSON.stringify(manifest), keyStore.currentKey())]));
+  await provider.put('manifest/gen-1.ovlk', Readable.from([sealedManifest]));
   return { keyStore, provider };
 }
 
