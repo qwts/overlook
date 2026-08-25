@@ -1,6 +1,5 @@
 import { useState, type ReactElement } from 'react';
 
-import { PHOTO_PURGE_AUTHORIZATION } from '../../../shared/destructive-actions.js';
 import type { PageCursor } from '../../../shared/library/types.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { useAppDispatch } from '../state/app-state-context';
@@ -38,22 +37,22 @@ export function useEmptyTrash(): { readonly open: () => void; readonly dialog: R
         onConfirm={() => {
           const confirmedIds = [...photoIds];
           setPhotoIds(null);
-          void window.overlook.library
-            .purge({ photoIds: confirmedIds, authorization: PHOTO_PURGE_AUTHORIZATION })
-            .then(({ purged, protected: protectedCount, remoteFailures }) => {
-              dispatch({
-                type: 'toast/shown',
-                toast: {
-                  title:
-                    protectedCount > 0
-                      ? `Deleted ${formatCount(purged)} permanently · preserved ${formatCount(protectedCount)} protected ${protectedCount === 1 ? 'Original' : 'Originals'}`
-                      : remoteFailures === 0
-                        ? `Deleted ${formatCount(purged)} ${purged === 1 ? 'photo' : 'photos'} permanently`
-                        : `Deleted permanently: ${formatCount(purged)} local; ${formatCount(remoteFailures)} cloud pending retry`,
-                  tone: remoteFailures === 0 && protectedCount === 0 ? 'neutral' : 'amber',
-                },
-              });
+          void window.overlook.library.purge({ photoIds: confirmedIds }).then((outcome) => {
+            if (outcome.status === 'cancelled') return;
+            const { purged, protected: protectedCount, remoteFailures } = outcome.result;
+            dispatch({
+              type: 'toast/shown',
+              toast: {
+                title:
+                  protectedCount > 0
+                    ? `Deleted ${formatCount(purged)} permanently · preserved ${formatCount(protectedCount)} protected ${protectedCount === 1 ? 'Original' : 'Originals'}`
+                    : remoteFailures === 0
+                      ? `Deleted ${formatCount(purged)} ${purged === 1 ? 'photo' : 'photos'} permanently`
+                      : `Deleted permanently: ${formatCount(purged)} local; ${formatCount(remoteFailures)} cloud pending retry`,
+                tone: remoteFailures === 0 && protectedCount === 0 ? 'neutral' : 'amber',
+              },
             });
+          });
         }}
       />
     );
