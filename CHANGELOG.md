@@ -1,5 +1,11 @@
 # photos
 
+## 0.71.1
+
+### Patch Changes
+
+- 2fd4abb: Require main-process confirmation bound to the exact permanent-purge request.
+
 ## 0.71.0
 
 ### Minor Changes
