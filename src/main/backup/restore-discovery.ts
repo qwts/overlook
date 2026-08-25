@@ -52,7 +52,26 @@ function generationOf(entry: RemoteEntry): number | null {
   const match = MANIFEST_PATH.exec(entry.path);
   if (match === null) return null;
   const generation = Number(match[1]);
-  return Number.isSafeInteger(generation) && generation > 0 ? generation : null;
+  if (!Number.isSafeInteger(generation) || generation <= 0) {
+    throw new RestoreError('corrupt', `invalid manifest generation path ${entry.path}`);
+  }
+  return generation;
+}
+
+function assertBootstrapGeneration(bootstrap: RecoveryBootstrap, newestGeneration: number): void {
+  if (bootstrap.schema === 1) return;
+  if (bootstrap.manifestGeneration === newestGeneration || bootstrap.manifestGeneration === newestGeneration + 1) return;
+  if (bootstrap.manifestGeneration < newestGeneration) {
+    throw new RestoreError('corrupt', 'recovery bootstrap predates the newest manifest generation');
+  }
+  throw new RestoreError('corrupt', 'recovery bootstrap and manifest generations are not contiguous');
+}
+
+function expectedManifestSha256(bootstrap: RecoveryBootstrap, generation: number): string | null | undefined {
+  if (bootstrap.schema === 1) return undefined;
+  if (generation === bootstrap.manifestGeneration) return bootstrap.manifestSha256;
+  if (generation === bootstrap.previousManifest?.generation) return bootstrap.previousManifest.sha256;
+  return null;
 }
 
 function validateManifest(manifest: RestorableBackupManifest, bootstrap: RecoveryBootstrap, resolveKey: KeyResolver): void {
@@ -81,15 +100,34 @@ async function openCandidate(
   generation: number,
   bootstrap: RecoveryBootstrap,
   resolveKey: KeyResolver,
+  expectedSha256: string | undefined,
   signal?: AbortSignal,
 ): Promise<RestoreCandidate> {
   assertNotAborted(signal);
   const sealed = await readLimited(await provider.getStream(entry.path), MAX_MANIFEST_BYTES, signal);
-  const plaintext = await readLimited(
-    Readable.from([sealed]).pipe(createDecryptStream(resolveKey, { photoId: 'manifest' })),
-    MAX_MANIFEST_BYTES,
-    signal,
-  );
+  const sealedSha256 = createHash('sha256').update(sealed).digest('hex');
+  if (expectedSha256 !== undefined && sealedSha256 !== expectedSha256) {
+    throw new RestoreError('corrupt', `${entry.path} does not match its authenticated recovery-bootstrap digest`);
+  }
+  let unavailableKeyId: number | null = null;
+  const trackedResolver: KeyResolver = (keyId) => {
+    const key = resolveKey(keyId);
+    if (key === undefined) unavailableKeyId = keyId;
+    return key;
+  };
+  let plaintext: Buffer;
+  try {
+    plaintext = await readLimited(
+      Readable.from([sealed]).pipe(createDecryptStream(trackedResolver, { photoId: 'manifest' })),
+      MAX_MANIFEST_BYTES,
+      signal,
+    );
+  } catch (error) {
+    if (unavailableKeyId !== null) {
+      throw new RestoreError('wrong-key', `manifest key ${String(unavailableKeyId)} is unavailable`);
+    }
+    throw error;
+  }
   let json: unknown;
   try {
     json = JSON.parse(plaintext.toString('utf8')) as unknown;
@@ -102,7 +140,7 @@ async function openCandidate(
   return {
     path: entry.path,
     generation,
-    sealedSha256: createHash('sha256').update(sealed).digest('hex'),
+    sealedSha256,
     manifest: parsed.manifest,
   };
 }
@@ -120,20 +158,26 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
       const reason = /authentication|wrapped key/u.test(message) ? 'wrong-key' : 'corrupt';
       throw new RestoreError(reason, message);
     }
-    const resolveKey = recoveryBootstrapResolver(bootstrap, masterKey);
     const entries = (await provider.list('manifest'))
       .map((entry) => ({ entry, generation: generationOf(entry) }))
       .filter((item): item is { entry: RemoteEntry; generation: number } => item.generation !== null)
       .sort((left, right) => right.generation - left.generation);
+    const newestGeneration = entries[0]?.generation;
+    if (newestGeneration === undefined) throw new RestoreError('corrupt', 'no manifest generation was found');
+    assertBootstrapGeneration(bootstrap, newestGeneration);
+    const resolveKey = recoveryBootstrapResolver(bootstrap, masterKey);
     const candidates: RestoreCandidate[] = [];
     for (const { entry, generation } of entries) {
+      const expectedSha256 = expectedManifestSha256(bootstrap, generation);
+      if (expectedSha256 === null) continue;
       try {
-        candidates.push(await openCandidate(provider, entry, generation, bootstrap, resolveKey, signal));
+        candidates.push(await openCandidate(provider, entry, generation, bootstrap, resolveKey, expectedSha256, signal));
       } catch (error) {
         const mapped = toRestoreError(error);
         if (
           mapped.reason === 'auth' ||
           mapped.reason === 'offline' ||
+          (mapped.reason === 'wrong-key' && candidates.length === 0) ||
           (error instanceof ProviderError && error.kind === 'transient' && error.scope === 'object') ||
           mapped.reason === 'cancelled'
         ) {
@@ -142,8 +186,6 @@ export async function discoverRestore(provider: StorageProvider, masterKey: Buff
       }
     }
     if (candidates.length === 0) throw new RestoreError('corrupt', 'no valid restorable manifest generation was found');
-    const newestGeneration = entries[0]?.generation;
-    if (newestGeneration === undefined) throw new RestoreError('corrupt', 'no manifest generation was found');
     return { bootstrap, resolveKey, newestGeneration, candidates };
   } catch (error) {
     throw toRestoreError(error);

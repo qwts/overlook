@@ -17,6 +17,7 @@ import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 import type { BackupIntegritySummary } from './integrity-scrubber.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
+import type { RecoveryBootstrapPublication } from './recovery-bootstrap.js';
 
 // Backup engine (#105, ADR-0007): dirty photos flow to the provider
 // reliably and politely. The ledger's dirty set IS the queue and the resume
@@ -115,7 +116,7 @@ export interface BackupEngineDeps {
   /** Seals the manifest JSON (envelope, current key) → ciphertext bytes. */
   readonly sealManifest: (json: string) => Promise<Buffer>;
   /** Seals wrapped key records for fresh-machine recovery under the master. */
-  readonly sealRecoveryBootstrap: (generatedAt: string) => Buffer;
+  readonly sealRecoveryBootstrap: (publication: RecoveryBootstrapPublication) => Buffer;
   readonly libraryId: () => string;
   /** One consistent DB snapshot: photos, metadata, albums, and membership. */
   readonly manifestSnapshot: () => BackupManifestSnapshot;
@@ -193,6 +194,27 @@ const BACKOFF_BASE_MS = 500;
 const TRANSIENT_FAILURE_BREAK = 10;
 /** Manifest generations retained remotely (ADR-0007). */
 const MANIFEST_KEEP = 2;
+const MANIFEST_GENERATION_PATH = /^manifest\/gen-(\d+)\.ovlk$/u;
+
+function nextManifestPublication(entries: readonly { readonly path: string }[]): {
+  readonly generation: number;
+  readonly previousPath: string | null;
+} {
+  let previous: { readonly generation: number; readonly path: string } | null = null;
+  for (const { path } of entries) {
+    const match = MANIFEST_GENERATION_PATH.exec(path);
+    if (match === null) continue;
+    const generation = Number(match[1]);
+    if (!Number.isSafeInteger(generation) || generation <= 0) {
+      throw new Error(`invalid manifest generation path ${path}`);
+    }
+    if (previous === null || generation > previous.generation) previous = { generation, path };
+  }
+  if (previous !== null && previous.generation >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('manifest generation space is exhausted');
+  }
+  return { generation: (previous?.generation ?? 0) + 1, previousPath: previous?.path ?? null };
+}
 const EMPTY_INTEGRITY: BackupRunIntegrity = {
   checked: 0,
   repaired: 0,
@@ -802,19 +824,29 @@ export class BackupEngine {
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
     );
+    const existing = await this.deps.provider.list('manifest');
+    const { generation, previousPath } = nextManifestPublication(existing);
+    const previousManifest =
+      previousPath === null
+        ? null
+        : {
+            generation: generation - 1,
+            sha256: (await this.deps.provider.verify(previousPath)).sha256,
+          };
     const json = JSON.stringify(manifest);
     const sealed = await this.deps.sealManifest(json);
+    const manifestSha256 = createHash('sha256').update(sealed).digest('hex');
     // The bootstrap is a superset across rotations and lands first: a crash
     // can leave an old manifest with newer wrapped keys, never a manifest
     // whose envelope key cannot be resolved on a fresh machine.
-    const bootstrap = this.deps.sealRecoveryBootstrap(generatedAt);
+    const bootstrap = this.deps.sealRecoveryBootstrap({
+      generatedAt,
+      manifestGeneration: generation,
+      manifestSha256,
+      previousManifest,
+    });
     await this.putBufferVerified('recovery/bootstrap.ovrb', bootstrap);
-    const existing = await this.deps.provider.list('manifest');
-    const generation = existing.reduce((max, entry) => {
-      const match = /gen-(\d+)\.ovlk$/u.exec(entry.path);
-      return match === null ? max : Math.max(max, Number(match[1]));
-    }, 0);
-    await this.putBufferVerified(`manifest/gen-${String(generation + 1)}.ovlk`, sealed);
+    await this.putBufferVerified(`manifest/gen-${String(generation)}.ovlk`, sealed);
     const all = await this.deps.provider.list('manifest');
     const sorted = [...all].sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true }));
     for (const stale of sorted.slice(0, Math.max(0, sorted.length - MANIFEST_KEEP))) {

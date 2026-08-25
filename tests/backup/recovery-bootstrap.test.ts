@@ -19,6 +19,9 @@ import {
 import { createDecryptStream, createEncryptStream } from '../../src/main/crypto/envelope.js';
 import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 
+const MANIFEST_SHA256 = 'ab'.repeat(32);
+const PREVIOUS_MANIFEST_SHA256 = 'cd'.repeat(32);
+
 function safeStorage(): SafeStorageLike {
   return {
     isEncryptionAvailable: () => true,
@@ -89,9 +92,38 @@ describe('cloud recovery bootstrap (#289)', () => {
       },
       libraryId: bootstrap.libraryId,
       generatedAt: bootstrap.generatedAt,
+      manifestGeneration: 7,
+      manifestSha256: MANIFEST_SHA256,
+      previousManifest: { generation: 6, sha256: PREVIOUS_MANIFEST_SHA256 },
     });
     assert.ok(temporary.every((byte) => byte === 0));
-    assert.equal(openRecoveryBootstrap(sealed, masterKey).libraryId, bootstrap.libraryId);
+    assert.deepEqual(openRecoveryBootstrap(sealed, masterKey), {
+      schema: 2,
+      libraryId: bootstrap.libraryId,
+      generatedAt: bootstrap.generatedAt,
+      manifestGeneration: 7,
+      manifestSha256: MANIFEST_SHA256,
+      previousManifest: { generation: 6, sha256: PREVIOUS_MANIFEST_SHA256 },
+      keys: keyStore.exportWrappedKeys(),
+    });
+  });
+
+  test('OVRB v1 stays readable while new schema 2 authenticates the exact manifest ciphertext', () => {
+    const { bootstrap, masterKey } = world();
+    const legacy = sealRecoveryBootstrap(bootstrap, masterKey);
+    const v2 = {
+      ...bootstrap,
+      schema: 2 as const,
+      manifestGeneration: 42,
+      manifestSha256: MANIFEST_SHA256,
+      previousManifest: { generation: 41, sha256: PREVIOUS_MANIFEST_SHA256 },
+    };
+    const current = sealRecoveryBootstrap(v2, masterKey);
+
+    assert.equal(legacy.readUInt8(4), 1);
+    assert.equal(current.readUInt8(4), 2);
+    assert.equal(openRecoveryBootstrap(legacy, masterKey).schema, 1);
+    assert.deepEqual(openRecoveryBootstrap(current, masterKey), v2);
   });
 
   test('invalid key sets fail before upload', () => {
@@ -111,6 +143,33 @@ describe('cloud recovery bootstrap (#289)', () => {
 
     const exhausted = { ...bootstrap, keys: [{ ...first, nonceHighWater: ((1n << 64n) + 1n).toString() }, second] };
     assert.throws(() => sealRecoveryBootstrap(exhausted, masterKey), /nonce high-water mark exceeds/u);
+
+    const unsafeGeneration = {
+      ...bootstrap,
+      schema: 2 as const,
+      manifestGeneration: Number.MAX_SAFE_INTEGER + 1,
+      manifestSha256: MANIFEST_SHA256,
+      previousManifest: null,
+    };
+    assert.throws(() => sealRecoveryBootstrap(unsafeGeneration, masterKey));
+  });
+
+  test('schema 2 only binds the immediately previous generation', () => {
+    const { bootstrap, masterKey } = world();
+    assert.throws(
+      () =>
+        sealRecoveryBootstrap(
+          {
+            ...bootstrap,
+            schema: 2,
+            manifestGeneration: 3,
+            manifestSha256: MANIFEST_SHA256,
+            previousManifest: { generation: 1, sha256: PREVIOUS_MANIFEST_SHA256 },
+          },
+          masterKey,
+        ),
+      /previous manifest must immediately precede/u,
+    );
   });
 
   test('invalid outer framing and master-key lengths fail closed', () => {

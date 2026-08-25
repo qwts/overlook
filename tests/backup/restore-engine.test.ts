@@ -145,7 +145,7 @@ function makeManifest(photos: readonly BackupManifestPhotoV2[]): BackupManifestV
   });
 }
 
-async function restoreWorld(count = 1): Promise<RestoreWorld> {
+async function restoreWorld(count = 1, bootstrapVersion: 1 | 2 = 1): Promise<RestoreWorld> {
   const sourceDir = mkdtempSync(join(tmpdir(), 'overlook-restore-source-'));
   const targetDir = join(mkdtempSync(join(tmpdir(), 'overlook-restore-target-')), 'library');
   const keyStore = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: sourceDir });
@@ -188,12 +188,26 @@ async function restoreWorld(count = 1): Promise<RestoreWorld> {
   }
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-restore-remote-')), libraryId: LIBRARY_ID });
   for (const photo of photos) await put(provider, photo.blobPath, await buffer(sourceStore.getEncryptedStream(photo.contentHash)));
+  const sealedManifest = await sealManifest(makeManifest(photos), keyStore);
   await put(
     provider,
     'recovery/bootstrap.ovrb',
-    sealRecoveryBootstrap({ schema: 1, libraryId: LIBRARY_ID, generatedAt: GENERATED_AT, keys: keyStore.exportWrappedKeys() }, masterKey),
+    sealRecoveryBootstrap(
+      bootstrapVersion === 1
+        ? { schema: 1, libraryId: LIBRARY_ID, generatedAt: GENERATED_AT, keys: keyStore.exportWrappedKeys() }
+        : {
+            schema: 2,
+            libraryId: LIBRARY_ID,
+            generatedAt: GENERATED_AT,
+            manifestGeneration: 1,
+            manifestSha256: createHash('sha256').update(sealedManifest).digest('hex'),
+            previousManifest: null,
+            keys: keyStore.exportWrappedKeys(),
+          },
+      masterKey,
+    ),
   );
-  await put(provider, 'manifest/gen-1.ovlk', await sealManifest(makeManifest(photos), keyStore));
+  await put(provider, 'manifest/gen-1.ovlk', sealedManifest);
   const counting = new CountingProvider(provider);
   const progress: RestoreProgress[] = [];
   const deps: RestoreEngineDeps = {
@@ -231,7 +245,6 @@ function isReason(reason: RestoreError['reason']): (error: unknown) => boolean {
 
 test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnails, and albums before activation (#288)', async () => {
   const world = await restoreWorld(2);
-  const sourceHighWater = BigInt(world.keyStore.exportWrappedKeys().find((key) => key.status === 'active')?.nonceHighWater ?? '0');
   const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
   assert.deepEqual(result, { libraryId: LIBRARY_ID, generation: 1, photos: 2, resumed: false, missing: [] });
   assert.equal(existsSync(`${world.targetDir}.restore-staging`), false);
@@ -240,7 +253,8 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
 
   const restoredKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
   const restoredHighWater = BigInt(restoredKeys.exportWrappedKeys().find((key) => key.status === 'active')?.nonceHighWater ?? '0');
-  assert.ok(restoredHighWater > sourceHighWater, 'thumbnail regeneration durably reserves fresh nonce prefixes');
+  assert.equal(restoredKeys.currentKey().id, 2, 'freshness-unproven v1 active key is retired before restored writes');
+  assert.ok(restoredHighWater > 0n, 'the fresh write key durably reserves thumbnail nonce prefixes');
   const dbKey = restoredKeys.resolver()(1);
   assert.ok(dbKey !== undefined);
   const db = openLibraryDatabase({ path: join(world.targetDir, 'library.db'), dbKey });
@@ -248,6 +262,7 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
   assert.deepEqual(repo.albums(), [{ id: 'A1', name: 'Recovered', count: 2 }]);
   assert.equal(repo.pendingCount(), 0);
   assert.equal(queryGet<{ count: number }>(db, 'SELECT count(*) AS count FROM photos_fts')?.count, 2);
+  assert.equal(queryGet<{ count: number }>(db, 'SELECT count(*) AS count FROM keys')?.count, 2, 'the rotated key seeds the catalog');
   db.close();
 
   const restoredStore = new BlobStore({ dataDir: world.targetDir });
@@ -260,6 +275,74 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
     assert.equal(await restoredStore.verifyThumbs(photo.contentHash, restoredKeys.resolver(), photo.id), true);
   }
   assert.equal(world.progress.at(-1)?.stage, 'complete');
+});
+
+test('restore engine: a generation-bound v2 bootstrap keeps its active key and advances nonce state (#996)', async () => {
+  const world = await restoreWorld(1, 2);
+  const sourceHighWater = BigInt(world.keyStore.exportWrappedKeys()[0]?.nonceHighWater ?? '0');
+  await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+
+  const restored = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  assert.equal(restored.currentKey().id, 1);
+  assert.equal(restored.exportWrappedKeys().length, 1);
+  assert.ok(BigInt(restored.exportWrappedKeys()[0]?.nonceHighWater ?? '0') > sourceHighWater);
+});
+
+test('restore engine: bootstrap-first fallback rotates a fresh write key exactly once (#996)', async () => {
+  const world = await restoreWorld(1, 2);
+  const first = await buffer(await world.provider.getStream('manifest/gen-1.ovlk'));
+  await put(
+    world.provider,
+    'recovery/bootstrap.ovrb',
+    sealRecoveryBootstrap(
+      {
+        schema: 2,
+        libraryId: LIBRARY_ID,
+        generatedAt: GENERATED_AT,
+        manifestGeneration: 2,
+        manifestSha256: 'ab'.repeat(32),
+        previousManifest: { generation: 1, sha256: createHash('sha256').update(first).digest('hex') },
+        keys: world.keyStore.exportWrappedKeys(),
+      },
+      world.masterKey,
+    ),
+  );
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.deepEqual(result, {
+    libraryId: LIBRARY_ID,
+    generation: 1,
+    photos: 1,
+    resumed: false,
+    missing: [],
+  });
+  const restored = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  assert.equal(restored.currentKey().id, 2);
+});
+
+test('restore engine: resumed v1 staging rotates exactly once after an interrupted thumbnail write (#996)', async () => {
+  const world = await restoreWorld();
+  const originalThumbnails = world.deps.thumbnails;
+  let interrupt = true;
+  const deps: RestoreEngineDeps = {
+    ...world.deps,
+    thumbnails: (store) => {
+      const service = originalThumbnails(store);
+      return {
+        generateFor: (request) => (interrupt ? Promise.reject(new Error('interrupt after legacy rotation')) : service.generateFor(request)),
+      };
+    },
+  };
+
+  await assert.rejects(new RestoreEngine(deps).run({ masterKey: world.masterKey, allowReplace: false }), /interrupt/u);
+  const stagingKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: `${world.targetDir}.restore-staging` });
+  assert.equal(stagingKeys.currentKey().id, 2);
+  stagingKeys.close();
+
+  interrupt = false;
+  await new RestoreEngine(deps).run({ masterKey: world.masterKey, allowReplace: false });
+  const restored = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  assert.equal(restored.currentKey().id, 2, 'resume reuses the staged rotation instead of minting key 3');
 });
 
 test('restore engine: schema 4 restores protected ciphertext and encrypted activity history (#328/#614)', async () => {

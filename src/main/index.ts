@@ -43,7 +43,7 @@ import { createProviderRuntime } from './backup/provider-runtime-factory.js';
 import type { RestoreRuntime } from './backup/restore-runtime.js';
 import { createRestoreRuntime } from './backup/restore-runtime-factory.js';
 import { recoverInterruptedActivation, restorePaths } from './backup/restore-staging.js';
-import { sealKeyStoreRecoveryBootstrap } from './backup/recovery-bootstrap.js';
+import { createRecoveryBootstrapSealer } from './backup/recovery-bootstrap.js';
 import type { ConsistencyChecker } from './library/consistency.js';
 import { createConsistencyChecker } from './library/consistency-factory.js';
 import type { PurgeService } from './library/purge-service.js';
@@ -488,8 +488,7 @@ function getBackupEngine(): BackupEngine {
       dirtyPhotos: () => repo.dirtyPhotos(),
       encryptedStream: (hash) => parts.blobStore.getEncryptedStream(hash),
       sealManifest: (json) => sealManifestJson(json, parts.keyStore.currentKey()),
-      sealRecoveryBootstrap: (generatedAt) =>
-        sealKeyStoreRecoveryBootstrap({ keyStore: parts.keyStore, libraryId: getProviderRuntime().libraryId(), generatedAt }),
+      sealRecoveryBootstrap: createRecoveryBootstrapSealer(parts.keyStore, () => getProviderRuntime().libraryId()),
       libraryId: () => getProviderRuntime().libraryId(),
       manifestSnapshot: () => repo.manifestSnapshot(),
       activitySnapshot: () => activityBackupSnapshot(parts.db),

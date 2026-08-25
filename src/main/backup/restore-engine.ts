@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 
 import { BlobStore, BlobStoreError } from '../blobs/blob-store.js';
 import { ProtectedBlobStore, ProtectedBlobStoreError } from '../blobs/protected-blob-store.js';
-import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
+import { KeyStore, type SafeStorageLike, type WrappedKeyRecord } from '../crypto/keystore.js';
 import { installRecoveredMaster } from '../crypto/recovery.js';
 import { createDecryptStream } from '../crypto/envelope.js';
 import { openLibraryDatabase } from '../db/database.js';
@@ -408,7 +408,7 @@ export class RestoreEngine {
     try {
       await this.restoreThumbnails(paths, store, recoveredKeys, discovery, candidate, checkpoint, missing, request.signal);
       this.emit('rebuilding', 0, restoreCandidate.manifest.photos.length, null);
-      await this.rebuildCatalog(paths, store, protectedStore, discovery, restoreCandidate, missing);
+      await this.rebuildCatalog(paths, store, protectedStore, recoveredKeys.exportWrappedKeys(), discovery, restoreCandidate, missing);
     } finally {
       recoveredKeys.close();
     }
@@ -742,13 +742,34 @@ export class RestoreEngine {
     if (installed !== 'installed' && installed !== 'already-installed') {
       throw new RestoreError('wrong-key', `recovered master installation failed: ${installed}`);
     }
-    return KeyStore.open({ safeStorage: this.deps.safeStorage, dataDir: paths.stagingDir });
+    const recovered = KeyStore.open({ safeStorage: this.deps.safeStorage, dataDir: paths.stagingDir });
+    try {
+      const requiresFreshWriteKey = discovery.bootstrap.schema === 1 || candidate.generation !== discovery.bootstrap.manifestGeneration;
+      if (requiresFreshWriteKey) {
+        const recoveredActive = discovery.bootstrap.keys.find((key) => key.status === 'active');
+        if (recoveredActive === undefined) throw new RestoreError('corrupt', 'recovery bootstrap has no active key');
+        const activeId = recovered.currentKey().id;
+        if (activeId === recoveredActive.id) {
+          recovered.rotate();
+        } else {
+          const expectedRotatedId = Math.max(...discovery.bootstrap.keys.map((key) => key.id)) + 1;
+          if (activeId !== expectedRotatedId) {
+            throw new RestoreError('corrupt', 'recovery staging has an unexpected active key');
+          }
+        }
+      }
+      return recovered;
+    } catch (error) {
+      recovered.close();
+      throw error;
+    }
   }
 
   private async rebuildCatalog(
     paths: RestorePaths,
     store: BlobStore,
     protectedStore: ProtectedBlobStore,
+    recoveredKeys: readonly WrappedKeyRecord[],
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: MissingObjects,
@@ -762,7 +783,7 @@ export class RestoreEngine {
     const db = openLibraryDatabase({ path: dbPath, dbKey });
     try {
       const repo = new PhotosRepository(db);
-      repo.restoreManifest(candidate.manifest, discovery.bootstrap.keys);
+      repo.restoreManifest(candidate.manifest, recoveredKeys);
       // The restored library starts owing a manifest generation (#741): the
       // provider selected after relaunch may not be the restore source, and
       // the first run's publication preflight reconciles the difference —
