@@ -11,6 +11,7 @@ import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js'
 import type { LibraryDescriptor } from '../shared/library/registry.js';
 import type { BoardExportRequest, BoardExportResult } from '../shared/moodboard/export-contract.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
+import { RelocationDestinationAuthority, RelocationDestinationGrantError } from './library/relocation-destination-authority.js';
 import type {
   ProviderCapacityStatus,
   ProviderConnectionStatus,
@@ -495,13 +496,52 @@ export type RelocationFacade = Pick<
   'move' | 'rename' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'
 >;
 
+function relocationAuthorizationFailure(error: unknown): {
+  readonly ok: false;
+  readonly reason: 'authorization-denied';
+  readonly detail: string;
+} {
+  if (!(error instanceof RelocationDestinationGrantError)) throw error;
+  return { ok: false, reason: 'authorization-denied', detail: error.message };
+}
+
 // Library relocation (#483, ADR-0022). Like the registry handlers these use
 // validateHandler directly. The runtime refuses OVLK custody without an
 // authenticated open and refuses a locked active library; other inactive
 // libraries may move while the active library is app-locked.
-export function registerRelocationHandlers(getRuntime: () => RelocationFacade): void {
-  ipcMain.handle(channels.libraryRelocationMove.name, (_event, request: unknown) =>
-    validateHandler(channels.libraryRelocationMove, ({ id, destPath }) => getRuntime().move(id, destPath))(request),
+export function registerRelocationHandlers(
+  getRuntime: () => RelocationFacade,
+  pickDestination: () => Promise<string | null>,
+  destinationAuthority = new RelocationDestinationAuthority(),
+): void {
+  const boundSenders = new WeakSet<Electron.WebContents>();
+  ipcMain.handle(channels.libraryRelocationPickDestination.name, (event, request: unknown) =>
+    validateHandler(channels.libraryRelocationPickDestination, async () => {
+      const selected = await pickDestination();
+      if (selected === null) return { path: null, authorization: null };
+      const grant = await destinationAuthority.issue(event.sender.id, selected);
+      if (!boundSenders.has(event.sender)) {
+        boundSenders.add(event.sender);
+        event.sender.once('destroyed', () => destinationAuthority.revokeSender(event.sender.id));
+      }
+      return { path: grant.root, authorization: grant.authorization };
+    })(request),
+  );
+  ipcMain.handle(channels.libraryRelocationRevokeDestination.name, (event, request: unknown) =>
+    validateHandler(channels.libraryRelocationRevokeDestination, ({ authorization }) => ({
+      revoked: destinationAuthority.revoke(event.sender.id, authorization),
+    }))(request),
+  );
+  ipcMain.handle(channels.libraryRelocationMove.name, (event, request: unknown) =>
+    validateHandler(channels.libraryRelocationMove, async ({ id, destPath, authorization }) => {
+      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath).catch(relocationAuthorizationFailure);
+      if ('ok' in lease) return lease;
+      try {
+        return await getRuntime().move(id, lease.destination);
+      } finally {
+        lease.release();
+      }
+    })(request),
   );
   ipcMain.handle(channels.libraryRelocationRename.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationRename, ({ id, newName }) => getRuntime().rename(id, newName))(request),
@@ -515,8 +555,16 @@ export function registerRelocationHandlers(getRuntime: () => RelocationFacade): 
   ipcMain.handle(channels.libraryRelocationDiscard.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationDiscard, async ({ id }) => ({ result: await getRuntime().discard(id) }))(request),
   );
-  ipcMain.handle(channels.libraryRelocationPreflight.name, (_event, request: unknown) =>
-    validateHandler(channels.libraryRelocationPreflight, ({ id, destPath }) => getRuntime().probe(id, destPath))(request),
+  ipcMain.handle(channels.libraryRelocationPreflight.name, (event, request: unknown) =>
+    validateHandler(channels.libraryRelocationPreflight, async ({ id, destPath, authorization }) => {
+      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath).catch(relocationAuthorizationFailure);
+      if ('ok' in lease) return lease;
+      try {
+        return await getRuntime().probe(id, lease.destination);
+      } finally {
+        lease.release();
+      }
+    })(request),
   );
   ipcMain.handle(channels.libraryRelocationFinishCleanup.name, (_event, request: unknown) =>
     validateHandler(channels.libraryRelocationFinishCleanup, async ({ id }) => ({ result: await getRuntime().finishCleanup(id) }))(request),

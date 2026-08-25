@@ -1811,6 +1811,7 @@
           "type": "unit-dom",
           "paths": [
             "tests/library/relocation.test.ts",
+            "tests/library/relocation-destination-authority.test.ts",
             "tests/library/relocation-runtime.test.ts",
             "tests/library/relocation-verify.test.ts",
             "tests/library/volume-info.test.ts"

@@ -35,6 +35,11 @@ interface Row {
   readonly mode?: 'copy' | 'rename';
 }
 
+interface DestinationGrant {
+  readonly root: string;
+  readonly authorization: string;
+}
+
 // Every failure reason renders as decided copy: refusals are designed
 // outcomes (ADR-0022 §5), and a mistranslated or missing sentence here is a
 // data-loss bug with a friendly face (ADR-0020's ruling).
@@ -69,6 +74,10 @@ const reasonMessages = defineMessages({
   'move-in-progress': { id: 'libmove.reason.moveInProgress', defaultMessage: 'Another move is already running.' },
   'app-locked': { id: 'libmove.reason.appLocked', defaultMessage: 'Unlock Overlook before moving the open library.' },
   'provider-busy': { id: 'libmove.reason.providerBusy', defaultMessage: 'Finish or wait for the current backup or restore first.' },
+  'authorization-denied': {
+    id: 'libmove.reason.authorizationDenied',
+    defaultMessage: 'The destination authorization expired. Choose the destination again.',
+  },
 });
 
 const phaseMessages = defineMessages({
@@ -197,7 +206,9 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
   // Open library moves LAST: its reactivation reloads this window.
   const ordered = [...libraries].sort((a, b) => Number(a.open) - Number(b.open));
   const [phase, setPhase] = useState<WizardPhase>('review');
-  const [root, setRoot] = useState<string | null>(null);
+  const [destination, setDestination] = useState<DestinationGrant | null>(null);
+  const [destinationAuthorizationDenied, setDestinationAuthorizationDenied] = useState(false);
+  const root = destination?.root ?? null;
   const [rows, setRows] = useState<readonly Row[]>(ordered.map((lib) => ({ lib, status: 'pending', destPath: null })));
   const [activeIndex, setActiveIndex] = useState(-1);
   const [progress, setProgress] = useState<{
@@ -219,20 +230,35 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
     });
   }, []);
 
+  useEffect(() => {
+    if (destination === null) return;
+    return () => {
+      void window.overlook.libraries.revokeMoveDestination({ authorization: destination.authorization });
+    };
+  }, [destination]);
+
   // Review-step dry run (#483/ADR-0022 §5): resolve the method chip, space
   // requirement, and network warning per library BEFORE anything moves. A
   // 'destination-not-empty' probe is informational — the move itself retries
   // collision-safe numbered names; every other refusal blocks Start honestly.
   useEffect(() => {
-    if (root === null) return;
+    if (destination === null) return;
+    const { root: selectedRoot, authorization } = destination;
     let stale = false;
     for (const lib of ordered) {
       void window.overlook.libraries
-        .probeMove({ id: lib.id, destPath: destFor(lib, root, 1) })
+        .probeMove({ id: lib.id, destPath: destFor(lib, selectedRoot, 1), authorization })
         .then((probe) => {
+          if (!probe.ok && probe.reason === 'authorization-denied') {
+            if (!stale) {
+              setDestinationAuthorizationDenied(true);
+              setDestination(null);
+            }
+            return;
+          }
           // Keyed by root+library, so a destination change never needs a
           // reset — lookups for the new root simply miss until it lands.
-          if (!stale) setProbes((previous) => new Map(previous).set(`${root}\u0000${lib.id}`, probe));
+          if (!stale) setProbes((previous) => new Map(previous).set(`${selectedRoot}\u0000${lib.id}`, probe));
         })
         .catch(() => undefined);
     }
@@ -241,18 +267,30 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
     };
     // ordered is derived from a stable prop; root is the only real input.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ordered identity churns per render
-  }, [root]);
+  }, [root, destination?.authorization]);
 
   const chooseRoot = (): void => {
-    void window.overlook.libraries.pickLocation().then(({ path }) => {
-      if (path !== null) setRoot(path);
+    void window.overlook.libraries.pickMoveDestination().then(({ path, authorization }) => {
+      if (path !== null && authorization !== null) {
+        setDestinationAuthorizationDenied(false);
+        setDestination({ root: path, authorization });
+      }
     });
   };
 
+  const closeDialog = (): void => {
+    setDestination(null);
+    onClose();
+  };
+
   const runBatch = async (targets: readonly number[]): Promise<void> => {
-    if (root === null) return;
+    if (destination === null) return;
+    const { root: selectedRoot, authorization } = destination;
+    let needsRetry = false;
+    let authorizationDenied = false;
     for (const index of targets) {
       if (stopRef.current) {
+        needsRetry = true;
         setRows((previous) => previous.map((row, at) => (at === index && row.status === 'pending' ? { ...row, status: 'skipped' } : row)));
         continue;
       }
@@ -264,12 +302,12 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
       if (lib === undefined) continue;
 
       let outcome: Awaited<ReturnType<typeof window.overlook.libraries.move>> | null = null;
-      let destPath = destFor(lib, root, 1);
+      let destPath = destFor(lib, selectedRoot, 1);
       // The engine refuses occupied paths; collision-safe naming retries
       // with a numbered suffix and gives up honestly after a few.
       for (let attempt = 1; attempt <= 4; attempt += 1) {
-        destPath = destFor(lib, root, attempt);
-        outcome = await window.overlook.libraries.move({ id: lib.id, destPath }).catch(() => null);
+        destPath = destFor(lib, selectedRoot, attempt);
+        outcome = await window.overlook.libraries.move({ id: lib.id, destPath, authorization }).catch(() => null);
         if (outcome === null || outcome.ok || outcome.reason !== 'destination-not-empty') break;
       }
 
@@ -301,10 +339,22 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
           };
         }),
       );
+      if (outcome !== null && !outcome.ok && outcome.reason === 'authorization-denied') {
+        authorizationDenied = true;
+        break;
+      }
+      if (outcome === null || !outcome.ok) needsRetry = true;
       if (outcome !== null && !outcome.ok && outcome.reason === 'cancelled') stopRef.current = true;
     }
     setActiveIndex(-1);
+    if (authorizationDenied) {
+      setDestinationAuthorizationDenied(true);
+      setDestination(null);
+      setPhase('review');
+      return;
+    }
     setPhase('results');
+    if (!needsRetry) setDestination(null);
   };
 
   const start = (): void => {
@@ -359,10 +409,10 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
         title={many ? intl.formatMessage(messages.titleMany, { count: ordered.length }) : intl.formatMessage(messages.titleOne)}
         icon="hard-drive"
         width={520}
-        onClose={onClose}
+        onClose={closeDialog}
         footer={
           <>
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={closeDialog}>
               <FormattedMessage {...messages.cancel} />
             </Button>
             <Button variant="primary" disabled={root === null || anyPending || anyBlocked} onClick={start} data-testid="move-start">
@@ -427,6 +477,11 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
             <FormattedMessage {...messages.choose} />
           </Button>
         </div>
+        {destinationAuthorizationDenied ? (
+          <div className="ovl-libmove__error" role="alert">
+            <FormattedMessage {...reasonMessages['authorization-denied']} />
+          </div>
+        ) : null}
         <div className="ovl-libmove__reassure">
           <Icon name="shield-check" size={16} color="var(--accent-green)" />
           <span>
@@ -501,7 +556,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
       title={intl.formatMessage(messages.resultsTitle)}
       icon="hard-drive"
       width={560}
-      onClose={onClose}
+      onClose={closeDialog}
       footer={
         <>
           {anyFailed ? (
@@ -509,7 +564,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
               <FormattedMessage {...messages.retryFailed} />
             </Button>
           ) : null}
-          <Button variant="primary" onClick={onClose} data-testid="move-done">
+          <Button variant="primary" onClick={closeDialog} data-testid="move-done">
             <FormattedMessage {...messages.done} />
           </Button>
         </>

@@ -55,6 +55,7 @@ const libraryRegistryList = createInvoker(channels.libraryRegistryList, invokeTr
 const libraryRegistryCurrent = createInvoker(channels.libraryRegistryCurrent, invokeTransport);
 const libraryRegistryPickLocation = createInvoker(channels.libraryRegistryPickLocation, invokeTransport);
 const libraryRegistryPickCreateLocation = createInvoker(channels.libraryRegistryPickCreateLocation, invokeTransport);
+const libraryRelocationPickDestination = createInvoker(channels.libraryRelocationPickDestination, invokeTransport);
 const libraryRelocationPending = createInvoker(channels.libraryRelocationPending, invokeTransport);
 const backupProviders = createInvoker(channels.backupProviders, invokeTransport);
 const backupProviderStatus = createInvoker(channels.backupProviderStatus, invokeTransport);
@@ -357,6 +358,8 @@ const overlook: OverlookApi = {
     pickCreateLocation: async () => libraryRegistryPickCreateLocation({}),
     // Relocation (#483, ADR-0022): move/cancel/cleanup + journal-backed
     // pending list for the resume banner; progress drives the wizard tracks.
+    pickMoveDestination: async () => libraryRelocationPickDestination({}),
+    revokeMoveDestination: createInvoker(channels.libraryRelocationRevokeDestination, invokeTransport),
     move: createInvoker(channels.libraryRelocationMove, invokeTransport),
     renameFolder: createInvoker(channels.libraryRelocationRename, invokeTransport),
     probeMove: createInvoker(channels.libraryRelocationPreflight, invokeTransport),

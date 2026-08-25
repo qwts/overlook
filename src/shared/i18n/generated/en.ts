@@ -233,6 +233,7 @@ export const en: Readonly<Record<string, string>> = {
   "libmove.progress.label": "{phase} {name}",
   "libmove.progress.title": "Moving libraries",
   "libmove.reason.appLocked": "Unlock Overlook before moving the open library.",
+  "libmove.reason.authorizationDenied": "The destination authorization expired. Choose the destination again.",
   "libmove.reason.cancelled": "Cancelled — the original library is untouched.",
   "libmove.reason.destinationNotEmpty": "The destination folder is not empty — Overlook never overwrites or merges.",
   "libmove.reason.destinationNotWritable": "The destination is not writable.",

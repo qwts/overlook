@@ -13,6 +13,7 @@ import type { LibraryDescriptor } from '../../../shared/library/registry.js';
 
 const ALPHA_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAA';
 const BETA_ID = '01BRZ3NDEKTSV4RRFFQ69G5FAB';
+const DESTINATION_AUTHORIZATION = '00000000-0000-4000-8000-000000000001';
 
 function lib(overrides: Partial<LibraryDescriptor>): LibraryDescriptor {
   return {
@@ -84,10 +85,11 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
       return Promise.resolve(typeof probe === 'function' ? probe(id) : probe);
     },
     pendingMoves: () => Promise.resolve({ pending: [] }),
-    pickLocation: () => {
-      calls.push('pick-location');
-      return Promise.resolve({ path: '/Volumes/External/Overlook' });
+    pickMoveDestination: () => {
+      calls.push('pick-move-destination');
+      return Promise.resolve({ path: '/Volumes/External/Overlook', authorization: DESTINATION_AUTHORIZATION });
     },
+    revokeMoveDestination: () => Promise.resolve({ revoked: true }),
     onMoveProgress: () => () => undefined,
   } as unknown as OverlookApi['libraries'];
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { libraries };
@@ -232,6 +234,34 @@ export const ResultsFailureIsHonest: Story = {
     await expect(body.getByText('Failed')).toBeVisible();
     await expect(body.getByText(/Not enough free space/)).toBeVisible();
     await expect(body.getByTestId('move-retry')).toBeVisible();
+  },
+};
+
+export const ExpiredGrantRequiresFreshDestination: Story = {
+  decorators: [
+    (Story) => {
+      installStub({
+        moveOutcome: {
+          ok: false,
+          reason: 'authorization-denied',
+          detail: 'Relocation destination authorization expired',
+        },
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByTestId('move-pick-destination'));
+    await waitFor(async () => {
+      await expect(body.getByTestId('move-start')).toBeEnabled();
+    });
+    await userEvent.click(body.getByTestId('move-start'));
+    await waitFor(async () => {
+      await expect(body.getByTestId('move-start')).toBeDisabled();
+    });
+    await expect(body.getByText('Choose a destination folder…')).toBeVisible();
+    await expect(body.getByRole('alert')).toHaveTextContent('The destination authorization expired. Choose the destination again.');
   },
 };
 

@@ -13,6 +13,7 @@ import type { LibraryDescriptor } from '../../../shared/library/registry.js';
 
 const OPEN_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAA';
 const BETA_ID = '01BRZ3NDEKTSV4RRFFQ69G5FAB';
+const DESTINATION_AUTHORIZATION = '00000000-0000-4000-8000-000000000001';
 
 function lib(overrides: Partial<LibraryDescriptor>): LibraryDescriptor {
   return {
@@ -94,6 +95,8 @@ function installStub(options: StubOptions = {}): { readonly calls: string[] } {
       calls.push('pick-create-location');
       return Promise.resolve({ path: '/Users/ansel/External/NewHome' });
     },
+    pickMoveDestination: () => Promise.resolve({ path: '/Users/ansel/External/NewHome', authorization: DESTINATION_AUTHORIZATION }),
+    revokeMoveDestination: () => Promise.resolve({ revoked: true }),
     // The per-row Move action mounts the wizard, which subscribes and probes.
     onMoveProgress: () => () => undefined,
     probeMove: () =>
