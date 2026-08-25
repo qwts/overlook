@@ -49,6 +49,7 @@ import { registerAlbumIpcHandlers } from './library/album-ipc.js';
 import { registerBoardIpcHandlers } from './library/board-ipc.js';
 import { toggleFavoriteWithActivity, toggleFavoritesWithActivity } from './library/favorite-mutation-handler.js';
 import { registerPhotoMetadataHandlers } from './library/photo-metadata-ipc.js';
+import { purgeAfterAuthorization, type PurgeAuthorizer, type PurgeFacade } from './library/purge-authorization.js';
 
 let contentAdmission = (): void => undefined;
 
@@ -411,33 +412,6 @@ export function registerProtectedAlbumHandlers(
     wrapHandler(channels.protectedAlbumRestore, ({ albumId, photoIds }) => getLibrary().restore(albumId, photoIds))(request),
   );
   registerProtectedAlbumExportHandlers(getExport, destinationAuthority);
-}
-
-export interface PurgeFacade {
-  purge(photoIds: readonly string[]): Promise<{ purged: number; skipped: number; protected: number; remoteFailures: number }>;
-}
-
-export type PurgeAuthorizer = (photoIds: readonly string[], parent: BrowserWindow | null) => Promise<boolean>;
-
-export async function purgeAfterAuthorization(
-  photoIds: readonly string[],
-  parent: BrowserWindow | null,
-  getFacade: () => PurgeFacade,
-  authorize: PurgeAuthorizer,
-  getActivity?: () => Pick<ActivityFacade, 'record'>,
-): Promise<z.output<typeof channels.libraryPurge.response>> {
-  const exactRequest = Object.freeze([...photoIds]);
-  if (!(await authorize(exactRequest, parent))) return { status: 'cancelled' };
-
-  const result = await getFacade().purge(exactRequest);
-  if (result.purged > 0 || result.remoteFailures > 0) {
-    getActivity?.().record({
-      eventType: 'photo.purged',
-      outcome: result.remoteFailures > 0 || result.skipped > 0 ? 'partial' : 'succeeded',
-      payload: { count: result.purged, skipped: result.skipped, remoteFailures: result.remoteFailures },
-    });
-  }
-  return { status: 'completed', result };
 }
 
 export function registerPurgeHandlers(getFacade: () => PurgeFacade, authorize: PurgeAuthorizer, getActivity?: () => ActivityFacade): void {

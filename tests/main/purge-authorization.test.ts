@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { purgeAfterAuthorization } from '../../src/main/ipc.js';
+import { purgeAfterAuthorization } from '../../src/main/library/purge-authorization.js';
 
 describe('permanent purge authorization', () => {
   test('denial is typed cancellation and performs no purge or activity work', async () => {
