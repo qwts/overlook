@@ -686,6 +686,9 @@
   "libmove.reason.appLocked": {
     "defaultMessage": "Unlock Overlook before moving the open library."
   },
+  "libmove.reason.authorizationDenied": {
+    "defaultMessage": "The destination authorization expired. Choose the destination again."
+  },
   "libmove.reason.cancelled": {
     "defaultMessage": "Cancelled — the original library is untouched."
   },

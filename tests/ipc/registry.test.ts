@@ -183,6 +183,25 @@ describe('channel registry', () => {
     );
   });
 
+  test('relocation requires a native-picker grant without changing the create-library picker (#991)', () => {
+    const authorization = '00000000-0000-4000-8000-000000000001';
+    assert.throws(() => channels.libraryRelocationMove.request.parse({ id: '01ARZ3NDEKTSV4RRFFQ69G5FAA', destPath: '/chosen/A' }));
+    assert.deepEqual(
+      channels.libraryRelocationMove.request.parse({
+        id: '01ARZ3NDEKTSV4RRFFQ69G5FAA',
+        destPath: '/chosen/A',
+        authorization,
+      }),
+      { id: '01ARZ3NDEKTSV4RRFFQ69G5FAA', destPath: '/chosen/A', authorization },
+    );
+    assert.deepEqual(channels.libraryRelocationPickDestination.response.parse({ path: null, authorization: null }), {
+      path: null,
+      authorization: null,
+    });
+    assert.throws(() => channels.libraryRelocationPickDestination.response.parse({ path: '/chosen', authorization: null }));
+    assert.deepEqual(channels.libraryRegistryPickCreateLocation.response.parse({ path: '/create' }), { path: '/create' });
+  });
+
   test('emergency provider removal requires its ADR-0023 risk acknowledgement (#732)', () => {
     assert.throws(() => channels.backupRemoveAuthorizationAnyway.request.parse({ providerId: 'pcloud' }));
     assert.throws(() =>

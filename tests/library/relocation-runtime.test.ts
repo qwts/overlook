@@ -324,6 +324,7 @@ describe('relocation runtime (#483, ADR-0022 §4)', () => {
     const moved = await wrapHandler(channels.libraryRelocationMove, ({ id, destPath }) => h.runtime.move(id, destPath))({
       id: ULID_A,
       destPath: '/channel-dest',
+      authorization: '00000000-0000-4000-8000-000000000001',
     });
     assert.deepEqual(moved, {
       ok: true,
