@@ -71,6 +71,8 @@ export const relocationFailureReasonSchema = z.enum([
   'move-in-progress',
   'app-locked',
   'provider-busy',
+  /** Main rejected a missing, expired, revoked, or sender-mismatched picker grant. */
+  'authorization-denied',
 ]);
 export type RelocationFailureReason = z.infer<typeof relocationFailureReasonSchema>;
 

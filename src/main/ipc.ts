@@ -11,7 +11,7 @@ import type { AppSettings, SettingsPatch } from '../shared/settings/settings.js'
 import type { LibraryDescriptor } from '../shared/library/registry.js';
 import type { BoardExportRequest, BoardExportResult } from '../shared/moodboard/export-contract.js';
 import type { RelocationRuntime } from './library/relocation-runtime.js';
-import { RelocationDestinationAuthority } from './library/relocation-destination-authority.js';
+import { RelocationDestinationAuthority, RelocationDestinationGrantError } from './library/relocation-destination-authority.js';
 import type {
   ProviderCapacityStatus,
   ProviderConnectionStatus,
@@ -507,6 +507,15 @@ export type RelocationFacade = Pick<
   'move' | 'rename' | 'resume' | 'discard' | 'cancel' | 'finishCleanup' | 'pending' | 'probe'
 >;
 
+function relocationAuthorizationFailure(error: unknown): {
+  readonly ok: false;
+  readonly reason: 'authorization-denied';
+  readonly detail: string;
+} {
+  if (!(error instanceof RelocationDestinationGrantError)) throw error;
+  return { ok: false, reason: 'authorization-denied', detail: error.message };
+}
+
 // Library relocation (#483, ADR-0022). Like the registry handlers these use
 // validateHandler directly. The runtime refuses OVLK custody without an
 // authenticated open and refuses a locked active library; other inactive
@@ -536,7 +545,8 @@ export function registerRelocationHandlers(
   );
   ipcMain.handle(channels.libraryRelocationMove.name, (event, request: unknown) =>
     validateHandler(channels.libraryRelocationMove, async ({ id, destPath, authorization }) => {
-      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath);
+      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath).catch(relocationAuthorizationFailure);
+      if ('ok' in lease) return lease;
       try {
         return await getRuntime().move(id, lease.destination);
       } finally {
@@ -558,7 +568,8 @@ export function registerRelocationHandlers(
   );
   ipcMain.handle(channels.libraryRelocationPreflight.name, (event, request: unknown) =>
     validateHandler(channels.libraryRelocationPreflight, async ({ id, destPath, authorization }) => {
-      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath);
+      const lease = await destinationAuthority.acquire(event.sender.id, authorization, destPath).catch(relocationAuthorizationFailure);
+      if ('ok' in lease) return lease;
       try {
         return await getRuntime().probe(id, lease.destination);
       } finally {

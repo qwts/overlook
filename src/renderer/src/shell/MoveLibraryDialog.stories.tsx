@@ -237,6 +237,34 @@ export const ResultsFailureIsHonest: Story = {
   },
 };
 
+export const ExpiredGrantRequiresFreshDestination: Story = {
+  decorators: [
+    (Story) => {
+      installStub({
+        moveOutcome: {
+          ok: false,
+          reason: 'authorization-denied',
+          detail: 'Relocation destination authorization expired',
+        },
+      });
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByTestId('move-pick-destination'));
+    await waitFor(async () => {
+      await expect(body.getByTestId('move-start')).toBeEnabled();
+    });
+    await userEvent.click(body.getByTestId('move-start'));
+    await waitFor(async () => {
+      await expect(body.getByTestId('move-start')).toBeDisabled();
+    });
+    await expect(body.getByText('Choose a destination folder…')).toBeVisible();
+    await expect(body.getByRole('alert')).toHaveTextContent('The destination authorization expired. Choose the destination again.');
+  },
+};
+
 export const ReviewResolvesMethodAndSpace: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);

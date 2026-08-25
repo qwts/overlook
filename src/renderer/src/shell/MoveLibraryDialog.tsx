@@ -74,6 +74,10 @@ const reasonMessages = defineMessages({
   'move-in-progress': { id: 'libmove.reason.moveInProgress', defaultMessage: 'Another move is already running.' },
   'app-locked': { id: 'libmove.reason.appLocked', defaultMessage: 'Unlock Overlook before moving the open library.' },
   'provider-busy': { id: 'libmove.reason.providerBusy', defaultMessage: 'Finish or wait for the current backup or restore first.' },
+  'authorization-denied': {
+    id: 'libmove.reason.authorizationDenied',
+    defaultMessage: 'The destination authorization expired. Choose the destination again.',
+  },
 });
 
 const phaseMessages = defineMessages({
@@ -203,6 +207,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
   const ordered = [...libraries].sort((a, b) => Number(a.open) - Number(b.open));
   const [phase, setPhase] = useState<WizardPhase>('review');
   const [destination, setDestination] = useState<DestinationGrant | null>(null);
+  const [destinationAuthorizationDenied, setDestinationAuthorizationDenied] = useState(false);
   const root = destination?.root ?? null;
   const [rows, setRows] = useState<readonly Row[]>(ordered.map((lib) => ({ lib, status: 'pending', destPath: null })));
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -244,6 +249,13 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
       void window.overlook.libraries
         .probeMove({ id: lib.id, destPath: destFor(lib, selectedRoot, 1), authorization })
         .then((probe) => {
+          if (!probe.ok && probe.reason === 'authorization-denied') {
+            if (!stale) {
+              setDestinationAuthorizationDenied(true);
+              setDestination(null);
+            }
+            return;
+          }
           // Keyed by root+library, so a destination change never needs a
           // reset — lookups for the new root simply miss until it lands.
           if (!stale) setProbes((previous) => new Map(previous).set(`${selectedRoot}\u0000${lib.id}`, probe));
@@ -259,7 +271,10 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
 
   const chooseRoot = (): void => {
     void window.overlook.libraries.pickMoveDestination().then(({ path, authorization }) => {
-      if (path !== null && authorization !== null) setDestination({ root: path, authorization });
+      if (path !== null && authorization !== null) {
+        setDestinationAuthorizationDenied(false);
+        setDestination({ root: path, authorization });
+      }
     });
   };
 
@@ -272,6 +287,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
     if (destination === null) return;
     const { root: selectedRoot, authorization } = destination;
     let needsRetry = false;
+    let authorizationDenied = false;
     for (const index of targets) {
       if (stopRef.current) {
         needsRetry = true;
@@ -323,10 +339,20 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
           };
         }),
       );
+      if (outcome !== null && !outcome.ok && outcome.reason === 'authorization-denied') {
+        authorizationDenied = true;
+        break;
+      }
       if (outcome === null || !outcome.ok) needsRetry = true;
       if (outcome !== null && !outcome.ok && outcome.reason === 'cancelled') stopRef.current = true;
     }
     setActiveIndex(-1);
+    if (authorizationDenied) {
+      setDestinationAuthorizationDenied(true);
+      setDestination(null);
+      setPhase('review');
+      return;
+    }
     setPhase('results');
     if (!needsRetry) setDestination(null);
   };
@@ -451,6 +477,11 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
             <FormattedMessage {...messages.choose} />
           </Button>
         </div>
+        {destinationAuthorizationDenied ? (
+          <div className="ovl-libmove__error" role="alert">
+            <FormattedMessage {...reasonMessages['authorization-denied']} />
+          </div>
+        ) : null}
         <div className="ovl-libmove__reassure">
           <Icon name="shield-check" size={16} color="var(--accent-green)" />
           <span>
