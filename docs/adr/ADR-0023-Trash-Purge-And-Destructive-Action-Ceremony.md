@@ -79,6 +79,14 @@ naming the exact counts of faces, groups, and named groups, and stating that
 the photos themselves are untouched) and **Delete a named group** (Tier D, same
 shape, narrower scope).
 
+**Amended and accepted 2026-08-24 by
+[#990](https://github.com/qwts/overlook/issues/990):** §6a replaces a
+renderer-provided acknowledgement as the authorization boundary for manual
+permanent purge. Main owns the trusted confirmation, binds approval to an
+immutable snapshot of the exact validated request, and reports denial as typed
+cancellation before any purge or activity work begins. Automated retention
+remains a separate service-level path and does not enter the manual ceremony.
+
 ## Context
 
 Deletion is the one operation whose _purpose_ is data loss, so it runs the
@@ -224,6 +232,30 @@ library contents" becomes the pattern for the whole tier).
 - Localization: destructive confirmations never ship unreviewed machine
   translation (ADR-0020's ruling, cited here because this is the surface it
   exists for).
+
+#### 6a. Manual purge uses main-owned, request-bound authorization
+
+For manual photo purge, this amendment supersedes §6's renderer-produced
+authorization acknowledgement. Request data is not authority: renderer code,
+stale UI, and injected scripts can reproduce any public literal.
+
+- Main validates the purge request, copies the ordered photo-ID list into an
+  immutable snapshot, and gives that snapshot to a native confirmation owned
+  by the requesting main-process handler. Approval authorizes only that same
+  snapshot; neither the renderer nor a later mutable selection can substitute
+  another request.
+- Denial returns the typed cancellation variant of the purge response. It is a
+  recoverable outcome, not a successful purge with zero counts and not an IPC
+  error. Main performs no purge-facade call, activity write, manifest change,
+  or other purge work before approval.
+- Approval returns the completed variant with the existing purge summary.
+  Protected-photo accounting, partial remote-failure reporting, and activity
+  semantics remain unchanged.
+- The trusted E2E process environment may deterministically approve the native
+  prompt so the existing harness remains non-interactive. This is test-process
+  policy, not renderer-provided authority.
+- Automated retention remains separately authorized by §3's visible fuse. It
+  calls the purge service directly and never enters this manual IPC ceremony.
 
 ### 7. One destructive-action registry
 

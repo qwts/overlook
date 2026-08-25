@@ -30,7 +30,6 @@ export const destructiveActions = {
     tier: 'irreversible',
     label: 'Delete permanently…',
     title: 'Delete photos permanently?',
-    authorization: 'photos.delete-permanently.v1',
     sideEffects:
       'Deletes local originals, previews, and metadata, and removes the encrypted copies from your cloud backup. The provider keeps its deleted objects in its own trash for a limited time (still encrypted, recoverable only through the provider). Cloud deletion failures are recorded and retried; encrypted records that name a photo may remain in up to two older recovery snapshots.',
   },
@@ -88,6 +87,5 @@ export const destructiveActions = {
   },
 } as const satisfies Record<string, DestructiveActionDescriptor>;
 
-export const PHOTO_PURGE_AUTHORIZATION = destructiveActions.deletePhotosPermanently.authorization;
 export const ORIGINAL_DELETE_AUTHORIZATION = destructiveActions.deleteProtectedOriginals.authorization;
 export const PROVIDER_AUTHORIZATION_REMOVAL = destructiveActions.removeProviderAuthorizationAnyway.authorization;

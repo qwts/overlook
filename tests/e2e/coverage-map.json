@@ -1116,6 +1116,7 @@
     {
       "id": "m10-purge-retention",
       "wiki": "User-Story-M10-Albums-organization-deletion",
+      "$note": "Manual purge uses a main-owned native confirmation bound to the exact validated photo-ID snapshot. The E2E harness covers the valid ceremony path and stale renderer acknowledgement rejection; unit coverage proves typed denial performs no purge or activity work and approval preserves the exact snapshot and activity summary.",
       "coverage": [
         {
           "type": "playwright-e2e",
@@ -1131,7 +1132,7 @@
         },
         {
           "type": "unit-dom",
-          "path": "tests/ipc/registry.test.ts"
+          "paths": ["tests/ipc/registry.test.ts", "tests/main/purge-authorization.test.ts"]
         },
         {
           "type": "storybook",
