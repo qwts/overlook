@@ -9,6 +9,12 @@ Accepted (2026-07-14 via merged
 [ADR-0008](./ADR-0008-Recovery-Key-Format.md); it does not replace their blob,
 offload, or recovery-file formats.
 
+**Amended and accepted 2026-08-24 by
+[#996](https://github.com/qwts/overlook/issues/996):** recovery-bootstrap
+freshness is bound to the monotonic manifest path generation, never inferred
+from `generatedAt`. OVRB v2, its bootstrap-first interruption relation, and the
+conservative OVRB v1 restore migration are specified below.
+
 ## Context
 
 ADR-0007 requires an encrypted, generation-numbered manifest that can rebuild
@@ -92,6 +98,86 @@ retained manifest and referenced blob envelopes. Wrong masters, tampering,
 malformed records, missing keys, and unsupported versions fail closed before
 any local library is activated.
 
+### Monotonic recovery publication binding (#996 amendment)
+
+`generatedAt` remains authenticated display/audit metadata, but it carries no
+freshness authority. Wall clocks can move backward, repeat a timestamp, or be
+replayed. The monotonic publication identity is the positive safe-integer `N`
+already encoded by `manifest/gen-N.ovlk`.
+
+**New publications use OVRB version 2.** Its outer framing is the version-1
+framing with byte `0x02`, and its domain-separated encryption key is
+`HKDF-SHA256(master, info="overlook cloud recovery bootstrap v2")`. Its strict
+authenticated JSON payload uses schema 2 and adds
+`manifestGeneration: N` to the version-1 library ID, timestamp, and wrapped-key
+set. An outer version and payload schema must match. Readers continue to
+authenticate OVRB v1 with its original framing, KDF info, and strict schema;
+writers never create a new v1 bootstrap.
+
+**`N` is decided before either publication object is sealed or uploaded.**
+After the ordinary completeness preflight succeeds, the engine lists the
+remote manifest namespace, validates its generation numbers, and chooses one
+greater than the highest advertised generation. It then:
+
+1. snapshots current wrapped keys and nonce high-water state into OVRB v2
+   bound to `N`, uploads it to `recovery/bootstrap.ovrb`, and checksum-verifies
+   the replacement;
+2. seals, uploads, and checksum-verifies the manifest at exactly
+   `manifest/gen-N.ovlk`;
+3. prunes retained generations only after both verified writes.
+
+Computing `N` after a bootstrap write is forbidden: the bootstrap and manifest
+would have no authenticated publication relation. Exhausted, malformed, or
+non-safe generation numbers fail the publication before the bootstrap write.
+The existing single-flight writer and provider verification contracts remain
+in force.
+
+**Discovery validates the advertised generation relation before decrypting a
+manifest.** It authenticates the bootstrap, lists and numerically orders all
+valid manifest paths, and uses the highest advertised generation even if that
+manifest later proves corrupt or unsupported. For OVRB v2 exactly two states
+are valid:
+
+- `bootstrap.manifestGeneration === newest`: the publication completed; or
+- `bootstrap.manifestGeneration === newest + 1`: the bootstrap-first write for
+  the next publication completed but its manifest did not. The prior newest
+  manifest remains recoverable because the bootstrap key set and nonce state
+  are a newer superset.
+
+A bootstrap generation below `newest` is an older replay and fails closed. A
+gap greater than one means remote history is missing or mismatched and also
+fails closed. Neither case may decrypt a candidate, fall back to a retained
+generation, write staging state, or activate a local library. Clock rollback
+and equal timestamps have no effect on this comparison.
+
+Within a valid relation, retained-generation fallback is unchanged for corrupt
+or unsupported manifests: candidates are tried newest first and a valid newer
+candidate always wins. If a candidate encountered before any valid newer
+candidate names an envelope key absent from the authenticated bootstrap,
+discovery fails `wrong-key`; it does not silently substitute older state. An
+unusable lower generation discovered after a valid newer candidate is skipped
+and cannot override that candidate.
+
+**OVRB v1 is readable but explicitly freshness-unproven.** Rejecting every
+existing v1 backup would destroy the disaster-recovery path, while comparing
+its timestamp would manufacture authority it does not have. Discovery may use
+a v1 bootstrap under the existing authentication, library-ID, key, and
+retained-candidate checks, including the fail-closed missing-key rule above.
+Before any restored thumbnail, catalog, or later application write, restore
+staging retires the v1 active data key and creates one fresh random active key.
+The rotation is persisted before use, occurs exactly once across checkpoint
+resume, and seeds the rebuilt database from the rotated key-store records.
+Recovered objects retain their old key IDs and remain decryptable through the
+retired records; no new nonce can be emitted under the freshness-unproven write
+key.
+
+Every restored database already carries manifest-publication debt. Therefore
+the first successful backup after a v1 restore publishes OVRB v2 with the fresh
+active key and current nonce high-water state. A trustworthy live library with
+only v1 remote state repairs it through the same next-publication path. Until a
+v2 pair lands, v1 remains a conservative compatibility path, never evidence of
+monotonic freshness.
+
 ## Consequences
 
 - A provider-neutral restore engine can discover compatibility and rebuild
@@ -115,9 +201,15 @@ any local library is activated.
 - `tests/backup/backup-manifest.test.ts`: schema-1 classification; schema-2
   round trip and cross-record/path/time/order validation.
 - `tests/backup/recovery-bootstrap.test.ts`: fresh-process key resolution;
-  wrong master, tamper, malformed key sets/framing, and temporary-key wiping.
+  wrong master, tamper, temporary-key wiping, v1/v2 framing and schema
+  dispatch, generation authentication, and legacy readability.
 - `tests/backup/manifest-snapshot.test.ts`: transactional full-state snapshot,
   backed-up deleted state, local-only deleted exclusion, ordering, and empty
   library.
 - `tests/backup/backup-engine.test.ts`: verified bootstrap-before-manifest
   publication and newest-two manifest retention.
+- `tests/backup/restore-discovery.test.ts`: replay and generation-gap refusal,
+  bootstrap-one-ahead interruption, clock independence, missing-key posture,
+  and retained fallback ordering.
+- `tests/backup/restore-engine.test.ts`: exactly-once v1 staging rotation before
+  restored writes and v2 no-rotation behavior.
