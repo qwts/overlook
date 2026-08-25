@@ -29,7 +29,7 @@ import {
   restoreTrashResponseSchema,
   restoreVerifyResponseSchema,
 } from '../backup/restore-contract.js';
-import { PHOTO_PURGE_AUTHORIZATION, PROVIDER_AUTHORIZATION_REMOVAL } from '../destructive-actions.js';
+import { PROVIDER_AUTHORIZATION_REMOVAL } from '../destructive-actions.js';
 import { commandIdSchema, commandMenuContextSchema } from '../commands/menu-contract.js';
 import { activityPageRequestSchema, activityPageResponseSchema } from '../activity/schemas.js';
 import { historyExecuteRequestSchema, historyExecuteResponseSchema, historyStatusSchema } from '../history/schemas.js';
@@ -528,15 +528,22 @@ export const channels = {
     z.object({ photoIds: z.array(z.string()).min(1) }),
     z.object({ restored: z.number().int().nonnegative() }),
   ),
-  // Permanent purge (#121): the main process requires the ADR-0023 ceremony
-  // acknowledgement even from stale or directly-invoked renderers.
+  // Permanent purge (#990): request data is not authority. Main confirms the
+  // exact validated snapshot and reports denial as typed cancellation.
   libraryPurge: defineChannel(
     'library:purge',
-    z.object({
-      photoIds: z.array(z.string()).min(1),
-      authorization: z.literal(PHOTO_PURGE_AUTHORIZATION),
-    }),
-    originalPolicy.purgeSummarySchema,
+    z
+      .object({
+        photoIds: z
+          .array(z.string())
+          .min(1)
+          .refine((photoIds) => new Set(photoIds).size === photoIds.length, 'photo IDs must be unique'),
+      })
+      .strict(),
+    z.discriminatedUnion('status', [
+      z.object({ status: z.literal('cancelled') }),
+      z.object({ status: z.literal('completed'), result: originalPolicy.purgeSummarySchema }),
+    ]),
   ),
   // Albums CRUD (#117): first-class library objects. Deleting an album
   // never deletes photos (Clear-vs-Delete rules); membership edits dirty

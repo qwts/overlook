@@ -6,6 +6,7 @@ import { app, dialog } from 'electron';
 import type { BrowserWindow } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
+import { destructiveActions } from '../shared/destructive-actions.js';
 import { createEmitter } from '../shared/ipc/registry.js';
 import { createBackupFacade, type BackupFacadeOptions } from './backup/backup-facade.js';
 import type { FullService } from './fullres/full-service.js';
@@ -134,6 +135,31 @@ async function confirmImportMove(
   return result.response === 1;
 }
 
+async function confirmManualPurge(
+  options: AppServicesOptions,
+  photoIds: readonly string[],
+  parent: BrowserWindow | null,
+): Promise<boolean> {
+  // Browser tests cannot operate native dialogs; this switch is fixed by the
+  // main-process test harness environment and is unavailable to the renderer.
+  if (!app.isPackaged && options.harnessEnv('OVERLOOK_E2E') !== undefined) return true;
+  if (parent === null) return false;
+  const count = photoIds.length;
+  const noun = count === 1 ? 'photo' : 'photos';
+  const action = destructiveActions.deletePhotosPermanently;
+  const result = await dialog.showMessageBox(parent, {
+    type: 'warning',
+    buttons: ['Cancel', 'Delete permanently'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: 'Confirm permanent deletion',
+    message: `Delete ${String(count)} ${noun} permanently?`,
+    detail: `${action.sideEffects} This cannot be undone.`,
+  });
+  return result.response === 1;
+}
+
 async function pickKeyExport(options: AppServicesOptions): Promise<string | null> {
   const fixture = options.harnessEnv('OVERLOOK_KEY_EXPORT_DESTINATION');
   if (fixture !== undefined && fixture !== '') return fixture;
@@ -208,7 +234,11 @@ export function registerAppServices(options: AppServicesOptions): void {
       recordDiagnostic: (occurrence) => getDiagnosticsService().record(occurrence),
     }),
   );
-  registerPurgeHandlers(() => ({ purge: (photoIds) => options.getPurge().purge(photoIds) }), options.getActivity);
+  registerPurgeHandlers(
+    () => ({ purge: (photoIds) => options.getPurge().purge(photoIds) }),
+    (photoIds, parent) => confirmManualPurge(options, photoIds, parent),
+    options.getActivity,
+  );
   registerOriginalPolicyHandlers(options.getLibrary, () => originalDeletion);
   registerLibraryRegistryHandlers(() => options.libraries);
   registerSettingsHandlers(() => getSettingsStore());

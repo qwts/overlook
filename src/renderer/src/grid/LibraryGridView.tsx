@@ -18,7 +18,6 @@ import { SelectionPill } from './SelectionPill';
 import { OriginalDeleteDialog } from './OriginalDeleteDialog';
 import { VirtualGrid, type VirtualGridItemKeyboard } from './VirtualGrid';
 import { beginPhotoDrag, endPhotoDrag } from './photo-drag-session';
-import { PHOTO_PURGE_AUTHORIZATION } from '../../../shared/destructive-actions.js';
 import { DEFAULT_TRASH_RETENTION, trashRetentionDays, trashRetentionLabel, type TrashRetention } from '../../../shared/library/trash.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import {
@@ -762,30 +761,30 @@ export function LibraryGridView({
           onConfirm={() => {
             const photoIds = [...purgeIds];
             setPurgeIds(null);
-            void window.overlook.library
-              .purge({ photoIds, authorization: PHOTO_PURGE_AUTHORIZATION })
-              .then(({ purged, protected: protectedCount, remoteFailures }) => {
-                dispatch({
-                  type: 'toast/shown',
-                  toast:
-                    protectedCount > 0
-                      ? {
-                          title: `Deleted ${formatCount(purged)} permanently · preserved ${formatCount(protectedCount)} protected ${protectedCount === 1 ? 'Original' : 'Originals'}`,
+            void window.overlook.library.purge({ photoIds }).then((outcome) => {
+              if (outcome.status === 'cancelled') return;
+              const { purged, protected: protectedCount, remoteFailures } = outcome.result;
+              dispatch({
+                type: 'toast/shown',
+                toast:
+                  protectedCount > 0
+                    ? {
+                        title: `Deleted ${formatCount(purged)} permanently · preserved ${formatCount(protectedCount)} protected ${protectedCount === 1 ? 'Original' : 'Originals'}`,
+                        tone: 'amber',
+                      }
+                    : remoteFailures > 0
+                      ? // Honest partial result: local copies are gone, some
+                        // remote copies are orphaned (audited for retry).
+                        {
+                          title: intl.formatMessage(messages.purgedWithCloudRetry, {
+                            purged: formatCount(purged),
+                            remoteFailures: formatCount(remoteFailures),
+                          }),
                           tone: 'amber',
                         }
-                      : remoteFailures > 0
-                        ? // Honest partial result: local copies are gone, some
-                          // remote copies are orphaned (audited for retry).
-                          {
-                            title: intl.formatMessage(messages.purgedWithCloudRetry, {
-                              purged: formatCount(purged),
-                              remoteFailures: formatCount(remoteFailures),
-                            }),
-                            tone: 'amber',
-                          }
-                        : { title: intl.formatMessage(messages.purged, { count: purged }), tone: 'neutral' },
-                });
+                      : { title: intl.formatMessage(messages.purged, { count: purged }), tone: 'neutral' },
               });
+            });
           }}
         />
       ) : null}
