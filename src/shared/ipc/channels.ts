@@ -845,6 +845,21 @@ export const channels = {
     z.object({}),
     z.object({ path: z.string().nullable() }),
   ),
+  /** Main-owned native-picker grant dedicated to relocation (#991). */
+  libraryRelocationPickDestination: defineChannel(
+    'library-relocation:pick-destination',
+    z.object({}),
+    z.union([
+      z.object({ path: z.null(), authorization: z.null() }),
+      z.object({ path: z.string().min(1), authorization: z.string().uuid() }),
+    ]),
+  ),
+  /** Explicitly ends the current wizard/batch destination grant. */
+  libraryRelocationRevokeDestination: defineChannel(
+    'library-relocation:revoke-destination',
+    z.object({ authorization: z.string().uuid() }),
+    z.object({ revoked: z.boolean() }),
+  ),
   // Library relocation (#483, ADR-0022 §1): journaled move with an atomic
   // registry path rewrite as the commit point. Designed refusals (the §5
   // preflight matrix, verification failure, cancellation) are RESPONSE
@@ -852,7 +867,7 @@ export const channels = {
   // moved-cleanup-pending is a success variant reporting both paths.
   libraryRelocationMove: defineChannel(
     'library-relocation:move',
-    z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
+    z.object({ id: libraryIdSchema, destPath: z.string().min(1), authorization: z.string().uuid() }),
     relocationMoveResponseSchema,
   ),
   /** Rename the library's folder in place (#686): parent fixed, new final
@@ -883,7 +898,7 @@ export const channels = {
    * warning — no lock, no journal, no bytes moved. */
   libraryRelocationPreflight: defineChannel(
     'library-relocation:preflight',
-    z.object({ id: libraryIdSchema, destPath: z.string().min(1) }),
+    z.object({ id: libraryIdSchema, destPath: z.string().min(1), authorization: z.string().uuid() }),
     z.discriminatedUnion('ok', [
       z.object({
         ok: z.literal(true),

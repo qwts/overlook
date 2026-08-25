@@ -806,7 +806,7 @@ void externalOpen.whenReady().then(async () => {
   installApplicationMenu(lock, custodyWorkActive);
   externalOpen.followAuthorization(lock);
   registerIpcHandlers(() => getSettingsStore().get().language);
-  registerRelocationHandlers(getRelocationRuntime);
+  registerRelocationHandlers(getRelocationRuntime, () => pickLibraryDirectory(harnessEnv('OVERLOOK_PICK_LIBRARY_DIR')));
   registerAppLockIpc({
     controller: lock,
     currentMaster: () => requireParts('master key').keyStore.masterKeyBytes(),
