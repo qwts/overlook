@@ -6,13 +6,17 @@ import { unwrapStoredKey, type KeyStore, type WrappedKeyRecord } from '../crypto
 import type { KeyResolver } from '../crypto/envelope.js';
 
 const MAGIC = Buffer.from('OVRB', 'ascii');
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION_V1 = 1;
+const FORMAT_VERSION_V2 = 2;
 const NONCE_LENGTH = 12;
 const TAG_LENGTH = 16;
 const HEADER_LENGTH = MAGIC.length + 1 + NONCE_LENGTH;
 const KEY_LENGTH = 32;
 const MAX_BOOTSTRAP_LENGTH = 1024 * 1024;
-const DERIVATION_INFO = Buffer.from('overlook cloud recovery bootstrap v1', 'utf8');
+const DERIVATION_INFO = {
+  [FORMAT_VERSION_V1]: Buffer.from('overlook cloud recovery bootstrap v1', 'utf8'),
+  [FORMAT_VERSION_V2]: Buffer.from('overlook cloud recovery bootstrap v2', 'utf8'),
+} as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const isoTimestampSchema = z.iso.datetime({ offset: true });
@@ -28,24 +32,35 @@ const nonceHighWaterSchema = z
   .regex(/^(0|[1-9][0-9]*)$/u)
   .refine((value) => BigInt(value) <= 1n << 64n, 'nonce high-water mark exceeds the 64-bit prefix space');
 
+const wrappedKeysSchema = z
+  .array(
+    z.strictObject({
+      id: z.number().int().positive(),
+      createdAt: isoTimestampSchema,
+      status: z.enum(['active', 'retired']),
+      wrappedKey: wrappedKeySchema,
+      nonceHighWater: nonceHighWaterSchema.optional(),
+    }),
+  )
+  .min(1)
+  .readonly();
+
 export const recoveryBootstrapSchema = z
-  .strictObject({
-    schema: z.literal(1),
-    libraryId: ulidSchema,
-    generatedAt: isoTimestampSchema,
-    keys: z
-      .array(
-        z.strictObject({
-          id: z.number().int().positive(),
-          createdAt: isoTimestampSchema,
-          status: z.enum(['active', 'retired']),
-          wrappedKey: wrappedKeySchema,
-          nonceHighWater: nonceHighWaterSchema.optional(),
-        }),
-      )
-      .min(1)
-      .readonly(),
-  })
+  .discriminatedUnion('schema', [
+    z.strictObject({
+      schema: z.literal(1),
+      libraryId: ulidSchema,
+      generatedAt: isoTimestampSchema,
+      keys: wrappedKeysSchema,
+    }),
+    z.strictObject({
+      schema: z.literal(2),
+      libraryId: ulidSchema,
+      generatedAt: isoTimestampSchema,
+      manifestGeneration: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      keys: wrappedKeysSchema,
+    }),
+  ])
   .superRefine((bootstrap, context) => {
     const ids = new Set<number>();
     let active = 0;
@@ -63,12 +78,22 @@ export const recoveryBootstrapSchema = z
     }
   });
 
-export interface RecoveryBootstrap {
+export interface RecoveryBootstrapV1 {
   readonly schema: 1;
   readonly libraryId: string;
   readonly generatedAt: string;
   readonly keys: readonly WrappedKeyRecord[];
 }
+
+export interface RecoveryBootstrapV2 {
+  readonly schema: 2;
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly manifestGeneration: number;
+  readonly keys: readonly WrappedKeyRecord[];
+}
+
+export type RecoveryBootstrap = RecoveryBootstrapV1 | RecoveryBootstrapV2;
 
 export class RecoveryBootstrapError extends Error {
   override readonly name = 'RecoveryBootstrapError';
@@ -80,8 +105,8 @@ function assertMasterKey(masterKey: Buffer): void {
   }
 }
 
-function deriveBootstrapKey(masterKey: Buffer): Buffer {
-  return Buffer.from(hkdfSync('sha256', masterKey, Buffer.alloc(0), DERIVATION_INFO, KEY_LENGTH));
+function deriveBootstrapKey(masterKey: Buffer, version: 1 | 2): Buffer {
+  return Buffer.from(hkdfSync('sha256', masterKey, Buffer.alloc(0), DERIVATION_INFO[version], KEY_LENGTH));
 }
 
 /** Encrypts the recovery bootstrap under a domain-separated key derived
@@ -89,9 +114,10 @@ function deriveBootstrapKey(masterKey: Buffer): Buffer {
 export function sealRecoveryBootstrap(input: RecoveryBootstrap, masterKey: Buffer): Buffer {
   assertMasterKey(masterKey);
   const bootstrap = recoveryBootstrapSchema.parse(input);
+  const version = bootstrap.schema;
   const nonce = randomBytes(NONCE_LENGTH);
-  const header = Buffer.concat([MAGIC, Buffer.from([FORMAT_VERSION]), nonce]);
-  const cipher = createCipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce, { authTagLength: TAG_LENGTH });
+  const header = Buffer.concat([MAGIC, Buffer.from([version]), nonce]);
+  const cipher = createCipheriv('aes-256-gcm', deriveBootstrapKey(masterKey, version), nonce, { authTagLength: TAG_LENGTH });
   cipher.setAAD(header);
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(bootstrap), 'utf8'), cipher.final()]);
   const sealed = Buffer.concat([header, ciphertext, cipher.getAuthTag()]);
@@ -107,14 +133,16 @@ export function sealKeyStoreRecoveryBootstrap(input: {
   readonly keyStore: Pick<KeyStore, 'exportWrappedKeys' | 'masterKeyBytes'>;
   readonly libraryId: string;
   readonly generatedAt: string;
+  readonly manifestGeneration: number;
 }): Buffer {
   const masterKey = input.keyStore.masterKeyBytes();
   try {
     return sealRecoveryBootstrap(
       {
-        schema: 1,
+        schema: 2,
         libraryId: input.libraryId,
         generatedAt: input.generatedAt,
+        manifestGeneration: input.manifestGeneration,
         keys: input.keyStore.exportWrappedKeys(),
       },
       masterKey,
@@ -122,6 +150,16 @@ export function sealKeyStoreRecoveryBootstrap(input: {
   } finally {
     masterKey.fill(0);
   }
+}
+
+/** Binds composition-root dependencies without copying the recovered master
+ * key until a publication is actually sealed. */
+export function createRecoveryBootstrapSealer(
+  keyStore: Pick<KeyStore, 'exportWrappedKeys' | 'masterKeyBytes'>,
+  libraryId: () => string,
+): (generatedAt: string, manifestGeneration: number) => Buffer {
+  return (generatedAt, manifestGeneration) =>
+    sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: libraryId(), generatedAt, manifestGeneration });
 }
 
 /** Opens and validates a bootstrap using only the recovered master key. */
@@ -134,14 +172,14 @@ export function openRecoveryBootstrap(sealed: Buffer, masterKey: Buffer): Recove
     throw new RecoveryBootstrapError('not an Overlook recovery bootstrap');
   }
   const version = sealed.readUInt8(MAGIC.length);
-  if (version !== FORMAT_VERSION) {
+  if (version !== FORMAT_VERSION_V1 && version !== FORMAT_VERSION_V2) {
     throw new RecoveryBootstrapError(`unsupported recovery-bootstrap version ${String(version)}`);
   }
   const header = sealed.subarray(0, HEADER_LENGTH);
   const nonce = sealed.subarray(MAGIC.length + 1, HEADER_LENGTH);
   const ciphertext = sealed.subarray(HEADER_LENGTH, sealed.length - TAG_LENGTH);
   const tag = sealed.subarray(sealed.length - TAG_LENGTH);
-  const decipher = createDecipheriv('aes-256-gcm', deriveBootstrapKey(masterKey), nonce, { authTagLength: TAG_LENGTH });
+  const decipher = createDecipheriv('aes-256-gcm', deriveBootstrapKey(masterKey, version), nonce, { authTagLength: TAG_LENGTH });
   decipher.setAAD(header);
   decipher.setAuthTag(tag);
   let plaintext: Buffer;
@@ -159,6 +197,9 @@ export function openRecoveryBootstrap(sealed: Buffer, masterKey: Buffer): Recove
   const parsed = recoveryBootstrapSchema.safeParse(input);
   if (!parsed.success) {
     throw new RecoveryBootstrapError(`invalid recovery bootstrap: ${z.prettifyError(parsed.error)}`);
+  }
+  if (parsed.data.schema !== version) {
+    throw new RecoveryBootstrapError('recovery-bootstrap framing and schema versions do not match');
   }
   return parsed.data;
 }

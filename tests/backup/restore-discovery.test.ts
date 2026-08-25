@@ -89,6 +89,27 @@ async function world(): Promise<{ provider: MockProvider; keyStore: KeyStore; ma
   return { provider, keyStore, masterKey };
 }
 
+async function putV2Bootstrap(
+  value: Awaited<ReturnType<typeof world>>,
+  manifestGeneration: number,
+  generatedAt = GENERATED_AT,
+): Promise<void> {
+  await put(
+    value.provider,
+    'recovery/bootstrap.ovrb',
+    sealRecoveryBootstrap(
+      {
+        schema: 2,
+        libraryId: LIBRARY_ID,
+        generatedAt,
+        manifestGeneration,
+        keys: value.keyStore.exportWrappedKeys(),
+      },
+      value.masterKey,
+    ),
+  );
+}
+
 describe('restore discovery (#288)', () => {
   test('newest corrupt manifest falls back to the retained valid generation', async () => {
     const w = await world();
@@ -125,6 +146,63 @@ describe('restore discovery (#288)', () => {
     assert.deepEqual(opened, ['recovery/bootstrap.ovrb', 'manifest/gen-2.ovlk']);
   });
 
+  test('an older v2 bootstrap replay fails before any manifest is decrypted (#996)', async () => {
+    const w = await world();
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(1), w.keyStore));
+    await putV2Bootstrap(w, 1);
+    const getStream = w.provider.getStream.bind(w.provider);
+    const opened: string[] = [];
+    w.provider.getStream = (path) => {
+      opened.push(path);
+      return getStream(path);
+    };
+
+    await assert.rejects(
+      discoverRestore(w.provider, w.masterKey),
+      (error: unknown) => error instanceof RestoreError && error.reason === 'corrupt' && /predates/u.test(error.message),
+    );
+    assert.deepEqual(opened, ['recovery/bootstrap.ovrb']);
+  });
+
+  test('a v2 bootstrap one generation ahead preserves the prior manifest after interruption (#996)', async () => {
+    const w = await world();
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+    await putV2Bootstrap(w, 2, '2025-01-01T00:00:00.000Z');
+
+    const found = await discoverRestore(w.provider, w.masterKey);
+    assert.equal(found.bootstrap.schema, 2);
+    assert.deepEqual(
+      found.candidates.map((candidate) => candidate.generation),
+      [1],
+    );
+  });
+
+  test('generation binding ignores rolled-back and identical wall-clock timestamps (#996)', async () => {
+    const w = await world();
+    const rolledBack = { ...manifest(1), generatedAt: '2025-01-01T00:00:00.000Z' };
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(rolledBack, w.keyStore));
+    await putV2Bootstrap(w, 2, GENERATED_AT);
+
+    const found = await discoverRestore(w.provider, w.masterKey);
+    assert.deepEqual(
+      found.candidates.map((candidate) => candidate.generation),
+      [2, 1],
+    );
+  });
+
+  test('a v2 bootstrap gap larger than the bootstrap-first window fails closed (#996)', async () => {
+    const w = await world();
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+    await putV2Bootstrap(w, 3);
+
+    await assert.rejects(
+      discoverRestore(w.provider, w.masterKey),
+      (error: unknown) => error instanceof RestoreError && error.reason === 'corrupt' && /not contiguous/u.test(error.message),
+    );
+  });
+
   test('a wrong recovery master fails before any manifest can be trusted', async () => {
     const w = await world();
     await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
@@ -132,6 +210,31 @@ describe('restore discovery (#288)', () => {
     await assert.rejects(
       discoverRestore(w.provider, randomBytes(32)),
       (error: unknown) => error instanceof RestoreError && error.reason === 'wrong-key',
+    );
+  });
+
+  test('a newest manifest encrypted after key rotation cannot fall back through a stale v1 bootstrap (#996)', async () => {
+    const w = await world();
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(1), w.keyStore));
+    const rotated = w.keyStore.rotate();
+    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(rotated.id), w.keyStore));
+
+    await assert.rejects(
+      discoverRestore(w.provider, w.masterKey),
+      (error: unknown) => error instanceof RestoreError && error.reason === 'wrong-key' && /key 2 is unavailable/u.test(error.message),
+    );
+  });
+
+  test('a missing key in a lower generation cannot override a newer valid candidate (#996)', async () => {
+    const w = await world();
+    await put(w.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest(1), w.keyStore));
+    const rotated = w.keyStore.rotate();
+    await put(w.provider, 'manifest/gen-1.ovlk', await sealManifest(manifest(rotated.id), w.keyStore));
+
+    const found = await discoverRestore(w.provider, w.masterKey);
+    assert.deepEqual(
+      found.candidates.map((candidate) => candidate.generation),
+      [2],
     );
   });
 

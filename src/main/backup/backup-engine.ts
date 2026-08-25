@@ -115,7 +115,7 @@ export interface BackupEngineDeps {
   /** Seals the manifest JSON (envelope, current key) → ciphertext bytes. */
   readonly sealManifest: (json: string) => Promise<Buffer>;
   /** Seals wrapped key records for fresh-machine recovery under the master. */
-  readonly sealRecoveryBootstrap: (generatedAt: string) => Buffer;
+  readonly sealRecoveryBootstrap: (generatedAt: string, manifestGeneration: number) => Buffer;
   readonly libraryId: () => string;
   /** One consistent DB snapshot: photos, metadata, albums, and membership. */
   readonly manifestSnapshot: () => BackupManifestSnapshot;
@@ -193,6 +193,22 @@ const BACKOFF_BASE_MS = 500;
 const TRANSIENT_FAILURE_BREAK = 10;
 /** Manifest generations retained remotely (ADR-0007). */
 const MANIFEST_KEEP = 2;
+const MANIFEST_GENERATION_PATH = /^manifest\/gen-(\d+)\.ovlk$/u;
+
+function nextManifestGeneration(entries: readonly { readonly path: string }[]): number {
+  let newest = 0;
+  for (const { path } of entries) {
+    const match = MANIFEST_GENERATION_PATH.exec(path);
+    if (match === null) continue;
+    const generation = Number(match[1]);
+    if (!Number.isSafeInteger(generation) || generation <= 0) {
+      throw new Error(`invalid manifest generation path ${path}`);
+    }
+    newest = Math.max(newest, generation);
+  }
+  if (newest >= Number.MAX_SAFE_INTEGER) throw new Error('manifest generation space is exhausted');
+  return newest + 1;
+}
 const EMPTY_INTEGRITY: BackupRunIntegrity = {
   checked: 0,
   repaired: 0,
@@ -802,19 +818,16 @@ export class BackupEngine {
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
     );
+    const existing = await this.deps.provider.list('manifest');
+    const generation = nextManifestGeneration(existing);
     const json = JSON.stringify(manifest);
     const sealed = await this.deps.sealManifest(json);
     // The bootstrap is a superset across rotations and lands first: a crash
     // can leave an old manifest with newer wrapped keys, never a manifest
     // whose envelope key cannot be resolved on a fresh machine.
-    const bootstrap = this.deps.sealRecoveryBootstrap(generatedAt);
+    const bootstrap = this.deps.sealRecoveryBootstrap(generatedAt, generation);
     await this.putBufferVerified('recovery/bootstrap.ovrb', bootstrap);
-    const existing = await this.deps.provider.list('manifest');
-    const generation = existing.reduce((max, entry) => {
-      const match = /gen-(\d+)\.ovlk$/u.exec(entry.path);
-      return match === null ? max : Math.max(max, Number(match[1]));
-    }, 0);
-    await this.putBufferVerified(`manifest/gen-${String(generation + 1)}.ovlk`, sealed);
+    await this.putBufferVerified(`manifest/gen-${String(generation)}.ovlk`, sealed);
     const all = await this.deps.provider.list('manifest');
     const sorted = [...all].sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true }));
     for (const stale of sorted.slice(0, Math.max(0, sorted.length - MANIFEST_KEEP))) {

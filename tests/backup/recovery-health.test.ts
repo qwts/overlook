@@ -40,7 +40,7 @@ async function recoveryWorld() {
   });
   await provider.put(
     'recovery/bootstrap.ovrb',
-    Readable.from([sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: LIBRARY_ID, generatedAt: GENERATED_AT })]),
+    Readable.from([sealKeyStoreRecoveryBootstrap({ keyStore, libraryId: LIBRARY_ID, generatedAt: GENERATED_AT, manifestGeneration: 1 })]),
   );
   await provider.put('manifest/gen-1.ovlk', Readable.from([await sealManifestJson(JSON.stringify(manifest), keyStore.currentKey())]));
   return { keyStore, provider };

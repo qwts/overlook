@@ -108,7 +108,7 @@ function highestManifestGeneration(remoteDir: string): number {
   return Math.max(...readdirSync(join(remoteDir, 'manifest')).map((name) => Number(/^gen-(\d+)\.ovlk$/u.exec(name)?.[1] ?? Number.NaN)));
 }
 
-test('fresh profile restores complete state; wrong password is isolated and cancellation resumes (#291)', async () => {
+test('fresh profile restores a generation-bound backup; wrong password is isolated and cancellation resumes (#291/#996)', async () => {
   test.setTimeout(60_000);
   const source = mkE2eTmpDir('overlook-e2e-restore-source-');
   const target = mkE2eTmpDir('overlook-e2e-restore-target-');

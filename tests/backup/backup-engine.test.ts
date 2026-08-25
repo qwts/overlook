@@ -34,7 +34,7 @@ const NO_INTEGRITY_FINDINGS = {
 // a full backup clears pendingCount, a killed/failed run resumes, and the
 // throttle / Wi-Fi / auto settings are respected (fault-injected).
 
-async function world(count: number, overrides?: { settings?: Partial<BackupSettings>; network?: NetworkKind }) {
+async function world(count: number, overrides?: { settings?: Partial<BackupSettings>; network?: NetworkKind; now?: () => number }) {
   const dataDir = mkdtempSync(join(tmpdir(), 'overlook-backup-'));
   const db = openLibraryDatabase({ path: join(dataDir, 'library.db'), dbKey: randomBytes(32) });
   run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-07-13T00:00:00.000Z')`);
@@ -76,6 +76,7 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
   const pendingCounts: number[] = [];
   const audits: string[] = [];
   const syncUpdates: { id: string; syncState: SyncStatus }[] = [];
+  const bootstrapGenerations: number[] = [];
   let clock = 0;
   const settings: BackupSettings = {
     throttlePercent: null,
@@ -89,13 +90,16 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     dirtyPhotos: () => repo.dirtyPhotos(),
     encryptedStream: (hash) => store.getEncryptedStream(hash),
     sealManifest: (json) => Promise.resolve(Buffer.from(json)),
-    sealRecoveryBootstrap: () => Buffer.from('recovery-bootstrap'),
+    sealRecoveryBootstrap: (_generatedAt, manifestGeneration) => {
+      bootstrapGenerations.push(manifestGeneration);
+      return Buffer.from(`recovery-bootstrap-${String(manifestGeneration)}`);
+    },
     libraryId: () => '01JZZZZZZZZZZZZZZZZZZZZZZZ',
     manifestSnapshot: () => repo.manifestSnapshot(),
     settings: () => settings,
     network: () => overrides?.network ?? 'wifi',
     events: { progress: (done, total) => progress.push([done, total]) },
-    now: () => (clock += 40),
+    now: overrides?.now ?? (() => (clock += 40)),
     sleep: (ms) => {
       sleeps.push(ms);
       return Promise.resolve();
@@ -124,6 +128,7 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     pendingCounts,
     audits,
     syncUpdates,
+    bootstrapGenerations,
     engine: new BackupEngine(deps),
   };
 }
@@ -173,6 +178,7 @@ describe('backup engine (#105)', () => {
     assert.equal(manifest.schema, 6);
     assert.equal(manifest.photos.length, 3);
     assert.equal((await w.provider.list('recovery')).length, 1, 'the fresh-machine key bootstrap landed first');
+    assert.deepEqual(w.bootstrapGenerations, [1]);
     // Aggregate progress is ordered 0..3 over the batch.
     assert.deepEqual(w.progress[0], [0, 3]);
     assert.deepEqual(w.progress.at(-1), [3, 3]);
@@ -187,6 +193,36 @@ describe('backup engine (#105)', () => {
     await w.engine.run();
     const manifests = (await w.provider.list('manifest')).map((entry) => entry.path).sort();
     assert.deepEqual(manifests, ['manifest/gen-2.ovlk', 'manifest/gen-3.ovlk']);
+    assert.deepEqual(w.bootstrapGenerations, [1, 2, 3]);
+  });
+
+  test('manifest generation—not wall time—binds bootstrap-first interruption and retry (#996)', async () => {
+    const w = await world(1, { now: () => 100 });
+    await w.engine.run();
+    w.engine.oweManifest();
+    const put = w.deps.provider.put.bind(w.deps.provider);
+    w.deps.provider.put = (path, bytes) =>
+      path === 'manifest/gen-2.ovlk' ? Promise.reject(new ProviderError('interrupted manifest publish', 'transient')) : put(path, bytes);
+
+    assert.equal((await w.engine.run()).manifestUploaded, false);
+    assert.deepEqual(w.bootstrapGenerations, [1, 2]);
+    w.deps.provider.put = put;
+    assert.equal((await w.engine.run()).manifestUploaded, true);
+    assert.deepEqual(w.bootstrapGenerations, [1, 2, 2], 'the retry reuses N because no manifest N was published');
+    assert.deepEqual(
+      (await w.provider.list('manifest')).map((entry) => entry.path),
+      ['manifest/gen-1.ovlk', 'manifest/gen-2.ovlk'],
+    );
+  });
+
+  test('unsafe remote generation fails before refreshing the recovery bootstrap (#996)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    await w.provider.put(`manifest/gen-${String(Number.MAX_SAFE_INTEGER + 1)}.ovlk`, Readable.from([Buffer.from('untrusted')]));
+    w.engine.oweManifest();
+
+    assert.equal((await w.engine.run()).manifestUploaded, false);
+    assert.deepEqual(w.bootstrapGenerations, [1]);
   });
 
   test('EXIT CRITERIA: transient failures retry with backoff, then error; the next run RESUMES', async () => {

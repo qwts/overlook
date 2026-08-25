@@ -104,7 +104,10 @@ export async function exerciseDisasterRecoveryContract(
     await put(
       scoped,
       bootstrapPath,
-      sealRecoveryBootstrap({ schema: 1, libraryId, generatedAt: GENERATED_AT, keys: keyStore.exportWrappedKeys() }, masterKey),
+      sealRecoveryBootstrap(
+        { schema: 2, libraryId, generatedAt: GENERATED_AT, manifestGeneration: 1, keys: keyStore.exportWrappedKeys() },
+        masterKey,
+      ),
     );
     remotePaths.push(bootstrapPath);
     const manifestPath = 'manifest/gen-1.ovlk';

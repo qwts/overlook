@@ -89,9 +89,27 @@ describe('cloud recovery bootstrap (#289)', () => {
       },
       libraryId: bootstrap.libraryId,
       generatedAt: bootstrap.generatedAt,
+      manifestGeneration: 7,
     });
     assert.ok(temporary.every((byte) => byte === 0));
-    assert.equal(openRecoveryBootstrap(sealed, masterKey).libraryId, bootstrap.libraryId);
+    assert.deepEqual(openRecoveryBootstrap(sealed, masterKey), {
+      schema: 2,
+      libraryId: bootstrap.libraryId,
+      generatedAt: bootstrap.generatedAt,
+      manifestGeneration: 7,
+      keys: keyStore.exportWrappedKeys(),
+    });
+  });
+
+  test('OVRB v1 stays readable while new schema 2 authenticates the manifest generation', () => {
+    const { bootstrap, masterKey } = world();
+    const legacy = sealRecoveryBootstrap(bootstrap, masterKey);
+    const current = sealRecoveryBootstrap({ ...bootstrap, schema: 2, manifestGeneration: 42 }, masterKey);
+
+    assert.equal(legacy.readUInt8(4), 1);
+    assert.equal(current.readUInt8(4), 2);
+    assert.equal(openRecoveryBootstrap(legacy, masterKey).schema, 1);
+    assert.deepEqual(openRecoveryBootstrap(current, masterKey), { ...bootstrap, schema: 2, manifestGeneration: 42 });
   });
 
   test('invalid key sets fail before upload', () => {
@@ -111,6 +129,9 @@ describe('cloud recovery bootstrap (#289)', () => {
 
     const exhausted = { ...bootstrap, keys: [{ ...first, nonceHighWater: ((1n << 64n) + 1n).toString() }, second] };
     assert.throws(() => sealRecoveryBootstrap(exhausted, masterKey), /nonce high-water mark exceeds/u);
+
+    const unsafeGeneration = { ...bootstrap, schema: 2 as const, manifestGeneration: Number.MAX_SAFE_INTEGER + 1 };
+    assert.throws(() => sealRecoveryBootstrap(unsafeGeneration, masterKey));
   });
 
   test('invalid outer framing and master-key lengths fail closed', () => {
