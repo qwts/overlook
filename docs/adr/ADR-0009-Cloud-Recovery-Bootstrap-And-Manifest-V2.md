@@ -12,8 +12,10 @@ offload, or recovery-file formats.
 **Amended and accepted 2026-08-24 by
 [#996](https://github.com/qwts/overlook/issues/996):** recovery-bootstrap
 freshness is bound to the monotonic manifest path generation, never inferred
-from `generatedAt`. OVRB v2, its bootstrap-first interruption relation, and the
-conservative OVRB v1 restore migration are specified below.
+from `generatedAt`. The accepted security clarification also binds the exact
+current and previous manifest ciphertext digests. OVRB v2, its bootstrap-first
+interruption relation, and the conservative restore rotations are specified
+below.
 
 ## Context
 
@@ -109,28 +111,35 @@ already encoded by `manifest/gen-N.ovlk`.
 framing with byte `0x02`, and its domain-separated encryption key is
 `HKDF-SHA256(master, info="overlook cloud recovery bootstrap v2")`. Its strict
 authenticated JSON payload uses schema 2 and adds
-`manifestGeneration: N` to the version-1 library ID, timestamp, and wrapped-key
-set. An outer version and payload schema must match. Readers continue to
-authenticate OVRB v1 with its original framing, KDF info, and strict schema;
-writers never create a new v1 bootstrap.
+`manifestGeneration: N`, the SHA-256 digest of the exact sealed gen-N manifest,
+and a nullable `{ generation, sha256 }` binding for the immediately preceding
+manifest to the version-1 library ID, timestamp, and wrapped-key set. The
+previous binding is null for generation 1 and otherwise must name `N - 1`. An
+outer version and payload schema must match. Readers continue to authenticate
+OVRB v1 with its original framing, KDF info, and strict schema; writers never
+create a new v1 bootstrap.
 
 **`N` is decided before either publication object is sealed or uploaded.**
 After the ordinary completeness preflight succeeds, the engine lists the
 remote manifest namespace, validates its generation numbers, and chooses one
 greater than the highest advertised generation. It then:
 
-1. snapshots current wrapped keys and nonce high-water state into OVRB v2
-   bound to `N`, uploads it to `recovery/bootstrap.ovrb`, and checksum-verifies
-   the replacement;
-2. seals, uploads, and checksum-verifies the manifest at exactly
+1. verifies and records the exact digest of the previous highest manifest, if
+   one exists;
+2. seals the gen-N manifest and computes its ciphertext digest;
+3. snapshots the wrapped keys and nonce high-water state after that seal into
+   OVRB v2, bound to N, the new digest, and the previous binding;
+4. uploads and checksum-verifies the bootstrap replacement first, then uploads
+   and checksum-verifies the already-sealed manifest at exactly
    `manifest/gen-N.ovlk`;
-3. prunes retained generations only after both verified writes.
+5. prunes retained generations only after both verified writes.
 
 Computing `N` after a bootstrap write is forbidden: the bootstrap and manifest
 would have no authenticated publication relation. Exhausted, malformed, or
 non-safe generation numbers fail the publication before the bootstrap write.
 The existing single-flight writer and provider verification contracts remain
-in force.
+in force. Sealing the manifest before snapshotting key state is required: the
+bootstrap high-water marks must cover the manifest envelope it authenticates.
 
 **Discovery validates the advertised generation relation before decrypting a
 manifest.** It authenticates the bootstrap, lists and numerically orders all
@@ -141,8 +150,8 @@ are valid:
 - `bootstrap.manifestGeneration === newest`: the publication completed; or
 - `bootstrap.manifestGeneration === newest + 1`: the bootstrap-first write for
   the next publication completed but its manifest did not. The prior newest
-  manifest remains recoverable because the bootstrap key set and nonce state
-  are a newer superset.
+  manifest remains recoverable only when its ciphertext digest matches the
+  authenticated previous-manifest binding.
 
 A bootstrap generation below `newest` is an older replay and fails closed. A
 gap greater than one means remote history is missing or mismatched and also
@@ -150,13 +159,22 @@ fails closed. Neither case may decrypt a candidate, fall back to a retained
 generation, write staging state, or activate a local library. Clock rollback
 and equal timestamps have no effect on this comparison.
 
-Within a valid relation, retained-generation fallback is unchanged for corrupt
-or unsupported manifests: candidates are tried newest first and a valid newer
-candidate always wins. If a candidate encountered before any valid newer
-candidate names an envelope key absent from the authenticated bootstrap,
-discovery fails `wrong-key`; it does not silently substitute older state. An
-unusable lower generation discovered after a valid newer candidate is skipped
-and cannot override that candidate.
+Within a valid relation, OVRB v2 considers only the exact current and previous
+ciphertext digests authenticated by the bootstrap. Digest comparison happens
+before manifest decryption. This prevents an older same-generation bootstrap
+from being paired with a later retry's manifest and prevents a manifest from
+being copied under a generation name it was never bound to. Candidates are
+tried newest first and a valid newer candidate always wins. If the current
+manifest is unusable but the bound previous manifest is valid, retained
+fallback remains available; restore rotates to a fresh active data key exactly
+once in staging before any new envelope write because the rejected ciphertext
+leaves the recovered high-water state conservatively uncertain. The same
+rotation applies to the legitimate bootstrap-one-ahead interruption fallback.
+If a candidate encountered before any valid newer candidate names an envelope
+key absent from the authenticated bootstrap, discovery fails `wrong-key`; it
+does not silently substitute older state. An unusable lower generation
+discovered after a valid newer candidate is skipped and cannot override that
+candidate.
 
 **OVRB v1 is readable but explicitly freshness-unproven.** Rejecting every
 existing v1 backup would destroy the disaster-recovery path, while comparing
