@@ -70,7 +70,8 @@ test('real Windows pipe enforces the current-user DACL, one owner, and bounded f
   });
 
   const ready = await waitForMessage(worker, (message) => message?.type === 'ready');
-  assert.equal(ready.securityDescriptor, sddl);
+  const canonicalTrustee = sid.endsWith('-500') ? 'LA' : sid;
+  assert.equal(ready.securityDescriptor, `D:P(A;;FA;;;${canonicalTrustee})`);
   assert.throws(() => new binding.PipeServer(endpoint, sddl, MAX_FRAME_BYTES), /CreateNamedPipeW/u);
 
   const payload = Buffer.from(JSON.stringify({ schemaVersion: 1, state: 'locked' }), 'utf8');
