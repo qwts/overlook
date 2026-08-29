@@ -15,34 +15,34 @@ components; their full license texts ship inside the Electron distribution at
 | ------- | ------- | ------- |
 | `@anthropic-ai/sdk` | 0.120.0 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
-| `@emnapi/runtime` | 1.11.2 | MIT |
+| `@emnapi/runtime` | 1.11.3 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
-| `@img/sharp-darwin-arm64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-darwin-x64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-freebsd-wasm32` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-libvips-darwin-arm64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-darwin-x64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-arm` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-arm64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-ppc64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-riscv64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-s390x` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linux-x64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linuxmusl-arm64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-libvips-linuxmusl-x64` | 1.3.2 | LGPL-3.0-or-later |
-| `@img/sharp-linux-arm` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linux-arm64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linux-ppc64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linux-riscv64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linux-s390x` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linux-x64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linuxmusl-arm64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-linuxmusl-x64` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-wasm32` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later AND MIT |
-| `@img/sharp-webcontainers-wasm32` | 0.35.3 | Apache-2.0 |
-| `@img/sharp-win32-arm64` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
-| `@img/sharp-win32-ia32` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
-| `@img/sharp-win32-x64` | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
+| `@img/sharp-darwin-arm64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-darwin-x64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-freebsd-wasm32` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-libvips-darwin-arm64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-darwin-x64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-arm` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-arm64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-ppc64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-riscv64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-s390x` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linux-x64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linuxmusl-arm64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-libvips-linuxmusl-x64` | 1.3.3 | LGPL-3.0-or-later |
+| `@img/sharp-linux-arm` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linux-arm64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linux-ppc64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linux-riscv64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linux-s390x` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linux-x64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linuxmusl-arm64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-linuxmusl-x64` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-wasm32` | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later AND MIT |
+| `@img/sharp-webcontainers-wasm32` | 0.35.4 | Apache-2.0 |
+| `@img/sharp-win32-arm64` | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| `@img/sharp-win32-ia32` | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| `@img/sharp-win32-x64` | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
 | `@stablelib/base64` | 1.0.1 | MIT |
 | `adm-zip` | 0.6.0 | MIT |
 | `better-sqlite3-multiple-ciphers` | 13.0.3 | MIT |
@@ -66,12 +66,12 @@ components; their full license texts ship inside the Electron distribution at
 | `mpegts.js` | 1.8.2 | Apache-2.0 |
 | `node-addon-api` | 8.9.0 | MIT |
 | `object-keys` | 1.1.1 | MIT |
-| `onnxruntime-common` | 1.27.0 | MIT |
-| `onnxruntime-node` | 1.27.0 | MIT |
+| `onnxruntime-common` | 1.29.0 | MIT |
+| `onnxruntime-node` | 1.29.0 | MIT |
 | `openai` | 7.5.0 | Apache-2.0 |
 | `semver` | 7.8.5 | ISC |
 | `serialize-error` | 8.1.0 | MIT |
-| `sharp` | 0.35.3 | Apache-2.0 |
+| `sharp` | 0.35.4 | Apache-2.0 |
 | `sqlite-vec` | 0.1.9 | MIT OR Apache |
 | `sqlite-vec-darwin-arm64` | 0.1.9 | MIT OR Apache |
 | `sqlite-vec-darwin-x64` | 0.1.9 | MIT OR Apache |
@@ -134,7 +134,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-## @emnapi/runtime 1.11.2
+## @emnapi/runtime 1.11.3
 
 License: MIT
 
@@ -233,7 +233,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## @img/sharp-darwin-arm64 0.35.3
+## @img/sharp-darwin-arm64 0.35.4
 
 License: Apache-2.0
 
@@ -241,7 +241,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-darwin-x64 0.35.3
+## @img/sharp-darwin-x64 0.35.4
 
 License: Apache-2.0
 
@@ -249,7 +249,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-freebsd-wasm32 0.35.3
+## @img/sharp-freebsd-wasm32 0.35.4
 
 License: Apache-2.0
 
@@ -257,7 +257,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-darwin-arm64 1.3.2
+## @img/sharp-libvips-darwin-arm64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -265,7 +265,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-darwin-x64 1.3.2
+## @img/sharp-libvips-darwin-x64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -273,7 +273,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-arm 1.3.2
+## @img/sharp-libvips-linux-arm 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -281,7 +281,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-arm64 1.3.2
+## @img/sharp-libvips-linux-arm64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -289,7 +289,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-ppc64 1.3.2
+## @img/sharp-libvips-linux-ppc64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -297,7 +297,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-riscv64 1.3.2
+## @img/sharp-libvips-linux-riscv64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -305,7 +305,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-s390x 1.3.2
+## @img/sharp-libvips-linux-s390x 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -313,7 +313,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linux-x64 1.3.2
+## @img/sharp-libvips-linux-x64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -321,7 +321,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linuxmusl-arm64 1.3.2
+## @img/sharp-libvips-linuxmusl-arm64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -329,7 +329,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-libvips-linuxmusl-x64 1.3.2
+## @img/sharp-libvips-linuxmusl-x64 1.3.3
 
 License: LGPL-3.0-or-later
 
@@ -337,7 +337,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-arm 0.35.3
+## @img/sharp-linux-arm 0.35.4
 
 License: Apache-2.0
 
@@ -345,7 +345,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-arm64 0.35.3
+## @img/sharp-linux-arm64 0.35.4
 
 License: Apache-2.0
 
@@ -353,7 +353,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-ppc64 0.35.3
+## @img/sharp-linux-ppc64 0.35.4
 
 License: Apache-2.0
 
@@ -361,7 +361,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-riscv64 0.35.3
+## @img/sharp-linux-riscv64 0.35.4
 
 License: Apache-2.0
 
@@ -369,7 +369,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-s390x 0.35.3
+## @img/sharp-linux-s390x 0.35.4
 
 License: Apache-2.0
 
@@ -377,7 +377,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linux-x64 0.35.3
+## @img/sharp-linux-x64 0.35.4
 
 License: Apache-2.0
 
@@ -385,7 +385,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linuxmusl-arm64 0.35.3
+## @img/sharp-linuxmusl-arm64 0.35.4
 
 License: Apache-2.0
 
@@ -393,7 +393,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-linuxmusl-x64 0.35.3
+## @img/sharp-linuxmusl-x64 0.35.4
 
 License: Apache-2.0
 
@@ -401,7 +401,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-wasm32 0.35.3
+## @img/sharp-wasm32 0.35.4
 
 License: Apache-2.0 AND LGPL-3.0-or-later AND MIT
 
@@ -409,7 +409,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-webcontainers-wasm32 0.35.3
+## @img/sharp-webcontainers-wasm32 0.35.4
 
 License: Apache-2.0
 
@@ -417,7 +417,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-win32-arm64 0.35.3
+## @img/sharp-win32-arm64 0.35.4
 
 License: Apache-2.0 AND LGPL-3.0-or-later
 
@@ -425,7 +425,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-win32-ia32 0.35.3
+## @img/sharp-win32-ia32 0.35.4
 
 License: Apache-2.0 AND LGPL-3.0-or-later
 
@@ -433,7 +433,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## @img/sharp-win32-x64 0.35.3
+## @img/sharp-win32-x64 0.35.4
 
 License: Apache-2.0 AND LGPL-3.0-or-later
 
@@ -1461,7 +1461,7 @@ THE SOFTWARE.
 
 ---
 
-## onnxruntime-common 1.27.0
+## onnxruntime-common 1.29.0
 
 License: MIT
 
@@ -1469,7 +1469,7 @@ _No license text file was found in the published package._
 
 ---
 
-## onnxruntime-node 1.27.0
+## onnxruntime-node 1.29.0
 
 License: MIT
 
@@ -1729,7 +1729,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## sharp 0.35.3
+## sharp 0.35.4
 
 License: Apache-2.0
 
