@@ -285,7 +285,7 @@ describe('production live local bootstrap (#544)', () => {
     });
     assert.equal(await bridge.start(), true);
     assert.match(endpoint, /^\\\\\.\\pipe\\com\.qwts\.overlook\.interop-[a-f0-9]{24}$/u);
-    assert.equal(sddl, `D:P(A;;GA;;;${sid})`);
+    assert.equal(sddl, `D:P(A;;FA;;;${sid})`);
     assert.deepEqual(
       await requestLiveLocalBootstrap(nativeBootstrapRequest(), {
         platform: 'win32',

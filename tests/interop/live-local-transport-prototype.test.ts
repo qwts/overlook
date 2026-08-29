@@ -425,7 +425,7 @@ describe('ADR-0029 user-scoped control seams (#543)', () => {
     const pipe = windowsNamedPipeForUser(sid);
     assert.match(pipe.path, /^\\\\\.\\pipe\\com\.qwts\.overlook\.interop-[a-f0-9]{24}$/u);
     assert.equal(pipe.path.includes(sid), false);
-    assert.equal(pipe.sddl, `D:P(A;;GA;;;${sid})`);
+    assert.equal(pipe.sddl, `D:P(A;;FA;;;${sid})`);
     assert.throws(() => windowsNamedPipeForUser('Everyone'));
 
     const target = await mkdtemp('/tmp/ovl-live-local-target-');

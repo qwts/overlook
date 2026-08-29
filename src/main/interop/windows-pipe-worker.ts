@@ -43,7 +43,7 @@ function validWorkerData(value: unknown): value is PipeWorkerData {
     typeof data.endpoint === 'string' &&
     data.endpoint.startsWith('\\\\.\\pipe\\com.qwts.overlook.interop-') &&
     typeof data.sddl === 'string' &&
-    /^D:P\(A;;GA;;;S-1-(?:\d+-){1,14}\d+\)$/u.test(data.sddl) &&
+    /^D:P\(A;;FA;;;S-1-(?:\d+-){1,14}\d+\)$/u.test(data.sddl) &&
     typeof data.maxFrameBytes === 'number' &&
     Number.isSafeInteger(data.maxFrameBytes) &&
     data.maxFrameBytes > 0 &&

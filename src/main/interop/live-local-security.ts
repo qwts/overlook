@@ -332,7 +332,7 @@ export function windowsNamedPipeForUser(userSid: string): WindowsNamedPipeSecuri
   return {
     path: `\\\\.\\pipe\\com.qwts.overlook.interop-${suffix}`,
     // Protected DACL: only the current user SID receives generic-all.
-    sddl: `D:P(A;;GA;;;${subject})`,
+    sddl: `D:P(A;;FA;;;${subject})`,
   };
 }
 

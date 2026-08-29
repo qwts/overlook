@@ -59,7 +59,7 @@ test('real Windows pipe enforces the current-user DACL, one owner, and bounded f
   const sid = binding.currentUserSid();
   assert.match(sid, /^S-1-(?:\d+-){1,14}\d+$/u);
   const endpoint = `\\\\.\\pipe\\com.qwts.overlook.interop-test-${process.pid}-${randomUUID()}`;
-  const sddl = `D:P(A;;GA;;;${sid})`;
+  const sddl = `D:P(A;;FA;;;${sid})`;
   const worker = new Worker(join(__dirname, 'test-worker.cjs'), {
     workerData: { endpoint, sddl, maxFrameBytes: MAX_FRAME_BYTES },
   });
