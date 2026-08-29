@@ -93,7 +93,7 @@ async function requestWindowsLiveLocalControl(endpoint: string, serverSid: strin
         if (message.type === 'response' && message.payload instanceof Uint8Array) resolve(Buffer.from(message.payload));
         else reject(requestError(message));
       });
-      worker.once('error', (error) => {
+      worker.once('error', (error: unknown) => {
         settled = true;
         reject(error instanceof Error ? error : new Error(String(error)));
       });

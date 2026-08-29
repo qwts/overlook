@@ -34,6 +34,10 @@ function validWorkerData(value: unknown): value is PipeClientWorkerData {
   );
 }
 
+function hasCode(value: object): value is { readonly code: unknown } {
+  return 'code' in value;
+}
+
 if (parentPort === null || !validWorkerData(workerData)) throw new Error('Invalid Windows named-pipe client configuration.');
 
 const nativeRequire = createRequire(import.meta.url);
@@ -49,10 +53,10 @@ try {
   );
   parentPort.postMessage({ type: 'response', payload: response });
 } catch (error) {
-  const failure = error as { readonly code?: unknown; readonly message?: unknown } | null;
+  const code = error instanceof Error && hasCode(error) && typeof error.code === 'string' ? error.code : 'native-error';
   parentPort.postMessage({
     type: 'error',
-    code: typeof failure?.code === 'string' ? failure.code : 'native-error',
-    message: typeof failure?.message === 'string' ? failure.message : 'Windows named-pipe request failed.',
+    code,
+    message: error instanceof Error ? error.message : 'Windows named-pipe request failed.',
   });
 }
