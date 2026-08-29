@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
@@ -21,7 +21,13 @@ import type { PCloudAuthRecord } from '../../src/main/backup/pcloud/token-store.
 import { BridgeICloudNativeAuthority } from '../../src/main/interop/icloud-native-authority.js';
 import { ICloudNativeHost, nativeHostManifest } from '../../src/main/interop/icloud-native-host.js';
 import { runICloudNativeHost } from '../../src/main/interop/icloud-native-runtime.js';
-import { nativeHostInvocation, registerICloudNativeHost } from '../../src/main/interop/icloud-native-registration.js';
+import {
+  NATIVE_HOST_UNREGISTER_ARGUMENT,
+  nativeHostInvocation,
+  nativeHostUnregisterRequested,
+  registerICloudNativeHost,
+  unregisterICloudNativeHost,
+} from '../../src/main/interop/icloud-native-registration.js';
 import { LiveLocalBridge } from '../../src/main/interop/live-local-bridge.js';
 import { encodeNativeMessage, readNativeMessage, runNativeMessage } from '../../src/main/interop/native-messaging.js';
 import {
@@ -357,13 +363,15 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     };
     const installed = await registerICloudNativeHost(options);
     assert.equal(installed.length, 4);
-    const manifest = JSON.parse(await readFile(installed[0] as string, 'utf8')) as Record<string, unknown>;
+    const firstManifest = installed[0];
+    assert.ok(firstManifest !== undefined);
+    const manifest = JSON.parse(await readFile(firstManifest, 'utf8')) as Record<string, unknown>;
     assert.equal(manifest['name'], OVERLOOK_ICLOUD_NATIVE_HOST);
     assert.equal(manifest['path'], executablePath);
     assert.deepEqual(manifest['allowed_origins'], [`chrome-extension://${RELEASED_EXTENSION_ID}/`]);
-    await writeFile(installed[0] as string, '{}');
+    await writeFile(firstManifest, '{}');
     assert.deepEqual(await registerICloudNativeHost(options), installed);
-    assert.match(await readFile(installed[0] as string, 'utf8'), /allowed_origins/u);
+    assert.match(await readFile(firstManifest, 'utf8'), /allowed_origins/u);
     assert.deepEqual(await registerICloudNativeHost({ ...options, platform: 'linux' }), []);
     assert.deepEqual(await registerICloudNativeHost({ ...options, packaged: false }), []);
     assert.deepEqual(await registerICloudNativeHost({ ...options, extensionId: null }), []);
@@ -381,6 +389,38 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     });
     assert.equal(installed.length, 3);
     assert.ok(installed.every((path) => !path.includes('/Google/Chrome/')));
+  });
+
+  test('unregisters only manifests owned by the exact packaged executable', async () => {
+    const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-'));
+    const executablePath = '/Applications/Overlook.app/Contents/MacOS/Overlook';
+    const options = {
+      platform: 'darwin' as const,
+      packaged: true,
+      applicationSupportDirectory: appSupport,
+      executablePath,
+      extensionId: RELEASED_EXTENSION_ID,
+    };
+    const installed = await registerICloudNativeHost(options);
+    const foreignPath = installed[0];
+    assert.ok(foreignPath !== undefined);
+    await writeFile(
+      foreignPath,
+      JSON.stringify(nativeHostManifest('/Applications/Newer.app/Contents/MacOS/Overlook', RELEASED_EXTENSION_ID)),
+    );
+
+    assert.deepEqual(await unregisterICloudNativeHost(options), installed.slice(1));
+    await access(foreignPath);
+    await Promise.all(installed.slice(1).map((path) => assert.rejects(access(path))));
+    assert.deepEqual(await unregisterICloudNativeHost({ ...options, platform: 'linux' }), []);
+    assert.deepEqual(await unregisterICloudNativeHost({ ...options, packaged: false }), []);
+    assert.deepEqual(await unregisterICloudNativeHost({ ...options, extensionId: null }), []);
+  });
+
+  test('recognizes only the explicit native-host unregister lifecycle', () => {
+    assert.equal(nativeHostUnregisterRequested(['Overlook', NATIVE_HOST_UNREGISTER_ARGUMENT]), true);
+    assert.equal(nativeHostUnregisterRequested(['Overlook', '--unregister-native-host=yes']), false);
+    assert.equal(nativeHostUnregisterRequested(['Overlook']), false);
   });
 
   test('gates iCloud authority on the process origin before native access', async () => {

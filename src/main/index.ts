@@ -93,11 +93,11 @@ const productionInterop = createProductionInteropAppRuntime({
   imports: () => getImportService() && importRuntime,
   imported: () => scheduleAutoBackup(),
 });
-const externalOpen = productionInterop.nativeHostRequested
+const externalOpen = productionInterop.headlessRequested
   ? createHeadlessExternalOpenRuntime()
   : createExternalOpenRuntime({ isolatedHarnessProfile: userDataOverride !== undefined && userDataOverride !== '' });
 
-if (!productionInterop.nativeHostRequested) {
+if (!productionInterop.headlessRequested) {
   registerSingleInstance();
   registerEarlyRuntime();
 }
@@ -783,7 +783,7 @@ function getRestoreRuntime(): RestoreRuntime {
 }
 
 void externalOpen.whenReady().then(async () => {
-  if (await productionInterop.runNativeHost()) return;
+  if (await productionInterop.runHeadless()) return;
   if (await exitForReleaseSmokeIfRequested(app)) return;
   await productionInterop.startDesktop();
   // Settle relocation journals FIRST (ADR-0022 §2): recovery may re-point the
@@ -879,7 +879,7 @@ void externalOpen.whenReady().then(async () => {
   externalOpen.finishBootstrap();
 });
 
-if (!productionInterop.nativeHostRequested) {
+if (!productionInterop.headlessRequested) {
   registerWindowAllClosedQuit();
   registerQuitTeardown({
     isLibraryOpen: () => libraryService !== undefined,

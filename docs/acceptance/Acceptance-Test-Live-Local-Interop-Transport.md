@@ -77,6 +77,12 @@ tests prove:
 - MV3 suspension/restart retries through a fresh bootstrap without persisting
   capability authority.
 
+The packaged executable exposes a headless `--unregister-native-host` cleanup
+seam for disable and uninstall flows. It removes only manifests whose canonical
+host name, exact executable path, and released extension origin match that app
+copy. Run it before removing the app bundle; a stale older app copy cannot
+unregister a newer installation.
+
 [#1066](https://github.com/qwts/overlook/issues/1066) owns the Windows-native
 pipe implementation and signed-installer evidence. Node's named-pipe API does
 not expose the explicit current-user SDDL required by ADR-0029, so Windows
