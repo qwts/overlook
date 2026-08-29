@@ -6,6 +6,7 @@ import {
   LIVE_LOCAL_CAPABILITY_TTL_MS,
   LIVE_LOCAL_CONTROL_FRAME_BYTES,
   LiveLocalCapabilityBroker,
+  LiveLocalError,
   type LiveLocalBootstrapResult,
   type LiveLocalRedemption,
 } from './live-local-security.js';
@@ -143,11 +144,15 @@ export class LiveLocalSessionListener {
   private readonly expiryTimers = new Map<string, NodeJS.Timeout>();
   private starting: Promise<void> | null = null;
   private stopping: Promise<void> | null = null;
+  private lifecycleGeneration = 0;
 
   constructor(private readonly options: LiveLocalSessionListenerOptions) {}
 
   async issue(value: unknown): Promise<LiveLocalBootstrapResult> {
+    const generation = this.lifecycleGeneration;
     await this.ensureListening();
+    if (generation !== this.lifecycleGeneration)
+      throw new LiveLocalError('Live local capability authority stopped during bootstrap.', 'unsupported');
     const broker = this.broker;
     if (broker === null) throw new Error('Live local capability broker did not start.');
     const result = broker.issue('running', value);
@@ -260,6 +265,17 @@ export class LiveLocalSessionListener {
 
   private async stop(): Promise<void> {
     if (this.stopping !== null) return this.stopping;
+    this.lifecycleGeneration += 1;
+    this.stopping = this.stopCurrentGeneration();
+    try {
+      await this.stopping;
+    } finally {
+      this.stopping = null;
+    }
+  }
+
+  private async stopCurrentGeneration(): Promise<void> {
+    await this.starting?.catch(() => undefined);
     const server = this.server;
     if (server === null) return;
     this.server = null;
@@ -270,11 +286,6 @@ export class LiveLocalSessionListener {
     for (const socket of this.sockets) socket.destroy();
     this.sockets.clear();
     this.acceptedSockets.clear();
-    this.stopping = new Promise<void>((resolve, reject) => server.close((error) => (error === undefined ? resolve() : reject(error))));
-    try {
-      await this.stopping;
-    } finally {
-      this.stopping = null;
-    }
+    await new Promise<void>((resolve, reject) => server.close((error) => (error === undefined ? resolve() : reject(error))));
   }
 }

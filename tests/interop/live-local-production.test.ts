@@ -9,6 +9,7 @@ import { describe, test } from 'node:test';
 import { LiveLocalBridge } from '../../src/main/interop/live-local-bridge.js';
 import { liveLocalRuntimeDirectory, requestUnixLiveLocalControl } from '../../src/main/interop/live-local-control.js';
 import { requestLiveLocalBootstrap } from '../../src/main/interop/live-local-native.js';
+import { LiveLocalSessionListener } from '../../src/main/interop/live-local-session.js';
 import { prepareUnixControlEndpoint, type LiveLocalCapability } from '../../src/main/interop/live-local-security.js';
 
 const EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
@@ -122,6 +123,17 @@ function redemption(capability: LiveLocalCapability): Record<string, unknown> {
 }
 
 describe('production live local bootstrap (#544)', () => {
+  test('invalidates a listener start that races shutdown', async () => {
+    const sessions = new LiveLocalSessionListener({ expectedExtensionId: EXTENSION_ID, onSession: () => undefined });
+    const issue = sessions.issue(bootstrapRequest());
+    await sessions.close();
+    await assert.rejects(issue, /stopped during bootstrap/u);
+
+    const restarted = await sessions.issue(bootstrapRequest());
+    assert.equal(restarted.state, 'running');
+    await sessions.close();
+  });
+
   test('classifies desktop state and redeems one authenticated control session', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
     const temporary = await mkdtemp(join(tmpdir(), 'overlook-live-tmp-'));
