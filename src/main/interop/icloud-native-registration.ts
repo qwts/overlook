@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { OVERLOOK_ICLOUD_NATIVE_HOST, nativeHostManifest } from './icloud-native-host.js';
 import { InteropTransportError } from './transport.js';
@@ -10,6 +12,8 @@ const CHROMIUM_HOST_DIRECTORIES = [
   ['BraveSoftware', 'Brave-Browser', 'NativeMessagingHosts'],
   ['Microsoft Edge', 'NativeMessagingHosts'],
 ] as const;
+
+export const NATIVE_HOST_UNREGISTER_ARGUMENT = '--unregister-native-host';
 
 export interface NativeHostRegistrationOptions {
   readonly platform: NodeJS.Platform;
@@ -23,6 +27,10 @@ export interface NativeHostInvocation {
   readonly requested: boolean;
   readonly origin: string | null;
   readonly authorized: boolean;
+}
+
+export function nativeHostUnregisterRequested(argv: readonly string[]): boolean {
+  return argv.includes(NATIVE_HOST_UNREGISTER_ARGUMENT);
 }
 
 export function nativeHostInvocation(argv: readonly string[], extensionId: string | null): NativeHostInvocation {
@@ -64,6 +72,45 @@ export async function registerICloudNativeHost(options: NativeHostRegistrationOp
     }
   }
   return installed;
+}
+
+/** Removes only manifests owned by this exact signed app invocation. An older
+ * app copy must not unregister a newer installation that already repaired the
+ * canonical browser manifest paths. */
+export async function unregisterICloudNativeHost(options: NativeHostRegistrationOptions): Promise<readonly string[]> {
+  if (options.platform !== 'darwin' || !options.packaged || options.extensionId === null) return [];
+  const expected = nativeHostManifest(options.executablePath, options.extensionId);
+  const removed: string[] = [];
+  for (const segments of CHROMIUM_HOST_DIRECTORIES) {
+    const path = join(options.applicationSupportDirectory, ...segments, `${OVERLOOK_ICLOUD_NATIVE_HOST}.json`);
+    const claimed = `${path}.${String(process.pid)}.${randomUUID()}.unregister`;
+    try {
+      await rename(path, claimed);
+    } catch {
+      continue;
+    }
+    try {
+      const actual = JSON.parse(await readFile(claimed, 'utf8')) as unknown;
+      if (!isDeepStrictEqual(actual, expected)) {
+        await restoreClaimedManifest(claimed, path);
+        continue;
+      }
+      await unlink(claimed);
+      removed.push(path);
+    } catch {
+      await restoreClaimedManifest(claimed, path);
+    }
+  }
+  return removed;
+}
+
+async function restoreClaimedManifest(claimed: string, path: string): Promise<void> {
+  try {
+    await link(claimed, path);
+    await unlink(claimed);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') await unlink(claimed).catch(() => undefined);
+  }
 }
 
 export function assertAuthorizedNativeHostInvocation(invocation: NativeHostInvocation): void {

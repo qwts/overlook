@@ -6,7 +6,7 @@ import { pickSafeStorage } from '../crypto/safe-storage-runtime.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
 import { runICloudNativeHost } from './icloud-native-runtime.js';
-import { nativeHostInvocation } from './icloud-native-registration.js';
+import { nativeHostInvocation, nativeHostUnregisterRequested, unregisterICloudNativeHost } from './icloud-native-registration.js';
 import { startProductionInterop, type StartedProductionInterop } from './production-runtime.js';
 
 export interface ProductionInteropAppOptions {
@@ -18,8 +18,9 @@ export interface ProductionInteropAppOptions {
 
 export interface ProductionInteropAppRuntime {
   readonly nativeHostRequested: boolean;
+  readonly headlessRequested: boolean;
   readonly pcloud: PCloudFeatureConfig;
-  runNativeHost(): Promise<boolean>;
+  runHeadless(): Promise<boolean>;
   startDesktop(): Promise<void>;
   lockDesktop(): Promise<void>;
   unlockDesktop(): void;
@@ -32,22 +33,35 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
   const pcloud = pcloudFeatureConfig(options.harnessEnv);
   const extensionId = imageTrailExtensionId(options.harnessEnv);
   const invocation = nativeHostInvocation(process.argv, extensionId);
+  const unregisterRequested = nativeHostUnregisterRequested(process.argv);
   let desktop: StartedProductionInterop | null = null;
   return {
     nativeHostRequested: invocation.requested,
+    headlessRequested: invocation.requested || unregisterRequested,
     pcloud,
-    runNativeHost: async () => {
-      if (!invocation.requested) return false;
-      await runICloudNativeHost({
-        invocation,
-        extensionId,
+    runHeadless: async () => {
+      if (invocation.requested) {
+        await runICloudNativeHost({
+          invocation,
+          extensionId,
+          platform: process.platform,
+          packaged: app.isPackaged,
+          profileDirectory: app.getPath('userData'),
+          safeStorage: pickSafeStorage(),
+          bridge: createNativeICloudDriveBridge({ platform: process.platform, packaged: app.isPackaged }),
+          input: process.stdin,
+          output: process.stdout,
+        });
+        app.exit(0);
+        return true;
+      }
+      if (!unregisterRequested) return false;
+      await unregisterICloudNativeHost({
         platform: process.platform,
         packaged: app.isPackaged,
-        profileDirectory: app.getPath('userData'),
-        safeStorage: pickSafeStorage(),
-        bridge: createNativeICloudDriveBridge({ platform: process.platform, packaged: app.isPackaged }),
-        input: process.stdin,
-        output: process.stdout,
+        applicationSupportDirectory: app.getPath('appData'),
+        executablePath: app.getPath('exe'),
+        extensionId,
       });
       app.exit(0);
       return true;
