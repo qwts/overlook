@@ -7,6 +7,7 @@ import type { SafeStorageLike } from '../crypto/keystore.js';
 import { BridgeICloudNativeAuthority } from './icloud-native-authority.js';
 import { ICloudNativeHost } from './icloud-native-host.js';
 import { assertAuthorizedNativeHostInvocation, type NativeHostInvocation } from './icloud-native-registration.js';
+import { isLiveLocalNativeBootstrapRequest, requestLiveLocalBootstrap } from './live-local-native.js';
 import { runNativeMessage } from './native-messaging.js';
 
 export interface RunICloudNativeHostOptions {
@@ -51,11 +52,24 @@ export async function runICloudNativeHost(options: RunICloudNativeHostOptions): 
   try {
     await runNativeMessage(options.input, options.output, async (value) => {
       assertAuthorizedNativeHostInvocation(options.invocation);
+      const expectedExtensionId = options.extensionId ?? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      if (isLiveLocalNativeBootstrapRequest(value)) {
+        return {
+          schemaVersion: 1,
+          ok: true,
+          result: await requestLiveLocalBootstrap(value, {
+            platform: options.platform,
+            packaged: options.packaged,
+            profileDirectory: options.profileDirectory,
+            expectedExtensionId,
+          }),
+        };
+      }
       const availability = await withDeadline(options.bridge.status(), options.statusTimeoutMs ?? 5_000)
         .then(hostAvailability)
         .catch(() => ({ entitled: false, available: false }));
       const host = new ICloudNativeHost({
-        expectedExtensionId: options.extensionId ?? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        expectedExtensionId,
         platform: options.platform,
         signed: options.packaged,
         entitled: availability.entitled,

@@ -1,10 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmod, lstat, mkdir } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import { z } from 'zod';
 
-import { interopOperationSchema } from './contract.js';
+import { interopOperationSchema } from '../../shared/interop/contract.js';
 
 export const LIVE_LOCAL_PROTOCOL_VERSION = 1;
 export const LIVE_LOCAL_CAPABILITY_TTL_MS = 15_000;
@@ -60,9 +61,48 @@ export interface LiveLocalCapability {
   readonly maxInFlightBytes: number;
 }
 
+const capabilitySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    sessionId: z.string().uuid(),
+    secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+    endpoint: z.string().url().startsWith('ws://127.0.0.1:'),
+    extensionId: extensionIdSchema,
+    pairingId: z.string().uuid(),
+    operation: interopOperationSchema,
+    protocolVersion: z.number().int().positive(),
+    issuedAtMs: z.number().nonnegative(),
+    expiresAtMs: z.number().positive(),
+    maxCiphertextFrameBytes: z.number().int().positive(),
+    maxInFlightBytes: z.number().int().positive(),
+  })
+  .strict();
+
+const bootstrapResultSchema = z.discriminatedUnion('state', [
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      state: z.enum(['not-running', 'locked', 'incompatible', 'unavailable']),
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      state: z.literal('running'),
+      capability: capabilitySchema,
+    })
+    .strict(),
+]);
+
 export type LiveLocalBootstrapResult =
   | { readonly schemaVersion: 1; readonly state: Exclude<LiveLocalBootstrapState, 'running'> }
   | { readonly schemaVersion: 1; readonly state: 'running'; readonly capability: LiveLocalCapability };
+
+export function parseLiveLocalBootstrapResult(value: unknown): LiveLocalBootstrapResult {
+  const parsed = bootstrapResultSchema.safeParse(value);
+  if (!parsed.success) throw new LiveLocalPrototypeError('Live local bootstrap response is corrupt.', 'corrupt');
+  return parsed.data;
+}
 
 interface StoredCapability {
   readonly secretDigest: Buffer;
@@ -109,6 +149,11 @@ function parseControlValue<Schema extends z.ZodType>(schema: Schema, value: unkn
   return result.data;
 }
 
+export function parseLiveLocalBootstrapRequest(value: unknown): LiveLocalBootstrapRequest {
+  boundedControlValue(value);
+  return parseControlValue(bootstrapRequestSchema, value);
+}
+
 function secretDigest(secret: string): Buffer {
   return createHash('sha256').update(secret, 'utf8').digest();
 }
@@ -126,8 +171,8 @@ function uuidFrom(bytes: Buffer): string {
 }
 
 /**
- * Test-only ADR-0029 capability prototype. No production composition root
- * imports this module; #544 owns that decision after the ADR is accepted.
+ * ADR-0029 capability authority. Only a digest of each short-lived secret is
+ * retained; every recognized redemption attempt consumes its capability.
  */
 export class LiveLocalCapabilityBroker {
   private readonly expectedExtensionId: string;
@@ -139,13 +184,12 @@ export class LiveLocalCapabilityBroker {
   constructor(options: LiveLocalCapabilityBrokerOptions) {
     this.expectedExtensionId = extensionIdSchema.parse(options.expectedExtensionId);
     this.endpoint = z.string().url().startsWith('ws://127.0.0.1:').parse(options.endpoint);
-    this.now = options.now ?? Date.now;
+    this.now = options.now ?? (() => Math.floor(performance.now()));
     this.random = options.random ?? randomBytes;
   }
 
   issue(state: LiveLocalBootstrapState, value: unknown): LiveLocalBootstrapResult {
-    boundedControlValue(value);
-    const request = parseControlValue(bootstrapRequestSchema, value);
+    const request = parseLiveLocalBootstrapRequest(value);
     if (request.extensionId !== this.expectedExtensionId)
       throw new LiveLocalPrototypeError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
     if (state !== 'running') return { schemaVersion: 1, state };
@@ -203,6 +247,18 @@ export class LiveLocalCapabilityBroker {
     if (!constantTimeMatch(secretDigest(redemption.secret), stored.secretDigest))
       throw new LiveLocalPrototypeError('Live local capability secret did not match.', 'wrong-authority');
     return redemption;
+  }
+
+  revoke(sessionId: string): void {
+    this.capabilities.delete(sessionId);
+  }
+
+  has(sessionId: string): boolean {
+    return this.capabilities.has(sessionId);
+  }
+
+  clear(): void {
+    this.capabilities.clear();
   }
 }
 

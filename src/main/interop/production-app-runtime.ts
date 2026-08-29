@@ -7,7 +7,7 @@ import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
 import { runICloudNativeHost } from './icloud-native-runtime.js';
 import { nativeHostInvocation } from './icloud-native-registration.js';
-import { startProductionInterop } from './production-runtime.js';
+import { startProductionInterop, type StartedProductionInterop } from './production-runtime.js';
 
 export interface ProductionInteropAppOptions {
   readonly harnessEnv: (name: string) => string | undefined;
@@ -21,6 +21,9 @@ export interface ProductionInteropAppRuntime {
   readonly pcloud: PCloudFeatureConfig;
   runNativeHost(): Promise<boolean>;
   startDesktop(): Promise<void>;
+  lockDesktop(): Promise<void>;
+  unlockDesktop(): void;
+  closeDesktop(): Promise<void>;
 }
 
 /** Electron-specific edge wiring kept out of the desktop composition root so
@@ -29,6 +32,7 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
   const pcloud = pcloudFeatureConfig(options.harnessEnv);
   const extensionId = imageTrailExtensionId(options.harnessEnv);
   const invocation = nativeHostInvocation(process.argv, extensionId);
+  let desktop: StartedProductionInterop | null = null;
   return {
     nativeHostRequested: invocation.requested,
     pcloud,
@@ -48,8 +52,8 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
       app.exit(0);
       return true;
     },
-    startDesktop: () =>
-      startProductionInterop({
+    startDesktop: async () => {
+      desktop = await startProductionInterop({
         pcloud: {
           config: pcloud,
           profileDirectory: app.getPath('userData'),
@@ -68,6 +72,17 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
           executablePath: app.getPath('exe'),
           extensionId,
         },
-      }),
+        liveLocal: {
+          enabled: extensionId !== null,
+          platform: process.platform,
+          profileDirectory: app.getPath('userData'),
+          temporaryDirectory: app.getPath('temp'),
+          expectedExtensionId: extensionId ?? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      });
+    },
+    lockDesktop: () => desktop?.lock() ?? Promise.resolve(),
+    unlockDesktop: () => desktop?.unlock(),
+    closeDesktop: () => desktop?.close() ?? Promise.resolve(),
   };
 }

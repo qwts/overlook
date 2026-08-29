@@ -28,6 +28,7 @@ export interface QuitTeardownOptions {
    * the same close path); anything else is ours. */
   readonly lockState: () => string | undefined;
   readonly close: () => Promise<void>;
+  readonly shutdown?: () => Promise<void>;
 }
 
 // Universal quit teardown (ADR-0017 §4, #385): every open-library quit — most
@@ -36,10 +37,12 @@ export interface QuitTeardownOptions {
 export function registerQuitTeardown(options: QuitTeardownOptions): void {
   let done = false;
   app.on('before-quit', (event) => {
-    if (done || !options.isLibraryOpen()) return;
-    if (options.lockState() === 'unlocked') return;
+    if (done) return;
+    const libraryOpen = options.isLibraryOpen();
+    if (libraryOpen && options.lockState() === 'unlocked') return;
     event.preventDefault();
     done = true;
-    void options.close().finally(() => app.quit());
+    const closeLibrary = libraryOpen ? options.close() : Promise.resolve();
+    void Promise.allSettled([closeLibrary, options.shutdown?.() ?? Promise.resolve()]).finally(() => app.quit());
   });
 }

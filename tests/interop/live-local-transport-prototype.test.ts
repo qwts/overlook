@@ -21,7 +21,7 @@ import {
   type LiveLocalCapability,
   type LiveLocalBootstrapResult,
   type LiveLocalBootstrapState,
-} from '../../src/shared/interop/live-local-prototype.js';
+} from '../../src/main/interop/live-local-security.js';
 
 const EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
 const OTHER_EXTENSION_ID = 'ponmlkjihgfedcbaponmlkjihgfedcba';

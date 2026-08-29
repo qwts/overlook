@@ -81,7 +81,6 @@ import { createEmbeddingApplicationRuntime } from './embedding/embedding-applica
 import type { EmbeddingService } from './embedding/embedding-service.js';
 import { EgressRuntime } from './egress-runtime.js';
 import { applicationEvents } from './application-events.js';
-
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
 
@@ -667,7 +666,7 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   posterCaptureService?.close();
   for (const controller of activeBackupControllers) controller.abort();
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
-    closeProductionInboundMoveLibrary(),
+    Promise.all([productionInterop.lockDesktop(), closeProductionInboundMoveLibrary()]),
     importRuntime?.service.drain() ?? Promise.resolve(),
     egressRuntime.drain(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
@@ -744,6 +743,7 @@ function buildAppLockController(): ReturnType<typeof createAppLockRuntime> {
       ? { anchorStore: new TestFileCredentialAnchorStore(path.join(app.getPath('userData'), 'app-lock-test-anchor.json')) }
       : {}),
     openAuthorized: (masterKey) => {
+      productionInterop.unlockDesktop();
       if (masterKey === undefined) return;
       const authorized = Buffer.from(masterKey);
       releasedMaster = authorized;
@@ -884,7 +884,7 @@ if (!productionInterop.nativeHostRequested) {
   registerQuitTeardown({
     isLibraryOpen: () => libraryService !== undefined,
     lockState: () => appLockHost?.snapshot().state,
-    close: () => closeLibrary('lock'),
+    ...{ close: () => closeLibrary('lock'), shutdown: () => productionInterop.closeDesktop() },
   });
 }
 
