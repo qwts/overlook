@@ -42,7 +42,7 @@ const redemptionSchema = z
 const redemptionIdentitySchema = z.object({ sessionId: z.string().uuid() }).passthrough();
 
 export type LiveLocalBootstrapState = 'running' | 'not-running' | 'locked' | 'incompatible' | 'unavailable';
-export type LiveLocalPrototypeFailure = 'corrupt' | 'replay' | 'expired' | 'unsupported' | 'wrong-authority' | 'over-budget';
+export type LiveLocalFailure = 'corrupt' | 'replay' | 'expired' | 'unsupported' | 'wrong-authority' | 'over-budget';
 export type LiveLocalBootstrapRequest = z.output<typeof bootstrapRequestSchema>;
 export type LiveLocalRedemption = z.output<typeof redemptionSchema>;
 
@@ -100,7 +100,7 @@ export type LiveLocalBootstrapResult =
 
 export function parseLiveLocalBootstrapResult(value: unknown): LiveLocalBootstrapResult {
   const parsed = bootstrapResultSchema.safeParse(value);
-  if (!parsed.success) throw new LiveLocalPrototypeError('Live local bootstrap response is corrupt.', 'corrupt');
+  if (!parsed.success) throw new LiveLocalError('Live local bootstrap response is corrupt.', 'corrupt');
   return parsed.data;
 }
 
@@ -113,13 +113,13 @@ interface StoredCapability {
   readonly expiresAtMs: number;
 }
 
-export class LiveLocalPrototypeError extends Error {
+export class LiveLocalError extends Error {
   constructor(
     message: string,
-    readonly code: LiveLocalPrototypeFailure,
+    readonly code: LiveLocalFailure,
   ) {
     super(message);
-    this.name = 'LiveLocalPrototypeError';
+    this.name = 'LiveLocalError';
   }
 }
 
@@ -135,17 +135,16 @@ function boundedControlValue(value: unknown): void {
   try {
     encoded = JSON.stringify(value);
   } catch {
-    throw new LiveLocalPrototypeError('Live local control frame is not JSON.', 'corrupt');
+    throw new LiveLocalError('Live local control frame is not JSON.', 'corrupt');
   }
-  if (encoded === undefined) throw new LiveLocalPrototypeError('Live local control frame is not JSON.', 'corrupt');
+  if (encoded === undefined) throw new LiveLocalError('Live local control frame is not JSON.', 'corrupt');
   const bytes = Buffer.byteLength(encoded, 'utf8');
-  if (bytes > LIVE_LOCAL_CONTROL_FRAME_BYTES)
-    throw new LiveLocalPrototypeError('Live local control frame exceeds its bound.', 'over-budget');
+  if (bytes > LIVE_LOCAL_CONTROL_FRAME_BYTES) throw new LiveLocalError('Live local control frame exceeds its bound.', 'over-budget');
 }
 
 function parseControlValue<Schema extends z.ZodType>(schema: Schema, value: unknown): z.output<Schema> {
   const result = schema.safeParse(value);
-  if (!result.success) throw new LiveLocalPrototypeError('Live local control frame is corrupt.', 'corrupt');
+  if (!result.success) throw new LiveLocalError('Live local control frame is corrupt.', 'corrupt');
   return result.data;
 }
 
@@ -191,7 +190,7 @@ export class LiveLocalCapabilityBroker {
   issue(state: LiveLocalBootstrapState, value: unknown): LiveLocalBootstrapResult {
     const request = parseLiveLocalBootstrapRequest(value);
     if (request.extensionId !== this.expectedExtensionId)
-      throw new LiveLocalPrototypeError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
+      throw new LiveLocalError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
     if (state !== 'running') return { schemaVersion: 1, state };
     if (request.protocolMin > LIVE_LOCAL_PROTOCOL_VERSION || request.protocolMax < LIVE_LOCAL_PROTOCOL_VERSION)
       return { schemaVersion: 1, state: 'incompatible' };
@@ -229,23 +228,23 @@ export class LiveLocalCapabilityBroker {
     boundedControlValue(value);
     const identity = parseControlValue(redemptionIdentitySchema, value);
     const stored = this.capabilities.get(identity.sessionId);
-    if (stored === undefined) throw new LiveLocalPrototypeError('Live local capability was already consumed.', 'replay');
+    if (stored === undefined) throw new LiveLocalError('Live local capability was already consumed.', 'replay');
 
     // Lookup and consumption are one synchronous operation. Every failure
     // after a session identifier is recognized burns the capability.
     this.capabilities.delete(identity.sessionId);
     const redemption = parseControlValue(redemptionSchema, value);
-    if (this.now() > stored.expiresAtMs) throw new LiveLocalPrototypeError('Live local capability expired.', 'expired');
+    if (this.now() > stored.expiresAtMs) throw new LiveLocalError('Live local capability expired.', 'expired');
     if (
       redemption.extensionId !== stored.extensionId ||
       redemption.pairingId !== stored.pairingId ||
       redemption.operation !== stored.operation
     )
-      throw new LiveLocalPrototypeError('Live local capability authority did not match.', 'wrong-authority');
+      throw new LiveLocalError('Live local capability authority did not match.', 'wrong-authority');
     if (redemption.protocolVersion !== stored.protocolVersion)
-      throw new LiveLocalPrototypeError('Live local protocol downgrade was rejected.', 'unsupported');
+      throw new LiveLocalError('Live local protocol downgrade was rejected.', 'unsupported');
     if (!constantTimeMatch(secretDigest(redemption.secret), stored.secretDigest))
-      throw new LiveLocalPrototypeError('Live local capability secret did not match.', 'wrong-authority');
+      throw new LiveLocalError('Live local capability secret did not match.', 'wrong-authority');
     return redemption;
   }
 
@@ -279,7 +278,7 @@ export class LiveLocalBackpressureWindow {
     readonly maxInFlightBytes = LIVE_LOCAL_IN_FLIGHT_BYTES,
   ) {
     if (maxFrameBytes <= 0 || maxInFlightBytes < maxFrameBytes)
-      throw new LiveLocalPrototypeError('Invalid live local byte-window bounds.', 'corrupt');
+      throw new LiveLocalError('Invalid live local byte-window bounds.', 'corrupt');
   }
 
   get inFlight(): number {
@@ -292,7 +291,7 @@ export class LiveLocalBackpressureWindow {
 
   reserve(bytes: number): Promise<() => void> {
     if (!Number.isSafeInteger(bytes) || bytes <= 0 || bytes > this.maxFrameBytes)
-      throw new LiveLocalPrototypeError('Ciphertext frame exceeds its negotiated bound.', 'over-budget');
+      throw new LiveLocalError('Ciphertext frame exceeds its negotiated bound.', 'over-budget');
     return new Promise<() => void>((resolve) => {
       this.waiting.push({ bytes, resolve });
       this.drain();
@@ -338,17 +337,17 @@ export function windowsNamedPipeForUser(userSid: string): WindowsNamedPipeSecuri
 }
 
 export async function prepareUnixControlEndpoint(runtimeDirectory: string): Promise<string> {
-  if (!isAbsolute(runtimeDirectory)) throw new LiveLocalPrototypeError('Live local runtime directory must be absolute.', 'corrupt');
+  if (!isAbsolute(runtimeDirectory)) throw new LiveLocalError('Live local runtime directory must be absolute.', 'corrupt');
   const endpoint = join(runtimeDirectory, 'com.qwts.overlook.interop.sock');
   if (Buffer.byteLength(endpoint, 'utf8') > 103)
-    throw new LiveLocalPrototypeError('Live local Unix socket path exceeds the platform bound.', 'corrupt');
+    throw new LiveLocalError('Live local Unix socket path exceeds the platform bound.', 'corrupt');
   await mkdir(runtimeDirectory, { recursive: true, mode: 0o700 });
   const before = await lstat(runtimeDirectory);
   if (!before.isDirectory() || before.isSymbolicLink())
-    throw new LiveLocalPrototypeError('Live local runtime directory is not an owned directory.', 'wrong-authority');
+    throw new LiveLocalError('Live local runtime directory is not an owned directory.', 'wrong-authority');
   const currentUid = process.getuid?.();
   if (currentUid !== undefined && before.uid !== currentUid)
-    throw new LiveLocalPrototypeError('Live local runtime directory belongs to another user.', 'wrong-authority');
+    throw new LiveLocalError('Live local runtime directory belongs to another user.', 'wrong-authority');
   await chmod(runtimeDirectory, 0o700);
   return endpoint;
 }

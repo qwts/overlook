@@ -2,7 +2,7 @@ import type { SafeStorageLike } from '../crypto/keystore.js';
 import { FilesystemInteropObjectStore } from './filesystem-object-store.js';
 import { InteropPairingBundleStore, InteropPairingCustodian } from './pairing-custody.js';
 import { InteropPCloudRuntime } from './pcloud-runtime.js';
-import { LiveLocalPrototypeError, type LiveLocalBootstrapRequest, type LiveLocalBootstrapState } from './live-local-security.js';
+import { LiveLocalError, type LiveLocalBootstrapRequest, type LiveLocalBootstrapState } from './live-local-security.js';
 
 export interface InteropRuntimeOptions {
   readonly profileDirectory: string;
@@ -83,7 +83,6 @@ export function lockInteropRuntime(): void {
 export function liveLocalBootstrapState(request: LiveLocalBootstrapRequest): LiveLocalBootstrapState {
   const state = profilePairing?.state();
   if (state?.status !== 'unlocked') return 'locked';
-  if (state.pairingId !== request.pairingId)
-    throw new LiveLocalPrototypeError('Live local bootstrap pairing did not match.', 'wrong-authority');
+  if (state.pairingId !== request.pairingId) throw new LiveLocalError('Live local bootstrap pairing did not match.', 'wrong-authority');
   return 'running';
 }

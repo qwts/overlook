@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import {
   LIVE_LOCAL_CONTROL_FRAME_BYTES,
-  LiveLocalPrototypeError,
+  LiveLocalError,
   classifyControlEndpointFailure,
   prepareUnixControlEndpoint,
 } from './live-local-security.js';
@@ -27,9 +27,9 @@ class BoundedSocketReader {
   async exactly(length: number): Promise<Buffer> {
     while (this.pending.length < length) {
       const next = await this.iterator.next();
-      if (next.done === true) throw new LiveLocalPrototypeError('Live local control frame ended early.', 'corrupt');
+      if (next.done === true) throw new LiveLocalError('Live local control frame ended early.', 'corrupt');
       if (next.value.length > LIVE_LOCAL_CONTROL_FRAME_BYTES + CONTROL_HEADER_BYTES - this.pending.length)
-        throw new LiveLocalPrototypeError('Live local control frame exceeds its bound.', 'over-budget');
+        throw new LiveLocalError('Live local control frame exceeds its bound.', 'over-budget');
       this.pending = Buffer.concat([this.pending, next.value], this.pending.length + next.value.length);
     }
     const value = this.pending.subarray(0, length);
@@ -43,16 +43,16 @@ function encodeControlFrame(value: unknown): Buffer {
   try {
     payload = Buffer.from(JSON.stringify(value), 'utf8');
   } catch {
-    throw new LiveLocalPrototypeError('Live local control response is not JSON.', 'corrupt');
+    throw new LiveLocalError('Live local control response is not JSON.', 'corrupt');
   }
   if (payload.length > LIVE_LOCAL_CONTROL_FRAME_BYTES)
-    throw new LiveLocalPrototypeError('Live local control response exceeds its bound.', 'over-budget');
+    throw new LiveLocalError('Live local control response exceeds its bound.', 'over-budget');
   const header = Buffer.alloc(CONTROL_HEADER_BYTES);
   header.writeUInt32LE(payload.length);
   return Buffer.concat([header, payload], CONTROL_HEADER_BYTES + payload.length);
 }
 
-function controlFailure(error: LiveLocalPrototypeError): Record<string, unknown> {
+function controlFailure(error: LiveLocalError): Record<string, unknown> {
   const code = error.code === 'corrupt' || error.code === 'over-budget' ? 'corrupt' : 'unsupported';
   return { schemaVersion: 1, ok: false, code, retryable: false };
 }
@@ -60,13 +60,12 @@ function controlFailure(error: LiveLocalPrototypeError): Record<string, unknown>
 async function readControlFrame(socket: Socket): Promise<unknown> {
   const reader = new BoundedSocketReader(socket);
   const length = (await reader.exactly(CONTROL_HEADER_BYTES)).readUInt32LE();
-  if (length > LIVE_LOCAL_CONTROL_FRAME_BYTES)
-    throw new LiveLocalPrototypeError('Live local control frame exceeds its bound.', 'over-budget');
+  if (length > LIVE_LOCAL_CONTROL_FRAME_BYTES) throw new LiveLocalError('Live local control frame exceeds its bound.', 'over-budget');
   try {
     return JSON.parse((await reader.exactly(length)).toString('utf8')) as unknown;
   } catch (error) {
-    if (error instanceof LiveLocalPrototypeError) throw error;
-    throw new LiveLocalPrototypeError('Live local control frame is not JSON.', 'corrupt');
+    if (error instanceof LiveLocalError) throw error;
+    throw new LiveLocalError('Live local control frame is not JSON.', 'corrupt');
   }
 }
 
@@ -74,14 +73,14 @@ function withSocketDeadline<T>(socket: Socket, operation: Promise<T>, timeoutMs 
   return new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => {
       socket.destroy();
-      reject(new LiveLocalPrototypeError('Live local control endpoint timed out.', 'unsupported'));
+      reject(new LiveLocalError('Live local control endpoint timed out.', 'unsupported'));
     }, timeoutMs);
     void operation.then(resolve, reject).finally(() => clearTimeout(timeout));
   });
 }
 
 export function liveLocalRuntimeDirectory(profileDirectory: string, temporaryDirectory: string, uid = process.getuid?.()): string {
-  if (uid === undefined) throw new LiveLocalPrototypeError('Live local Unix identity is unavailable.', 'unsupported');
+  if (uid === undefined) throw new LiveLocalError('Live local Unix identity is unavailable.', 'unsupported');
   const suffix = createHash('sha256')
     .update(`${String(uid)}\0${profileDirectory}`, 'utf8')
     .digest('hex')
@@ -119,9 +118,8 @@ async function removeOwnedStaleEndpoint(endpoint: string): Promise<void> {
   }
   const uid = process.getuid?.();
   if (!metadata.isSocket() || metadata.isSymbolicLink() || (uid !== undefined && metadata.uid !== uid))
-    throw new LiveLocalPrototypeError('Live local control endpoint is not an owned socket.', 'wrong-authority');
-  if (await endpointIsLive(endpoint))
-    throw new LiveLocalPrototypeError('A live Overlook control endpoint already exists.', 'wrong-authority');
+    throw new LiveLocalError('Live local control endpoint is not an owned socket.', 'wrong-authority');
+  if (await endpointIsLive(endpoint)) throw new LiveLocalError('A live Overlook control endpoint already exists.', 'wrong-authority');
   await unlink(endpoint);
 }
 
@@ -153,7 +151,7 @@ export async function startUnixLiveLocalControlServer(
     void withSocketDeadline(socket, readControlFrame(socket).then(handle))
       .then((response) => socket.end(encodeControlFrame({ schemaVersion: 1, ok: true, result: response })))
       .catch((error: unknown) => {
-        if (error instanceof LiveLocalPrototypeError && !socket.destroyed) socket.end(encodeControlFrame(controlFailure(error)));
+        if (error instanceof LiveLocalError && !socket.destroyed) socket.end(encodeControlFrame(controlFailure(error)));
         else socket.destroy();
       });
   });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import {
-  LiveLocalPrototypeError,
+  LiveLocalError,
   parseLiveLocalBootstrapRequest,
   type LiveLocalBootstrapRequest,
   type LiveLocalBootstrapResult,
@@ -89,7 +89,7 @@ export class LiveLocalBridge {
   private async bootstrap(value: unknown): Promise<LiveLocalBootstrapResult> {
     const request = parseLiveLocalBootstrapRequest(value);
     if (request.extensionId !== this.options.expectedExtensionId)
-      throw new LiveLocalPrototypeError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
+      throw new LiveLocalError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
     const state = this.suspended ? 'locked' : this.options.bootstrapState(request);
     if (state !== 'running') return { schemaVersion: 1, state };
     return this.sessions.issue(request);
