@@ -138,3 +138,8 @@ Expect `Status: Valid`, a signer subject matching `publisherName`, and an RFC
 failed or was skipped — check the Package workflow run for which branch it
 took, gated on all three `AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/
 `AZURE_CLIENT_SECRET` secrets being present.
+
+The same Package workflow builds the Windows live-local Node-API binding for
+each target architecture. Its x64 leg exercises the real named-pipe DACL,
+second-owner rejection, bounded framing, and native-host registry cleanup; both
+legs then prove every packaged native binary matches the installer target.

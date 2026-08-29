@@ -66,6 +66,35 @@ Automated production evidence:
 - `tests/interop/live-local-production.test.ts`
 - `tests/interop/transport.test.ts`
 
+## Production Windows evidence
+
+[#1066](https://github.com/qwts/overlook/issues/1066) composes the same
+bootstrap through a narrow Node-API binding:
+
+1. The desktop hashes the current process-token SID into the endpoint name and
+   creates one named-pipe instance with a protected DACL granting access only
+   to that SID.
+2. The binding asks Windows for the pipe's actual security descriptor before
+   publishing readiness, rejects remote clients, and prevents a second server
+   from claiming the endpoint.
+3. A dedicated worker thread owns bounded connect, read, and write operations;
+   synchronous Win32 waits never block Electron's main thread.
+4. The signed executable remains the native-messaging host. Per-user Chromium,
+   Chrome, Brave, and Edge registry values point to an executable-versioned
+   manifest, and cleanup removes only values owned by that exact manifest.
+5. Native tests exercise the real kernel DACL, second-owner rejection, bounded
+   framing, recovery after an oversized frame, and exact-owner registry
+   cleanup on `windows-latest`.
+
+Automated production evidence:
+
+- `native/windows-interop/windows_pipe.cc`
+- `native/windows-interop/test.cjs`
+- `src/main/interop/windows-live-local.ts`
+- `src/main/interop/windows-pipe-worker.ts`
+- `src/main/interop/windows-native-host-registry.ts`
+- `.github/workflows/package.yml`
+
 ## Production follow-up gates
 
 The remaining #544 owner-run gate must prove the signed packaged macOS host
@@ -83,10 +112,12 @@ host name, exact executable path, and released extension origin match that app
 copy. Run it before removing the app bundle; a stale older app copy cannot
 unregister a newer installation.
 
-[#1066](https://github.com/qwts/overlook/issues/1066) owns the Windows-native
-pipe implementation and signed-installer evidence. Node's named-pipe API does
-not expose the explicit current-user SDDL required by ADR-0029, so Windows
-production remains blocked rather than accepting a broader ACL.
+The #1066 signed-package gate builds x64 and ARM64 installers, verifies every
+packaged native binary has the target machine type, and verifies Authenticode
+when the repository's Azure signing credentials are present. The x64 leg also
+runs the binding against the real Windows kernel, then silently installs and
+repairs the package, registers and disables the native host, and proves the
+uninstaller invokes exact-owner cleanup before removing the executable.
 
 [#545](https://github.com/qwts/overlook/issues/545) must prove:
 

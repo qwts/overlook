@@ -154,7 +154,8 @@ The deterministic prototype records:
 - negotiated in-flight memory ceiling, producer backpressure, and cancellation
   latency;
 - MV3 worker suspension between bootstrap and redemption;
-- macOS socket ownership/stale cleanup and Windows named-pipe ACL seams;
+- macOS socket ownership/stale cleanup and the production Windows named-pipe
+  ACL;
 - packaged-host registration and uninstall implications.
 
 `tests/interop/live-local-transport-prototype.test.ts` exercises a real
@@ -162,11 +163,11 @@ user-scoped Unix rendezvous and loopback WebSocket. It transfers 16 MiB as
 bounded binary frames with an 8 MiB producer window, sustains more than the
 1 MiB/s floor, observes cancellation within 250 ms, and closes every threat
 in the [threat table](../Live-Local-Interop-Threat-Model.md#threats-and-controls).
-The Windows seam emits the current-user-only SDDL but remains a production
-platform gate.
+The Windows implementation applies the current-user-only SDDL to the kernel
+pipe and verifies the resulting descriptor before publishing readiness.
 
 The prototype's bulk-stream harness remains evidence, not a production
-transport. #544 owns macOS bootstrap and packaging, #1066 owns the Windows
+transport. #544 owns macOS bootstrap and packaging, #1066 composes the Windows
 production ACL, and #545 owns durable transport-journal composition. The
 complete evidence and remaining owner-run gates are in the [acceptance
 test](../acceptance/Acceptance-Test-Live-Local-Interop-Transport.md).
