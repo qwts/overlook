@@ -423,6 +423,29 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     assert.equal(nativeHostUnregisterRequested(['Overlook']), false);
   });
 
+  test('a stale app cannot unlink a concurrently repaired newer registration', async () => {
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-race-'));
+      const oldOptions = {
+        platform: 'darwin' as const,
+        packaged: true,
+        applicationSupportDirectory: appSupport,
+        executablePath: '/Applications/Overlook 0.71.0.app/Contents/MacOS/Overlook',
+        extensionId: RELEASED_EXTENSION_ID,
+      };
+      const newOptions = {
+        ...oldOptions,
+        executablePath: '/Applications/Overlook.app/Contents/MacOS/Overlook',
+      };
+      const installed = await registerICloudNativeHost(oldOptions);
+      await Promise.all([unregisterICloudNativeHost(oldOptions), registerICloudNativeHost(newOptions)]);
+      for (const path of installed) {
+        const actual = JSON.parse(await readFile(path, 'utf8')) as unknown;
+        assert.deepEqual(actual, nativeHostManifest(newOptions.executablePath, RELEASED_EXTENSION_ID));
+      }
+    }
+  });
+
   test('gates iCloud authority on the process origin before native access', async () => {
     const input = { schemaVersion: 1, operation: 'status', extensionId: RELEASED_EXTENSION_ID };
     const output = new PassThrough();

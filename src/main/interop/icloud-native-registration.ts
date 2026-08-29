@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -82,16 +83,34 @@ export async function unregisterICloudNativeHost(options: NativeHostRegistration
   const removed: string[] = [];
   for (const segments of CHROMIUM_HOST_DIRECTORIES) {
     const path = join(options.applicationSupportDirectory, ...segments, `${OVERLOOK_ICLOUD_NATIVE_HOST}.json`);
+    const claimed = `${path}.${String(process.pid)}.${randomUUID()}.unregister`;
     try {
-      const actual = JSON.parse(await readFile(path, 'utf8')) as unknown;
-      if (!isDeepStrictEqual(actual, expected)) continue;
-      await unlink(path);
+      await rename(path, claimed);
+    } catch {
+      continue;
+    }
+    try {
+      const actual = JSON.parse(await readFile(claimed, 'utf8')) as unknown;
+      if (!isDeepStrictEqual(actual, expected)) {
+        await restoreClaimedManifest(claimed, path);
+        continue;
+      }
+      await unlink(claimed);
       removed.push(path);
     } catch {
-      // Missing, unreadable, or foreign manifests are not owned cleanup.
+      await restoreClaimedManifest(claimed, path);
     }
   }
   return removed;
+}
+
+async function restoreClaimedManifest(claimed: string, path: string): Promise<void> {
+  try {
+    await link(claimed, path);
+    await unlink(claimed);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') await unlink(claimed).catch(() => undefined);
+  }
 }
 
 export function assertAuthorizedNativeHostInvocation(invocation: NativeHostInvocation): void {
