@@ -9,9 +9,14 @@ const SID = /^S-1-(?:\d+-){1,14}\d+$/u;
 const WORKER_CLOSE_MS = 6_000;
 const IO_TIMEOUT_MS = 5_000;
 
-interface WindowsPipeBinding {
+export interface WindowsPipeBinding {
   canonicalizeSddl(sddl: string): unknown;
   currentUserSid(): unknown;
+}
+
+export interface WindowsLiveLocalDependencies {
+  loadBinding(): WindowsPipeBinding;
+  createWorker(filename: URL, workerData: unknown): Worker;
 }
 
 interface WorkerMessage {
@@ -33,8 +38,13 @@ function loadBinding(): WindowsPipeBinding {
   return nativeRequire('@overlook/windows-interop/pipe.cjs') as WindowsPipeBinding;
 }
 
-function currentUserSid(): string {
-  const sid = loadBinding().currentUserSid();
+const DEFAULT_DEPENDENCIES: WindowsLiveLocalDependencies = {
+  loadBinding,
+  createWorker: (filename, workerData) => new Worker(filename, { workerData }),
+};
+
+function currentUserSid(dependencies: WindowsLiveLocalDependencies): string {
+  const sid = dependencies.loadBinding().currentUserSid();
   if (typeof sid !== 'string' || !SID.test(sid)) {
     throw new LiveLocalError('Windows live local identity is unavailable.', 'unsupported');
   }
@@ -75,15 +85,18 @@ function requestError(message: WorkerMessage): Error {
   return error;
 }
 
-async function requestWindowsLiveLocalControl(endpoint: string, serverSid: string, value: unknown): Promise<unknown> {
-  const worker = new Worker(new URL('./windows-pipe-client-worker.js', import.meta.url), {
-    workerData: {
-      endpoint,
-      serverSid,
-      payload: encodedRequest(value),
-      maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
-      timeoutMs: IO_TIMEOUT_MS,
-    },
+async function requestWindowsLiveLocalControl(
+  endpoint: string,
+  serverSid: string,
+  value: unknown,
+  dependencies: WindowsLiveLocalDependencies,
+): Promise<unknown> {
+  const worker = dependencies.createWorker(new URL('./windows-pipe-client-worker.js', import.meta.url), {
+    endpoint,
+    serverSid,
+    payload: encodedRequest(value),
+    maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
+    timeoutMs: IO_TIMEOUT_MS,
   });
   try {
     const payload = await new Promise<Buffer>((resolve, reject) => {
@@ -115,13 +128,16 @@ async function startWindowsLiveLocalControlServer(
   endpoint: string,
   sddl: string,
   handle: (value: unknown) => unknown,
+  dependencies: WindowsLiveLocalDependencies,
 ): Promise<LiveLocalControlServer> {
-  const expectedSecurityDescriptor = loadBinding().canonicalizeSddl(sddl);
+  const expectedSecurityDescriptor = dependencies.loadBinding().canonicalizeSddl(sddl);
   if (typeof expectedSecurityDescriptor !== 'string') {
     throw new LiveLocalError('Windows live local security descriptor is unavailable.', 'unsupported');
   }
-  const worker = new Worker(new URL('./windows-pipe-worker.js', import.meta.url), {
-    workerData: { endpoint, sddl, maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES },
+  const worker = dependencies.createWorker(new URL('./windows-pipe-worker.js', import.meta.url), {
+    endpoint,
+    sddl,
+    maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
   });
   let closed = false;
   let readyResolve: (() => void) | undefined;
@@ -183,10 +199,12 @@ async function startWindowsLiveLocalControlServer(
   };
 }
 
-export function createWindowsLiveLocalPlatform(): WindowsLiveLocalPlatform {
+export function createWindowsLiveLocalPlatform(
+  dependencies: WindowsLiveLocalDependencies = DEFAULT_DEPENDENCIES,
+): WindowsLiveLocalPlatform {
   return {
-    currentUserSid,
-    start: startWindowsLiveLocalControlServer,
-    request: (endpoint, value) => requestWindowsLiveLocalControl(endpoint, currentUserSid(), value),
+    currentUserSid: () => currentUserSid(dependencies),
+    start: (endpoint, sddl, handle) => startWindowsLiveLocalControlServer(endpoint, sddl, handle, dependencies),
+    request: (endpoint, value) => requestWindowsLiveLocalControl(endpoint, currentUserSid(dependencies), value, dependencies),
   };
 }
