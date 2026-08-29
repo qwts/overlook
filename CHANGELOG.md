@@ -1,5 +1,14 @@
 # photos
 
+## 0.72.0
+
+### Minor Changes
+
+- 7f878a7: Add the authenticated macOS live-local interoperability bootstrap, including
+  the signed native-host handoff, user-scoped control socket, short-lived
+  capability redemption, lock/shutdown teardown, and exact-owner native-host
+  unregistration for disable and uninstall flows.
+
 ## 0.71.1
 
 ### Patch Changes
