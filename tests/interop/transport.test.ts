@@ -22,6 +22,7 @@ import { BridgeICloudNativeAuthority } from '../../src/main/interop/icloud-nativ
 import { ICloudNativeHost, nativeHostManifest } from '../../src/main/interop/icloud-native-host.js';
 import { runICloudNativeHost } from '../../src/main/interop/icloud-native-runtime.js';
 import { nativeHostInvocation, registerICloudNativeHost } from '../../src/main/interop/icloud-native-registration.js';
+import { LiveLocalBridge } from '../../src/main/interop/live-local-bridge.js';
 import { encodeNativeMessage, readNativeMessage, runNativeMessage } from '../../src/main/interop/native-messaging.js';
 import {
   EncryptedInteropTransport,
@@ -445,6 +446,64 @@ describe('iCloud native host registration and production boundary (#467)', () =>
       result: { available: true, provider: 'icloud' },
     });
     assert.deepEqual(bridge.calls, ['status', 'status']);
+  });
+
+  test('forwards the versioned live-local bootstrap without entering iCloud authority', async () => {
+    const profile = mkdtempSync(join(tmpdir(), 'overlook-native-profile-'));
+    const desktop = new LiveLocalBridge({
+      platform: 'darwin',
+      profileDirectory: profile,
+      temporaryDirectory: tmpdir(),
+      expectedExtensionId: RELEASED_EXTENSION_ID,
+      bootstrapState: () => 'locked',
+    });
+    await desktop.start();
+    const output = new PassThrough();
+    const captured = buffer(output);
+    const bridge = new DeterministicICloudDriveBridge();
+    bridge.drain = () => {
+      bridge.calls.push('drain');
+      return Promise.resolve();
+    };
+    try {
+      await runICloudNativeHost({
+        invocation: nativeHostInvocation(['Overlook', `chrome-extension://${RELEASED_EXTENSION_ID}/`], RELEASED_EXTENSION_ID),
+        extensionId: RELEASED_EXTENSION_ID,
+        platform: 'darwin',
+        packaged: true,
+        profileDirectory: profile,
+        safeStorage: {
+          isEncryptionAvailable: () => true,
+          encryptString: (value) => Buffer.from(value, 'utf8'),
+          decryptString: (value) => value.toString('utf8'),
+        },
+        bridge,
+        input: Readable.from([
+          requestFrame({
+            schemaVersion: 2,
+            operation: 'live-local-bootstrap',
+            request: {
+              schemaVersion: 1,
+              extensionId: RELEASED_EXTENSION_ID,
+              pairingId: SCOPE.pairingId,
+              operation: 'move',
+              protocolMin: 1,
+              protocolMax: 1,
+            },
+          }),
+        ]),
+        output,
+      });
+      output.end();
+      assert.deepEqual(decodeFrame(await captured), {
+        schemaVersion: 1,
+        ok: true,
+        result: { schemaVersion: 1, state: 'locked' },
+      });
+      assert.deepEqual(bridge.calls, ['drain']);
+    } finally {
+      await desktop.close();
+    }
   });
 
   test('fails closed and exits when native status and drain do not settle', async () => {

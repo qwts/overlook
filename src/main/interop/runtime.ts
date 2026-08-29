@@ -2,6 +2,7 @@ import type { SafeStorageLike } from '../crypto/keystore.js';
 import { FilesystemInteropObjectStore } from './filesystem-object-store.js';
 import { InteropPairingBundleStore, InteropPairingCustodian } from './pairing-custody.js';
 import { InteropPCloudRuntime } from './pcloud-runtime.js';
+import { LiveLocalError, type LiveLocalBootstrapRequest, type LiveLocalBootstrapState } from './live-local-security.js';
 
 export interface InteropRuntimeOptions {
   readonly profileDirectory: string;
@@ -18,8 +19,8 @@ export class InteropRuntime {
   readonly pcloud: InteropPCloudRuntime;
   #workCount = 0;
 
-  constructor(options: InteropRuntimeOptions) {
-    this.pairing = new InteropPairingCustodian(new InteropPairingBundleStore(options.profileDirectory));
+  constructor(options: InteropRuntimeOptions, pairing = configureInteropPairing(options.profileDirectory)) {
+    this.pairing = pairing;
     this.pcloud = new InteropPCloudRuntime({
       ...options,
       clientId: options.pcloudClientId,
@@ -47,6 +48,12 @@ export class InteropRuntime {
 }
 
 let profileRuntime: InteropRuntime | undefined;
+let profilePairing: InteropPairingCustodian | undefined;
+
+export function configureInteropPairing(profileDirectory: string): InteropPairingCustodian {
+  profilePairing ??= new InteropPairingCustodian(new InteropPairingBundleStore(profileDirectory));
+  return profilePairing;
+}
 
 export function configureInteropRuntime(
   profileDirectory: string,
@@ -70,4 +77,12 @@ export function interopRuntimeBusy(): boolean {
 
 export function lockInteropRuntime(): void {
   profileRuntime?.lock();
+  if (profileRuntime === undefined) profilePairing?.lock();
+}
+
+export function liveLocalBootstrapState(request: LiveLocalBootstrapRequest): LiveLocalBootstrapState {
+  const state = profilePairing?.state();
+  if (state?.status !== 'unlocked') return 'locked';
+  if (state.pairingId !== request.pairingId) throw new LiveLocalError('Live local bootstrap pairing did not match.', 'wrong-authority');
+  return 'running';
 }

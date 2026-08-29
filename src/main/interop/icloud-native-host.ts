@@ -73,7 +73,7 @@ export function nativeHostManifest(executablePath: string, releasedExtensionId: 
   const extensionId = extensionIdSchema.parse(releasedExtensionId);
   return {
     name: OVERLOOK_ICLOUD_NATIVE_HOST,
-    description: 'Signed Overlook iCloud interoperability host',
+    description: 'Signed Overlook interoperability host',
     path: executablePath,
     type: 'stdio',
     allowed_origins: [`chrome-extension://${extensionId}/`],

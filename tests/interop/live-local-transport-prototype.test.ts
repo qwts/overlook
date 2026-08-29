@@ -14,14 +14,14 @@ import {
   LIVE_LOCAL_IN_FLIGHT_BYTES,
   LiveLocalBackpressureWindow,
   LiveLocalCapabilityBroker,
-  LiveLocalPrototypeError,
+  LiveLocalError,
   classifyControlEndpointFailure,
   prepareUnixControlEndpoint,
   windowsNamedPipeForUser,
   type LiveLocalCapability,
   type LiveLocalBootstrapResult,
   type LiveLocalBootstrapState,
-} from '../../src/shared/interop/live-local-prototype.js';
+} from '../../src/main/interop/live-local-security.js';
 
 const EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
 const OTHER_EXTENSION_ID = 'ponmlkjihgfedcbaponmlkjihgfedcba';
@@ -319,7 +319,7 @@ describe('ADR-0029 capability prototype (#543)', () => {
     assert.equal(broker.issue('running', bootstrapRequest({ protocolMin: 2, protocolMax: 3 })).state, 'incompatible');
     assert.throws(
       () => broker.issue('running', bootstrapRequest({ extensionId: OTHER_EXTENSION_ID })),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'wrong-authority',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'wrong-authority',
     );
 
     const valid = runningCapability(broker);
@@ -327,28 +327,28 @@ describe('ADR-0029 capability prototype (#543)', () => {
     assert.equal(broker.redeem(redemption(valid)).sessionId, valid.sessionId);
     assert.throws(
       () => broker.redeem(redemption(valid)),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'replay',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'replay',
     );
 
     const downgraded = runningCapability(broker);
     assert.throws(
       () => broker.redeem(redemption(downgraded, { protocolVersion: 2 })),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'unsupported',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'unsupported',
     );
     assert.throws(
       () => broker.redeem(redemption(downgraded)),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'replay',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'replay',
     );
 
     const expired = runningCapability(broker);
     now += LIVE_LOCAL_CAPABILITY_TTL_MS + 1;
     assert.throws(
       () => broker.redeem(redemption(expired)),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'expired',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'expired',
     );
     assert.throws(
       () => broker.issue('running', bootstrapRequest({ padding: 'x'.repeat(LIVE_LOCAL_CONTROL_FRAME_BYTES) })),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'over-budget',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'over-budget',
     );
   });
 
@@ -372,7 +372,7 @@ describe('ADR-0029 capability prototype (#543)', () => {
     assert.equal(window.inFlight, 0);
     assert.throws(
       () => window.reserve(1025),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'over-budget',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'over-budget',
     );
   });
 });
@@ -385,31 +385,31 @@ describe('ADR-0029 corrupt control handling (#543)', () => {
     });
     assert.throws(
       () => broker.issue('running', bootstrapRequest({ schemaVersion: 2 })),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'corrupt',
     );
     assert.throws(
       () => broker.issue('running', { value: 1n }),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'corrupt',
     );
     const circular: { self?: unknown } = {};
     circular.self = circular;
     assert.throws(
       () => broker.issue('running', circular),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'corrupt',
     );
 
     const malformed = runningCapability(broker);
     assert.throws(
       () => broker.redeem(redemption(malformed, { schemaVersion: 2 })),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'corrupt',
     );
     assert.throws(
       () => broker.redeem(redemption(malformed)),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'replay',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'replay',
     );
     assert.throws(
       () => broker.redeem({ sessionId: 'not-a-session' }),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'corrupt',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'corrupt',
     );
   });
 });
@@ -433,7 +433,7 @@ describe('ADR-0029 user-scoped control seams (#543)', () => {
     await symlink(target, link);
     await assert.rejects(
       prepareUnixControlEndpoint(link),
-      (error: unknown) => error instanceof LiveLocalPrototypeError && error.code === 'wrong-authority',
+      (error: unknown) => error instanceof LiveLocalError && error.code === 'wrong-authority',
     );
   });
 

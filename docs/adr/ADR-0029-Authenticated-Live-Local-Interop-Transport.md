@@ -165,10 +165,11 @@ in the [threat table](../Live-Local-Interop-Threat-Model.md#threats-and-controls
 The Windows seam emits the current-user-only SDDL but remains a production
 platform gate.
 
-The prototype is evidence, not a production transport. #544 owns bootstrap and
-packaging; #545 owns durable transport-journal composition. The complete
-evidence and remaining owner-run gates are in the
-[acceptance test](../acceptance/Acceptance-Test-Live-Local-Interop-Transport.md).
+The prototype's bulk-stream harness remains evidence, not a production
+transport. #544 owns macOS bootstrap and packaging, #1066 owns the Windows
+production ACL, and #545 owns durable transport-journal composition. The
+complete evidence and remaining owner-run gates are in the [acceptance
+test](../acceptance/Acceptance-Test-Live-Local-Interop-Transport.md).
 
 ## Consequences
 
