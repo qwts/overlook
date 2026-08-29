@@ -101,6 +101,55 @@ IoResult RunOverlapped(HANDLE pipe, DWORD timeout_ms, DWORD* transferred, DWORD*
   return IoResult::kComplete;
 }
 
+ULONGLONG DeadlineAfter(DWORD timeout_ms) { return GetTickCount64() + static_cast<ULONGLONG>(timeout_ms); }
+
+DWORD RemainingTimeout(ULONGLONG deadline) {
+  const ULONGLONG now = GetTickCount64();
+  if (now >= deadline) return 0;
+  const ULONGLONG remaining = deadline - now;
+  return remaining > MAXDWORD ? MAXDWORD : static_cast<DWORD>(remaining);
+}
+
+IoResult ReadExactHandle(
+    HANDLE pipe, std::uint8_t* target, DWORD length, ULONGLONG deadline, DWORD* error_code) {
+  DWORD offset = 0;
+  while (offset < length) {
+    const DWORD timeout_ms = RemainingTimeout(deadline);
+    if (timeout_ms == 0) return IoResult::kTimeout;
+    DWORD transferred = 0;
+    const IoResult result = RunOverlapped(pipe, timeout_ms, &transferred, error_code, [&](OVERLAPPED* overlapped) {
+      return ReadFile(pipe, target + offset, length - offset, nullptr, overlapped);
+    });
+    if (result != IoResult::kComplete) return result;
+    if (transferred == 0) {
+      *error_code = ERROR_BROKEN_PIPE;
+      return IoResult::kError;
+    }
+    offset += transferred;
+  }
+  return IoResult::kComplete;
+}
+
+IoResult WriteExactHandle(
+    HANDLE pipe, const std::uint8_t* source, DWORD length, ULONGLONG deadline, DWORD* error_code) {
+  DWORD offset = 0;
+  while (offset < length) {
+    const DWORD timeout_ms = RemainingTimeout(deadline);
+    if (timeout_ms == 0) return IoResult::kTimeout;
+    DWORD transferred = 0;
+    const IoResult result = RunOverlapped(pipe, timeout_ms, &transferred, error_code, [&](OVERLAPPED* overlapped) {
+      return WriteFile(pipe, source + offset, length - offset, nullptr, overlapped);
+    });
+    if (result != IoResult::kComplete) return result;
+    if (transferred == 0) {
+      *error_code = ERROR_BROKEN_PIPE;
+      return IoResult::kError;
+    }
+    offset += transferred;
+  }
+  return IoResult::kComplete;
+}
+
 class PipeServer final : public Napi::ObjectWrap<PipeServer> {
  public:
   static Napi::Function Define(Napi::Env env) {
@@ -207,40 +256,6 @@ class PipeServer final : public Napi::ObjectWrap<PipeServer> {
     return true;
   }
 
-  IoResult ReadExact(std::uint8_t* target, DWORD length, DWORD timeout_ms, DWORD* error_code) {
-    DWORD offset = 0;
-    while (offset < length) {
-      DWORD transferred = 0;
-      const IoResult result = RunOverlapped(pipe_, timeout_ms, &transferred, error_code, [&](OVERLAPPED* overlapped) {
-        return ReadFile(pipe_, target + offset, length - offset, nullptr, overlapped);
-      });
-      if (result != IoResult::kComplete) return result;
-      if (transferred == 0) {
-        *error_code = ERROR_BROKEN_PIPE;
-        return IoResult::kError;
-      }
-      offset += transferred;
-    }
-    return IoResult::kComplete;
-  }
-
-  IoResult WriteExact(const std::uint8_t* source, DWORD length, DWORD timeout_ms, DWORD* error_code) {
-    DWORD offset = 0;
-    while (offset < length) {
-      DWORD transferred = 0;
-      const IoResult result = RunOverlapped(pipe_, timeout_ms, &transferred, error_code, [&](OVERLAPPED* overlapped) {
-        return WriteFile(pipe_, source + offset, length - offset, nullptr, overlapped);
-      });
-      if (result != IoResult::kComplete) return result;
-      if (transferred == 0) {
-        *error_code = ERROR_BROKEN_PIPE;
-        return IoResult::kError;
-      }
-      offset += transferred;
-    }
-    return IoResult::kComplete;
-  }
-
   Napi::Value Read(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (pipe_ == INVALID_HANDLE_VALUE || info.Length() != 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
@@ -253,8 +268,9 @@ class PipeServer final : public Napi::ObjectWrap<PipeServer> {
       if (error_code == ERROR_SUCCESS) return env.Null();
       return ThrowWindowsError(env, "ConnectNamedPipe", error_code);
     }
+    const ULONGLONG deadline = DeadlineAfter(io_timeout);
     std::uint8_t header[kHeaderBytes]{};
-    IoResult result = ReadExact(header, kHeaderBytes, io_timeout, &error_code);
+    IoResult result = ReadExactHandle(pipe_, header, kHeaderBytes, deadline, &error_code);
     if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe control read timed out", "timeout");
     if (result == IoResult::kError) return ThrowWindowsError(env, "ReadFile", error_code);
     const std::uint32_t length = static_cast<std::uint32_t>(header[0]) |
@@ -264,7 +280,7 @@ class PipeServer final : public Napi::ObjectWrap<PipeServer> {
     if (length > max_frame_bytes_) return ThrowError(env, "named-pipe control frame exceeds its bound", "over-budget");
     std::vector<std::uint8_t> payload(length);
     if (length > 0) {
-      result = ReadExact(payload.data(), length, io_timeout, &error_code);
+      result = ReadExactHandle(pipe_, payload.data(), length, deadline, &error_code);
       if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe control read timed out", "timeout");
       if (result == IoResult::kError) return ThrowWindowsError(env, "ReadFile", error_code);
     }
@@ -286,7 +302,8 @@ class PipeServer final : public Napi::ObjectWrap<PipeServer> {
     frame[3] = static_cast<std::uint8_t>((length >> 24U) & 0xffU);
     if (length > 0) std::copy(payload.Data(), payload.Data() + payload.Length(), frame.data() + kHeaderBytes);
     DWORD error_code = ERROR_SUCCESS;
-    const IoResult result = WriteExact(frame.data(), static_cast<DWORD>(frame.size()), info[1].As<Napi::Number>().Uint32Value(), &error_code);
+    const IoResult result = WriteExactHandle(
+        pipe_, frame.data(), static_cast<DWORD>(frame.size()), DeadlineAfter(info[1].As<Napi::Number>().Uint32Value()), &error_code);
     if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe control write timed out", "timeout");
     if (result == IoResult::kError) return ThrowWindowsError(env, "WriteFile", error_code);
     return env.Undefined();
@@ -370,6 +387,142 @@ Napi::Value CurrentUserSid(const Napi::CallbackInfo& info) {
   const std::string result = WideToUtf8(sid);
   LocalFree(sid);
   return Napi::String::New(env, result);
+}
+
+bool ProcessUserMatches(DWORD process_id, PSID expected_sid, bool* matches, DWORD* error_code) {
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+  if (process == nullptr) {
+    *error_code = GetLastError();
+    return false;
+  }
+  HANDLE token = nullptr;
+  if (OpenProcessToken(process, TOKEN_QUERY, &token) == FALSE) {
+    *error_code = GetLastError();
+    CloseHandle(process);
+    return false;
+  }
+  DWORD required = 0;
+  GetTokenInformation(token, TokenUser, nullptr, 0, &required);
+  if (required == 0 || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+    *error_code = GetLastError();
+    CloseHandle(token);
+    CloseHandle(process);
+    return false;
+  }
+  std::vector<std::uint8_t> storage(required);
+  if (GetTokenInformation(token, TokenUser, storage.data(), required, &required) == FALSE) {
+    *error_code = GetLastError();
+    CloseHandle(token);
+    CloseHandle(process);
+    return false;
+  }
+  const auto* user = reinterpret_cast<const TOKEN_USER*>(storage.data());
+  *matches = EqualSid(user->User.Sid, expected_sid) != FALSE;
+  CloseHandle(token);
+  CloseHandle(process);
+  return true;
+}
+
+Napi::Value RequestPipe(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() != 5 || !info[0].IsString() || !info[1].IsString() || !info[2].IsBuffer() ||
+      !info[3].IsNumber() || !info[4].IsNumber()) {
+    return ThrowError(env, "request requires endpoint, server SID, payload, frame bound, and timeout", "native-error");
+  }
+  const std::wstring endpoint = Utf8ToWide(info[0].As<Napi::String>().Utf8Value());
+  const std::wstring expected_sid_text = Utf8ToWide(info[1].As<Napi::String>().Utf8Value());
+  const auto payload = info[2].As<Napi::Buffer<std::uint8_t>>();
+  const DWORD max_frame_bytes = info[3].As<Napi::Number>().Uint32Value();
+  const DWORD timeout_ms = info[4].As<Napi::Number>().Uint32Value();
+  if (endpoint.rfind(L"\\\\.\\pipe\\", 0) != 0 || endpoint.size() > 256 || expected_sid_text.empty() ||
+      max_frame_bytes == 0 || max_frame_bytes > 1024 * 1024 || payload.Length() > max_frame_bytes || timeout_ms == 0 ||
+      timeout_ms > 60'000) {
+    return ThrowError(env, "pipe request arguments are outside their security bounds", "native-error");
+  }
+  PSID expected_sid = nullptr;
+  if (ConvertStringSidToSidW(expected_sid_text.c_str(), &expected_sid) == FALSE) {
+    return ThrowWindowsError(env, "ConvertStringSidToSidW", GetLastError());
+  }
+  if (WaitNamedPipeW(endpoint.c_str(), timeout_ms) == FALSE) {
+    const DWORD error_code = GetLastError();
+    LocalFree(expected_sid);
+    if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_SEM_TIMEOUT || error_code == ERROR_PIPE_BUSY) {
+      return ThrowError(env, "named-pipe server is not running", "not-running");
+    }
+    return ThrowWindowsError(env, "WaitNamedPipeW", error_code);
+  }
+  HANDLE pipe = CreateFileW(
+      endpoint.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+  if (pipe == INVALID_HANDLE_VALUE) {
+    const DWORD error_code = GetLastError();
+    LocalFree(expected_sid);
+    if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PIPE_BUSY) {
+      return ThrowError(env, "named-pipe server is not running", "not-running");
+    }
+    return ThrowWindowsError(env, "CreateFileW", error_code);
+  }
+  ULONG server_process_id = 0;
+  if (GetNamedPipeServerProcessId(pipe, &server_process_id) == FALSE) {
+    const DWORD error_code = GetLastError();
+    CloseHandle(pipe);
+    LocalFree(expected_sid);
+    return ThrowWindowsError(env, "GetNamedPipeServerProcessId", error_code);
+  }
+  bool owner_matches = false;
+  DWORD error_code = ERROR_SUCCESS;
+  if (!ProcessUserMatches(server_process_id, expected_sid, &owner_matches, &error_code)) {
+    CloseHandle(pipe);
+    LocalFree(expected_sid);
+    return ThrowWindowsError(env, "query named-pipe server identity", error_code);
+  }
+  LocalFree(expected_sid);
+  if (!owner_matches) {
+    CloseHandle(pipe);
+    return ThrowError(env, "named-pipe server belongs to another user", "wrong-authority");
+  }
+
+  std::vector<std::uint8_t> request(kHeaderBytes + payload.Length());
+  const std::uint32_t request_length = static_cast<std::uint32_t>(payload.Length());
+  request[0] = static_cast<std::uint8_t>(request_length & 0xffU);
+  request[1] = static_cast<std::uint8_t>((request_length >> 8U) & 0xffU);
+  request[2] = static_cast<std::uint8_t>((request_length >> 16U) & 0xffU);
+  request[3] = static_cast<std::uint8_t>((request_length >> 24U) & 0xffU);
+  if (request_length > 0) std::copy(payload.Data(), payload.Data() + payload.Length(), request.data() + kHeaderBytes);
+  IoResult result = WriteExactHandle(
+      pipe, request.data(), static_cast<DWORD>(request.size()), DeadlineAfter(timeout_ms), &error_code);
+  if (result != IoResult::kComplete) {
+    CloseHandle(pipe);
+    if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe request write timed out", "timeout");
+    return ThrowWindowsError(env, "WriteFile", error_code);
+  }
+
+  const ULONGLONG response_deadline = DeadlineAfter(timeout_ms);
+  std::uint8_t header[kHeaderBytes]{};
+  result = ReadExactHandle(pipe, header, kHeaderBytes, response_deadline, &error_code);
+  if (result != IoResult::kComplete) {
+    CloseHandle(pipe);
+    if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe response read timed out", "timeout");
+    return ThrowWindowsError(env, "ReadFile", error_code);
+  }
+  const std::uint32_t response_length = static_cast<std::uint32_t>(header[0]) |
+                                        (static_cast<std::uint32_t>(header[1]) << 8U) |
+                                        (static_cast<std::uint32_t>(header[2]) << 16U) |
+                                        (static_cast<std::uint32_t>(header[3]) << 24U);
+  if (response_length > max_frame_bytes) {
+    CloseHandle(pipe);
+    return ThrowError(env, "named-pipe response exceeds its bound", "over-budget");
+  }
+  std::vector<std::uint8_t> response(response_length);
+  if (response_length > 0) {
+    result = ReadExactHandle(pipe, response.data(), response_length, response_deadline, &error_code);
+    if (result != IoResult::kComplete) {
+      CloseHandle(pipe);
+      if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe response read timed out", "timeout");
+      return ThrowWindowsError(env, "ReadFile", error_code);
+    }
+  }
+  CloseHandle(pipe);
+  return Napi::Buffer<std::uint8_t>::Copy(env, response.data(), response.size());
 }
 
 Napi::Value CanonicalizeSddl(const Napi::CallbackInfo& info) {
@@ -471,6 +624,7 @@ Napi::Value NativeHostRegistryValues(const Napi::CallbackInfo& info) {
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("PipeServer", PipeServer::Define(env));
   exports.Set("currentUserSid", Napi::Function::New(env, CurrentUserSid));
+  exports.Set("request", Napi::Function::New(env, RequestPipe));
   exports.Set("canonicalizeSddl", Napi::Function::New(env, CanonicalizeSddl));
   exports.Set("registerNativeHost", Napi::Function::New(env, RegisterNativeHost));
   exports.Set("unregisterNativeHost", Napi::Function::New(env, UnregisterNativeHost));

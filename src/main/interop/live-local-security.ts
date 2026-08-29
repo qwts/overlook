@@ -331,7 +331,7 @@ export function windowsNamedPipeForUser(userSid: string): WindowsNamedPipeSecuri
   const suffix = createHash('sha256').update(subject, 'utf8').digest('hex').slice(0, 24);
   return {
     path: `\\\\.\\pipe\\com.qwts.overlook.interop-${suffix}`,
-    // Protected DACL: only the current user SID receives generic-all.
+    // Protected DACL: only the current user SID receives file-object full access.
     sddl: `D:P(A;;FA;;;${subject})`,
   };
 }

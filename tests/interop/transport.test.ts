@@ -433,6 +433,24 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     assert.equal(registered, alternate[0]);
   });
 
+  test('contains damaged Windows native-host registry state during desktop startup', async () => {
+    const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-windows-damaged-'));
+    const installed = await registerICloudNativeHost({
+      platform: 'win32',
+      packaged: true,
+      applicationSupportDirectory: appSupport,
+      executablePath: 'C:\\Program Files\\Overlook\\Overlook.exe',
+      extensionId: RELEASED_EXTENSION_ID,
+      windowsRegistry: {
+        register: () => {
+          throw new Error('access denied');
+        },
+        unregister: () => undefined,
+      },
+    });
+    assert.deepEqual(installed, []);
+  });
+
   test('unregisters only manifests owned by the exact packaged executable', async () => {
     const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-'));
     const executablePath = '/Applications/Overlook.app/Contents/MacOS/Overlook';

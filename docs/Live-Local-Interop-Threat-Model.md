@@ -55,7 +55,7 @@ a durability acknowledgement.
 | Capability copied or replayed        | 15-second monotonic expiry; atomic single-use consumption             | Expiry and concurrent replay tests                  |
 | Protocol downgrade                   | Version range selected at bootstrap and repeated at redemption        | Lower or changed version is rejected                |
 | Cross-pairing confused deputy        | Capability binds pairing ID and operation                             | Wrong pairing/operation fails before data           |
-| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL                 | Production macOS modes and Windows kernel DACL      |
+| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL and server SID  | Production macOS modes and Windows kernel identity  |
 | Stale socket hijack                  | Owned-directory validation and live-peer probe before cleanup         | Production macOS rejects foreign/live endpoints     |
 | Oversized bootstrap/frame            | 64 KiB control ceiling and 4 MiB ciphertext-frame ceiling             | Boundary and over-limit tests                       |
 | Memory/CPU exhaustion                | Negotiated in-flight budget, backpressure, one session per capability | Peak buffered bytes remain within the bound         |

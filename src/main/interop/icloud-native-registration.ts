@@ -66,11 +66,17 @@ export async function registerICloudNativeHost(options: NativeHostRegistrationOp
   if (!options.packaged || options.extensionId === null) return [];
   const manifest = `${JSON.stringify(nativeHostManifest(options.executablePath, options.extensionId), null, 2)}\n`;
   if (options.platform === 'win32') {
-    const path = windowsManifestPath(options);
-    await mkdir(join(options.applicationSupportDirectory, 'Overlook', 'NativeMessagingHosts'), { recursive: true, mode: 0o700 });
-    await writeManifest(path, manifest);
-    (options.windowsRegistry ?? createWindowsNativeHostRegistry()).register(path);
-    return [path];
+    try {
+      const path = windowsManifestPath(options);
+      await mkdir(join(options.applicationSupportDirectory, 'Overlook', 'NativeMessagingHosts'), { recursive: true, mode: 0o700 });
+      await writeManifest(path, manifest);
+      (options.windowsRegistry ?? createWindowsNativeHostRegistry()).register(path);
+      return [path];
+    } catch {
+      // A damaged per-user registry key or manifest directory disables the
+      // affected browser integration, never the signed desktop application.
+      return [];
+    }
   }
   if (options.platform !== 'darwin') return [];
   const installed: string[] = [];

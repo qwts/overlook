@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const { createConnection } = require('node:net');
 const { join } = require('node:path');
 const { test } = require('node:test');
+const { setTimeout: delay } = require('node:timers/promises');
 const { Worker } = require('node:worker_threads');
 
 const binding = require('./pipe.cjs');
@@ -31,29 +32,6 @@ function waitForMessage(worker, predicate) {
   });
 }
 
-function framed(payload) {
-  const header = Buffer.alloc(4);
-  header.writeUInt32LE(payload.length);
-  return Buffer.concat([header, payload]);
-}
-
-function exchange(endpoint, payload) {
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(endpoint);
-    let pending = Buffer.alloc(0);
-    socket.once('error', reject);
-    socket.once('connect', () => socket.write(framed(payload)));
-    socket.on('data', (chunk) => {
-      pending = Buffer.concat([pending, chunk]);
-      if (pending.length < 4) return;
-      const length = pending.readUInt32LE();
-      if (pending.length < 4 + length) return;
-      socket.destroy();
-      resolve(pending.subarray(4, 4 + length));
-    });
-  });
-}
-
 test('real Windows pipe enforces the current-user DACL, one owner, and bounded framing', async (context) => {
   assert.equal(process.platform, 'win32');
   const sid = binding.currentUserSid();
@@ -74,7 +52,13 @@ test('real Windows pipe enforces the current-user DACL, one owner, and bounded f
   assert.throws(() => new binding.PipeServer(endpoint, sddl, MAX_FRAME_BYTES), /CreateNamedPipeW/u);
 
   const payload = Buffer.from(JSON.stringify({ schemaVersion: 1, state: 'locked' }), 'utf8');
-  assert.deepEqual(await exchange(endpoint, payload), payload);
+  const firstDisconnect = waitForMessage(worker, (message) => message?.type === 'disconnected');
+  assert.deepEqual(binding.request(endpoint, sid, payload, MAX_FRAME_BYTES, 500), payload);
+  await firstDisconnect;
+
+  const rejectedDisconnect = waitForMessage(worker, (message) => message?.type === 'disconnected');
+  assert.throws(() => binding.request(endpoint, 'S-1-5-18', payload, MAX_FRAME_BYTES, 500), /belongs to another user/u);
+  await rejectedDisconnect;
 
   const oversized = waitForMessage(worker, (message) => message?.type === 'read-error');
   const hostile = createConnection(endpoint);
@@ -88,7 +72,23 @@ test('real Windows pipe enforces the current-user DACL, one owner, and bounded f
   assert.equal((await oversized).code, 'over-budget');
   hostile.destroy();
 
-  assert.deepEqual(await exchange(endpoint, payload), payload);
+  const secondDisconnect = waitForMessage(worker, (message) => message?.type === 'disconnected');
+  assert.deepEqual(binding.request(endpoint, sid, payload, MAX_FRAME_BYTES, 500), payload);
+  await secondDisconnect;
+
+  const timedOut = waitForMessage(worker, (message) => message?.type === 'read-error' && message?.code === 'timeout');
+  const slow = createConnection(endpoint);
+  await new Promise((resolve, reject) => {
+    slow.once('connect', resolve);
+    slow.once('error', reject);
+  });
+  const startedAt = Date.now();
+  slow.write(Buffer.from([1]));
+  await delay(300);
+  slow.write(Buffer.from([0]));
+  await timedOut;
+  assert.ok(Date.now() - startedAt < 750, 'partial reads must share one absolute frame deadline');
+  slow.destroy();
 });
 
 test('native-host registry cleanup removes only the exact manifest owner', (context) => {

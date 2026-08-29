@@ -108,7 +108,11 @@ async function run(): Promise<void> {
       const id = nextId;
       nextId += 1;
       parentPort?.postMessage({ type: 'request', id, payload });
-      server.write(await response(id), IO_TIMEOUT_MS);
+      try {
+        server.write(await response(id), IO_TIMEOUT_MS);
+      } catch {
+        server.disconnect();
+      }
       await pause();
     }
   } finally {

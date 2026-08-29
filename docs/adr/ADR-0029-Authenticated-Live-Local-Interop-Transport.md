@@ -117,7 +117,9 @@ Overlook creates the control endpoint only after single-instance ownership and
 removes it during shutdown. Startup repairs a stale macOS socket only after
 proving it is inside the owned runtime directory and no live peer accepts a
 connection. Windows creates a fresh named-pipe instance with an explicit
-current-user access control list.
+current-user access control list. Before sending a bootstrap request, the
+native-host client checks the connected server process token against that same
+user SID on the exact pipe handle.
 
 The existing signed app executable remains the Native Messaging host. No
 launch agent, login item, service, always-running daemon, or unsigned helper is

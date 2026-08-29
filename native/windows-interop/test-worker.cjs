@@ -27,7 +27,9 @@ void (async () => {
         server.write(request, 500);
       } catch (error) {
         server.disconnect();
-        if (error?.win32Code !== 109 && error?.win32Code !== 232 && error?.win32Code !== 233) {
+        if (error?.win32Code === 109 || error?.win32Code === 232 || error?.win32Code === 233) {
+          parentPort.postMessage({ type: 'disconnected' });
+        } else {
           parentPort.postMessage({ type: 'read-error', code: error?.code ?? 'unknown' });
         }
       }

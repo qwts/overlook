@@ -1,13 +1,13 @@
 import { createRequire } from 'node:module';
-import { createConnection } from 'node:net';
 import { Worker } from 'node:worker_threads';
 
-import { requestSocketLiveLocalControl, type LiveLocalControlServer } from './live-local-control.js';
+import type { LiveLocalControlServer } from './live-local-control.js';
 import { LIVE_LOCAL_CONTROL_FRAME_BYTES, LiveLocalError } from './live-local-security.js';
 
 const nativeRequire = createRequire(import.meta.url);
 const SID = /^S-1-(?:\d+-){1,14}\d+$/u;
 const WORKER_CLOSE_MS = 6_000;
+const IO_TIMEOUT_MS = 5_000;
 
 interface WindowsPipeBinding {
   canonicalizeSddl(sddl: string): unknown;
@@ -20,6 +20,7 @@ interface WorkerMessage {
   readonly payload?: unknown;
   readonly securityDescriptor?: unknown;
   readonly message?: unknown;
+  readonly code?: unknown;
 }
 
 export interface WindowsLiveLocalPlatform {
@@ -53,6 +54,61 @@ function controlFailure(error: unknown): Record<string, unknown> {
     return { schemaVersion: 1, ok: false, code: 'corrupt', retryable: false };
   }
   return { schemaVersion: 1, ok: false, code: 'unsupported', retryable: false };
+}
+
+function encodedRequest(value: unknown): Buffer {
+  let payload: Buffer;
+  try {
+    payload = Buffer.from(JSON.stringify(value), 'utf8');
+  } catch {
+    throw new LiveLocalError('Windows live local request is not JSON.', 'corrupt');
+  }
+  if (payload.length > LIVE_LOCAL_CONTROL_FRAME_BYTES) {
+    throw new LiveLocalError('Windows live local request exceeds its bound.', 'over-budget');
+  }
+  return payload;
+}
+
+function requestError(message: WorkerMessage): Error {
+  const error = new Error(typeof message.message === 'string' ? message.message : 'Windows named-pipe request failed.');
+  Object.assign(error, { code: message.code === 'not-running' ? 'ENOENT' : message.code });
+  return error;
+}
+
+async function requestWindowsLiveLocalControl(endpoint: string, serverSid: string, value: unknown): Promise<unknown> {
+  const worker = new Worker(new URL('./windows-pipe-client-worker.js', import.meta.url), {
+    workerData: {
+      endpoint,
+      serverSid,
+      payload: encodedRequest(value),
+      maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
+      timeoutMs: IO_TIMEOUT_MS,
+    },
+  });
+  try {
+    const payload = await new Promise<Buffer>((resolve, reject) => {
+      let settled = false;
+      worker.once('message', (message: WorkerMessage) => {
+        settled = true;
+        if (message.type === 'response' && message.payload instanceof Uint8Array) resolve(Buffer.from(message.payload));
+        else reject(requestError(message));
+      });
+      worker.once('error', (error) => {
+        settled = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+      worker.once('exit', (code) => {
+        if (!settled) reject(new Error(`Windows named-pipe client worker exited with code ${String(code)}.`));
+      });
+    });
+    try {
+      return JSON.parse(payload.toString('utf8')) as unknown;
+    } catch {
+      throw new LiveLocalError('Windows live local response is not JSON.', 'corrupt');
+    }
+  } finally {
+    if (worker.threadId !== -1) await worker.terminate();
+  }
 }
 
 async function startWindowsLiveLocalControlServer(
@@ -131,6 +187,6 @@ export function createWindowsLiveLocalPlatform(): WindowsLiveLocalPlatform {
   return {
     currentUserSid,
     start: startWindowsLiveLocalControlServer,
-    request: (endpoint, value) => requestSocketLiveLocalControl(createConnection(endpoint), value),
+    request: (endpoint, value) => requestWindowsLiveLocalControl(endpoint, currentUserSid(), value),
   };
 }

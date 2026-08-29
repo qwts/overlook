@@ -77,20 +77,25 @@ bootstrap through a narrow Node-API binding:
 2. The binding asks Windows for the pipe's actual security descriptor before
    publishing readiness, rejects remote clients, and prevents a second server
    from claiming the endpoint.
-3. A dedicated worker thread owns bounded connect, read, and write operations;
-   synchronous Win32 waits never block Electron's main thread.
+3. The native-host client verifies the connected server process-token SID on
+   the exact handle before sending a bootstrap frame. Dedicated worker threads
+   own bounded connect, read, and write operations; one absolute deadline
+   covers each complete frame and synchronous Win32 waits never block
+   Electron's main thread.
 4. The signed executable remains the native-messaging host. Per-user Chromium,
    Chrome, Brave, and Edge registry values point to an executable-versioned
    manifest, and cleanup removes only values owned by that exact manifest.
-5. Native tests exercise the real kernel DACL, second-owner rejection, bounded
-   framing, recovery after an oversized frame, and exact-owner registry
-   cleanup on `windows-latest`.
+5. Native tests exercise the real kernel DACL, second-owner rejection,
+   connected-server SID rejection, bounded framing with a trickle deadline,
+   recovery after an oversized frame, and exact-owner registry cleanup on
+   `windows-latest`.
 
 Automated production evidence:
 
 - `native/windows-interop/windows_pipe.cc`
 - `native/windows-interop/test.cjs`
 - `src/main/interop/windows-live-local.ts`
+- `src/main/interop/windows-pipe-client-worker.ts`
 - `src/main/interop/windows-pipe-worker.ts`
 - `src/main/interop/windows-native-host-registry.ts`
 - `.github/workflows/package.yml`
