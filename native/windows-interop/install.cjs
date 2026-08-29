@@ -12,6 +12,7 @@ if (process.platform !== 'win32' || !['arm64', 'x64'].includes(targetArch)) {
 const environment = { ...process.env, npm_config_arch: targetArch };
 const nodeGyp = join(__dirname, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js');
 execFileSync(process.execPath, [nodeGyp, 'rebuild', `--arch=${targetArch}`], {
+  cwd: __dirname,
   env: environment,
   stdio: 'inherit',
 });
