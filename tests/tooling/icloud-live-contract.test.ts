@@ -11,10 +11,10 @@ import {
 } from '../../src/main/backup/icloud-drive/live-contract.js';
 
 describe('signed packaged iCloud live contract (#659)', () => {
-  test('the owner-only entrypoint is guarded and validates provisioned identity', () => {
+  test('the owner-only entrypoint validates provisioned identity', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as { readonly scripts?: Record<string, string> };
     const command = packageJson.scripts?.['test:icloud:live'] ?? '';
-    assert.match(command, /tools\/agent-guard\/run-guarded\.mjs/u);
+    assert.doesNotMatch(command, /tools\/agent-guard/u);
     assert.match(command, /verify-macos-icloud-live-contract\.mjs/u);
     const verifier = readFileSync('scripts/verify-macos-icloud-live-contract.mjs', 'utf8');
     assert.match(verifier, /verify-macos-provisioned-app\.mjs/u);
