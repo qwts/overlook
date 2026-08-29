@@ -139,8 +139,7 @@ describe('a11y budget file and gate wiring (#398)', () => {
     assert.match(packageJson, /"check:a11y-budget": "node scripts\/check-a11y-budget\.mjs"/u);
     // The static validator rides `npm run ci`; the runtime lanes ride the story and E2E jobs.
     assert.match(packageJson, /"ci": ".*check:a11y-budget.*"/u);
-    // The orphan check can only run where the lane actually visited stories. The
-    // guarded entrypoint (test:stories:ci) just wraps run-guarded.mjs around this.
+    // The orphan check can only run where the lane actually visited stories.
     assert.match(packageJson, /"test:stories:ci:inner": ".*OVERLOOK_A11Y_VISITED.*--visited.*--lane stories"/u);
     assert.match(source('.storybook/test-runner.ts'), /getViolations/u);
     assert.match(source('tests/e2e/a11y.spec.ts'), /getViolations/u);
