@@ -47,7 +47,7 @@ a durability acknowledgement.
 
 ## Threats and controls
 
-| Threat                               | Required control                                                      | Prototype evidence                                  |
+| Threat                               | Required control                                                      | Automated evidence                                  |
 | ------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------- |
 | Website scans localhost              | Exact extension `Origin`; reject before upgrade                       | Wrong/missing Origin cannot open a session          |
 | Unrelated extension invokes host     | Manifest allowlist plus exact launch-origin check                     | Wrong extension bootstrap fails closed              |
@@ -55,13 +55,13 @@ a durability acknowledgement.
 | Capability copied or replayed        | 15-second monotonic expiry; atomic single-use consumption             | Expiry and concurrent replay tests                  |
 | Protocol downgrade                   | Version range selected at bootstrap and repeated at redemption        | Lower or changed version is rejected                |
 | Cross-pairing confused deputy        | Capability binds pairing ID and operation                             | Wrong pairing/operation fails before data           |
-| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL                 | Platform seam tests inspect permissions/ACL builder |
-| Stale socket hijack                  | Owned-directory validation and live-peer probe before cleanup         | Foreign path and live endpoint are never removed    |
+| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL                 | Production macOS modes; Windows SDDL contract seam  |
+| Stale socket hijack                  | Owned-directory validation and live-peer probe before cleanup         | Production macOS rejects foreign/live endpoints     |
 | Oversized bootstrap/frame            | 64 KiB control ceiling and 4 MiB ciphertext-frame ceiling             | Boundary and over-limit tests                       |
 | Memory/CPU exhaustion                | Negotiated in-flight budget, backpressure, one session per capability | Peak buffered bytes remain within the bound         |
 | Slow or abandoned client             | Bootstrap, redemption, idle, and cancellation deadlines               | Bounded teardown and cancellation latency           |
-| Native host becomes data proxy       | Bootstrap-only response; host exits before bulk stream                | No original-sized reads or writes in host evidence  |
-| Listener escapes loopback            | Explicit `127.0.0.1` bind; no wildcard/hostname bind                  | Bound address assertion                             |
+| Native host becomes data proxy       | Bootstrap-only response; host exits before bulk stream                | Production host forwards one bounded control result |
+| Listener escapes loopback            | Explicit `127.0.0.1` bind; no wildcard/hostname bind                  | Production listener bound-address assertion         |
 | Logs leak authority or content       | Closed error vocabulary; no raw frames, URLs, secrets, or paths       | No logs; generic errors omit authority and content  |
 | Desktop is locked                    | Authority check before capability issuance                            | Typed `locked` state, no endpoint capability        |
 | App disappears after acknowledgement | ADR-0014/0015 durable acknowledgement remains authoritative           | Retry only unacknowledged work                      |
@@ -77,13 +77,16 @@ a durability acknowledgement.
   local.
 - MV3 suspension can waste an issued capability. Expiry makes this a retry, not
   a reason to lengthen or persist authority.
-- Windows ACL and packaged macOS signing behavior require native owner-run
-  evidence before production closeout.
+- Windows ACL production support remains blocked on the native implementation
+  in [#1066](https://github.com/qwts/overlook/issues/1066).
+- Packaged macOS signing behavior requires owner-run evidence before production
+  closeout.
 
 ## Production gates
 
-ADR acceptance requires deterministic prototype evidence for the closed threat
-matrix. #544 must add signed packaged macOS and Windows bootstrap evidence.
-#545 must prove encrypted transfer, backpressure, cancellation, replay, and
-durable journal behavior on the production composition. Neither issue may
-introduce a daemon or plaintext fallback without an ADR amendment.
+ADR acceptance requires deterministic evidence for the closed threat matrix.
+#544 composes the macOS bootstrap and must add signed packaged evidence. #1066
+owns Windows production ACL and installer evidence. #545 must prove encrypted
+transfer, backpressure, cancellation, replay, and durable journal behavior on
+the production composition. None may introduce a daemon or plaintext fallback
+without an ADR amendment.

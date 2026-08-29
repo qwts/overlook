@@ -33,23 +33,54 @@ composition root:
 
 Automated evidence:
 
-- `src/shared/interop/live-local-prototype.ts`
+- `src/main/interop/live-local-security.ts`
 - `tests/interop/live-local-transport-prototype.test.ts`
 
-The shared module is marked test-only and has no production importer. It
-exists to keep the ADR executable while #544 and #545 remain gated.
+The security contract was promoted intact from the prototype into the main
+process for #544. The bulk-stream and journal harness remains deterministic
+evidence for #545 rather than a second production transport.
+
+## Production macOS evidence
+
+[#544](https://github.com/qwts/overlook/issues/544) composes the accepted
+bootstrap on macOS:
+
+1. The desktop owns a deterministic per-user, per-profile Unix endpoint in a
+   mode-`0700` directory and sets the socket to mode `0600`.
+2. Startup refuses foreign endpoint files and a second live desktop peer. A
+   dead owned socket is the only stale endpoint it removes.
+3. The existing signed native-messaging executable forwards one bounded,
+   versioned bootstrap request without entering iCloud storage authority.
+4. The ephemeral listener binds `127.0.0.1`, checks the exact released
+   extension Origin and WebSocket subprotocol, and accepts data only after
+   first-frame capability redemption.
+5. Lock revokes outstanding capabilities and closes active sessions; shutdown
+   closes both endpoints. Unsupported platforms create no listener.
+
+Automated production evidence:
+
+- `src/main/interop/live-local-control.ts`
+- `src/main/interop/live-local-session.ts`
+- `src/main/interop/live-local-bridge.ts`
+- `src/main/interop/live-local-native.ts`
+- `tests/interop/live-local-production.test.ts`
+- `tests/interop/transport.test.ts`
 
 ## Production follow-up gates
 
-[#544](https://github.com/qwts/overlook/issues/544) must prove:
+The remaining #544 owner-run gate must prove the signed packaged macOS host
+across install, upgrade, disable, and uninstall. The deterministic production
+tests prove:
 
-- the packaged signed host distinguishes every running state;
 - native-host launch origin and browser manifest identity remain exact;
-- macOS socket ownership/stale cleanup and Windows named-pipe ACLs survive
-  install, upgrade, disable, and uninstall;
 - unsupported platforms install and listen to nothing;
 - MV3 suspension/restart retries through a fresh bootstrap without persisting
   capability authority.
+
+[#1066](https://github.com/qwts/overlook/issues/1066) owns the Windows-native
+pipe implementation and signed-installer evidence. Node's named-pipe API does
+not expose the explicit current-user SDDL required by ADR-0029, so Windows
+production remains blocked rather than accepting a broader ACL.
 
 [#545](https://github.com/qwts/overlook/issues/545) must prove:
 
@@ -60,5 +91,4 @@ exists to keep the ADR executable while #544 and #545 remain gated.
   cancellation, app disappearance, and restart behavior;
 - no listener, native proxy, timer, or producer survives app/session teardown.
 
-These owner-run and production-composition gates cannot be marked complete by
-the prototype.
+The signed-package gates cannot be marked complete by deterministic tests.
