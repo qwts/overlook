@@ -7,10 +7,12 @@ import {
   prepareUnixControlEndpoint,
   parseLiveLocalBootstrapRequest,
   parseLiveLocalBootstrapResult,
+  windowsNamedPipeForUser,
   type LiveLocalBootstrapRequest,
   type LiveLocalBootstrapResult,
 } from './live-local-security.js';
 import { InteropTransportError } from './transport.js';
+import { createWindowsLiveLocalPlatform, type WindowsLiveLocalPlatform } from './windows-live-local.js';
 
 const nativeBootstrapRequestSchema = z
   .object({
@@ -59,21 +61,30 @@ export interface RequestLiveLocalBootstrapOptions {
   readonly profileDirectory: string;
   readonly expectedExtensionId: string;
   readonly temporaryDirectory?: string;
+  readonly windows?: WindowsLiveLocalPlatform;
 }
 
 export async function requestLiveLocalBootstrap(
   value: unknown,
   options: RequestLiveLocalBootstrapOptions,
 ): Promise<LiveLocalBootstrapResult> {
-  if (options.platform !== 'darwin' || !options.packaged)
+  if ((options.platform !== 'darwin' && options.platform !== 'win32') || !options.packaged)
     throw new InteropTransportError('Live local bootstrap is unavailable on this build.', 'unsupported', false);
   const nativeRequest = parseLiveLocalNativeBootstrapRequest(value);
   if (nativeRequest.request.extensionId !== options.expectedExtensionId)
     throw new InteropTransportError('Live local native host rejected the extension identity.', 'unsupported', false);
-  const runtimeDirectory = liveLocalRuntimeDirectory(options.profileDirectory, options.temporaryDirectory ?? tmpdir());
-  const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
   try {
-    const reply = controlReplySchema.parse(await requestUnixLiveLocalControl(endpoint, nativeRequest.request));
+    let replyValue: unknown;
+    if (options.platform === 'darwin') {
+      const runtimeDirectory = liveLocalRuntimeDirectory(options.profileDirectory, options.temporaryDirectory ?? tmpdir());
+      const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
+      replyValue = await requestUnixLiveLocalControl(endpoint, nativeRequest.request);
+    } else {
+      const windows = options.windows ?? createWindowsLiveLocalPlatform();
+      const endpoint = windowsNamedPipeForUser(windows.currentUserSid()).path;
+      replyValue = await windows.request(endpoint, nativeRequest.request);
+    }
+    const reply = controlReplySchema.parse(replyValue);
     if (!reply.ok) throw new InteropTransportError('Live local desktop rejected the bootstrap.', reply.code, reply.retryable);
     return parseLiveLocalBootstrapResult(reply.result);
   } catch (error) {

@@ -11,6 +11,7 @@ import { liveLocalRuntimeDirectory, requestUnixLiveLocalControl } from '../../sr
 import { requestLiveLocalBootstrap } from '../../src/main/interop/live-local-native.js';
 import { LiveLocalSessionListener } from '../../src/main/interop/live-local-session.js';
 import { prepareUnixControlEndpoint, type LiveLocalCapability } from '../../src/main/interop/live-local-security.js';
+import type { WindowsLiveLocalPlatform } from '../../src/main/interop/windows-live-local.js';
 
 const EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
 const OTHER_EXTENSION_ID = 'ponmlkjihgfedcbaponmlkjihgfedcba';
@@ -245,5 +246,57 @@ describe('production live local bootstrap (#544)', () => {
     });
     assert.equal(await unsupported.start(), false);
     await unsupported.close();
+  });
+
+  test('composes the protected current-user Windows pipe for desktop and native-host bootstrap', async () => {
+    const sid = 'S-1-5-21-111-222-333-1001';
+    let endpoint = '';
+    let sddl = '';
+    let handler: ((value: unknown) => unknown) | undefined;
+    let closed = false;
+    const windows: WindowsLiveLocalPlatform = {
+      currentUserSid: () => sid,
+      start: (nextEndpoint, nextSddl, nextHandler) => {
+        endpoint = nextEndpoint;
+        sddl = nextSddl;
+        handler = nextHandler;
+        return Promise.resolve({
+          endpoint,
+          close: () => {
+            closed = true;
+            return Promise.resolve();
+          },
+        });
+      },
+      request: async (requestedEndpoint, value) => {
+        assert.equal(requestedEndpoint, endpoint);
+        assert.ok(handler);
+        return { schemaVersion: 1, ok: true, result: await handler(value) };
+      },
+    };
+    const profile = await mkdtemp(join(tmpdir(), 'overlook-live-windows-profile-'));
+    const bridge = new LiveLocalBridge({
+      platform: 'win32',
+      profileDirectory: profile,
+      temporaryDirectory: profile,
+      expectedExtensionId: EXTENSION_ID,
+      bootstrapState: () => 'locked',
+      windows,
+    });
+    assert.equal(await bridge.start(), true);
+    assert.match(endpoint, /^\\\\\.\\pipe\\com\.qwts\.overlook\.interop-[a-f0-9]{24}$/u);
+    assert.equal(sddl, `D:P(A;;GA;;;${sid})`);
+    assert.deepEqual(
+      await requestLiveLocalBootstrap(nativeBootstrapRequest(), {
+        platform: 'win32',
+        packaged: true,
+        profileDirectory: profile,
+        expectedExtensionId: EXTENSION_ID,
+        windows,
+      }),
+      { schemaVersion: 1, state: 'locked' },
+    );
+    await bridge.close();
+    assert.equal(closed, true);
   });
 });

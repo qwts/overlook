@@ -69,7 +69,8 @@ export interface NativeHostManifest {
 }
 
 export function nativeHostManifest(executablePath: string, releasedExtensionId: string): NativeHostManifest {
-  if (!executablePath.startsWith('/')) throw new InteropTransportError('Native host executable path must be absolute.', 'corrupt', false);
+  if (!executablePath.startsWith('/') && !/^[A-Za-z]:[\\/]/u.test(executablePath))
+    throw new InteropTransportError('Native host executable path must be absolute.', 'corrupt', false);
   const extensionId = extensionIdSchema.parse(releasedExtensionId);
   return {
     name: OVERLOOK_ICLOUD_NATIVE_HOST,

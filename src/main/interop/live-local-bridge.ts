@@ -3,12 +3,14 @@ import { z } from 'zod';
 import {
   LiveLocalError,
   parseLiveLocalBootstrapRequest,
+  windowsNamedPipeForUser,
   type LiveLocalBootstrapRequest,
   type LiveLocalBootstrapResult,
   type LiveLocalBootstrapState,
 } from './live-local-security.js';
 import { liveLocalRuntimeDirectory, startUnixLiveLocalControlServer, type LiveLocalControlServer } from './live-local-control.js';
 import { LiveLocalSessionListener, type LiveLocalAcceptedSession } from './live-local-session.js';
+import { createWindowsLiveLocalPlatform, type WindowsLiveLocalPlatform } from './windows-live-local.js';
 
 const sessionControlSchema = z
   .object({
@@ -23,6 +25,7 @@ export interface LiveLocalBridgeOptions {
   readonly temporaryDirectory: string;
   readonly expectedExtensionId: string;
   readonly bootstrapState: (request: LiveLocalBootstrapRequest) => LiveLocalBootstrapState;
+  readonly windows?: WindowsLiveLocalPlatform;
 }
 
 async function runControlOnlySession(session: LiveLocalAcceptedSession): Promise<void> {
@@ -63,10 +66,15 @@ export class LiveLocalBridge {
   }
 
   async start(): Promise<boolean> {
-    if (this.options.platform !== 'darwin') return false;
     if (this.control !== null) return true;
-    const runtimeDirectory = liveLocalRuntimeDirectory(this.options.profileDirectory, this.options.temporaryDirectory);
-    this.control = await startUnixLiveLocalControlServer(runtimeDirectory, (value) => this.bootstrap(value));
+    if (this.options.platform === 'darwin') {
+      const runtimeDirectory = liveLocalRuntimeDirectory(this.options.profileDirectory, this.options.temporaryDirectory);
+      this.control = await startUnixLiveLocalControlServer(runtimeDirectory, (value) => this.bootstrap(value));
+    } else if (this.options.platform === 'win32') {
+      const windows = this.options.windows ?? createWindowsLiveLocalPlatform();
+      const contract = windowsNamedPipeForUser(windows.currentUserSid());
+      this.control = await windows.start(contract.path, contract.sddl, (value) => this.bootstrap(value));
+    } else return false;
     return true;
   }
 

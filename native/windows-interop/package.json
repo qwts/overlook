@@ -1,0 +1,29 @@
+{
+  "name": "@overlook/windows-interop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Overlook Windows named-pipe security bridge",
+  "main": "pipe.cjs",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "gypfile": true,
+  "files": [
+    "pipe.cjs",
+    "prebuilds/**/*.node"
+  ],
+  "scripts": {
+    "install": "node install.cjs"
+  },
+  "dependencies": {
+    "node-addon-api": "8.9.0"
+  },
+  "devDependencies": {
+    "node-gyp": "13.0.1"
+  }
+}

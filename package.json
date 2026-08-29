@@ -167,6 +167,7 @@
   },
   "allowScripts": {
     "@overlook/touch-id@0.1.0": true,
+    "@overlook/windows-interop@0.1.0": true,
     "better-sqlite3-multiple-ciphers": false,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
@@ -184,6 +185,7 @@
     "sqlite-vec": "0.1.9"
   },
   "optionalDependencies": {
-    "@overlook/touch-id": "0.1.0"
+    "@overlook/touch-id": "0.1.0",
+    "@overlook/windows-interop": "0.1.0"
   }
 }

@@ -44,6 +44,20 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /node scripts\/verify-windows-arch\.mjs "\$WIN_ARCH"/u);
   });
 
+  test('the x64 package proves native ACL and complete installer lifecycle behavior', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const installer = source('build/installer.nsh');
+    const smoke = source('scripts/verify-windows-live-local-install.ps1');
+    assert.match(workflow, /node native\/windows-interop\/install\.cjs "\$WIN_ARCH"/u);
+    assert.match(workflow, /node native\/windows-interop\/test\.cjs/u);
+    assert.match(workflow, /pwsh -NoProfile -File scripts\/verify-windows-live-local-install\.ps1/u);
+    assert.match(installer, /!macro customUnInstall/u);
+    assert.match(installer, /--unregister-native-host/u);
+    assert.match(smoke, /--register-native-host/u);
+    assert.match(smoke, /--unregister-native-host/u);
+    assert.match(smoke, /Windows live-local install, upgrade, disable, and uninstall smoke passed/u);
+  });
+
   test('SQLite v13 foreign prebuilds are pruned before Windows architecture verification', () => {
     const workflow = source('.github/workflows/package.yml');
     const builder = source('electron-builder.yml');

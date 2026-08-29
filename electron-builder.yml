@@ -39,6 +39,10 @@ files:
   - '!node_modules/@overlook/touch-id/native_drag.mm'
   - '!node_modules/@overlook/touch-id/photokit.mm'
   - '!node_modules/@overlook/touch-id/file_provider.mm'
+  - '!node_modules/@overlook/windows-interop/build/**'
+  - '!node_modules/@overlook/windows-interop/install.cjs'
+  - '!node_modules/@overlook/windows-interop/prepare-prebuild.cjs'
+  - '!node_modules/@overlook/windows-interop/windows_pipe.cc'
 # Everything ships bundled by electron-vite (no runtime node_modules yet);
 # native modules must land in "dependencies" so electron-builder includes and
 # verifies them. Every shipped native dependency is Node-API or a loadable
