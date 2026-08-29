@@ -110,7 +110,7 @@ jobs:
           cache: npm
 
       - name: Install release verification dependencies (scripts skipped)
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@df404e2ce63fc1566eb2a60c92a8fabe009955b0
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
         with:
           task: Install locked release verification dependencies
           executable: npm
