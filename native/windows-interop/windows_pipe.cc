@@ -51,7 +51,11 @@ Napi::Value ThrowError(Napi::Env env, const std::string& message, const char* co
 }
 
 Napi::Value ThrowWindowsError(Napi::Env env, const std::string& operation, DWORD error_code) {
-  return ThrowError(env, operation + " failed with Windows error " + std::to_string(error_code), "native-error");
+  Napi::Error error = Napi::Error::New(env, operation + " failed with Windows error " + std::to_string(error_code));
+  error.Value().Set("code", Napi::String::New(env, "native-error"));
+  error.Value().Set("win32Code", Napi::Number::New(env, error_code));
+  error.ThrowAsJavaScriptException();
+  return env.Null();
 }
 
 enum class IoResult { kComplete, kTimeout, kError };
@@ -283,7 +287,6 @@ class PipeServer final : public Napi::ObjectWrap<PipeServer> {
     if (length > 0) std::copy(payload.Data(), payload.Data() + payload.Length(), frame.data() + kHeaderBytes);
     DWORD error_code = ERROR_SUCCESS;
     const IoResult result = WriteExact(frame.data(), static_cast<DWORD>(frame.size()), info[1].As<Napi::Number>().Uint32Value(), &error_code);
-    Disconnect();
     if (result == IoResult::kTimeout) return ThrowError(env, "named-pipe control write timed out", "timeout");
     if (result == IoResult::kError) return ThrowWindowsError(env, "WriteFile", error_code);
     return env.Undefined();
@@ -369,6 +372,28 @@ Napi::Value CurrentUserSid(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, result);
 }
 
+Napi::Value CanonicalizeSddl(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() != 1 || !info[0].IsString()) return ThrowError(env, "SDDL is required", "native-error");
+  const std::wstring sddl = Utf8ToWide(info[0].As<Napi::String>().Utf8Value());
+  if (sddl.empty()) return ThrowError(env, "SDDL is required", "native-error");
+  PSECURITY_DESCRIPTOR descriptor = nullptr;
+  if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &descriptor, nullptr) == FALSE) {
+    return ThrowWindowsError(env, "ConvertStringSecurityDescriptorToSecurityDescriptorW", GetLastError());
+  }
+  LPWSTR serialized = nullptr;
+  if (ConvertSecurityDescriptorToStringSecurityDescriptorW(
+          descriptor, SDDL_REVISION_1, DACL_SECURITY_INFORMATION, &serialized, nullptr) == FALSE) {
+    const DWORD error_code = GetLastError();
+    LocalFree(descriptor);
+    return ThrowWindowsError(env, "ConvertSecurityDescriptorToStringSecurityDescriptorW", error_code);
+  }
+  const std::string result = WideToUtf8(serialized);
+  LocalFree(serialized);
+  LocalFree(descriptor);
+  return Napi::String::New(env, result);
+}
+
 bool RegistryDefaultValue(const wchar_t* subkey, std::wstring* value) {
   HKEY key = nullptr;
   if (RegOpenKeyExW(HKEY_CURRENT_USER, subkey, 0, KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) return false;
@@ -446,6 +471,7 @@ Napi::Value NativeHostRegistryValues(const Napi::CallbackInfo& info) {
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("PipeServer", PipeServer::Define(env));
   exports.Set("currentUserSid", Napi::Function::New(env, CurrentUserSid));
+  exports.Set("canonicalizeSddl", Napi::Function::New(env, CanonicalizeSddl));
   exports.Set("registerNativeHost", Napi::Function::New(env, RegisterNativeHost));
   exports.Set("unregisterNativeHost", Napi::Function::New(env, UnregisterNativeHost));
   exports.Set("nativeHostRegistryValues", Napi::Function::New(env, NativeHostRegistryValues));

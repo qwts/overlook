@@ -10,6 +10,7 @@ const SID = /^S-1-(?:\d+-){1,14}\d+$/u;
 const WORKER_CLOSE_MS = 6_000;
 
 interface WindowsPipeBinding {
+  canonicalizeSddl(sddl: string): unknown;
   currentUserSid(): unknown;
 }
 
@@ -59,6 +60,10 @@ async function startWindowsLiveLocalControlServer(
   sddl: string,
   handle: (value: unknown) => unknown,
 ): Promise<LiveLocalControlServer> {
+  const expectedSecurityDescriptor = loadBinding().canonicalizeSddl(sddl);
+  if (typeof expectedSecurityDescriptor !== 'string') {
+    throw new LiveLocalError('Windows live local security descriptor is unavailable.', 'unsupported');
+  }
   const worker = new Worker(new URL('./windows-pipe-worker.js', import.meta.url), {
     workerData: { endpoint, sddl, maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES },
   });
@@ -71,7 +76,7 @@ async function startWindowsLiveLocalControlServer(
   });
   worker.on('message', (message: WorkerMessage) => {
     if (message.type === 'ready') {
-      if (message.securityDescriptor === sddl) readyResolve?.();
+      if (message.securityDescriptor === expectedSecurityDescriptor) readyResolve?.();
       else readyReject?.(new Error('Windows named-pipe DACL does not match the accepted security contract.'));
       return;
     }

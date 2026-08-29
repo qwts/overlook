@@ -26,6 +26,11 @@ interface ParentMessage {
   readonly payload?: unknown;
 }
 
+interface NativePipeError {
+  readonly code?: unknown;
+  readonly win32Code?: unknown;
+}
+
 const CONNECT_POLL_MS = 50;
 const IO_TIMEOUT_MS = 5_000;
 const CORRUPT_REPLY = Buffer.from(JSON.stringify({ schemaVersion: 1, ok: false, code: 'corrupt', retryable: false }), 'utf8');
@@ -81,7 +86,13 @@ async function run(): Promise<void> {
       try {
         payload = server.read(CONNECT_POLL_MS, IO_TIMEOUT_MS);
       } catch (error) {
-        const code = (error as { readonly code?: unknown } | null)?.code;
+        const nativeError = error as NativePipeError | null;
+        if (nativeError?.win32Code === 109 || nativeError?.win32Code === 232 || nativeError?.win32Code === 233) {
+          server.disconnect();
+          await pause();
+          continue;
+        }
+        const code = nativeError?.code;
         try {
           server.write(code === 'over-budget' ? CORRUPT_REPLY : UNAVAILABLE_REPLY, IO_TIMEOUT_MS);
         } catch {
