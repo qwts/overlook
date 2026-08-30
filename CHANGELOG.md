@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.4
+
+### Patch Changes
+
+- b294026: Add accessible copy controls for exact cloud recovery identifiers, remote paths, provider accounts, and recovery errors.
+
 ## 0.74.3
 
 ### Patch Changes
