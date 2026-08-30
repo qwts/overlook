@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.1
+
+### Patch Changes
+
+- dff6ec2: Allow release recovery to package historical tags that predate the optional native Windows interop component.
+
 ## 0.74.0
 
 ### Minor Changes
