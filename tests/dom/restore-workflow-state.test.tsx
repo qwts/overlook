@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
+import { AnnouncerProvider } from '../../src/renderer/src/components/LiveAnnouncer.js';
 import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
 
 // #748: every result on the restore dialog belongs to exactly one discovery.
@@ -110,7 +111,9 @@ test('a failed discovery error clears when the provider changes (#748)', async (
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -192,7 +195,9 @@ test('a discovery that resolves AFTER the provider changes is ignored (#748 stal
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -250,7 +255,9 @@ test('Back from the library list clears the previous discovery (#748)', async ()
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -323,7 +330,9 @@ test('an unreadable namespace is reported as corrupt, not as a connection failur
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();

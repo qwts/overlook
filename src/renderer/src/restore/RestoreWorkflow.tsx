@@ -12,6 +12,7 @@ import { useFormats } from '../i18n/use-formats.js';
 import { Badge } from '../components/Badge.js';
 import { Button } from '../components/Button.js';
 import { Checkbox } from '../components/Checkbox.js';
+import { CopyableValue } from '../components/CopyableValue.js';
 import { Icon } from '../components/Icon.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { RecoveryKeyDropTarget } from './RecoveryKeyDropTarget.js';
@@ -110,7 +111,8 @@ const messages = defineMessages({
   trashConfirmLabel: { id: 'restore.verify.trashConfirm', defaultMessage: 'Type Permanently Delete Backup to confirm' },
   trashConfirmPlaceholder: { id: 'restore.verify.trashPlaceholder', defaultMessage: 'Permanently Delete Backup' },
   details: { id: 'restore.error.details', defaultMessage: 'Details' },
-  copyError: { id: 'restore.error.copy', defaultMessage: 'Copy error' },
+  copyRemotePath: { id: 'restore.copy.remotePath', defaultMessage: 'remote path' },
+  copyErrorDetails: { id: 'restore.copy.errorDetails', defaultMessage: 'recovery error details' },
 });
 
 export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): ReactElement {
@@ -555,10 +557,13 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                 </strong>
                 <span>{intl.formatMessage(messages.verifyHelp)}</span>
                 {verifyResult.missing.length === 0 ? null : (
-                  <ul className="mono-data ovl-restore__verifyList">
+                  <ul className="ovl-restore__verifyList">
                     {verifyResult.missing.map((o) => (
                       <li key={o.path}>
-                        {o.path} — {o.kind} — {o.reason}
+                        <CopyableValue value={o.path} label={intl.formatMessage(messages.copyRemotePath)} />
+                        <span className="mono-data">
+                          {o.kind} — {o.reason}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -743,9 +748,11 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             <div className="ovl-restore__warnings ovl-restore__missing" data-testid="restore-missing">
               <strong>{intl.formatMessage(messages.missingCount, { count: missing.length })}</strong>
               <span>{intl.formatMessage(messages.missingHelp)}</span>
-              <ul className="mono-data">
+              <ul>
                 {missing.map((object) => (
-                  <li key={object.path}>{object.path}</li>
+                  <li key={object.path}>
+                    <CopyableValue value={object.path} label={intl.formatMessage(messages.copyRemotePath)} />
+                  </li>
                 ))}
               </ul>
             </div>
@@ -769,14 +776,11 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           </span>
           <details className="ovl-restore__errorDetails">
             <summary>{intl.formatMessage(messages.details)}</summary>
-            <pre className="mono-data ovl-restore__errorText">{`reason: ${error.reason}\nmessage: ${error.message}`}</pre>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void window.overlook.clipboard.writeText(`reason: ${error.reason}\nmessage: ${error.message}`)}
-            >
-              {intl.formatMessage(messages.copyError)}
-            </Button>
+            <CopyableValue
+              value={`reason: ${error.reason}\nmessage: ${error.message}`}
+              label={intl.formatMessage(messages.copyErrorDetails)}
+              textClassName="ovl-restore__errorText"
+            />
           </details>
         </div>
       )}

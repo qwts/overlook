@@ -679,6 +679,8 @@ export const DisconnectBlockedByCloudOnlyCustody: Story = {
     await waitFor(() => expect(confirmation).toHaveTextContent('3 cloud-only originals (6.3 GB)'));
     await expect(confirmation).toHaveTextContent('Rivera Archive: 3 originals · 6.3 GB');
     await expect(confirmation).toHaveTextContent('m.rivera@example.com');
+    await expect(within(confirmation).getByRole('button', { name: 'Copy provider account ID' })).toBeVisible();
+    await expect(within(confirmation).getByRole('button', { name: 'Copy library ID' })).toBeVisible();
     await expect(confirmation.querySelector('.mono-data')).not.toBeNull();
     await expect(confirmation).not.toHaveTextContent('Encrypted data already stored in Local mock is not deleted.');
     await expect(within(confirmation).getByRole('button', { name: 'Restore all originals first' })).toBeEnabled();
@@ -718,6 +720,7 @@ export const ProviderRequiredRecoveryBanner: Story = {
     await expect(banner).toHaveTextContent('Google Drive required');
     await expect(banner).toHaveTextContent('Reconnect Google Drive as m.rivera@gmail.com');
     await expect(banner).toHaveTextContent('4 · 8.4 GB');
+    await expect(within(banner).getByRole('button', { name: 'Copy provider account ID' })).toBeVisible();
     await expect(banner).toHaveClass('ovl-settings__custodyRequirement');
   },
 };

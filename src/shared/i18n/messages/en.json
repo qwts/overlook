@@ -1370,8 +1370,14 @@
   "restore.chrome.show": {
     "defaultMessage": "Show restore"
   },
-  "restore.error.copy": {
-    "defaultMessage": "Copy error"
+  "restore.copy.errorDetails": {
+    "defaultMessage": "recovery error details"
+  },
+  "restore.copy.libraryId": {
+    "defaultMessage": "library ID"
+  },
+  "restore.copy.remotePath": {
+    "defaultMessage": "remote path"
   },
   "restore.error.details": {
     "defaultMessage": "Details"
@@ -1438,6 +1444,9 @@
   },
   "restore.restored.count": {
     "defaultMessage": "{count, plural, one {# photo restored.} other {# photos restored.}}"
+  },
+  "restore.select.library": {
+    "defaultMessage": "Select library {libraryId}"
   },
   "restore.verify.cancel": {
     "defaultMessage": "Cancel scan"
@@ -1784,6 +1793,12 @@
   "settings.provider.connectHint": {
     "defaultMessage": "Link a provider to store encrypted originals off-device."
   },
+  "settings.provider.copyAccount": {
+    "defaultMessage": "provider account"
+  },
+  "settings.provider.copyError": {
+    "defaultMessage": "provider error"
+  },
   "settings.provider.couldNotCheck": {
     "defaultMessage": "Could not check this provider’s connection."
   },
@@ -1798,6 +1813,15 @@
   },
   "settings.storage.connect.failed": {
     "defaultMessage": "Connection failed. Try again."
+  },
+  "settings.storage.custody.copyAccountId": {
+    "defaultMessage": "provider account ID"
+  },
+  "settings.storage.custody.copyError": {
+    "defaultMessage": "recovery error"
+  },
+  "settings.storage.custody.copyLibraryId": {
+    "defaultMessage": "library ID"
   },
   "settings.storage.custody.countAndBytes": {
     "defaultMessage": "{count} · {bytes}"
