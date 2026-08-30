@@ -11,6 +11,7 @@ import {
 import { liveLocalRuntimeDirectory, startUnixLiveLocalControlServer, type LiveLocalControlServer } from './live-local-control.js';
 import { LiveLocalSessionListener, type LiveLocalAcceptedSession } from './live-local-session.js';
 import { createWindowsLiveLocalPlatform, type WindowsLiveLocalPlatform } from './windows-live-local.js';
+import type { LiveLocalConnectionStatus } from '../../shared/interop/live-local-runtime.js';
 
 const sessionControlSchema = z
   .object({
@@ -25,6 +26,8 @@ export interface LiveLocalBridgeOptions {
   readonly temporaryDirectory: string;
   readonly expectedExtensionId: string;
   readonly bootstrapState: (request: LiveLocalBootstrapRequest) => LiveLocalBootstrapState;
+  readonly onSession?: ((session: LiveLocalAcceptedSession) => Promise<void> | void) | undefined;
+  readonly availabilityChanged?: ((status: LiveLocalConnectionStatus) => void) | undefined;
   readonly windows?: WindowsLiveLocalPlatform;
 }
 
@@ -61,7 +64,7 @@ export class LiveLocalBridge {
   constructor(private readonly options: LiveLocalBridgeOptions) {
     this.sessions = new LiveLocalSessionListener({
       expectedExtensionId: options.expectedExtensionId,
-      onSession: runControlOnlySession,
+      onSession: options.onSession ?? runControlOnlySession,
     });
   }
 
@@ -75,16 +78,19 @@ export class LiveLocalBridge {
       const contract = windowsNamedPipeForUser(windows.currentUserSid());
       this.control = await windows.start(contract.path, contract.sddl, (value) => this.bootstrap(value));
     } else return false;
+    this.options.availabilityChanged?.('available');
     return true;
   }
 
   async lock(): Promise<void> {
     this.suspended = true;
     await this.sessions.closeSessions();
+    this.options.availabilityChanged?.('unavailable');
   }
 
   unlock(): void {
     this.suspended = false;
+    this.options.availabilityChanged?.('available');
   }
 
   async close(): Promise<void> {
@@ -92,6 +98,7 @@ export class LiveLocalBridge {
     this.control = null;
     await this.sessions.close();
     await control?.close();
+    this.options.availabilityChanged?.('unavailable');
   }
 
   private async bootstrap(value: unknown): Promise<LiveLocalBootstrapResult> {
@@ -99,7 +106,13 @@ export class LiveLocalBridge {
     if (request.extensionId !== this.options.expectedExtensionId)
       throw new LiveLocalError('Live local bootstrap rejected the extension authority.', 'wrong-authority');
     const state = this.suspended ? 'locked' : this.options.bootstrapState(request);
-    if (state !== 'running') return { schemaVersion: 1, state };
-    return this.sessions.issue(request);
+    if (state !== 'running') {
+      this.options.availabilityChanged?.(state === 'incompatible' ? 'incompatible' : 'unavailable');
+      return { schemaVersion: 1, state };
+    }
+    this.options.availabilityChanged?.('connecting');
+    const result = await this.sessions.issue(request);
+    if (result.state === 'incompatible') this.options.availabilityChanged?.('incompatible');
+    return result;
   }
 }

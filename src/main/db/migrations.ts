@@ -850,6 +850,30 @@ const SCHEMA_V24: Migration = {
   },
 };
 
+const SCHEMA_V25: Migration = {
+  version: 25,
+  name: 'interop-transport-routes',
+  // #545: transport selection and remote resume identity survive restart,
+  // while short-lived local capability authority remains memory-only.
+  up(db) {
+    db.exec(`
+      CREATE TABLE interop_transport_routes (
+        operation_id TEXT PRIMARY KEY,
+        pairing_id TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK (operation IN ('move', 'sync')),
+        transport TEXT NOT NULL CHECK (transport IN ('local-overlook', 'pcloud', 'google-drive', 'icloud')),
+        remote_session_id TEXT NOT NULL,
+        scope_hash TEXT NOT NULL CHECK (length(scope_hash) = 64 AND scope_hash NOT GLOB '*[^0-9a-f]*'),
+        state TEXT NOT NULL CHECK (state IN ('connecting', 'connected', 'paused', 'completed', 'cancelled', 'failed')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) WITHOUT ROWID;
+      CREATE INDEX idx_interop_transport_routes_state
+        ON interop_transport_routes (state, updated_at, operation_id);
+    `);
+  },
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -875,6 +899,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V22,
   SCHEMA_V23,
   SCHEMA_V24,
+  SCHEMA_V25,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

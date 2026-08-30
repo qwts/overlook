@@ -3,6 +3,7 @@ import { ipcMain } from 'electron';
 import { channels } from '../../shared/ipc/channels.js';
 import { wrapHandler } from '../../shared/ipc/registry.js';
 import type { InboundMoveController } from './inbound-move-controller.js';
+import { liveLocalRuntimeState } from './live-local-state.js';
 
 export function registerInboundMoveHandlers(getController: () => InboundMoveController, requireContentAccess: () => void): void {
   const admit = <T>(operation: () => T): T => {
@@ -11,6 +12,9 @@ export function registerInboundMoveHandlers(getController: () => InboundMoveCont
   };
   ipcMain.handle(channels.interopStatus.name, (_event, request: unknown) =>
     wrapHandler(channels.interopStatus, () => admit(() => getController().status()))(request),
+  );
+  ipcMain.handle(channels.interopLocalStatus.name, (_event, request: unknown) =>
+    wrapHandler(channels.interopLocalStatus, () => admit(() => liveLocalRuntimeState()))(request),
   );
   ipcMain.handle(channels.interopProviderConnect.name, (_event, request: unknown) =>
     wrapHandler(channels.interopProviderConnect, () => admit(() => getController().connectProvider()))(request),

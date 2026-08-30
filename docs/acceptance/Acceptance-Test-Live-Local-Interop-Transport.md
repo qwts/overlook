@@ -133,4 +133,42 @@ uninstaller invokes exact-owner cleanup before removing the executable.
   cancellation, app disappearance, and restart behavior;
 - no listener, native proxy, timer, or producer survives app/session teardown.
 
+## Durable journal composition
+
+The Overlook side of #545 composes authenticated sessions through the existing
+encrypted-object and library-journal seams:
+
+1. `local-overlook` is a session-scoped `InteropObjectStore`; it has no provider
+   credentials and cannot address backup or cloud interop storage.
+2. Binary frames carry bounded, checksum-verified encrypted object chunks.
+   Provider-shaped manifests and ADR-0016 ciphertext are reassembled only in
+   memory, and each outgoing object waits for a peer durability acknowledgement
+   before the canonical outbox marks it delivered.
+3. Move executes through `InboundMoveRuntime`, `MoveJournalRepository`, and the
+   existing acknowledgement/original-verification guard. Replayed objects
+   therefore reuse the stored response and cannot repeat an import or deletion.
+4. Sync accepts canonical sealed record envelopes into an already-reviewed
+   `SyncRepository` session. A disappearing peer sets the same durable session
+   to disconnected/paused; reconnect explicitly resumes the original scope and
+   decisions.
+5. `interop_transport_routes` persists only pairing, operation, reviewed-scope
+   hash, selected transport, and remote resume identity. Capability secrets and
+   endpoints remain memory-only. A different session identity or scope cannot
+   resume, and a cloud route change requires a paused journal plus the exact
+   reviewed scope hash.
+6. The typed renderer channel reports `available`, `connecting`, `connected`,
+   `paused`, `incompatible`, or `unavailable` without exposing capabilities,
+   paths, record metadata, or original bytes.
+
+Automated evidence:
+
+- `src/main/interop/live-local-journal-session.ts`
+- `src/main/interop/live-local-object-store.ts`
+- `src/main/interop/live-local-route-repository.ts`
+- `src/main/interop/live-local-sync-runtime.ts`
+- `tests/interop/live-local-journals.test.ts`
+
+The companion Image Trail client and browser E2E remain owned by
+`qwts/image-trail#675` and `qwts/image-trail#676`.
+
 The signed-package gates cannot be marked complete by deterministic tests.

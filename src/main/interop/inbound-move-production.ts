@@ -10,8 +10,11 @@ import type { LibraryParts } from '../library/library-parts.js';
 import { InboundMoveController } from './inbound-move-controller.js';
 import type { InboundMoveRuntime } from './inbound-move-runtime.js';
 import { createInboundMoveRuntime } from './inbound-move-runtime-factory.js';
+import type { LiveLocalJournalOperation } from './live-local-journal-session.js';
+import { LiveLocalSyncRuntime } from './live-local-sync-runtime.js';
+import type { LiveLocalObjectStore } from './live-local-object-store.js';
 import { createInteropProtocolRuntime, type InteropProtocolRuntime } from './protocol-runtime.js';
-import { getInteropRuntime } from './runtime.js';
+import { getInteropPairing, getInteropRuntime } from './runtime.js';
 
 interface ProductionOptions {
   readonly library: () => LibraryParts;
@@ -83,6 +86,62 @@ class ProductionInboundMove {
     return this.#runtime;
   }
 
+  localOperation(store: LiveLocalObjectStore, operation: 'move' | 'sync', operationId: string): LiveLocalJournalOperation {
+    const protocols = this.protocols();
+    const custody = getInteropPairing().withUnlocked((value) => value);
+    if (operation === 'sync') {
+      const sync = new LiveLocalSyncRuntime(protocols, store, custody, operationId);
+      return {
+        routes: protocols.routes,
+        execute: async () => {
+          await sync.receive();
+          return { completed: false };
+        },
+        pause: () => sync.pause(),
+        cancel: () => sync.cancel(),
+      };
+    }
+    const runtime = this.createRuntime(store, () => () => undefined);
+    return {
+      routes: protocols.routes,
+      execute: async () => {
+        const batch = (await runtime.refresh()).find((candidate) => candidate.transferId === operationId);
+        if (batch === undefined) throw new Error('Live local Move did not publish the reviewed transfer.');
+        await runtime.start(operationId);
+        return { completed: true };
+      },
+      pause: () => undefined,
+      cancel: () => undefined,
+    };
+  }
+
+  private protocols(): InteropProtocolRuntime {
+    this.#protocols ??= createInteropProtocolRuntime(this.options.library().db);
+    return this.#protocols;
+  }
+
+  private createRuntime(store: Parameters<typeof createInboundMoveRuntime>[0]['store'], beginWork: () => () => void): InboundMoveRuntime {
+    const library = this.options.library();
+    const imports = this.options.imports();
+    if (imports === undefined) throw new Error('Library import runtime is unavailable for inbound Move.');
+    return createInboundMoveRuntime({
+      db: library.db,
+      blobs: library.blobStore,
+      blobsReady: library.blobStoreReady,
+      currentKey: () => library.keyStore.currentKey(),
+      resolveKey: library.keyStore.resolver(),
+      thumbnails: imports.thumbnails,
+      store,
+      custody: () => getInteropPairing().withUnlocked((custody) => custody),
+      photoChanged: (photoId) => {
+        broadcast((window) => window.webContents.send(events.libraryChanged.name, { photoIds: [photoId], membership: 'library' }));
+        this.options.imported();
+      },
+      beginWork,
+      protocols: this.protocols(),
+    });
+  }
+
   private async pickPairingBundle(): Promise<unknown> {
     const fixture = this.options.pairingFixture();
     const selected =
@@ -108,6 +167,15 @@ export function configureProductionInboundMove(
 export function getProductionInboundMoveController(): InboundMoveController {
   if (production === undefined) throw new Error('Production inbound Move is not configured.');
   return production.controller();
+}
+
+export function createProductionLiveLocalOperation(
+  store: LiveLocalObjectStore,
+  operation: 'move' | 'sync',
+  operationId: string,
+): LiveLocalJournalOperation {
+  if (production === undefined) throw new Error('Production interop library is not configured.');
+  return production.localOperation(store, operation, operationId);
 }
 
 export async function closeProductionInboundMoveLibrary(): Promise<void> {

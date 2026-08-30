@@ -2,6 +2,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { PhotosRepository } from '../db/photos-repository.js';
 import { InteropRepository } from './interop-repository.js';
+import { LiveLocalRouteRepository } from './live-local-route-repository.js';
 import { MoveJournalRepository } from './move-journal-repository.js';
 import { MoveProtocolService } from './move-protocol.js';
 import { SyncProtocolService } from './sync-protocol.js';
@@ -15,6 +16,7 @@ export interface InteropProtocolRuntime {
   readonly move: MoveProtocolService;
   readonly syncRepository: SyncRepository;
   readonly sync: SyncProtocolService;
+  readonly routes: LiveLocalRouteRepository;
 }
 
 /** One library-scoped production composition for the canonical Move and Sync
@@ -33,5 +35,6 @@ export function createInteropProtocolRuntime(db: BetterSqlite3.Database): Intero
     move: new MoveProtocolService('overlook', moveJournals, translation),
     syncRepository,
     sync: new SyncProtocolService('overlook', syncRepository),
+    routes: new LiveLocalRouteRepository(db),
   };
 }

@@ -66,7 +66,7 @@ export interface InteropObjectPage {
 }
 
 export interface InteropObjectStore {
-  readonly provider: 'pcloud' | 'google-drive' | 'icloud';
+  readonly provider: 'pcloud' | 'google-drive' | 'icloud' | 'local-overlook';
   authState(): Promise<'connected' | 'not-connected' | 'expired'>;
   put(path: string, bytes: Buffer): Promise<{ readonly bytes: number }>;
   get(path: string): Promise<Buffer>;

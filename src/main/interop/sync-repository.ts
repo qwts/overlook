@@ -462,16 +462,15 @@ export class SyncRepository {
 
   setControl(sessionId: string, action: 'pause' | 'resume' | 'cancel' | 'disconnect', atInput: string): StoredSyncSession {
     const session = this.requireSession(sessionId);
-    if (action !== 'disconnect' && !session.connected) {
+    if (action !== 'disconnect' && action !== 'resume' && !session.connected) {
       throw new SyncRepositoryError('Disconnected Sync sessions cannot resume or change state.');
     }
     if (session.phase === 'cancelled' && action !== 'disconnect') {
       throw new SyncRepositoryError('Cancelled Sync sessions cannot resume or change state.');
     }
     const at = timestampSchema.parse(atInput);
-    const phase = action === 'pause' ? 'paused' : action === 'resume' ? 'reviewing' : 'cancelled';
-    const connected = action === 'disconnect' ? 0 : session.connected ? 1 : 0;
-    if (action === 'resume' && !session.connected) throw new SyncRepositoryError('Disconnected Sync sessions cannot resume.');
+    const phase = action === 'pause' || action === 'disconnect' ? 'paused' : action === 'resume' ? 'reviewing' : 'cancelled';
+    const connected = action === 'disconnect' ? 0 : 1;
     runNamed(
       this.db,
       `UPDATE interop_sync_sessions SET phase = @phase, connected = @connected, updated_at = @at WHERE session_id = @sessionId`,
