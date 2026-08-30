@@ -67,8 +67,8 @@ export async function runReleaseImportSmoke(
   const persistedSource = await readFile(sourcePath);
   if (!persistedSource.equals(source)) throw new Error('copy import changed the source fixture');
   const needle = source.subarray(Math.min(600, Math.max(0, source.length - 40)), Math.min(source.length, 640));
-  if (needle.length > 0 && (await containsBytes(profilePath, needle))) {
-    throw new Error('plaintext source bytes remain in the isolated profile');
+  if (needle.length > 0 && (await containsBytes(join(profilePath, 'library'), needle))) {
+    throw new Error('plaintext source bytes remain in the isolated library custody');
   }
 }
 

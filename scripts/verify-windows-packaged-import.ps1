@@ -61,12 +61,16 @@ try {
   if (-not $process.Start()) { throw 'Installed Overlook process did not start.' }
   $stdout = $process.StandardOutput.ReadToEndAsync()
   $stderr = $process.StandardError.ReadToEndAsync()
-  if (-not $process.WaitForExit(120000)) {
+  $timedOut = -not $process.WaitForExit(120000)
+  if ($timedOut) {
     $process.Kill($true)
-    throw 'Installed Overlook import smoke exceeded 120 seconds.'
+    $process.WaitForExit()
   }
   $output = $stdout.GetAwaiter().GetResult()
   $errorOutput = $stderr.GetAwaiter().GetResult()
+  if ($timedOut) {
+    throw "Installed Overlook import smoke exceeded 120 seconds.`n$output$errorOutput"
+  }
   if ($process.ExitCode -ne 0 -or $output -notmatch 'overlook-release-import-smoke:ready') {
     throw "Installed import smoke failed with exit $($process.ExitCode).`n$output$errorOutput"
   }

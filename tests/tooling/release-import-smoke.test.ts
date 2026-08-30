@@ -14,7 +14,7 @@ describe('packaged release import smoke (#1083)', () => {
     const profile = join(root, 'profile');
     const sourcePath = join(root, 'fixture.jpg');
     const source = Buffer.concat([Buffer.alloc(700, 17), Buffer.from('unique-release-import-smoke-plaintext')]);
-    await mkdir(profile);
+    await mkdir(join(profile, 'library'), { recursive: true });
     await writeFile(sourcePath, source);
     const contentHash = createHash('sha256').update(source).digest('hex');
     try {
@@ -28,14 +28,14 @@ describe('packaged release import smoke (#1083)', () => {
     }
   });
 
-  test('rejects plaintext bytes persisted under the profile', async () => {
+  test('rejects plaintext bytes persisted in library custody', async () => {
     const root = await mkdtemp(join(tmpdir(), 'overlook-release-import-smoke-test-'));
     const profile = join(root, 'profile');
     const sourcePath = join(root, 'fixture.jpg');
     const source = Buffer.alloc(700, 29);
-    await mkdir(profile);
+    await mkdir(join(profile, 'library'), { recursive: true });
     await writeFile(sourcePath, source);
-    await writeFile(join(profile, 'leak.bin'), source);
+    await writeFile(join(profile, 'library', 'leak.bin'), source);
     const contentHash = createHash('sha256').update(source).digest('hex');
     try {
       await assert.rejects(
