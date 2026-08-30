@@ -1,5 +1,11 @@
 # photos
 
+## 0.73.0
+
+### Minor Changes
+
+- e77184b: Add the protected Windows named-pipe bootstrap for live local interoperability.
+
 ## 0.72.0
 
 ### Minor Changes
