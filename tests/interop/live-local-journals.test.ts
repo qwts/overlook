@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { queryAll } from '../../src/main/db/sql.js';
-import { LiveLocalJournalSessionHandler } from '../../src/main/interop/live-local-journal-session.js';
+import { LiveLocalJournalSessionHandler, type LiveLocalJournalSocket } from '../../src/main/interop/live-local-journal-session.js';
 import {
   decodeLiveLocalObjectChunk,
   encodeLiveLocalObjectChunk,
@@ -116,7 +116,7 @@ test('authenticated session commits through the durable route and never persists
   ];
   const sent: unknown[] = [];
   let executed = 0;
-  const session = {
+  const session: LiveLocalJournalSocket = {
     redemption: {
       schemaVersion: 1,
       type: 'redeem',
