@@ -43,16 +43,12 @@ try {
   $installedExecutable = Find-InstalledFile 'Overlook.exe'
   $uninstaller = Find-InstalledFile 'Uninstall Overlook.exe'
 
-  $arguments = @(
-    '--disable-gpu',
-    '--overlook-release-import-smoke',
-    "--overlook-release-import-source=$fixturePath",
-    "--overlook-release-import-profile=$profile",
-    "--overlook-release-import-result=$resultPath",
-    "--user-data-dir=$profile"
-  )
   Write-Host "Launching installed executable: $installedExecutable"
-  $process = Start-Process -FilePath $installedExecutable -ArgumentList $arguments -PassThru
+  $process = Start-Process -FilePath $installedExecutable -ArgumentList '--overlook-release-import-smoke' -Environment @{
+    OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE = $fixturePath
+    OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE = $profile
+    OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT = $resultPath
+  } -PassThru
   $timedOut = -not $process.WaitForExit(120000)
   if ($timedOut) {
     $process.Kill($true)

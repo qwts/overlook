@@ -12,6 +12,7 @@ import {
   RELEASE_SMOKE_ARGUMENT,
   RELEASE_SMOKE_READY_MARKER,
   exitForReleaseSmokeIfRequested,
+  parseReleaseImportSmokeRequest,
   releaseImportSmokeProfileIfRequested,
 } from '../../src/main/release-smoke.js';
 
@@ -107,6 +108,23 @@ describe('packaged release launch smoke (#357)', () => {
     assert.match(runtime, /headlessRequested:\s*[\s\S]*?RELEASE_IMPORT_SMOKE_ARGUMENT/u);
     assert.match(entrypoint, /productionInterop\.headlessRequested\s*\?\s*createHeadlessExternalOpenRuntime\(\)/u);
     assert.match(entrypoint, /if \(!productionInterop\.headlessRequested\) \{\s*registerSingleInstance\(\)/u);
+  });
+
+  test('accepts one fixed launch flag with validated inherited smoke paths', async () => {
+    const { app, profile } = smokeApp(join(tmpdir(), `overlook-release-import-smoke-${Date.now()}`));
+    const source = join(tmpdir(), 'overlook-release-import-fixture.jpg');
+    const result = join(profile, 'release-import-result.txt');
+    const environment = {
+      OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE: source,
+      OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE: profile,
+      OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT: result,
+    };
+
+    assert.equal(releaseImportSmokeProfileIfRequested(app, ['Overlook', RELEASE_IMPORT_SMOKE_ARGUMENT], environment), profile);
+    assert.deepEqual(await parseReleaseImportSmokeRequest(app, ['Overlook', RELEASE_IMPORT_SMOKE_ARGUMENT], environment), {
+      sourcePath: source,
+      profilePath: await realpath(profile),
+    });
   });
 
   test('fails closed when the import profile is not the active isolated profile', async () => {

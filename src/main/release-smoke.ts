@@ -18,6 +18,9 @@ export const RELEASE_IMPORT_SMOKE_PROGRESS_MARKER = 'overlook-release-import-smo
 const RELEASE_IMPORT_SOURCE_ARGUMENT = '--overlook-release-import-source=';
 const RELEASE_IMPORT_PROFILE_ARGUMENT = '--overlook-release-import-profile=';
 const RELEASE_IMPORT_RESULT_ARGUMENT = '--overlook-release-import-result=';
+const RELEASE_IMPORT_SOURCE_ENV = 'OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE';
+const RELEASE_IMPORT_PROFILE_ENV = 'OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE';
+const RELEASE_IMPORT_RESULT_ENV = 'OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT';
 const RELEASE_IMPORT_RESULT_FILE = 'release-import-result.txt';
 
 interface ReleaseSmokeApp {
@@ -59,6 +62,10 @@ function argumentValue(argv: readonly string[], prefix: string): string | undefi
   return argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 }
 
+function smokeValue(argv: readonly string[], prefix: string, environmentName: string, environment: NodeJS.ProcessEnv): string | undefined {
+  return argumentValue(argv, prefix) ?? environment[environmentName];
+}
+
 function isolatedReleaseImportProfile(profilePath: string): string {
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
   const resolvedProfile = realpathSync(resolve(profilePath));
@@ -77,11 +84,14 @@ function isolatedReleaseImportProfile(profilePath: string): string {
 export function releaseImportSmokeProfileIfRequested(
   app: ReleaseSmokeProfileApp,
   argv: readonly string[] = process.argv,
+  environment: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   releaseImportSmokeResultPath = undefined;
   if (!app.isPackaged || !argv.includes(RELEASE_IMPORT_SMOKE_ARGUMENT)) return undefined;
-  const profilePath = isolatedReleaseImportProfile(argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '');
-  const resultPath = resolve(argumentValue(argv, RELEASE_IMPORT_RESULT_ARGUMENT) ?? '');
+  const profilePath = isolatedReleaseImportProfile(
+    smokeValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT, RELEASE_IMPORT_PROFILE_ENV, environment) ?? '',
+  );
+  const resultPath = resolve(smokeValue(argv, RELEASE_IMPORT_RESULT_ARGUMENT, RELEASE_IMPORT_RESULT_ENV, environment) ?? '');
   if (!isAbsolute(resultPath) || basename(resultPath) !== RELEASE_IMPORT_RESULT_FILE || realpathSync(dirname(resultPath)) !== profilePath) {
     throw new Error('release import result must be the dedicated marker file in the isolated profile');
   }
@@ -90,10 +100,14 @@ export function releaseImportSmokeProfileIfRequested(
   return profilePath;
 }
 
-export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): Promise<ReleaseImportSmokeRequest> {
+export async function parseReleaseImportSmokeRequest(
+  app: ReleaseSmokeApp,
+  argv: readonly string[],
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<ReleaseImportSmokeRequest> {
   if (!app.isPackaged) throw new Error('release import smoke requires a packaged application');
-  const sourcePath = argumentValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT) ?? '';
-  const profilePath = argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '';
+  const sourcePath = smokeValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT, RELEASE_IMPORT_SOURCE_ENV, environment) ?? '';
+  const profilePath = smokeValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT, RELEASE_IMPORT_PROFILE_ENV, environment) ?? '';
   if (!isAbsolute(sourcePath)) throw new Error('release import source must be an absolute path');
   const resolvedProfile = await realpath(isolatedReleaseImportProfile(profilePath));
   if ((await realpath(resolve(app.getPath('userData')))) !== resolvedProfile) {
