@@ -119,6 +119,7 @@ describe('scoped settings store (#387, ADR-0017 §6)', () => {
     assert.equal(store.get().providerId, 'pcloud');
     assert.deepEqual(JSON.parse(readFileSync(profileFilePath, 'utf8')), {
       appearance: 'light',
+      userTheme: null,
       language: null,
       quickActions: defaultSettings.quickActions,
       shareDiagnostics: false,
