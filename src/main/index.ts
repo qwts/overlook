@@ -85,7 +85,6 @@ const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undef
 
 // Configure the stable profile identity before the first userData lookup.
 const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA'], releaseImportSmokeProfileIfRequested(app));
-
 const productionInterop = createProductionInteropAppRuntime({
   harnessEnv,
   library: () => requireParts('inbound Move'),
@@ -95,7 +94,6 @@ const productionInterop = createProductionInteropAppRuntime({
 const externalOpen = productionInterop.headlessRequested
   ? createHeadlessExternalOpenRuntime()
   : createExternalOpenRuntime({ isolatedHarnessProfile: userDataOverride !== undefined && userDataOverride !== '' });
-
 if (!productionInterop.headlessRequested) {
   registerSingleInstance();
   registerEarlyRuntime();

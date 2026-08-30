@@ -100,6 +100,15 @@ describe('packaged release launch smoke (#357)', () => {
     );
   });
 
+  test('classifies the packaged import as headless before desktop startup', () => {
+    const runtime = readFileSync(join(process.cwd(), 'src/main/interop/production-app-runtime.ts'), 'utf8');
+    const entrypoint = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8');
+
+    assert.match(runtime, /headlessRequested:\s*[\s\S]*?RELEASE_IMPORT_SMOKE_ARGUMENT/u);
+    assert.match(entrypoint, /productionInterop\.headlessRequested\s*\?\s*createHeadlessExternalOpenRuntime\(\)/u);
+    assert.match(entrypoint, /if \(!productionInterop\.headlessRequested\) \{\s*registerSingleInstance\(\)/u);
+  });
+
   test('fails closed when the import profile is not the active isolated profile', async () => {
     const { app, exits } = smokeApp();
     let output = '';

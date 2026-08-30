@@ -43,23 +43,16 @@ try {
   $installedExecutable = Find-InstalledFile 'Overlook.exe'
   $uninstaller = Find-InstalledFile 'Uninstall Overlook.exe'
 
-  $start = [System.Diagnostics.ProcessStartInfo]::new()
-  $start.FileName = $installedExecutable
-  $start.UseShellExecute = $false
-  $start.CreateNoWindow = $true
-  foreach ($argument in @(
+  $arguments = @(
     '--disable-gpu',
     '--overlook-release-import-smoke',
     "--overlook-release-import-source=$fixturePath",
     "--overlook-release-import-profile=$profile",
     "--overlook-release-import-result=$resultPath",
     "--user-data-dir=$profile"
-  )) {
-    [void]$start.ArgumentList.Add($argument)
-  }
-  $process = [System.Diagnostics.Process]::new()
-  $process.StartInfo = $start
-  if (-not $process.Start()) { throw 'Installed Overlook process did not start.' }
+  )
+  Write-Host "Launching installed executable: $installedExecutable"
+  $process = Start-Process -FilePath $installedExecutable -ArgumentList $arguments -PassThru -WindowStyle Hidden
   $timedOut = -not $process.WaitForExit(120000)
   if ($timedOut) {
     $process.Kill($true)
