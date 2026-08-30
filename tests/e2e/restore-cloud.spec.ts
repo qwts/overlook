@@ -189,6 +189,8 @@ test('fresh profile restores a generation-bound backup; wrong password is isolat
     await page.getByLabel('Recovery-key password').fill(PASSWORD);
     await page.getByRole('button', { name: 'Discover backups' }).click();
     await expect(page.getByTestId('restore-library-card')).toContainText(`${String(PHOTO_COUNT)} photos`);
+    await expect(page.getByRole('button', { name: 'Copy library ID' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Select library/u })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Verify backup' }).click();
     await expect(page.getByTestId('restore-verify')).toBeVisible({ timeout: 15000 });
     await page.getByRole('button', { name: /Heal/u }).click();

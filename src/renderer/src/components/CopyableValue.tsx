@@ -1,9 +1,9 @@
 import type { ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { IconButton } from './IconButton';
-import { useAnnouncer } from './LiveAnnouncer';
-import { Tooltip } from './Tooltip';
+import { IconButton } from './IconButton.js';
+import { useAnnouncer } from './LiveAnnouncer.js';
+import { Tooltip } from './Tooltip.js';
 
 import './controls.css';
 
