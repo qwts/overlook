@@ -253,8 +253,10 @@ test('a reduced restore lists every excluded object and explains the new cloud t
     assert.match(text, /quarantine\/gen-N\/gaps\.json/u, 'the quarantine gap list is named (#994)');
     assert.match(host.textContent ?? '', /NOT FOUND/u, 'the heading says the restore is incomplete');
     assert.match(host.textContent ?? '', /2 photos restored/u, 'the complete screen reports the reduced restored count');
-    const copyPaths = [...block.querySelectorAll('button')].filter((button) => button.getAttribute('aria-label') === 'Copy remote path');
-    assert.equal(copyPaths.length, MISSING.length, 'every excluded remote path has a copy affordance');
+    const copyPaths = MISSING.map((object) =>
+      [...block.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === `Copy remote path ${object.path}`),
+    );
+    assert.ok(copyPaths.every(Boolean), 'every excluded remote path has a uniquely named copy affordance');
     act(() => copyPaths[0]?.click());
     await flush();
     assert.deepEqual(restoreMock.calls.copies, [MISSING[0].path]);
@@ -301,8 +303,10 @@ test('gap triage exposes all five truthful actions and retains failures on scree
     assert.ok(proceed);
     assert.ok(trash);
     assert.ok(doNothing);
-    const copyPaths = buttons.filter((button) => button.getAttribute('aria-label') === 'Copy remote path');
-    assert.equal(copyPaths.length, MISSING.length, 'verification paths are individually copyable');
+    const copyPaths = MISSING.map((object) =>
+      buttons.find((button) => button.getAttribute('aria-label') === `Copy remote path ${object.path}`),
+    );
+    assert.ok(copyPaths.every(Boolean), 'verification paths have distinct accessible copy names');
     act(() => copyPaths[0]?.click());
     await flush();
 

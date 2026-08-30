@@ -111,7 +111,7 @@ const messages = defineMessages({
   trashConfirmLabel: { id: 'restore.verify.trashConfirm', defaultMessage: 'Type Permanently Delete Backup to confirm' },
   trashConfirmPlaceholder: { id: 'restore.verify.trashPlaceholder', defaultMessage: 'Permanently Delete Backup' },
   details: { id: 'restore.error.details', defaultMessage: 'Details' },
-  copyRemotePath: { id: 'restore.copy.remotePath', defaultMessage: 'remote path' },
+  copyRemotePath: { id: 'restore.copy.remotePath', defaultMessage: 'remote path {path}' },
   copyErrorDetails: { id: 'restore.copy.errorDetails', defaultMessage: 'recovery error details' },
 });
 
@@ -560,7 +560,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                   <ul className="ovl-restore__verifyList">
                     {verifyResult.missing.map((o) => (
                       <li key={o.path}>
-                        <CopyableValue value={o.path} label={intl.formatMessage(messages.copyRemotePath)} />
+                        <CopyableValue value={o.path} label={intl.formatMessage(messages.copyRemotePath, { path: o.path })} />
                         <span className="mono-data">
                           {o.kind} — {o.reason}
                         </span>
@@ -751,7 +751,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
               <ul>
                 {missing.map((object) => (
                   <li key={object.path}>
-                    <CopyableValue value={object.path} label={intl.formatMessage(messages.copyRemotePath)} />
+                    <CopyableValue value={object.path} label={intl.formatMessage(messages.copyRemotePath, { path: object.path })} />
                   </li>
                 ))}
               </ul>

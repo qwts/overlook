@@ -680,7 +680,7 @@ export const DisconnectBlockedByCloudOnlyCustody: Story = {
     await expect(confirmation).toHaveTextContent('Rivera Archive: 3 originals · 6.3 GB');
     await expect(confirmation).toHaveTextContent('m.rivera@example.com');
     await expect(within(confirmation).getByRole('button', { name: 'Copy provider account ID' })).toBeVisible();
-    await expect(within(confirmation).getByRole('button', { name: 'Copy library ID' })).toBeVisible();
+    await expect(within(confirmation).getByRole('button', { name: 'Copy library ID library-main' })).toBeVisible();
     await expect(confirmation.querySelector('.mono-data')).not.toBeNull();
     await expect(confirmation).not.toHaveTextContent('Encrypted data already stored in Local mock is not deleted.');
     await expect(within(confirmation).getByRole('button', { name: 'Restore all originals first' })).toBeEnabled();

@@ -64,7 +64,7 @@ const messages = defineMessages({
   },
   countAndBytes: { id: 'settings.storage.custody.countAndBytes', defaultMessage: '{count} · {bytes}' },
   copyAccountId: { id: 'settings.storage.custody.copyAccountId', defaultMessage: 'provider account ID' },
-  copyLibraryId: { id: 'settings.storage.custody.copyLibraryId', defaultMessage: 'library ID' },
+  copyLibraryId: { id: 'settings.storage.custody.copyLibraryId', defaultMessage: 'library ID {libraryId}' },
   copyError: { id: 'settings.storage.custody.copyError', defaultMessage: 'recovery error' },
 });
 
@@ -185,7 +185,10 @@ export function DisconnectProviderDialog(props: DisconnectProviderDialogProps): 
                             bytes: formatBytes(library.bytes),
                           })}
                     </span>
-                    <CopyableValue value={library.libraryId} label={intl.formatMessage(messages.copyLibraryId)} />
+                    <CopyableValue
+                      value={library.libraryId}
+                      label={intl.formatMessage(messages.copyLibraryId, { libraryId: library.libraryId })}
+                    />
                   </li>
                 ))}
               </ul>
@@ -200,7 +203,10 @@ export function DisconnectProviderDialog(props: DisconnectProviderDialogProps): 
                     {custody.unverifiedLibraries.map((library) => (
                       <li key={library.libraryId}>
                         <span>{library.name}</span>
-                        <CopyableValue value={library.libraryId} label={intl.formatMessage(messages.copyLibraryId)} />
+                        <CopyableValue
+                          value={library.libraryId}
+                          label={intl.formatMessage(messages.copyLibraryId, { libraryId: library.libraryId })}
+                        />
                       </li>
                     ))}
                   </ul>

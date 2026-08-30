@@ -1377,7 +1377,7 @@
     "defaultMessage": "library ID"
   },
   "restore.copy.remotePath": {
-    "defaultMessage": "remote path"
+    "defaultMessage": "remote path {path}"
   },
   "restore.error.details": {
     "defaultMessage": "Details"
@@ -1821,7 +1821,7 @@
     "defaultMessage": "recovery error"
   },
   "settings.storage.custody.copyLibraryId": {
-    "defaultMessage": "library ID"
+    "defaultMessage": "library ID {libraryId}"
   },
   "settings.storage.custody.countAndBytes": {
     "defaultMessage": "{count} · {bytes}"
