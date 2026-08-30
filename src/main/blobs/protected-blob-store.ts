@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
+import { syncDirectoryEntry } from '../filesystem/durability.js';
 
 export type ProtectedBlobKind = 'original' | 'thumb' | 'mid';
 
@@ -34,15 +35,6 @@ function isErrno(error: unknown, code: string): boolean {
 }
 
 async function syncFile(path: string): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-async function syncDirectory(path: string): Promise<void> {
   const handle = await open(path, 'r');
   try {
     await handle.sync();
@@ -160,7 +152,7 @@ export class ProtectedBlobStore {
         }
       }
       await rm(stagePath, { force: true });
-      await syncDirectory(dirname(finalPath));
+      await syncDirectoryEntry(dirname(finalPath));
     } catch (error) {
       await rm(stagePath, { force: true });
       throw error;
@@ -213,7 +205,7 @@ export class ProtectedBlobStore {
         if (existingHash !== plaintextHash) throw new ProtectedBlobStoreError(`protected ${kind} dedupe collision failed verification`);
       }
       await rm(stagePath, { force: true });
-      await syncDirectory(dirname(finalPath));
+      await syncDirectoryEntry(dirname(finalPath));
     } catch (error) {
       await rm(stagePath, { force: true });
       throw error;
