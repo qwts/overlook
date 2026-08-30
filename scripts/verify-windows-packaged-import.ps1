@@ -44,11 +44,25 @@ try {
   $uninstaller = Find-InstalledFile 'Uninstall Overlook.exe'
 
   Write-Host "Launching installed executable: $installedExecutable"
-  $process = Start-Process -FilePath $installedExecutable -ArgumentList '--overlook-release-import-smoke' -Environment @{
+  $smokeEnvironment = @{
     OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE = $fixturePath
     OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE = $profile
     OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT = $resultPath
-  } -PassThru
+  }
+  $previousEnvironment = @{}
+  foreach ($entry in $smokeEnvironment.GetEnumerator()) {
+    $previousEnvironment[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key, 'Process')
+    [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
+  }
+  try {
+    $process = Start-Process -FilePath $installedExecutable -ArgumentList '--overlook-release-import-smoke' -PassThru
+  } finally {
+    foreach ($entry in $previousEnvironment.GetEnumerator()) {
+      [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
+    }
+  }
+  $launchedCommandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)" -ErrorAction SilentlyContinue).CommandLine
+  if ($null -ne $launchedCommandLine) { Write-Host "Installed process command line: $launchedCommandLine" }
   $timedOut = -not $process.WaitForExit(120000)
   if ($timedOut) {
     $process.Kill($true)
