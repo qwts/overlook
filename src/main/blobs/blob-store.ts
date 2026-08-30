@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
+import { syncDirectoryEntry } from '../filesystem/durability.js';
 import type { EnvelopeKey, KeyResolver } from '../crypto/envelope.js';
 
 // Content-addressed encrypted blob store per ADR-0005 (#70). Plaintext never
@@ -54,15 +55,6 @@ async function readEnvelopeKeyId(path: string): Promise<number> {
       throw new BlobStoreError(`existing blob at ${path} is not an Overlook envelope`);
     }
     return header.readUInt32BE(5);
-  } finally {
-    await handle.close();
-  }
-}
-
-async function fsyncDir(path: string): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
   } finally {
     await handle.close();
   }
@@ -228,7 +220,7 @@ export class BlobStore {
         await rm(finalPath, { force: true });
         throw new BlobStoreError(`restored sidecar ${contentHash} of ${photoId} failed verification`);
       }
-      await fsyncDir(dirname(finalPath));
+      await syncDirectoryEntry(dirname(finalPath));
     } catch (error) {
       await rm(stagePath, { force: true });
       throw error;
@@ -303,7 +295,7 @@ export class BlobStore {
       await mkdir(dirname(finalPath), { recursive: true });
       if (replace) {
         await rename(stagePath, finalPath);
-        await fsyncDir(dirname(finalPath));
+        await syncDirectoryEntry(dirname(finalPath));
         return { contentHash, keyId: key.id, bytes: plainBytes };
       }
       // Atomic no-replace publish: link() fails with EEXIST instead of
@@ -322,7 +314,7 @@ export class BlobStore {
       }
       await rm(stagePath, { force: true });
       // Durability point 2: the directory entry.
-      await fsyncDir(dirname(finalPath));
+      await syncDirectoryEntry(dirname(finalPath));
       return { contentHash, keyId: key.id, bytes: plainBytes };
     } catch (error) {
       await rm(stagePath, { force: true });
@@ -366,7 +358,7 @@ export class BlobStore {
         await rm(finalPath, { force: true });
         throw new BlobStoreError(`restored blob ${contentHash} failed verification`);
       }
-      await fsyncDir(dirname(finalPath));
+      await syncDirectoryEntry(dirname(finalPath));
     } catch (error) {
       await rm(stagePath, { force: true });
       throw error;
@@ -397,7 +389,7 @@ export class BlobStore {
         if (!isErrno(error, 'EEXIST')) throw error;
       }
       await rm(stagePath, { force: true });
-      await fsyncDir(this.viewCacheDir);
+      await syncDirectoryEntry(this.viewCacheDir);
       return (await stat(finalPath)).size;
     } catch (error) {
       await rm(stagePath, { force: true });
@@ -430,7 +422,7 @@ export class BlobStore {
     } catch (error) {
       if (!isErrno(error, 'EEXIST')) throw error;
     }
-    await fsyncDir(dirname(destination));
+    await syncDirectoryEntry(dirname(destination));
   }
 
   async deleteEphemeralOriginal(contentHash: string): Promise<void> {

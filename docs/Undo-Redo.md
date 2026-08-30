@@ -36,8 +36,10 @@ budget. Execution verifies the original parent identity, destination vacancy,
 permissions, free space, decrypted content hash, and library key access.
 
 The source is reconstructed through a private temporary file, then published
-with a no-replace link and directory fsync. Existing paths are never overwritten
-or silently renamed. Successful compensation is intentionally not redoable.
+with a no-replace link. Supported POSIX hosts fsync the directory entry; Windows
+skips that unsupported operation after preserving the regular-file fsync and
+atomic publication boundary. Existing paths are never overwritten or silently
+renamed. Successful compensation is intentionally not redoable.
 
 ## Retention and privacy
 

@@ -311,7 +311,9 @@ metadata stripped, per [ADR-0006](./adr/ADR-0006-Media-Processing.md).
    AAD binds the original photo id. Overwriting would orphan that row's
    decrypts.
 4. Remove the stage file, then `fsync` the destination **directory** so the entry
-   itself is durable.
+   itself is durable on platforms that support directory handles. Windows skips
+   this unsupported operation after preserving the regular-file `fsync` and
+   atomic publication boundary.
 
 Thumbnails may be replaced (repair re-derives them); originals never are.
 

@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
+import { syncDirectoryEntry } from '../filesystem/durability.js';
 import type { CapabilityReason } from '../../shared/history/types.js';
 import type { MoveCompensationRuntime } from './history-service.js';
 
@@ -37,15 +38,6 @@ async function hashFile(path: string): Promise<string> {
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
   return hash.digest('hex');
-}
-
-async function fsyncDirectory(path: string): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
 }
 
 async function closeHandle(handle: FileHandle): Promise<void> {
@@ -116,7 +108,7 @@ export function createMoveCompensationRuntime(blobs: BlobStore, resolveKey: KeyR
           if ((await hashFile(record.sourcePath)) === record.contentHash) return 'already-restored';
           throw new MoveCompensationError('path-occupied');
         }
-        await fsyncDirectory(parent);
+        await syncDirectoryEntry(parent);
         return 'restored';
       } finally {
         await rm(stage, { force: true });
