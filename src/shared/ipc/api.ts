@@ -62,6 +62,7 @@ export interface OverlookApi {
   };
   readonly interop: {
     readonly status: () => Promise<Res<typeof channels.interopStatus>>;
+    readonly localStatus: () => Promise<Res<typeof channels.interopLocalStatus>>;
     readonly connectProvider: (
       request: Req<typeof channels.interopProviderConnect>,
     ) => Promise<Res<typeof channels.interopProviderConnect>>;
@@ -77,6 +78,7 @@ export interface OverlookApi {
     readonly cancel: () => Promise<Res<typeof channels.interopCancel>>;
     readonly retry: () => Promise<Res<typeof channels.interopRetry>>;
     readonly onChanged: (listener: (payload: z.output<typeof events.interopStatusChanged.payload>) => void) => () => void;
+    readonly onLocalChanged: (listener: (payload: z.output<typeof events.interopLocalStatusChanged.payload>) => void) => () => void;
   };
   readonly library: {
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;

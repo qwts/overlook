@@ -26,6 +26,7 @@ export interface ProductionInteropAppRuntime {
   readonly nativeHostRequested: boolean;
   readonly headlessRequested: boolean;
   readonly pcloud: PCloudFeatureConfig;
+  readonly liveLocalEnabled: boolean;
   runHeadless(): Promise<boolean>;
   startDesktop(): Promise<void>;
   lockDesktop(): Promise<void>;
@@ -46,6 +47,7 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
     nativeHostRequested: invocation.requested,
     headlessRequested: invocation.requested || registerRequested || unregisterRequested,
     pcloud,
+    liveLocalEnabled: extensionId !== null,
     runHeadless: async () => {
       if (invocation.requested) {
         await runICloudNativeHost({

@@ -59,6 +59,7 @@ export interface InboundPhotoImporterOptions {
 }
 
 export interface InboundAcceptanceHooks {
+  readonly assertActive?: (() => void) | undefined;
   readonly blobCommitted: () => void;
   readonly databaseCommitted: () => void;
 }
@@ -86,11 +87,13 @@ export class InboundPhotoImporter {
     record: InteropRecord,
     albums: readonly InteropAlbum[],
     category: InteropReviewCategory,
-    hooks: Pick<InboundAcceptanceHooks, 'databaseCommitted'>,
+    hooks: Pick<InboundAcceptanceHooks, 'assertActive' | 'databaseCommitted'>,
   ): InboundAcceptance {
+    hooks.assertActive?.();
     if (category === 'conflict' || category === 'unsupported' || category === 'skipped') {
       return this.rejected(category, `Incoming record requires ${category} review.`);
     }
+    hooks.assertActive?.();
     this.persistInterop(record, albums, category, null);
     hooks.databaseCommitted();
     return {
@@ -111,6 +114,7 @@ export class InboundPhotoImporter {
     bytes: Buffer,
     hooks: InboundAcceptanceHooks,
   ): Promise<InboundAcceptance> {
+    hooks.assertActive?.();
     if (record.original.state !== 'available') return this.rejected('unsupported', 'Incoming original reference is unavailable.');
     const kind = sniffImageKind(bytes);
     if (kind === null) return this.rejected('unsupported', 'Incoming original media type is unsupported or undetectable.');
@@ -137,7 +141,9 @@ export class InboundPhotoImporter {
     const existingTarget = this.options.photos.get(photoId);
     let photoChanged = false;
     if (existingTarget === undefined) {
+      hooks.assertActive?.();
       const stored = await this.options.blobs.putOriginal(Readable.from([bytes]), this.options.currentKey(), photoId);
+      hooks.assertActive?.();
       if (stored.contentHash !== record.original.contentHash || stored.bytes !== record.original.byteLength) {
         return this.rejected('unsupported', 'Incoming original failed its durable content verification.');
       }
@@ -145,7 +151,9 @@ export class InboundPhotoImporter {
       if (!(await this.options.blobs.verifyOriginal(stored.contentHash, this.options.resolveKey, photoId))) {
         return this.rejected('unsupported', 'Incoming original failed encrypted BlobStore verification.');
       }
+      hooks.assertActive?.();
       const metadata = await this.#metadata(bytes, kind);
+      hooks.assertActive?.();
       const photo = this.photoInsert(record, kind, photoId, stored.keyId, bytes, metadata);
       this.options.db.transaction(() => {
         this.options.photos.insert(photo);
@@ -159,9 +167,11 @@ export class InboundPhotoImporter {
       if (!(await this.options.blobs.verifyOriginal(existingTarget.contentHash, this.options.resolveKey, photoId))) {
         return this.rejected('conflict', 'Existing deterministic target original could not be verified.');
       }
+      hooks.assertActive?.();
       this.persistInterop(record, albums, category, photoId);
     }
     hooks.databaseCommitted();
+    hooks.assertActive?.();
     const outcome = await this.options.thumbnails.generateFor({
       photoId,
       bytes,
@@ -185,11 +195,12 @@ export class InboundPhotoImporter {
     record: InteropRecord,
     albums: readonly InteropAlbum[],
     duplicate: PhotoRecord,
-    hooks: Pick<InboundAcceptanceHooks, 'databaseCommitted'>,
+    hooks: Pick<InboundAcceptanceHooks, 'assertActive' | 'databaseCommitted'>,
   ): Promise<InboundAcceptance> {
     if (!(await this.options.blobs.verifyOriginal(duplicate.contentHash, this.options.resolveKey, duplicate.id))) {
       return this.rejected('conflict', 'Matching native photo custody could not be verified.');
     }
+    hooks.assertActive?.();
     this.persistInterop(record, albums, 'duplicate', duplicate.id);
     hooks.databaseCommitted();
     return {

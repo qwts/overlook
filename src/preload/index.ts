@@ -158,6 +158,7 @@ const overlook: OverlookApi = {
   }),
   interop: Object.freeze({
     status: async () => interopStatus({}),
+    localStatus: async () => createInvoker(channels.interopLocalStatus, invokeTransport)({}),
     connectProvider: createInvoker(channels.interopProviderConnect, invokeTransport),
     disconnectProvider: createInvoker(channels.interopProviderDisconnect, invokeTransport),
     selectPairing: async () => interopPairingSelect({}),
@@ -169,6 +170,7 @@ const overlook: OverlookApi = {
     cancel: async () => interopCancel({}),
     retry: async () => interopRetry({}),
     onChanged: createSubscriber(events.interopStatusChanged, subscribeTransport),
+    onLocalChanged: createSubscriber(events.interopLocalStatusChanged, subscribeTransport),
   }),
   library: Object.freeze({
     page: createInvoker(channels.libraryPage, invokeTransport),

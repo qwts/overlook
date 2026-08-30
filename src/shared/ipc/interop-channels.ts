@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { interopInboundStatusSchema } from '../interop/inbound-ui.js';
+import { liveLocalRuntimeStateSchema } from '../interop/live-local-runtime.js';
 import type { ChannelDefinition, EventDefinition } from './channels.js';
 
 function defineChannel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
@@ -15,6 +16,7 @@ const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload
 
 export const interopChannels = {
   interopStatus: defineChannel('interop:status', z.object({}), interopInboundStatusSchema),
+  interopLocalStatus: defineChannel('interop:local-status', z.object({}), liveLocalRuntimeStateSchema),
   interopProviderConnect: defineChannel(
     'interop:provider-connect',
     z.object({ provider: z.literal('pcloud') }),
@@ -41,4 +43,5 @@ export const interopChannels = {
 
 export const interopEvents = {
   interopStatusChanged: defineEvent('interop:status-changed', interopInboundStatusSchema),
+  interopLocalStatusChanged: defineEvent('interop:local-status-changed', liveLocalRuntimeStateSchema),
 } as const;

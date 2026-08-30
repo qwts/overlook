@@ -408,6 +408,8 @@ function installStub(options?: {
   };
   const interopApi: OverlookApi['interop'] = {
     status: () => Promise.resolve(interopStatus),
+    localStatus: () =>
+      Promise.resolve({ status: 'unavailable', operation: null, operationId: null, remoteSessionId: null, retryable: true }),
     connectProvider: () => setInterop({ ...interopStatus, provider: { provider: 'pcloud', status: 'connected', busy: false } }),
     disconnectProvider: () => setInterop({ ...interopStatus, provider: { provider: 'pcloud', status: 'not-connected', busy: false } }),
     selectPairing: () =>
@@ -473,6 +475,7 @@ function installStub(options?: {
       interopListeners.add(listener);
       return () => interopListeners.delete(listener);
     },
+    onLocalChanged: () => () => undefined,
   };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     settings: settingsApi,

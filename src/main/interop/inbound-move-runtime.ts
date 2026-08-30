@@ -50,6 +50,7 @@ export interface IncomingMoveRunResult {
 }
 
 export interface InboundMoveRunControl {
+  readonly signal?: AbortSignal | undefined;
   readonly beforeItem?: ((item: IncomingMoveItem, index: number, total: number) => Promise<void> | void) | undefined;
   readonly itemCompleted?:
     ((item: IncomingMoveItem, acceptance: InboundAcceptance, index: number, total: number) => Promise<void> | void) | undefined;
@@ -112,31 +113,36 @@ export class InboundMoveRuntime {
     this.#createMessageId = options.createMessageId ?? randomUUID;
   }
 
-  async refresh(): Promise<readonly IncomingMoveBatch[]> {
+  async refresh(signal?: AbortSignal): Promise<readonly IncomingMoveBatch[]> {
     return this.withWork(async () => {
+      signal?.throwIfAborted();
       const custody = this.options.custody();
       if ((await this.options.store.authState()) !== 'connected') {
         throw new InboundMoveRuntimeError('Connect the interoperability provider before checking for transfers.');
       }
       const transfers = await this.#discovery.discover(custody.pairingId);
+      signal?.throwIfAborted();
       const batches: IncomingMoveBatch[] = [];
-      for (const transfer of transfers) batches.push(await this.openTransfer(transfer, custody));
+      for (const transfer of transfers) batches.push(await this.openTransfer(transfer, custody, signal));
       return batches;
     });
   }
 
   async start(transferId: string, control: InboundMoveRunControl = {}): Promise<IncomingMoveRunResult> {
     return this.withWork(async () => {
+      control.signal?.throwIfAborted();
       const custody = this.options.custody();
       const transfer = (await this.#discovery.discover(custody.pairingId)).find((candidate) => candidate.transferId === transferId);
       if (transfer === undefined) throw new InboundMoveRuntimeError('Incoming transfer is no longer available from the provider.');
-      const batch = await this.openTransfer(transfer, custody);
+      const batch = await this.openTransfer(transfer, custody, control.signal);
       let accepted = 0;
       let retained = 0;
       const changedPhotoIds: string[] = [];
       for (const [index, item] of batch.items.entries()) {
+        control.signal?.throwIfAborted();
         await control.beforeItem?.(item, index, batch.items.length);
-        const result = await this.acceptItem(item, custody);
+        control.signal?.throwIfAborted();
+        const result = await this.acceptItem(item, custody, control.signal);
         if (result.accepted) accepted += 1;
         else retained += 1;
         if (result.photoChanged && result.targetLocalId !== null) {
@@ -144,17 +150,24 @@ export class InboundMoveRuntime {
           this.options.onPhotoChanged?.(result.targetLocalId);
         }
         await control.itemCompleted?.(item, result, index, batch.items.length);
+        control.signal?.throwIfAborted();
       }
       return { transferId, accepted, retained, changedPhotoIds };
     });
   }
 
-  private async openTransfer(transfer: DiscoveredMoveTransfer, custody: InteropKeyCustody): Promise<IncomingMoveBatch> {
+  private async openTransfer(
+    transfer: DiscoveredMoveTransfer,
+    custody: InteropKeyCustody,
+    signal?: AbortSignal,
+  ): Promise<IncomingMoveBatch> {
     const scope = { pairingId: custody.pairingId, transferId: transfer.transferId };
     const opened = new Map<number, { discovered: DiscoveredMoveMessage; envelope: InteropEnvelope }>();
     for (const discovered of transfer.messages) {
+      signal?.throwIfAborted();
       const encrypted = await this.#transport.download(scope, discovered.logicalPath);
       try {
+        signal?.throwIfAborted();
         const envelope = openInteropMessage(encrypted, custody);
         this.assertMessageIdentity(envelope, discovered, transfer.transferId, custody.pairingId);
         opened.set(discovered.sequence, { discovered, envelope });
@@ -267,26 +280,30 @@ export class InboundMoveRuntime {
     }
   }
 
-  private async acceptItem(item: IncomingMoveItem, custody: InteropKeyCustody): Promise<InboundAcceptance> {
+  private async acceptItem(item: IncomingMoveItem, custody: InteropKeyCustody, signal?: AbortSignal): Promise<InboundAcceptance> {
+    signal?.throwIfAborted();
     const paths = [item.recordMessage.logicalPath, ...(item.blobMessage === null ? [] : [item.blobMessage.logicalPath])];
     const prior = this.options.journals.responseForReceipt(item.request.header.pairingId, item.request.header.messageId);
     if (prior !== undefined) {
       if (prior.payload.kind !== 'acknowledgement') throw new InboundMoveRuntimeError('Stored Move response is not an acknowledgement.');
       const phase = prior.payload.status === 'accepted' ? 'ack-journaled' : 'retained';
       paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, phase, prior.header.messageId));
-      await this.uploadAcknowledgement(item, prior, custody);
+      await this.uploadAcknowledgement(item, prior, custody, signal);
       return this.acceptanceFromAcknowledgement(prior);
     }
     for (const path of paths) this.advanceIf(path, item.request.header.transferId, 'validated');
     let acceptance: InboundAcceptance;
     if (item.request.payload.record.original.state === 'available') {
-      acceptance = await this.acceptAvailable(item, custody, paths);
+      acceptance = await this.acceptAvailable(item, custody, paths, signal);
     } else {
       acceptance = this.options.importer.acceptWithoutOriginal(
         item.request.payload.record,
         item.request.payload.albums,
         item.reviewCategory,
-        { databaseCommitted: () => paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, 'database-committed')) },
+        {
+          assertActive: () => signal?.throwIfAborted(),
+          databaseCommitted: () => paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, 'database-committed')),
+        },
       );
     }
     const acknowledgement = this.createAcknowledgement(item, acceptance);
@@ -305,11 +322,17 @@ export class InboundMoveRuntime {
     } else {
       paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, 'retained'));
     }
-    await this.uploadAcknowledgement(item, acknowledgement, custody);
+    await this.uploadAcknowledgement(item, acknowledgement, custody, signal);
     return acceptance;
   }
 
-  private async acceptAvailable(item: IncomingMoveItem, custody: InteropKeyCustody, paths: readonly string[]): Promise<InboundAcceptance> {
+  private async acceptAvailable(
+    item: IncomingMoveItem,
+    custody: InteropKeyCustody,
+    paths: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<InboundAcceptance> {
+    signal?.throwIfAborted();
     if (item.original === null || item.blobEnvelope === null || item.blobMessage === null) {
       throw new InboundMoveRuntimeError('Incoming original custody is incomplete.');
     }
@@ -321,12 +344,14 @@ export class InboundMoveRuntime {
     encrypted.fill(0);
     try {
       this.assertOpenedBlob(item, opened.descriptor);
+      signal?.throwIfAborted();
       return await this.options.importer.acceptOriginal(
         item.request.payload.record,
         item.request.payload.albums,
         item.reviewCategory,
         opened.bytes,
         {
+          assertActive: () => signal?.throwIfAborted(),
           blobCommitted: () => paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, 'blob-committed')),
           databaseCommitted: () => paths.forEach((path) => this.advanceIf(path, item.request.header.transferId, 'database-committed')),
         },
@@ -361,7 +386,13 @@ export class InboundMoveRuntime {
     });
   }
 
-  private async uploadAcknowledgement(item: IncomingMoveItem, acknowledgement: InteropEnvelope, custody: InteropKeyCustody): Promise<void> {
+  private async uploadAcknowledgement(
+    item: IncomingMoveItem,
+    acknowledgement: InteropEnvelope,
+    custody: InteropKeyCustody,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    signal?.throwIfAborted();
     const sealed = sealInteropMessage(acknowledgement, custody);
     try {
       await this.#transport.upload(
@@ -375,6 +406,7 @@ export class InboundMoveRuntime {
         if (stored.phase === 'ack-journaled')
           this.options.objects.advance(item.request.header.transferId, path, 'ack-uploaded', this.#now(), acknowledgement.header.messageId);
       }
+      signal?.throwIfAborted();
     } finally {
       sealed.fill(0);
     }

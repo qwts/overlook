@@ -71,6 +71,15 @@ export function getInteropRuntime(): InteropRuntime {
   return profileRuntime;
 }
 
+export function configuredInteropRuntime(): InteropRuntime | undefined {
+  return profileRuntime;
+}
+
+export function getInteropPairing(): InteropPairingCustodian {
+  if (profilePairing === undefined) throw new Error('Interoperability pairing is not configured.');
+  return profilePairing;
+}
+
 export function interopRuntimeBusy(): boolean {
   return profileRuntime?.busy() === true;
 }
