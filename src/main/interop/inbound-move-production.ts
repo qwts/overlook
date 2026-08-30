@@ -7,14 +7,16 @@ import { createEmitter } from '../../shared/ipc/registry.js';
 import { broadcast } from '../app-window.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
+import type { LiveLocalOpen } from '../../shared/interop/live-local-runtime.js';
 import { InboundMoveController } from './inbound-move-controller.js';
 import type { InboundMoveRuntime } from './inbound-move-runtime.js';
 import { createInboundMoveRuntime } from './inbound-move-runtime-factory.js';
-import type { LiveLocalJournalOperation } from './live-local-journal-session.js';
+import type { LiveLocalJournalOperation, LiveLocalJournalSocket } from './live-local-journal-session.js';
 import { LiveLocalSyncRuntime } from './live-local-sync-runtime.js';
-import type { LiveLocalObjectStore } from './live-local-object-store.js';
+import { LiveLocalObjectRepository } from './live-local-object-repository.js';
+import { LiveLocalObjectStore } from './live-local-object-store.js';
 import { createInteropProtocolRuntime, type InteropProtocolRuntime } from './protocol-runtime.js';
-import { getInteropPairing, getInteropRuntime } from './runtime.js';
+import { configuredInteropRuntime, getInteropPairing, getInteropRuntime } from './runtime.js';
 
 interface ProductionOptions {
   readonly library: () => LibraryParts;
@@ -32,13 +34,18 @@ class ProductionInboundMove {
 
   controller(): InboundMoveController {
     if (this.#controller !== undefined) return this.#controller;
-    const authority = getInteropRuntime();
+    const pairing = getInteropPairing();
+    const provider = configuredInteropRuntime()?.pcloud ?? {
+      state: () => Promise.resolve({ provider: 'pcloud' as const, status: 'not-connected' as const, busy: false }),
+      connect: () => Promise.resolve({ ok: false as const, reason: 'pCloud interoperability is unavailable in this build.' }),
+      disconnect: () => ({ ok: false as const, reason: 'pCloud interoperability is unavailable in this build.' }),
+    };
     const emitStatus = createEmitter(events.interopStatusChanged, (name, payload) =>
       broadcast((window) => window.webContents.send(name, payload)),
     );
     this.#controller = new InboundMoveController({
-      pairing: authority.pairing,
-      provider: authority.pcloud,
+      pairing,
+      provider,
       runtime: () => this.runtime(),
       pickPairingBundle: () => this.pickPairingBundle(),
       statusChanged: emitStatus,
@@ -86,11 +93,12 @@ class ProductionInboundMove {
     return this.#runtime;
   }
 
-  localOperation(store: LiveLocalObjectStore, operation: 'move' | 'sync', operationId: string): LiveLocalJournalOperation {
+  localOperation(store: LiveLocalObjectStore, operation: 'move' | 'sync', open: LiveLocalOpen): LiveLocalJournalOperation {
     const protocols = this.protocols();
     const custody = getInteropPairing().withUnlocked((value) => value);
     if (operation === 'sync') {
-      const sync = new LiveLocalSyncRuntime(protocols, store, custody, operationId);
+      if (open.review.operation !== 'sync') throw new Error('Live local Sync is missing its reviewed operation choices.');
+      const sync = new LiveLocalSyncRuntime(protocols, store, custody, open.operationId, open.review);
       return {
         routes: protocols.routes,
         execute: async () => {
@@ -102,17 +110,32 @@ class ProductionInboundMove {
       };
     }
     const runtime = this.createRuntime(store, () => () => undefined);
+    const controller = new AbortController();
+    let running: Promise<{ readonly completed: boolean }> | null = null;
+    const stop = async () => {
+      controller.abort();
+      await running?.catch((error: unknown) => {
+        if (!controller.signal.aborted) throw error;
+      });
+    };
     return {
       routes: protocols.routes,
-      execute: async () => {
-        const batch = (await runtime.refresh()).find((candidate) => candidate.transferId === operationId);
-        if (batch === undefined) throw new Error('Live local Move did not publish the reviewed transfer.');
-        await runtime.start(operationId);
-        return { completed: true };
+      execute: () => {
+        running ??= (async () => {
+          const batch = (await runtime.refresh(controller.signal)).find((candidate) => candidate.transferId === open.operationId);
+          if (batch === undefined) throw new Error('Live local Move did not publish the reviewed transfer.');
+          await runtime.start(open.operationId, { signal: controller.signal });
+          return { completed: true };
+        })();
+        return running;
       },
-      pause: () => undefined,
-      cancel: () => undefined,
+      pause: stop,
+      cancel: stop,
     };
+  }
+
+  localStore(session: LiveLocalJournalSocket, operationId: string): LiveLocalObjectStore {
+    return new LiveLocalObjectStore(session, new LiveLocalObjectRepository(this.options.library().db, operationId));
   }
 
   private protocols(): InteropProtocolRuntime {
@@ -172,10 +195,15 @@ export function getProductionInboundMoveController(): InboundMoveController {
 export function createProductionLiveLocalOperation(
   store: LiveLocalObjectStore,
   operation: 'move' | 'sync',
-  operationId: string,
+  open: LiveLocalOpen,
 ): LiveLocalJournalOperation {
   if (production === undefined) throw new Error('Production interop library is not configured.');
-  return production.localOperation(store, operation, operationId);
+  return production.localOperation(store, operation, open);
+}
+
+export function createProductionLiveLocalObjectStore(session: LiveLocalJournalSocket, operationId: string): LiveLocalObjectStore {
+  if (production === undefined) throw new Error('Production interop library is not configured.');
+  return production.localStore(session, operationId);
 }
 
 export async function closeProductionInboundMoveLibrary(): Promise<void> {

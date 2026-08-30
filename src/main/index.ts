@@ -854,7 +854,7 @@ void externalOpen.whenReady().then(async () => {
     authorizePassword: (password) => lock.authorize(password),
     safeStorage: pickSafeStorage,
     providerBusy: custodyWorkActive,
-    pcloudEnabled: productionInterop.pcloud.enabled,
+    ...{ pcloudEnabled: productionInterop.pcloud.enabled, liveLocalEnabled: productionInterop.liveLocalEnabled },
     onManifestChanged: markManifestDebt,
     onImported: () => {
       getBackupEngine();

@@ -93,6 +93,7 @@ export interface AppServicesOptions {
   readonly backup: BackupFacadeOptions;
   readonly providerBusy: () => boolean;
   readonly pcloudEnabled: boolean;
+  readonly liveLocalEnabled: boolean;
   readonly onManifestChanged: () => void;
   readonly onImported: () => void;
   readonly onImportRendererReady: () => void;
@@ -247,7 +248,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   const emitSettingsChanged = createEmitter(events.settingsChanged, options.broadcast);
   getSettingsStore().subscribe((settings) => emitSettingsChanged({ settings }));
   registerBackupHandlers(() => createBackupFacade(options.backup));
-  if (options.pcloudEnabled) {
+  if (options.pcloudEnabled || options.liveLocalEnabled) {
     registerInboundMoveHandlers(getProductionInboundMoveController, options.requireContentAccess);
   }
 }

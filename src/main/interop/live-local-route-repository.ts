@@ -93,7 +93,8 @@ export class LiveLocalRouteRepository {
       if (existing.transport !== 'local-overlook') {
         throw new LiveLocalRouteError('Operation is assigned to a different reviewed transport.');
       }
-      if (existing.state === 'completed' || existing.state === 'cancelled') return existing;
+      if (existing.state === 'cancelled') throw new LiveLocalRouteError('Cancelled local routes cannot be resumed.');
+      if (existing.state === 'completed') return existing;
     }
     runNamed(
       this.db,

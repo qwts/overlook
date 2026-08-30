@@ -12,6 +12,36 @@ export const liveLocalRuntimeStateSchema = z
   })
   .strict();
 
+const liveLocalSyncScopeSchema = z
+  .object({
+    kind: z.enum(['all', 'selected', 'album']),
+    localIds: z.array(z.string().min(1)).readonly(),
+  })
+  .strict()
+  .superRefine((scope, context) => {
+    if (new Set(scope.localIds).size !== scope.localIds.length) {
+      context.addIssue({ code: 'custom', message: 'Live local Sync scope ids must be unique.' });
+    }
+    const valid =
+      (scope.kind === 'all' && scope.localIds.length === 0) ||
+      (scope.kind === 'selected' && scope.localIds.length > 0) ||
+      (scope.kind === 'album' && scope.localIds.length === 1);
+    if (!valid) context.addIssue({ code: 'custom', message: 'Live local Sync scope ids do not match the selected scope kind.' });
+  });
+
+export const liveLocalOperationReviewSchema = z.discriminatedUnion('operation', [
+  z.object({ operation: z.literal('move') }).strict(),
+  z
+    .object({
+      operation: z.literal('sync'),
+      sourceProduct: z.literal('image-trail'),
+      targetProduct: z.literal('overlook'),
+      direction: z.enum(['image-trail-to-overlook', 'two-way']),
+      scope: liveLocalSyncScopeSchema,
+    })
+    .strict(),
+]);
+
 export const liveLocalOpenSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -19,6 +49,7 @@ export const liveLocalOpenSchema = z
     operationId: z.string().uuid(),
     remoteSessionId: z.string().uuid(),
     scopeHash: z.string().regex(/^[a-f0-9]{64}$/u),
+    review: liveLocalOperationReviewSchema,
   })
   .strict();
 
@@ -39,3 +70,4 @@ export const liveLocalControlSchema = z.discriminatedUnion('type', [
 export type LiveLocalRuntimeState = z.output<typeof liveLocalRuntimeStateSchema>;
 export type LiveLocalConnectionStatus = z.output<typeof liveLocalConnectionStatusSchema>;
 export type LiveLocalOpen = z.output<typeof liveLocalOpenSchema>;
+export type LiveLocalOperationReview = z.output<typeof liveLocalOperationReviewSchema>;

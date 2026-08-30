@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { migrateDurableLiveLocalObjects } from './interop-migrations.js';
 import { queryAll, run } from './sql.js';
 
 // Forward-only, versioned, transactional migrations per ADR-0005 (#69).
@@ -874,6 +875,12 @@ const SCHEMA_V25: Migration = {
   },
 };
 
+const SCHEMA_V26: Migration = {
+  version: 26,
+  name: 'durable-live-local-objects',
+  up: migrateDurableLiveLocalObjects,
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -900,6 +907,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V23,
   SCHEMA_V24,
   SCHEMA_V25,
+  SCHEMA_V26,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

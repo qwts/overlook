@@ -9,10 +9,13 @@ import {
   type InteropObjectPage,
   type InteropObjectStore,
 } from './transport.js';
+import type { LiveLocalObjectRepository } from './live-local-object-repository.js';
+import { LIVE_LOCAL_IN_FLIGHT_BYTES } from './live-local-security.js';
 
 const HEADER_RESERVE_BYTES = 2048;
 const WIRE_CHUNK_BYTES = INTEROP_CHUNK_BYTES - HEADER_RESERVE_BYTES;
 const MAX_OBJECT_BYTES = 64 * 1024 * 1024;
+const MAX_INCOMING_SESSION_BYTES = LIVE_LOCAL_IN_FLIGHT_BYTES;
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const objectHeaderSchema = z
   .object({
@@ -27,7 +30,20 @@ const objectHeaderSchema = z
     chunkSha256: sha256Schema,
   })
   .strict()
-  .refine((value) => value.chunkIndex < value.chunkCount, 'Live local chunk index is outside its object.');
+  .superRefine((value, context) => {
+    if (value.chunkIndex >= value.chunkCount) {
+      context.addIssue({ code: 'custom', message: 'Live local chunk index is outside its object.' });
+    }
+    const expectedCount = Math.max(1, Math.ceil(value.objectBytes / WIRE_CHUNK_BYTES));
+    if (value.chunkCount !== expectedCount) {
+      context.addIssue({ code: 'custom', message: 'Live local chunk count does not match the bounded object size.' });
+    }
+    const expectedBytes =
+      value.chunkIndex + 1 === value.chunkCount ? value.objectBytes - value.chunkIndex * WIRE_CHUNK_BYTES : WIRE_CHUNK_BYTES;
+    if (value.chunkBytes !== expectedBytes) {
+      context.addIssue({ code: 'custom', message: 'Live local chunk length does not match its bounded position.' });
+    }
+  });
 
 type ObjectHeader = z.output<typeof objectHeaderSchema>;
 
@@ -91,12 +107,15 @@ export function decodeLiveLocalObjectChunk(frame: Uint8Array): { readonly header
  * as cloud providers but never reads or writes a provider namespace. */
 export class LiveLocalObjectStore implements InteropObjectStore {
   readonly provider = 'local-overlook' as const;
-  readonly #objects = new Map<string, Buffer>();
   readonly #incoming = new Map<string, IncomingObject>();
   readonly #pending = new Map<string, PendingAcknowledgement>();
+  #incomingBytes = 0;
   #closed = false;
 
-  constructor(private readonly session: { readonly sendBinary: (value: Buffer) => void }) {}
+  constructor(
+    private readonly session: { readonly sendBinary: (value: Buffer) => void },
+    private readonly objects: LiveLocalObjectRepository,
+  ) {}
 
   authState(): Promise<'connected'> {
     return Promise.resolve('connected');
@@ -108,62 +127,66 @@ export class LiveLocalObjectStore implements InteropObjectStore {
     const bytes = Buffer.from(bytesInput);
     const sha256 = digest(bytes);
     const chunkCount = Math.max(1, Math.ceil(bytes.length / WIRE_CHUNK_BYTES));
+    if (this.#pending.has(path))
+      throw new InteropTransportError('Live local object already has an outstanding acknowledgement.', 'partial-failure', true);
     const acknowledgement = new Promise<void>((resolve, reject) => {
       this.#pending.set(path, { sha256, resolve, reject });
     });
-    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-      this.assertOpen();
-      const payload = bytes.subarray(chunkIndex * WIRE_CHUNK_BYTES, Math.min(bytes.length, (chunkIndex + 1) * WIRE_CHUNK_BYTES));
-      this.session.sendBinary(
-        encodeLiveLocalObjectChunk(
-          {
-            schemaVersion: 1,
-            type: 'encrypted-object-chunk',
-            path,
-            objectBytes: bytes.length,
-            objectSha256: sha256,
-            chunkIndex,
-            chunkCount,
-            chunkBytes: payload.length,
-            chunkSha256: digest(payload),
-          },
-          payload,
-        ),
-      );
+    try {
+      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+        this.assertOpen();
+        const payload = bytes.subarray(chunkIndex * WIRE_CHUNK_BYTES, Math.min(bytes.length, (chunkIndex + 1) * WIRE_CHUNK_BYTES));
+        this.session.sendBinary(
+          encodeLiveLocalObjectChunk(
+            {
+              schemaVersion: 1,
+              type: 'encrypted-object-chunk',
+              path,
+              objectBytes: bytes.length,
+              objectSha256: sha256,
+              chunkIndex,
+              chunkCount,
+              chunkBytes: payload.length,
+              chunkSha256: digest(payload),
+            },
+            payload,
+          ),
+        );
+      }
+      await acknowledgement;
+      this.objects.put(path, bytes, sha256);
+      return { bytes: bytes.length };
+    } catch (error) {
+      this.#pending.delete(path);
+      throw error;
+    } finally {
+      bytes.fill(0);
     }
-    await acknowledgement;
-    this.#objects.set(path, bytes);
-    return { bytes: bytes.length };
   }
 
   get(pathInput: string): Promise<Buffer> {
     const path = assertSafeInteropPath(pathInput);
-    const value = this.#objects.get(path);
+    const value = this.objects.get(path);
     if (value === undefined) return Promise.reject(new InteropTransportError('Local interop object was not found.', 'not-found', false));
     return Promise.resolve(Buffer.from(value));
   }
 
   list(prefixInput: string, cursor: string | null): Promise<InteropObjectPage> {
     const prefix = assertSafeInteropPath(prefixInput);
-    const entries = [...this.#objects]
-      .filter(([path]) => path.startsWith(prefix))
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([path, bytes]) => ({ path, bytes: bytes.length }));
-    const offset = cursor === null ? 0 : Number(cursor);
-    if (!Number.isSafeInteger(offset) || offset < 0) {
+    try {
+      return Promise.resolve(this.objects.list(prefix, cursor));
+    } catch {
       return Promise.reject(new InteropTransportError('Invalid local interoperability cursor.', 'corrupt', false));
     }
-    const page = entries.slice(offset, offset + 100);
-    return Promise.resolve({ entries: page, nextCursor: offset + page.length < entries.length ? String(offset + page.length) : null });
   }
 
   delete(pathInput: string): Promise<void> {
-    this.#objects.delete(assertSafeInteropPath(pathInput));
+    this.objects.delete(assertSafeInteropPath(pathInput));
     return Promise.resolve();
   }
 
   quota(): Promise<{ readonly usedBytes: number; readonly totalBytes: null }> {
-    return Promise.resolve({ usedBytes: [...this.#objects.values()].reduce((total, bytes) => total + bytes.length, 0), totalBytes: null });
+    return Promise.resolve({ usedBytes: this.objects.usedBytes(), totalBytes: null });
   }
 
   async verify(pathInput: string): Promise<{ readonly sha256: string; readonly bytes: number }> {
@@ -190,8 +213,14 @@ export class LiveLocalObjectStore implements InteropObjectStore {
       payload.fill(0);
       throw new InteropTransportError('Live local chunk identity was replayed with different content.', 'corrupt', false);
     }
-    if (prior === undefined) incoming.chunks.set(header.chunkIndex, payload);
-    else payload.fill(0);
+    if (prior === undefined) {
+      if (this.#incomingBytes + payload.length > MAX_INCOMING_SESSION_BYTES) {
+        payload.fill(0);
+        throw new InteropTransportError('Live local in-flight ciphertext exceeded its session budget.', 'partial-failure', true);
+      }
+      incoming.chunks.set(header.chunkIndex, payload);
+      this.#incomingBytes += payload.length;
+    } else payload.fill(0);
     this.#incoming.set(header.path, incoming);
     if (incoming.chunks.size !== header.chunkCount) return null;
     const chunks = [...incoming.chunks.entries()].sort(([left], [right]) => left - right).map(([, chunk]) => chunk);
@@ -200,9 +229,16 @@ export class LiveLocalObjectStore implements InteropObjectStore {
       object.fill(0);
       throw new InteropTransportError('Live local encrypted object failed whole-object verification.', 'corrupt', false);
     }
-    this.#objects.set(header.path, object);
-    this.#incoming.delete(header.path);
-    for (const chunk of chunks) chunk.fill(0);
+    try {
+      this.objects.put(header.path, object, header.objectSha256);
+    } finally {
+      object.fill(0);
+      this.#incoming.delete(header.path);
+      for (const chunk of chunks) {
+        this.#incomingBytes -= chunk.length;
+        chunk.fill(0);
+      }
+    }
     return { path: header.path, sha256: header.objectSha256 };
   }
 
@@ -222,10 +258,13 @@ export class LiveLocalObjectStore implements InteropObjectStore {
     const error = new InteropTransportError('Live local peer disappeared before durable acknowledgement.', 'offline', true);
     for (const pending of this.#pending.values()) pending.reject(error);
     this.#pending.clear();
-    for (const bytes of this.#objects.values()) bytes.fill(0);
-    this.#objects.clear();
     for (const incoming of this.#incoming.values()) for (const chunk of incoming.chunks.values()) chunk.fill(0);
     this.#incoming.clear();
+    this.#incomingBytes = 0;
+  }
+
+  clearDurable(): void {
+    this.objects.clear();
   }
 
   private assertOpen(): void {

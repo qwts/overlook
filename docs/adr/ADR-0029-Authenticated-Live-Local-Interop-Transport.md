@@ -96,6 +96,21 @@ socket and must become observable within the prototype bound.
 The loopback channel does not replace application-layer encryption or durable
 journals. It is a local transport for the same encrypted protocol objects.
 
+The first post-redemption `open` control frame carries a schema-validated
+operation review descriptor. Move binds the reviewed operation identity. Sync
+also binds source, target, direction, and scope. Overlook recomputes the
+canonical SHA-256 review hash before opening the route journal, creates or
+reuses the exact durable Sync session from those choices, and rejects a
+mismatch before accepting ciphertext.
+
+Received complete encrypted objects enter library-scoped durable staging before
+the peer receives an object acknowledgement. Partial objects remain memory-only
+and share the negotiated in-flight byte ceiling across the session. Once the
+canonical Move or Sync journal has consumed the staged ciphertext, the staging
+rows are deleted. Disconnect preserves complete staged objects for exact resume;
+cancel drains producers before closing the socket and deletes the cancelled
+route's staging rows.
+
 ### Running-state and error contract
 
 Bootstrap distinguishes:

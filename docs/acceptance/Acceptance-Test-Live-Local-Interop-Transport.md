@@ -141,16 +141,18 @@ encrypted-object and library-journal seams:
 1. `local-overlook` is a session-scoped `InteropObjectStore`; it has no provider
    credentials and cannot address backup or cloud interop storage.
 2. Binary frames carry bounded, checksum-verified encrypted object chunks.
-   Provider-shaped manifests and ADR-0016 ciphertext are reassembled only in
-   memory, and each outgoing object waits for a peer durability acknowledgement
-   before the canonical outbox marks it delivered.
+   Partial objects share the negotiated in-flight memory ceiling; complete
+   provider-shaped manifests and ADR-0016 ciphertext are staged in the encrypted
+   library database before the peer receives a durability acknowledgement.
+   Canonical journal consumption removes staging rows.
 3. Move executes through `InboundMoveRuntime`, `MoveJournalRepository`, and the
    existing acknowledgement/original-verification guard. Replayed objects
    therefore reuse the stored response and cannot repeat an import or deletion.
-4. Sync accepts canonical sealed record envelopes into an already-reviewed
-   `SyncRepository` session. A disappearing peer sets the same durable session
-   to disconnected/paused; reconnect explicitly resumes the original scope and
-   decisions.
+4. The authenticated `open` frame binds a canonical review descriptor and hash.
+   Sync creates or reuses the exact `SyncRepository` session from its reviewed
+   source, target, direction, and scope before receiving sealed records. A
+   disappearing peer sets the same durable session to disconnected/paused;
+   reconnect explicitly resumes the original scope and decisions.
 5. `interop_transport_routes` persists only pairing, operation, reviewed-scope
    hash, selected transport, and remote resume identity. Capability secrets and
    endpoints remain memory-only. A different session identity or scope cannot
@@ -159,11 +161,16 @@ encrypted-object and library-journal seams:
 6. The typed renderer channel reports `available`, `connecting`, `connected`,
    `paused`, `incompatible`, or `unavailable` without exposing capabilities,
    paths, record metadata, or original bytes.
+7. Pairing selection/unlock and local status IPC are composed whenever the live
+   local feature is enabled, independently of optional pCloud configuration.
+   Cancel and disconnect abort and drain an active Move producer before socket
+   teardown; cancelled routes cannot be reopened.
 
 Automated evidence:
 
 - `src/main/interop/live-local-journal-session.ts`
 - `src/main/interop/live-local-object-store.ts`
+- `src/main/interop/live-local-object-repository.ts`
 - `src/main/interop/live-local-route-repository.ts`
 - `src/main/interop/live-local-sync-runtime.ts`
 - `tests/interop/live-local-journals.test.ts`

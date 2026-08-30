@@ -1,4 +1,5 @@
 import type { InteropKeyCustody } from './pairing-custody.js';
+import type { LiveLocalOperationReview } from '../../shared/interop/live-local-runtime.js';
 import type { InteropProtocolRuntime } from './protocol-runtime.js';
 import { openInteropMessage } from './sealed-transport.js';
 import { EncryptedInteropTransport, type InteropObjectStore } from './transport.js';
@@ -22,14 +23,31 @@ export class LiveLocalSyncRuntime {
     private readonly store: InteropObjectStore,
     private readonly custody: InteropKeyCustody,
     private readonly sessionId: string,
+    private readonly review: Extract<LiveLocalOperationReview, { readonly operation: 'sync' }>,
   ) {
     this.#transport = new EncryptedInteropTransport(store);
   }
 
   async receive(): Promise<number> {
-    const session = this.protocols.syncRepository.getSession(this.sessionId);
-    if (session === undefined) throw new Error('Local Sync requires an existing reviewed durable session.');
+    const session =
+      this.protocols.syncRepository.getSession(this.sessionId) ??
+      this.protocols.sync.start({
+        sessionId: this.sessionId,
+        pairingId: this.custody.pairingId,
+        sourceProduct: this.review.sourceProduct,
+        targetProduct: this.review.targetProduct,
+        direction: this.review.direction,
+        scope: this.review.scope,
+      });
     if (session.pairingId !== this.custody.pairingId) throw new Error('Local Sync session does not match pairing authority.');
+    if (
+      session.sourceProduct !== this.review.sourceProduct ||
+      session.targetProduct !== this.review.targetProduct ||
+      session.direction !== this.review.direction ||
+      JSON.stringify(session.scope) !== JSON.stringify(this.review.scope)
+    ) {
+      throw new Error('Local Sync session does not match the reviewed operation choices.');
+    }
     if (!session.connected || session.phase === 'paused') this.protocols.sync.resume(this.sessionId);
     const scope = { pairingId: this.custody.pairingId, transferId: this.sessionId };
     const prefix = `pairings/${scope.pairingId}/transfers/${scope.transferId}/objects/`;

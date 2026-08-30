@@ -2,7 +2,11 @@ import { LiveLocalBridge, type LiveLocalBridgeOptions } from './live-local-bridg
 import { registerICloudNativeHost, type NativeHostRegistrationOptions } from './icloud-native-registration.js';
 import { configurePCloudInteropFeature, type PCloudInteropFeatureOptions } from './feature-runtime.js';
 import { configureInteropPairing, liveLocalBootstrapState } from './runtime.js';
-import { configureProductionInboundMove, createProductionLiveLocalOperation } from './inbound-move-production.js';
+import {
+  configureProductionInboundMove,
+  createProductionLiveLocalObjectStore,
+  createProductionLiveLocalOperation,
+} from './inbound-move-production.js';
 import { LiveLocalJournalSessionHandler } from './live-local-journal-session.js';
 import { setLiveLocalRuntimeState } from './live-local-state.js';
 import { events } from '../../shared/ipc/channels.js';
@@ -31,7 +35,8 @@ export async function startProductionInterop(options: ProductionInteropOptions):
     broadcast((window) => window.webContents.send(events.interopLocalStatusChanged.name, parsed));
   };
   const journalSessions = new LiveLocalJournalSessionHandler({
-    createOperation: ({ open, redemption, store }) => createProductionLiveLocalOperation(store, redemption.operation, open.operationId),
+    createStore: ({ open, session }) => createProductionLiveLocalObjectStore(session, open.operationId),
+    createOperation: ({ open, redemption, store }) => createProductionLiveLocalOperation(store, redemption.operation, open),
     stateChanged: publish,
   });
   const bridge = enabled
