@@ -287,6 +287,8 @@ jobs:
       OVERLOOK_E2E_WORKERS: '1'
       OVERLOOK_E2E_RETRIES: '0'
     steps:
+      - name: Configure LF checkout
+        run: git config --global core.autocrlf false
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -352,6 +354,8 @@ jobs:
       OVERLOOK_E2E_WORKERS: '1'
       OVERLOOK_E2E_RETRIES: '0'
     steps:
+      - name: Configure LF checkout
+        run: git config --global core.autocrlf false
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

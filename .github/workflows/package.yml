@@ -377,7 +377,7 @@ jobs:
       - name: Install and run real import smoke
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -LiteralPath release-smoke-artifact -Filter "Overlook-*-${{ matrix.arch }}.exe" -File | Select-Object -First 1
+          $installer = Get-ChildItem -LiteralPath release-smoke-artifact -Filter "Overlook-*-${{ matrix.arch }}.exe" -File -Recurse | Select-Object -First 1
           if ($null -eq $installer) { throw 'Matching NSIS installer was not downloaded.' }
           ./scripts/verify-windows-packaged-import.ps1 `
             -Installer $installer.FullName `

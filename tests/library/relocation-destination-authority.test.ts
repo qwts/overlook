@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test, type TestContext } from 'node:test';
@@ -33,9 +33,9 @@ describe('RelocationDestinationAuthority', () => {
     const authority = new RelocationDestinationAuthority({ createToken: () => TOKEN_A });
     const grant = await authority.issue(7, rootAlias);
 
-    assert.equal(grant.root, root);
+    assert.equal(grant.root, realpathSync(root));
     const lease = await authority.acquire(7, grant.authorization, path.join(rootAlias, 'Library', 'new'));
-    assert.equal(lease.destination, path.join(root, 'Library', 'new'));
+    assert.equal(lease.destination, path.join(grant.root, 'Library', 'new'));
     lease.release();
 
     await assert.rejects(authority.acquire(7, grant.authorization, path.join(outside, 'Library')), RelocationDestinationGrantError);
@@ -109,7 +109,7 @@ describe('RelocationDestinationAuthority', () => {
     const lease = await authority.acquire(7, grant.authorization, path.join(root, 'Library'));
 
     assert.equal(authority.revoke(7, grant.authorization), true);
-    assert.equal(lease.destination, path.join(root, 'Library'));
+    assert.equal(lease.destination, path.join(grant.root, 'Library'));
     assert.doesNotThrow(() => lease.release());
     await assert.rejects(authority.acquire(7, grant.authorization, path.join(root, 'Again')), RelocationDestinationGrantError);
   });

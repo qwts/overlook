@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, test } from 'node:test';
 
-import { runReleaseImportSmoke } from '../../src/main/release-import-smoke.js';
+import { createReleaseImportSmokeRunner, runReleaseImportSmoke } from '../../src/main/release-import-smoke.js';
 
 describe('packaged release import smoke (#1083)', () => {
   test('proves the record, decrypted custody, source preservation, and no plaintext at rest', async () => {
@@ -49,5 +49,21 @@ describe('packaged release import smoke (#1083)', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  test('the production runner always closes an opened library after failure', async () => {
+    let closed = false;
+    const runner = createReleaseImportSmokeRunner(
+      () => ({}) as never,
+      () => {
+        throw new Error('library parts unavailable');
+      },
+      () => {
+        closed = true;
+        return Promise.resolve();
+      },
+    );
+    await assert.rejects(runner({ sourcePath: 'fixture.jpg', profilePath: 'profile' }), /library parts unavailable/u);
+    assert.equal(closed, true);
   });
 });

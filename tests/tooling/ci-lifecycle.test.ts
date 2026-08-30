@@ -100,6 +100,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     const gate = ci.slice(ci.indexOf('\n  gate:\n'));
     assert.match(ci, /^ {2}windows-tests:\n {4}name: Windows x64 tests and import$/mu);
     assert.match(ci, /runs-on: windows-latest/u);
+    assert.match(ci, /name: Configure LF checkout\s+run: git config --global core\.autocrlf false/u);
     assert.match(ci, /executable: cmd\.exe/u);
     assert.match(ci, /run: npm run test:inner/u);
     assert.match(ci, /run: npm run test:e2e:windows-import:inner/u);

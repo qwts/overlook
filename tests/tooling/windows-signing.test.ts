@@ -51,6 +51,7 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /arch: x64\s+runner: windows-latest/u);
     assert.match(workflow, /arch: arm64\s+runner: windows-11-arm/u);
     assert.match(workflow, /name: overlook-windows-\$\{\{ matrix\.arch \}\}/u);
+    assert.match(workflow, /Get-ChildItem .* -File -Recurse/u);
     assert.match(workflow, /verify-windows-packaged-import\.ps1/u);
     assert.match(smoke, /ProcessArchitecture/u);
     assert.match(smoke, /--overlook-release-import-smoke/u);
