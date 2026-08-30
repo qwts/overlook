@@ -11,7 +11,9 @@
   runs.
 - **CI follows PR lifecycle:** drafts run locally; ready heads, merge candidates,
   and manual preflights run the complete suite; validated main commits run a
-  short integration smoke, with a complete-suite fallback.
+  short integration smoke, with a complete-suite fallback. Ready/queue/manual
+  suites also run unit, DOM, and a real import on Windows x64; main runs the
+  source import on native Windows x64 and ARM64.
 - **Floors ratchet upward only:** c8 lines 90 / branches 80 (`.c8rc.json`),
   type-coverage 99.8 strict, file-size budget 800 lines. The **a11y violation
   budget** (`tests/a11y/violation-budget.json`, #398) is the same policy
@@ -155,11 +157,14 @@ non-browser gates still run through `npm run ci` locally and in hosted CI.
 - Manual dispatch runs the complete suite for the dispatched ref's exact SHA.
 - A ready PR reuses a successful manual suite only for its exact current head;
   otherwise lint, formatting, changesets, acceptance/a11y, tests with coverage,
-  build, Storybook, E2E, docs-gov, and Advanced CodeQL all run.
+  build, Storybook, E2E, docs-gov, Advanced CodeQL, and Windows x64 unit/DOM plus
+  real copy-import validation all run.
 - Each `merge_group` candidate runs that same complete suite. PR-scoped
   concurrency cancels obsolete ready runs without canceling other candidates.
 - A `main` push with successful exact merge-group evidence runs the short interop
-  smoke and default-branch CodeQL. Missing evidence triggers the complete suite.
+  smoke and default-branch CodeQL. Every main push also runs the source copy-import
+  smoke on native Windows x64 and ARM64. Missing evidence triggers the complete
+  Ubuntu suite.
 - Stable `CI` evaluates the selected lane. `E2E gate`, docs-gov, and CodeQL keep
   their existing check identities and evidence artifacts.
 
@@ -180,7 +185,10 @@ the operational package and perf workflows remain manual.
 deliberately **not** in the PR gate — it is the slow lane. The **Package**
 workflow (`workflow_dispatch`) builds unsigned mac + win artifacts on demand;
 run it when packaging risk changes (Electron bumps, native modules, builder
-config). Native modules stay in `dependencies`; the reviewed install step lays
+config). After packaging, matching native x64 and ARM64 runners install each NSIS
+artifact, import a checked-in fixture through the production copy path, verify
+encrypted custody and source preservation, and uninstall in cleanup. Native
+modules stay in `dependencies`; the reviewed install step lays
 down Node-API prebuilds, SQLite's inferred `binding.gyp` install is explicitly
 denied, and `npmRebuild: false` prevents electron-rebuild from mistaking that
 retained source metadata for an ABI-bound dependency. The after-pack hook

@@ -94,7 +94,7 @@ describe('source scan (#84)', () => {
     assert.equal(second.summary.total, 7, 'the card itself is unchanged');
   });
 
-  test('an unreadable directory is skipped, never fatal (PR #174 review)', async () => {
+  test('an unreadable directory is skipped, never fatal (PR #174 review)', { skip: process.platform === 'win32' }, async () => {
     const { dir } = fixtureCard();
     const locked = join(dir, 'System Volume Information');
     mkdirSync(locked);

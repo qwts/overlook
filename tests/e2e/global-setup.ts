@@ -24,5 +24,5 @@ export default function globalSetup(): void {
   writeFileSync(registryPath, '', 'utf8');
   process.env[tmpRegistryEnvVar] = registryPath;
 
-  execFileSync('npm', ['run', 'build'], { cwd: repoRoot, stdio: 'inherit', env: process.env });
+  execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], { cwd: repoRoot, stdio: 'inherit', env: process.env });
 }

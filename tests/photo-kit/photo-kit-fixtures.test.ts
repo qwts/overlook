@@ -44,7 +44,9 @@ describe('PhotoKit test bridge fixtures (#798)', () => {
       stage,
     );
     assert.deepEqual(await Promise.all(materialized.map(async (asset) => (await readFile(asset.path)).toString())), ['video', 'image']);
-    assert.ok((await Promise.all(materialized.map((asset) => stat(asset.path)))).every((details) => (details.mode & 0o077) === 0));
+    if (process.platform !== 'win32') {
+      assert.ok((await Promise.all(materialized.map((asset) => stat(asset.path)))).every((details) => (details.mode & 0o077) === 0));
+    }
     await assert.rejects(bridge.materialize(['missing'], stage), /unavailable/u);
 
     await bridge.exportAssets([

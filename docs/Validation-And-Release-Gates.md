@@ -151,6 +151,17 @@ Four overrides exist, each with a removal condition:
   `package-lock.json` integrity entry before extraction** — registry metadata is
   never trusted on its own. `tests/tooling/windows-signing.test.ts` locks the
   gate; keep both in step when changing sharp packaging or the lockfile shape.
+- Windows source validation is architecture-aware: complete-suite PR, queue, and
+  manual runs execute unit/DOM plus a real copy import on `windows-latest`; every
+  main push executes that import on `windows-latest` and native
+  `windows-11-arm`. The aggregate `CI` job requires the applicable Windows result,
+  so exact-SHA evidence cannot bypass it.
+- Package and release runs download each architecture-qualified NSIS artifact on
+  a matching native runner. The verifier asserts the runner architecture,
+  installs silently, launches a dedicated packaged-only import mode against a
+  temporary profile, verifies the database record, decrypted content hash, no
+  plaintext-at-rest leak, and copy-source preservation, then uninstalls in a
+  `finally` cleanup.
 
 ## Changesets and releases
 
@@ -187,6 +198,9 @@ Windows ships two architecture-qualified NSIS installers — `overlook-windows-x
 and `overlook-windows-arm64` (arm64 cross-compiled on the x64 runner) — each gated
 post-build by `verify-windows-arch.mjs`, which fails the leg if any payload
 (`Overlook.exe` or a shipped `*.node`) is not the target PE machine type.
+Each completed installer is then executed on a matching native x64 or ARM64
+host for the installed import smoke; cross-compilation is not treated as runtime
+evidence.
 `prune-foreign-binaries.mjs` runs inside electron-builder before that gate and
 keeps only the target payload from packages that bundle multiple platforms:
 onnxruntime-node's nested directories and better-sqlite3-multiple-ciphers v13's

@@ -44,6 +44,20 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /node scripts\/verify-windows-arch\.mjs "\$WIN_ARCH"/u);
   });
 
+  test('runs each installed artifact on a matching native Windows runner', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const smoke = source('scripts/verify-windows-packaged-import.ps1');
+    assert.match(workflow, /^ {2}installed-windows-import:/mu);
+    assert.match(workflow, /arch: x64\s+runner: windows-latest/u);
+    assert.match(workflow, /arch: arm64\s+runner: windows-11-arm/u);
+    assert.match(workflow, /name: overlook-windows-\$\{\{ matrix\.arch \}\}/u);
+    assert.match(workflow, /verify-windows-packaged-import\.ps1/u);
+    assert.match(smoke, /ProcessArchitecture/u);
+    assert.match(smoke, /--overlook-release-import-smoke/u);
+    assert.match(smoke, /overlook-release-import-smoke:ready/u);
+    assert.match(smoke, /Remove-Item -LiteralPath \$profile -Recurse -Force/u);
+  });
+
   test('the x64 package proves native ACL and complete installer lifecycle behavior', () => {
     const workflow = source('.github/workflows/package.yml');
     const installer = source('build/installer.nsh');

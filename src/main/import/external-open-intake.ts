@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 const MAX_PENDING_PATHS = 100_000;
 
@@ -25,11 +25,12 @@ export function openPathKey(path: string, platform: NodeJS.Platform = process.pl
 }
 
 export function normalizeOpenPaths(paths: readonly string[], cwd: string, platform: NodeJS.Platform = process.platform): readonly string[] {
+  const pathApi = platform === 'win32' ? win32 : posix;
   const normalized = new Map<string, string>();
   for (const candidate of paths) {
     const trimmed = candidate.trim();
-    if (trimmed === '' || (!isAbsolute(trimmed) && trimmed.startsWith('-'))) continue;
-    const absolute = isAbsolute(trimmed) ? resolve(trimmed) : resolve(cwd, trimmed);
+    if (trimmed === '' || (!pathApi.isAbsolute(trimmed) && trimmed.startsWith('-'))) continue;
+    const absolute = pathApi.isAbsolute(trimmed) ? pathApi.resolve(trimmed) : pathApi.resolve(cwd, trimmed);
     normalized.set(openPathKey(absolute, platform), absolute);
   }
   return [...normalized.values()];

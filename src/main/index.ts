@@ -68,7 +68,7 @@ import { ProtectedRuntime } from './library/protected-runtime.js';
 import { registerAppServices } from './register-app-services.js';
 import { devSeedAccess, runDevSeeds } from './library/dev-seed.js';
 import { ThumbService } from './thumbs/thumb-service.js';
-import { exitForReleaseSmokeIfRequested } from './release-smoke.js';
+import { configureReleaseImportSmoke, exitForReleaseSmokeIfRequested } from './release-smoke.js';
 import { registerEarlyRuntime } from './early-runtime.js';
 import { installApplicationMenu, refreshApplicationMenu } from './application-menu.js';
 import { interopRuntimeBusy, lockInteropRuntime } from './interop/runtime.js';
@@ -78,7 +78,6 @@ import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
 import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
-import type { EmbeddingService } from './embedding/embedding-service.js';
 import { EgressRuntime } from './egress-runtime.js';
 import { applicationEvents } from './application-events.js';
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
@@ -334,7 +333,7 @@ const changeProviderWork = (delta: 1 | -1): void => {
 
 const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
-function getEmbeddingService(): EmbeddingService {
+function getEmbeddingService() {
   embeddingRuntime ??= createEmbeddingApplicationRuntime({
     parts: requireParts('embedding service'),
     importBusy: () => importRuntime?.service.busy() === true,
@@ -713,6 +712,8 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   await releaseLibraryLockAfter(() => closeLibraryResources(mode), release);
   releaseLibraryLock = undefined;
 }
+
+configureReleaseImportSmoke(getImportService, requireParts, () => libraryService && closeLibrary('lock'));
 
 const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({
   registryRuntime,

@@ -47,7 +47,7 @@ async function measure() {
   const results = await eslint.lintFiles(LINT_GLOBS);
   const counts = new Map();
   for (const result of results) {
-    const rel = path.relative(ROOT, result.filePath);
+    const rel = path.relative(ROOT, result.filePath).split(path.sep).join('/');
     if (isFixture(rel)) continue;
     const hits = result.messages.filter((m) => m.ruleId === RULE_ID).length;
     if (hits > 0) counts.set(rel, hits);

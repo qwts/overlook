@@ -84,7 +84,7 @@ describe('external open intake (#406)', () => {
   test('later bursts coalesce while the same renderer remains ready', () => {
     const scheduler = new ManualScheduler();
     const deliveries: string[][] = [];
-    const intake = new ExternalOpenIntake({ scheduler, deliver: (paths) => deliveries.push([...paths]) });
+    const intake = new ExternalOpenIntake({ scheduler, platform: 'darwin', deliver: (paths) => deliveries.push([...paths]) });
     intake.setAuthorized(true);
     intake.rendererReady();
     scheduler.run();

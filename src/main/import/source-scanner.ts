@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, open, readdir, stat } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 
 import { classifyMediaFile } from '../../shared/library/media-files.js';
 import { sniffImageKind, sniffVideoKind } from '../../shared/library/media-signatures.js';
@@ -385,7 +385,7 @@ export async function listVolumes(deps: VolumeListerDeps): Promise<ImportSource[
       if (name.startsWith('.')) {
         continue;
       }
-      const path = join('/Volumes', name);
+      const path = posix.join('/Volumes', name);
       // The boot volume appears as a symlink to / — not an import source.
       if (await deps.isSymlink(path)) {
         continue;

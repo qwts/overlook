@@ -62,7 +62,7 @@ async function launch(card: string, launchOverlook: LaunchOverlook): Promise<Lau
   return launched;
 }
 
-test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', async ({ launchOverlook }) => {
+test('Copy import: dialog flow, encrypted at rest, grid + toast + counts', { tag: '@windows-import' }, async ({ launchOverlook }) => {
   const card = makeCard();
   const { page, userData, close } = await launch(card, launchOverlook);
   try {

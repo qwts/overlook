@@ -349,3 +349,37 @@ jobs:
             release/sbom.cyclonedx.json
             THIRD-PARTY-NOTICES.md
           retention-days: 14
+
+  installed-windows-import:
+    name: Installed Windows ${{ matrix.arch }} import
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout smoke verifier and fixture
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Download matching Windows artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: overlook-windows-${{ matrix.arch }}
+          path: release-smoke-artifact
+      - name: Install and run real import smoke
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath release-smoke-artifact -Filter "Overlook-*-${{ matrix.arch }}.exe" -File | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Matching NSIS installer was not downloaded.' }
+          ./scripts/verify-windows-packaged-import.ps1 `
+            -Installer $installer.FullName `
+            -Fixture (Resolve-Path -LiteralPath tests/fixtures/exif/exif-full.jpg).Path `
+            -Architecture '${{ matrix.arch }}'
