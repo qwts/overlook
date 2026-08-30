@@ -68,7 +68,7 @@ import { ProtectedRuntime } from './library/protected-runtime.js';
 import { registerAppServices } from './register-app-services.js';
 import { devSeedAccess, runDevSeeds } from './library/dev-seed.js';
 import { ThumbService } from './thumbs/thumb-service.js';
-import { configureReleaseImportSmoke, exitForReleaseSmokeIfRequested } from './release-smoke.js';
+import { configureReleaseImportSmoke, exitForReleaseSmokeIfRequested, releaseImportSmokeProfileIfRequested } from './release-smoke.js';
 import { registerEarlyRuntime } from './early-runtime.js';
 import { installApplicationMenu, refreshApplicationMenu } from './application-menu.js';
 import { interopRuntimeBusy, lockInteropRuntime } from './interop/runtime.js';
@@ -84,7 +84,7 @@ import { applicationEvents } from './application-events.js';
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
 
 // Configure the stable profile identity before the first userData lookup.
-const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA']);
+const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA'], releaseImportSmokeProfileIfRequested(app));
 
 const productionInterop = createProductionInteropAppRuntime({
   harnessEnv,

@@ -11,6 +11,7 @@ import {
   RELEASE_SMOKE_ARGUMENT,
   RELEASE_SMOKE_READY_MARKER,
   exitForReleaseSmokeIfRequested,
+  releaseImportSmokeProfileIfRequested,
 } from '../../src/main/release-smoke.js';
 
 function smokeApp(profile = join(tmpdir(), 'overlook-release-import-smoke-test')) {
@@ -71,6 +72,27 @@ describe('packaged release launch smoke (#357)', () => {
     assert.deepEqual(request, { sourcePath: source, profilePath: profile });
     assert.equal(output, `${RELEASE_IMPORT_SMOKE_READY_MARKER}\n`);
     assert.deepEqual(exits, [0]);
+  });
+
+  test('selects the isolated profile before packaged app-profile configuration', () => {
+    const { profile } = smokeApp();
+
+    assert.equal(
+      releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+        'Overlook',
+        RELEASE_IMPORT_SMOKE_ARGUMENT,
+        `--overlook-release-import-profile=${profile}`,
+      ]),
+      profile,
+    );
+    assert.equal(
+      releaseImportSmokeProfileIfRequested({ isPackaged: false }, [
+        'Overlook',
+        RELEASE_IMPORT_SMOKE_ARGUMENT,
+        `--overlook-release-import-profile=${profile}`,
+      ]),
+      undefined,
+    );
   });
 
   test('fails closed when the import profile is not the active isolated profile', async () => {

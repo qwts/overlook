@@ -1,4 +1,4 @@
-import { writeSync } from 'node:fs';
+import { realpathSync, writeSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -23,6 +23,10 @@ interface ReleaseSmokeApp {
   exit(code: number): void;
 }
 
+interface ReleaseSmokeProfileApp {
+  readonly isPackaged: boolean;
+}
+
 export interface ReleaseImportSmokeRequest {
   readonly sourcePath: string;
   readonly profilePath: string;
@@ -43,14 +47,10 @@ function argumentValue(argv: readonly string[], prefix: string): string | undefi
   return argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 }
 
-export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): Promise<ReleaseImportSmokeRequest> {
-  if (!app.isPackaged) throw new Error('release import smoke requires a packaged application');
-  const sourcePath = argumentValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT) ?? '';
-  const profilePath = argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '';
-  if (!isAbsolute(sourcePath)) throw new Error('release import source must be an absolute path');
+function isolatedReleaseImportProfile(profilePath: string): string {
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
-  const resolvedProfile = await realpath(resolve(profilePath));
-  const tempRelation = relative(await realpath(resolve(tmpdir())), resolvedProfile);
+  const resolvedProfile = realpathSync(resolve(profilePath));
+  const tempRelation = relative(realpathSync(resolve(tmpdir())), resolvedProfile);
   if (
     tempRelation === '' ||
     tempRelation.startsWith('..') ||
@@ -59,6 +59,23 @@ export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv:
   ) {
     throw new Error('release import profile must be an isolated Overlook smoke directory under the system temp directory');
   }
+  return resolvedProfile;
+}
+
+export function releaseImportSmokeProfileIfRequested(
+  app: ReleaseSmokeProfileApp,
+  argv: readonly string[] = process.argv,
+): string | undefined {
+  if (!app.isPackaged || !argv.includes(RELEASE_IMPORT_SMOKE_ARGUMENT)) return undefined;
+  return isolatedReleaseImportProfile(argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '');
+}
+
+export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): Promise<ReleaseImportSmokeRequest> {
+  if (!app.isPackaged) throw new Error('release import smoke requires a packaged application');
+  const sourcePath = argumentValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT) ?? '';
+  const profilePath = argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '';
+  if (!isAbsolute(sourcePath)) throw new Error('release import source must be an absolute path');
+  const resolvedProfile = await realpath(isolatedReleaseImportProfile(profilePath));
   if ((await realpath(resolve(app.getPath('userData')))) !== resolvedProfile) {
     throw new Error('release import profile does not match Electron userData');
   }

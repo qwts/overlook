@@ -191,6 +191,17 @@ describe('app profile identity', () => {
     assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${stable}`]);
   });
 
+  it('binds a packaged launch to a separately verified release-smoke profile', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-packaged-smoke-'));
+    const isolated = join(appData, 'isolated');
+    mkdirSync(isolated);
+    const { app, calls } = profileApp(true, { appData, userData: join(appData, 'electron') });
+
+    assert.equal(configureAppProfile(app, '/untrusted/environment', isolated), isolated);
+    assert.deepEqual(calls, [`name:${OVERLOOK_PRODUCT_NAME}`, `path:userData:${isolated}`]);
+    assert.deepEqual(readdirSync(appData), ['isolated']);
+  });
+
   it('reuses the established packaged profile containing the library registry and provider custody', () => {
     const appData = mkdtempSync(join(tmpdir(), 'overlook-app-profile-'));
     const stable = join(appData, OVERLOOK_PRODUCT_NAME);
