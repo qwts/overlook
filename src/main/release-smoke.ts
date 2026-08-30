@@ -14,6 +14,7 @@ export const RELEASE_SMOKE_READY_MARKER = 'overlook-release-smoke:ready';
 export const RELEASE_IMPORT_SMOKE_ARGUMENT = '--overlook-release-import-smoke';
 export const RELEASE_IMPORT_SMOKE_READY_MARKER = 'overlook-release-import-smoke:ready';
 export const RELEASE_IMPORT_SMOKE_ERROR_MARKER = 'overlook-release-import-smoke:error';
+export const RELEASE_IMPORT_SMOKE_PROGRESS_MARKER = 'overlook-release-import-smoke:progress';
 const RELEASE_IMPORT_SOURCE_ARGUMENT = '--overlook-release-import-source=';
 const RELEASE_IMPORT_PROFILE_ARGUMENT = '--overlook-release-import-profile=';
 
@@ -40,7 +41,9 @@ export function configureReleaseImportSmoke(
   requireParts: (what: string) => LibraryParts,
   closeLibrary: () => Promise<void> | undefined,
 ): void {
-  releaseImportSmokeRunner = createReleaseImportSmokeRunner(getImportService, requireParts, closeLibrary);
+  releaseImportSmokeRunner = createReleaseImportSmokeRunner(getImportService, requireParts, closeLibrary, (stage) => {
+    writeSync(process.stdout.fd, `${RELEASE_IMPORT_SMOKE_PROGRESS_MARKER}:${stage}\n`);
+  });
 }
 
 function argumentValue(argv: readonly string[], prefix: string): string | undefined {

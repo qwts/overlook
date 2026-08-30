@@ -53,6 +53,7 @@ describe('packaged release import smoke (#1083)', () => {
 
   test('the production runner always closes an opened library after failure', async () => {
     let closed = false;
+    const stages: string[] = [];
     const runner = createReleaseImportSmokeRunner(
       () => ({}) as never,
       () => {
@@ -62,8 +63,10 @@ describe('packaged release import smoke (#1083)', () => {
         closed = true;
         return Promise.resolve();
       },
+      (stage) => stages.push(stage),
     );
     await assert.rejects(runner({ sourcePath: 'fixture.jpg', profilePath: 'profile' }), /library parts unavailable/u);
     assert.equal(closed, true);
+    assert.deepEqual(stages, ['bootstrap', 'closing', 'closed']);
   });
 });

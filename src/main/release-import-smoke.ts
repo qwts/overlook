@@ -76,20 +76,27 @@ export function createReleaseImportSmokeRunner(
   getImportService: () => ImportService,
   requireParts: (what: string) => LibraryParts,
   closeLibrary: () => Promise<void> | undefined,
+  report: (stage: string) => void = () => undefined,
 ): (request: ReleaseImportSmokeRequest) => Promise<void> {
   return async ({ sourcePath, profilePath }) => {
     try {
+      report('bootstrap');
       const service = getImportService();
       const parts = requireParts('release import smoke');
+      report('library-open');
       await parts.blobStoreReady;
+      report('storage-ready');
       const repo = new PhotosRepository(parts.db);
       await runReleaseImportSmoke(sourcePath, profilePath, {
         runCopy: (path) => service.runFiles([path], 'copy'),
         record: (photoId) => repo.get(photoId),
         readOriginal: (record) => parts.blobStore.getStream(record.contentHash, parts.keyStore.resolver(), record.id),
       });
+      report('verified');
     } finally {
+      report('closing');
       await closeLibrary();
+      report('closed');
     }
   };
 }
