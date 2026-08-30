@@ -763,6 +763,28 @@
       ]
     },
     {
+      "id": "recovery-copy-affordances",
+      "wiki": "Acceptance-Test-Visual-Accessibility",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/restore-cloud.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/settings/ProviderCard.stories.tsx", "src/renderer/src/settings/SettingsDialog.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/restore-workflow-missing.test.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "Follow the recovery copy-affordance section in docs/acceptance/Acceptance-Test-Visual-Accessibility.md with VoiceOver or Narrator to verify unique button names, keyboard copy, selectable text, clipboard contents, and live success or failure announcements across restore and provider custody surfaces."
+        }
+      ]
+    },
+    {
       "id": "m08-continuous-backup-integrity",
       "wiki": "User-Story-M08-Backup-offload-engine-provider-abstraction-mock-first",
       "coverage": [

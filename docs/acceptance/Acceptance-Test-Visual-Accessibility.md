@@ -65,3 +65,15 @@ It always takes precedence over first-party and user-theme colors.
    `forced-color-adjust: none` opt-out defeats the user's colors.
 6. Repeat with any installed user theme. Confirm the OS accessibility palette
    remains authoritative and Reset Appearance remains reachable.
+
+## Copyable recovery data
+
+1. Discover a cloud backup, open the provider disconnect preflight, and trigger
+   a recoverable restore error.
+2. Confirm library IDs, provider account IDs, remote missing/corrupt paths, and
+   exact recovery errors render as selectable machine text with an adjacent
+   keyboard-reachable copy button.
+3. Activate each copy button with the keyboard. Confirm the exact visible value
+   reaches the clipboard and the screen-reader announcer reports success.
+4. Deny clipboard access in the component story. Confirm the value remains
+   selectable and an assertive failure announcement is emitted.

@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
+import { AnnouncerProvider } from '../../src/renderer/src/components/LiveAnnouncer.js';
 import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
 
 // #915: a partial restore reports every NOT FOUND object on the complete
@@ -169,7 +170,9 @@ async function renderToVerified(): Promise<HTMLElement> {
     root = createRoot(container as HTMLElement);
     root.render(
       <IntlHost>
-        <RestoreWorkflow context="settings" />
+        <AnnouncerProvider>
+          <RestoreWorkflow context="settings" />
+        </AnnouncerProvider>
       </IntlHost>,
     );
     await Promise.resolve();
@@ -250,6 +253,13 @@ test('a reduced restore lists every excluded object and explains the new cloud t
     assert.match(text, /quarantine\/gen-N\/gaps\.json/u, 'the quarantine gap list is named (#994)');
     assert.match(host.textContent ?? '', /NOT FOUND/u, 'the heading says the restore is incomplete');
     assert.match(host.textContent ?? '', /2 photos restored/u, 'the complete screen reports the reduced restored count');
+    const copyPaths = MISSING.map((object) =>
+      [...block.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === `Copy remote path ${object.path}`),
+    );
+    assert.ok(copyPaths.every(Boolean), 'every excluded remote path has a uniquely named copy affordance');
+    act(() => copyPaths[0]?.click());
+    await flush();
+    assert.deepEqual(restoreMock.calls.copies, [MISSING[0].path]);
     assert.deepEqual(restoreMock.calls.runs, [
       {
         sessionId: 'session-a',
@@ -293,6 +303,12 @@ test('gap triage exposes all five truthful actions and retains failures on scree
     assert.ok(proceed);
     assert.ok(trash);
     assert.ok(doNothing);
+    const copyPaths = MISSING.map((object) =>
+      buttons.find((button) => button.getAttribute('aria-label') === `Copy remote path ${object.path}`),
+    );
+    assert.ok(copyPaths.every(Boolean), 'verification paths have distinct accessible copy names');
+    act(() => copyPaths[0]?.click());
+    await flush();
 
     act(() => csv.click());
     await flush();
@@ -325,13 +341,13 @@ test('gap triage exposes all five truthful actions and retains failures on scree
     const summary = details?.querySelector('summary');
     assert.ok(summary);
     act(() => summary.click());
-    const copy = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Copy error'));
+    const copy = [...host.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Copy recovery error details');
     assert.ok(copy);
     act(() => copy.click());
     await flush();
     // #806: the copy affordance rides the app clipboard bridge — the
     // sandboxed renderer's navigator.clipboard silently no-ops.
-    assert.deepEqual(restoreMock.calls.copies, ['reason: io\nmessage: One cloud object remains.']);
+    assert.deepEqual(restoreMock.calls.copies, [MISSING[0].path, 'reason: io\nmessage: One cloud object remains.']);
     assert.equal(restoreMock.calls.csvExports.length, 1);
     assert.equal(restoreMock.calls.corruptExports.length, 1);
     assert.equal(restoreMock.calls.trash.length, 1);
