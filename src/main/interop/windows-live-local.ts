@@ -1,0 +1,210 @@
+import { createRequire } from 'node:module';
+import { Worker } from 'node:worker_threads';
+
+import type { LiveLocalControlServer } from './live-local-control.js';
+import { LIVE_LOCAL_CONTROL_FRAME_BYTES, LiveLocalError } from './live-local-security.js';
+
+const nativeRequire = createRequire(import.meta.url);
+const SID = /^S-1-(?:\d+-){1,14}\d+$/u;
+const WORKER_CLOSE_MS = 6_000;
+const IO_TIMEOUT_MS = 5_000;
+
+export interface WindowsPipeBinding {
+  canonicalizeSddl(sddl: string): unknown;
+  currentUserSid(): unknown;
+}
+
+export interface WindowsLiveLocalDependencies {
+  loadBinding(): WindowsPipeBinding;
+  createWorker(filename: URL, workerData: unknown): Worker;
+}
+
+interface WorkerMessage {
+  readonly type?: unknown;
+  readonly id?: unknown;
+  readonly payload?: unknown;
+  readonly securityDescriptor?: unknown;
+  readonly message?: unknown;
+  readonly code?: unknown;
+}
+
+export interface WindowsLiveLocalPlatform {
+  currentUserSid(): string;
+  start(endpoint: string, sddl: string, handle: (value: unknown) => unknown): Promise<LiveLocalControlServer>;
+  request(endpoint: string, value: unknown): Promise<unknown>;
+}
+
+function loadBinding(): WindowsPipeBinding {
+  return nativeRequire('@overlook/windows-interop/pipe.cjs') as WindowsPipeBinding;
+}
+
+const DEFAULT_DEPENDENCIES: WindowsLiveLocalDependencies = {
+  loadBinding,
+  createWorker: (filename, workerData) => new Worker(filename, { workerData }),
+};
+
+function currentUserSid(dependencies: WindowsLiveLocalDependencies): string {
+  const sid = dependencies.loadBinding().currentUserSid();
+  if (typeof sid !== 'string' || !SID.test(sid)) {
+    throw new LiveLocalError('Windows live local identity is unavailable.', 'unsupported');
+  }
+  return sid;
+}
+
+function encodedReply(value: unknown): Buffer {
+  const payload = Buffer.from(JSON.stringify(value), 'utf8');
+  if (payload.length > LIVE_LOCAL_CONTROL_FRAME_BYTES) {
+    throw new LiveLocalError('Windows live local response exceeds its bound.', 'over-budget');
+  }
+  return payload;
+}
+
+function controlFailure(error: unknown): Record<string, unknown> {
+  if (error instanceof LiveLocalError && (error.code === 'corrupt' || error.code === 'over-budget')) {
+    return { schemaVersion: 1, ok: false, code: 'corrupt', retryable: false };
+  }
+  return { schemaVersion: 1, ok: false, code: 'unsupported', retryable: false };
+}
+
+function encodedRequest(value: unknown): Buffer {
+  let payload: Buffer;
+  try {
+    payload = Buffer.from(JSON.stringify(value), 'utf8');
+  } catch {
+    throw new LiveLocalError('Windows live local request is not JSON.', 'corrupt');
+  }
+  if (payload.length > LIVE_LOCAL_CONTROL_FRAME_BYTES) {
+    throw new LiveLocalError('Windows live local request exceeds its bound.', 'over-budget');
+  }
+  return payload;
+}
+
+function requestError(message: WorkerMessage): Error {
+  const error = new Error(typeof message.message === 'string' ? message.message : 'Windows named-pipe request failed.');
+  Object.assign(error, { code: message.code === 'not-running' ? 'ENOENT' : message.code });
+  return error;
+}
+
+async function requestWindowsLiveLocalControl(
+  endpoint: string,
+  serverSid: string,
+  value: unknown,
+  dependencies: WindowsLiveLocalDependencies,
+): Promise<unknown> {
+  const worker = dependencies.createWorker(new URL('./windows-pipe-client-worker.js', import.meta.url), {
+    endpoint,
+    serverSid,
+    payload: encodedRequest(value),
+    maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
+    timeoutMs: IO_TIMEOUT_MS,
+  });
+  try {
+    const payload = await new Promise<Buffer>((resolve, reject) => {
+      let settled = false;
+      worker.once('message', (message: WorkerMessage) => {
+        settled = true;
+        if (message.type === 'response' && message.payload instanceof Uint8Array) resolve(Buffer.from(message.payload));
+        else reject(requestError(message));
+      });
+      worker.once('error', (error: unknown) => {
+        settled = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+      worker.once('exit', (code) => {
+        if (!settled) reject(new Error(`Windows named-pipe client worker exited with code ${String(code)}.`));
+      });
+    });
+    try {
+      return JSON.parse(payload.toString('utf8')) as unknown;
+    } catch {
+      throw new LiveLocalError('Windows live local response is not JSON.', 'corrupt');
+    }
+  } finally {
+    if (worker.threadId !== -1) await worker.terminate();
+  }
+}
+
+async function startWindowsLiveLocalControlServer(
+  endpoint: string,
+  sddl: string,
+  handle: (value: unknown) => unknown,
+  dependencies: WindowsLiveLocalDependencies,
+): Promise<LiveLocalControlServer> {
+  const expectedSecurityDescriptor = dependencies.loadBinding().canonicalizeSddl(sddl);
+  if (typeof expectedSecurityDescriptor !== 'string') {
+    throw new LiveLocalError('Windows live local security descriptor is unavailable.', 'unsupported');
+  }
+  const worker = dependencies.createWorker(new URL('./windows-pipe-worker.js', import.meta.url), {
+    endpoint,
+    sddl,
+    maxFrameBytes: LIVE_LOCAL_CONTROL_FRAME_BYTES,
+  });
+  let closed = false;
+  let readyResolve: (() => void) | undefined;
+  let readyReject: ((error: Error) => void) | undefined;
+  const ready = new Promise<void>((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  worker.on('message', (message: WorkerMessage) => {
+    if (message.type === 'ready') {
+      if (message.securityDescriptor === expectedSecurityDescriptor) readyResolve?.();
+      else readyReject?.(new Error('Windows named-pipe DACL does not match the accepted security contract.'));
+      return;
+    }
+    if (message.type === 'fatal') {
+      readyReject?.(new Error(typeof message.message === 'string' ? message.message : 'Windows named-pipe worker failed.'));
+      return;
+    }
+    if (message.type !== 'request' || !Number.isSafeInteger(message.id) || !(message.payload instanceof Uint8Array)) return;
+    const id = message.id as number;
+    void Promise.resolve()
+      .then(() => JSON.parse(Buffer.from(message.payload as Uint8Array).toString('utf8')) as unknown)
+      .then(handle)
+      .then(
+        (result) => ({ schemaVersion: 1, ok: true, result }),
+        (error: unknown) => controlFailure(error),
+      )
+      .then((reply) => worker.postMessage({ type: 'response', id, payload: encodedReply(reply) }))
+      .catch(() => worker.postMessage({ type: 'response', id, payload: encodedReply(controlFailure(undefined)) }));
+  });
+  worker.once('error', (error: unknown) => readyReject?.(error instanceof Error ? error : new Error(String(error))));
+  worker.once('exit', (code) => {
+    if (!closed && code !== 0) readyReject?.(new Error(`Windows named-pipe worker exited with code ${String(code)}.`));
+  });
+  try {
+    await ready;
+  } catch (error) {
+    closed = true;
+    await worker.terminate();
+    throw error;
+  }
+  return {
+    endpoint,
+    close: async () => {
+      if (closed) return;
+      closed = true;
+      const exited = new Promise<void>((resolve) => worker.once('exit', () => resolve()));
+      worker.postMessage({ type: 'close' });
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        exited,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, WORKER_CLOSE_MS);
+        }),
+      ]);
+      if (timer !== undefined) clearTimeout(timer);
+      if (worker.threadId !== -1) await worker.terminate();
+    },
+  };
+}
+
+export function createWindowsLiveLocalPlatform(
+  dependencies: WindowsLiveLocalDependencies = DEFAULT_DEPENDENCIES,
+): WindowsLiveLocalPlatform {
+  return {
+    currentUserSid: () => currentUserSid(dependencies),
+    start: (endpoint, sddl, handle) => startWindowsLiveLocalControlServer(endpoint, sddl, handle, dependencies),
+    request: (endpoint, value) => requestWindowsLiveLocalControl(endpoint, currentUserSid(dependencies), value, dependencies),
+  };
+}

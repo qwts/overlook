@@ -24,8 +24,12 @@ import { join, sep } from 'node:path';
 import { buildFileProviderExtension } from './build-file-provider-extension.mjs';
 import { buildQuickLookExtension } from './build-quick-look-extension.mjs';
 
-// Package-relative roots whose immediate layout is <platform>/<arch>/.
-export const BUNDLED_MULTI_PLATFORM_ROOTS = ['node_modules/onnxruntime-node/bin/napi-v6'];
+// Package-relative roots whose immediate layout is either <platform>/<arch>/
+// or <platform>-<arch>/. The latter is used by the Windows interop binding.
+export const BUNDLED_MULTI_PLATFORM_ROOTS = [
+  'node_modules/onnxruntime-node/bin/napi-v6',
+  'node_modules/@overlook/windows-interop/prebuilds',
+];
 
 // Package-relative roots whose files are <platform>-<arch>.node.
 export const BUNDLED_FLAT_PREBUILD_ROOTS = ['node_modules/better-sqlite3-multiple-ciphers/prebuilds'];
@@ -94,6 +98,14 @@ async function pruneNestedBinaries(appOutDir, targetPlatform, targetArch) {
       for (const platformEntry of await entries(root)) {
         if (!platformEntry.isDirectory()) continue;
         const platformDir = join(root, platformEntry.name);
+        const flatDirectory = flatPrebuildTarget(`${platformEntry.name}.node`);
+        if (flatDirectory !== undefined) {
+          if (isForeign(flatDirectory.platform, flatDirectory.arch, targetPlatform, targetArch)) {
+            await rm(platformDir, { recursive: true, force: true });
+            removed.push(platformDir);
+          }
+          continue;
+        }
         for (const archEntry of await entries(platformDir)) {
           if (!archEntry.isDirectory()) continue;
           if (!isForeign(platformEntry.name, archEntry.name, targetPlatform, targetArch)) continue;

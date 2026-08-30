@@ -19,6 +19,8 @@
     "src/main/interop/inbound-move-ipc.ts",
     "src/main/interop/inbound-move-production.ts",
     "src/main/interop/inbound-move-runtime-factory.ts",
+    "src/main/interop/windows-pipe-client-worker.ts",
+    "src/main/interop/windows-pipe-worker.ts",
     "src/main/library/board-ipc.ts",
     "src/main/library/library-lifecycle-wiring.ts",
     "src/main/library/library-picker.ts",

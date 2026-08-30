@@ -55,7 +55,7 @@ a durability acknowledgement.
 | Capability copied or replayed        | 15-second monotonic expiry; atomic single-use consumption             | Expiry and concurrent replay tests                  |
 | Protocol downgrade                   | Version range selected at bootstrap and repeated at redemption        | Lower or changed version is rejected                |
 | Cross-pairing confused deputy        | Capability binds pairing ID and operation                             | Wrong pairing/operation fails before data           |
-| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL                 | Production macOS modes; Windows SDDL contract seam  |
+| Cross-user endpoint access           | Mode `0700` socket directory or current-user pipe ACL and server SID  | Production macOS modes and Windows kernel identity  |
 | Stale socket hijack                  | Owned-directory validation and live-peer probe before cleanup         | Production macOS rejects foreign/live endpoints     |
 | Oversized bootstrap/frame            | 64 KiB control ceiling and 4 MiB ciphertext-frame ceiling             | Boundary and over-limit tests                       |
 | Memory/CPU exhaustion                | Negotiated in-flight budget, backpressure, one session per capability | Peak buffered bytes remain within the bound         |
@@ -77,8 +77,9 @@ a durability acknowledgement.
   local.
 - MV3 suspension can waste an issued capability. Expiry makes this a retry, not
   a reason to lengthen or persist authority.
-- Windows ACL production support remains blocked on the native implementation
-  in [#1066](https://github.com/qwts/overlook/issues/1066).
+- A process already running as the current Windows user can invoke the pipe.
+  The origin allowlist and one-use capability remain separate required gates;
+  pipe possession alone grants no bulk-data authority.
 - Packaged macOS signing behavior requires owner-run evidence before production
   closeout.
 
@@ -86,7 +87,7 @@ a durability acknowledgement.
 
 ADR acceptance requires deterministic evidence for the closed threat matrix.
 #544 composes the macOS bootstrap and must add signed packaged evidence. #1066
-owns Windows production ACL and installer evidence. #545 must prove encrypted
-transfer, backpressure, cancellation, replay, and durable journal behavior on
-the production composition. None may introduce a daemon or plaintext fallback
-without an ADR amendment.
+composes the Windows production ACL and signed-package evidence. #545 must
+prove encrypted transfer, backpressure, cancellation, replay, and durable
+journal behavior on the production composition. None may introduce a daemon
+or plaintext fallback without an ADR amendment.

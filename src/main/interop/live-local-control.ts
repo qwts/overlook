@@ -179,7 +179,10 @@ export async function startUnixLiveLocalControlServer(
 }
 
 export async function requestUnixLiveLocalControl(endpoint: string, value: unknown): Promise<unknown> {
-  const socket = createConnection(endpoint);
+  return requestSocketLiveLocalControl(createConnection(endpoint), value);
+}
+
+export async function requestSocketLiveLocalControl(socket: Socket, value: unknown): Promise<unknown> {
   try {
     await withSocketDeadline(
       socket,

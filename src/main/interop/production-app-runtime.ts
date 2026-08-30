@@ -6,7 +6,13 @@ import { pickSafeStorage } from '../crypto/safe-storage-runtime.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
 import { runICloudNativeHost } from './icloud-native-runtime.js';
-import { nativeHostInvocation, nativeHostUnregisterRequested, unregisterICloudNativeHost } from './icloud-native-registration.js';
+import {
+  nativeHostInvocation,
+  nativeHostRegisterRequested,
+  nativeHostUnregisterRequested,
+  registerICloudNativeHost,
+  unregisterICloudNativeHost,
+} from './icloud-native-registration.js';
 import { startProductionInterop, type StartedProductionInterop } from './production-runtime.js';
 
 export interface ProductionInteropAppOptions {
@@ -33,11 +39,12 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
   const pcloud = pcloudFeatureConfig(options.harnessEnv);
   const extensionId = imageTrailExtensionId(options.harnessEnv);
   const invocation = nativeHostInvocation(process.argv, extensionId);
+  const registerRequested = nativeHostRegisterRequested(process.argv);
   const unregisterRequested = nativeHostUnregisterRequested(process.argv);
   let desktop: StartedProductionInterop | null = null;
   return {
     nativeHostRequested: invocation.requested,
-    headlessRequested: invocation.requested || unregisterRequested,
+    headlessRequested: invocation.requested || registerRequested || unregisterRequested,
     pcloud,
     runHeadless: async () => {
       if (invocation.requested) {
@@ -51,6 +58,17 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
           bridge: createNativeICloudDriveBridge({ platform: process.platform, packaged: app.isPackaged }),
           input: process.stdin,
           output: process.stdout,
+        });
+        app.exit(0);
+        return true;
+      }
+      if (registerRequested) {
+        await registerICloudNativeHost({
+          platform: process.platform,
+          packaged: app.isPackaged,
+          applicationSupportDirectory: app.getPath('appData'),
+          executablePath: app.getPath('exe'),
+          extensionId,
         });
         app.exit(0);
         return true;

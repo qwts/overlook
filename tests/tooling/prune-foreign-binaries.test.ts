@@ -55,6 +55,16 @@ function packedSqliteApp(resourcesPrefix: string[]): string {
   return dir;
 }
 
+function packedWindowsInteropApp(resourcesPrefix: string[]): string {
+  const dir = mkdtempSync(join(tmpdir(), 'prune-windows-interop-'));
+  for (const arch of ['arm64', 'x64']) {
+    const leaf = join(dir, ...resourcesPrefix, 'node_modules/@overlook/windows-interop/prebuilds', `win32-${arch}`);
+    mkdirSync(leaf, { recursive: true });
+    writeFileSync(join(leaf, 'pipe.node'), 'binary');
+  }
+  return dir;
+}
+
 function survives(appDir: string, prefix: string[], platform: string, arch: string): boolean {
   return existsSync(join(appDir, ...prefix, 'node_modules/onnxruntime-node/bin/napi-v6', platform, arch));
 }
@@ -142,6 +152,18 @@ describe('foreign binary pruning', () => {
       assert.equal(sqliteSurvives(app, prefix, prebuild), false, `${prebuild} must be pruned`);
     }
     assert.equal(sqliteSurvives(app, prefix, 'README.md'), true);
+  });
+
+  test('keeps only the target Windows interop pipe binding', async () => {
+    const { pruneForeignBinaries } = await pruneModule();
+    const prefix = ['resources', 'app.asar.unpacked'];
+    const app = packedWindowsInteropApp(prefix);
+
+    const removed = await pruneForeignBinaries(app, 'win32', 'arm64');
+
+    assert.equal(removed.length, 1);
+    assert.equal(existsSync(join(app, ...prefix, 'node_modules/@overlook/windows-interop/prebuilds/win32-arm64/pipe.node')), true);
+    assert.equal(existsSync(join(app, ...prefix, 'node_modules/@overlook/windows-interop/prebuilds/win32-x64/pipe.node')), false);
   });
 
   test('keeps both Darwin SQLite slices only for a universal macOS package', async () => {

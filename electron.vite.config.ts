@@ -68,6 +68,12 @@ export default defineConfig({
           // ADR-0018 uses the same dedicated-entry shape for the embedding
           // worker so native inference never runs on the main thread.
           'embedding-worker': 'src/main/embedding/embedding-worker.ts',
+          // Windows keeps blocking named-pipe syscalls off Electron's main
+          // thread while the native addon owns the explicit DACL.
+          'windows-pipe-worker': 'src/main/interop/windows-pipe-worker.ts',
+          // The native-host client authenticates the exact connected server
+          // handle without blocking Electron's main thread.
+          'windows-pipe-client-worker': 'src/main/interop/windows-pipe-client-worker.ts',
         },
       },
     },

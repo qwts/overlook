@@ -22,8 +22,10 @@ import { BridgeICloudNativeAuthority } from '../../src/main/interop/icloud-nativ
 import { ICloudNativeHost, nativeHostManifest } from '../../src/main/interop/icloud-native-host.js';
 import { runICloudNativeHost } from '../../src/main/interop/icloud-native-runtime.js';
 import {
+  NATIVE_HOST_REGISTER_ARGUMENT,
   NATIVE_HOST_UNREGISTER_ARGUMENT,
   nativeHostInvocation,
+  nativeHostRegisterRequested,
   nativeHostUnregisterRequested,
   registerICloudNativeHost,
   unregisterICloudNativeHost,
@@ -391,6 +393,64 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     assert.ok(installed.every((path) => !path.includes('/Google/Chrome/')));
   });
 
+  test('registers and unregisters the exact packaged Windows host through HKCU ownership', async () => {
+    const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-windows-'));
+    const executablePath = 'C:\\Program Files\\Overlook\\Overlook.exe';
+    let registered: string | null = null;
+    const windowsRegistry = {
+      register: (path: string) => {
+        registered = path;
+      },
+      unregister: (path: string) => {
+        if (registered === path) registered = null;
+      },
+    };
+    const options = {
+      platform: 'win32' as const,
+      packaged: true,
+      applicationSupportDirectory: appSupport,
+      executablePath,
+      extensionId: RELEASED_EXTENSION_ID,
+      windowsRegistry,
+    };
+    const installed = await registerICloudNativeHost(options);
+    assert.equal(installed.length, 1);
+    const path = installed[0] as string;
+    assert.equal(registered, path);
+    assert.match(path, /com\.qwts\.overlook\.interop-[a-f0-9]{24}\.json$/u);
+    assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), nativeHostManifest(executablePath, RELEASED_EXTENSION_ID));
+
+    const alternate = await registerICloudNativeHost({
+      ...options,
+      executablePath: 'D:\\Portable\\Overlook.exe',
+    });
+    assert.notEqual(alternate[0], path);
+    assert.equal(registered, alternate[0]);
+
+    assert.deepEqual(await unregisterICloudNativeHost(options), [path]);
+    await assert.rejects(access(path));
+    await access(alternate[0] as string);
+    assert.equal(registered, alternate[0]);
+  });
+
+  test('contains damaged Windows native-host registry state during desktop startup', async () => {
+    const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-windows-damaged-'));
+    const installed = await registerICloudNativeHost({
+      platform: 'win32',
+      packaged: true,
+      applicationSupportDirectory: appSupport,
+      executablePath: 'C:\\Program Files\\Overlook\\Overlook.exe',
+      extensionId: RELEASED_EXTENSION_ID,
+      windowsRegistry: {
+        register: () => {
+          throw new Error('access denied');
+        },
+        unregister: () => undefined,
+      },
+    });
+    assert.deepEqual(installed, []);
+  });
+
   test('unregisters only manifests owned by the exact packaged executable', async () => {
     const appSupport = mkdtempSync(join(tmpdir(), 'overlook-native-host-'));
     const executablePath = '/Applications/Overlook.app/Contents/MacOS/Overlook';
@@ -417,7 +477,10 @@ describe('iCloud native host registration and production boundary (#467)', () =>
     assert.deepEqual(await unregisterICloudNativeHost({ ...options, extensionId: null }), []);
   });
 
-  test('recognizes only the explicit native-host unregister lifecycle', () => {
+  test('recognizes only the explicit native-host registration lifecycles', () => {
+    assert.equal(nativeHostRegisterRequested(['Overlook', NATIVE_HOST_REGISTER_ARGUMENT]), true);
+    assert.equal(nativeHostRegisterRequested(['Overlook', '--register-native-host=yes']), false);
+    assert.equal(nativeHostRegisterRequested(['Overlook']), false);
     assert.equal(nativeHostUnregisterRequested(['Overlook', NATIVE_HOST_UNREGISTER_ARGUMENT]), true);
     assert.equal(nativeHostUnregisterRequested(['Overlook', '--unregister-native-host=yes']), false);
     assert.equal(nativeHostUnregisterRequested(['Overlook']), false);
