@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -69,7 +70,7 @@ describe('packaged release launch smoke (#357)', () => {
       },
     );
     assert.equal(handled, true);
-    assert.deepEqual(request, { sourcePath: source, profilePath: profile });
+    assert.deepEqual(request, { sourcePath: source, profilePath: await realpath(profile) });
     assert.equal(output, `${RELEASE_IMPORT_SMOKE_READY_MARKER}\n`);
     assert.deepEqual(exits, [0]);
   });
