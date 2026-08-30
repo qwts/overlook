@@ -129,9 +129,21 @@ jobs:
           WIN_ARCH: ${{ matrix.win-arch }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            node native/windows-interop/install.cjs "$WIN_ARCH"
-            if [ "$WIN_ARCH" = "x64" ]; then
-              node native/windows-interop/test.cjs
+            has_windows_interop=$(node -p '
+              Object.hasOwn(require("./package.json").optionalDependencies ?? {}, "@overlook/windows-interop")
+            ')
+            if [ "$has_windows_interop" = true ]; then
+              test -f native/windows-interop/install.cjs
+              node native/windows-interop/install.cjs "$WIN_ARCH"
+              if [ "$WIN_ARCH" = "x64" ]; then
+                test -f native/windows-interop/test.cjs
+                node native/windows-interop/test.cjs
+              fi
+            elif [ -e native/windows-interop ]; then
+              echo "::error::Windows interop source exists without its optional dependency declaration."
+              exit 1
+            else
+              echo "This ref predates the optional Windows interop component; skipping its bootstrap."
             fi
           fi
           if [ "$RUNNER_OS" = "Windows" ] && [ -n "$WIN_ARCH" ] && [ "$WIN_ARCH" != "x64" ]; then

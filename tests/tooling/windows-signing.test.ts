@@ -58,6 +58,17 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(smoke, /Windows live-local install, upgrade, disable, and uninstall smoke passed/u);
   });
 
+  test('historical refs skip only an undeclared Windows interop component', () => {
+    const workflow = source('.github/workflows/package.yml');
+    assert.match(workflow, /Object\.hasOwn\([\s\S]*optionalDependencies[\s\S]*"@overlook\/windows-interop"\)/u);
+    assert.match(workflow, /if \[ "\$has_windows_interop" = true \]; then/u);
+    assert.match(workflow, /test -f native\/windows-interop\/install\.cjs/u);
+    assert.match(workflow, /test -f native\/windows-interop\/test\.cjs/u);
+    assert.match(workflow, /elif \[ -e native\/windows-interop \]; then/u);
+    assert.match(workflow, /Windows interop source exists without its optional dependency declaration/u);
+    assert.match(workflow, /This ref predates the optional Windows interop component/u);
+  });
+
   test('SQLite v13 foreign prebuilds are pruned before Windows architecture verification', () => {
     const workflow = source('.github/workflows/package.yml');
     const builder = source('electron-builder.yml');
