@@ -52,7 +52,7 @@ try {
     "--user-data-dir=$profile"
   )
   Write-Host "Launching installed executable: $installedExecutable"
-  $process = Start-Process -FilePath $installedExecutable -ArgumentList $arguments -PassThru -WindowStyle Hidden
+  $process = Start-Process -FilePath $installedExecutable -ArgumentList $arguments -PassThru
   $timedOut = -not $process.WaitForExit(120000)
   if ($timedOut) {
     $process.Kill($true)
