@@ -122,7 +122,7 @@ test('disconnect is blocked by exact custody and emergency removal leaves provid
   const required = page.getByRole('status');
   await expect(required).toContainText('Local mock required');
   await expect(required).toContainText('Reconnect Local mock as Mock account');
-  await expect(required.locator('.ovl-settings__custodyRequirement > div > .mono-data')).toContainText('1');
+  await expect(required.locator(':scope > div > .mono-data')).toContainText('1');
   await expect(page.getByTestId('provider-card')).toContainText('Not connected');
 });
 
