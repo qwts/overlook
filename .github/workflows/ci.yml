@@ -302,8 +302,8 @@ jobs:
         uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
         with:
           task: Install locked Windows test dependencies
-          executable: npm.cmd
-          arguments-json: '["ci"]'
+          executable: cmd.exe
+          arguments-json: '["/d","/s","/c","npm ci"]'
           timeout-seconds: '900'
           attempts: '2'
           retry-delay-seconds: '5'
@@ -367,8 +367,8 @@ jobs:
         uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
         with:
           task: Install locked native Windows smoke dependencies
-          executable: npm.cmd
-          arguments-json: '["ci"]'
+          executable: cmd.exe
+          arguments-json: '["/d","/s","/c","npm ci"]'
           timeout-seconds: '900'
           attempts: '2'
           retry-delay-seconds: '5'
