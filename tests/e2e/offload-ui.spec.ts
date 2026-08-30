@@ -109,7 +109,7 @@ test('disconnect is blocked by exact custody and emergency removal leaves provid
   await page.getByRole('button', { name: 'Disconnect provider' }).click();
   const blocked = page.getByRole('dialog', { name: 'Disconnect Local mock?' });
   await expect(blocked).toContainText('1 cloud-only original');
-  await expect(blocked.locator('.ovl-settings__disconnectLibraries .mono-data')).toContainText('1 original');
+  await expect(blocked.locator('.ovl-settings__disconnectLibraries > li > .mono-data')).toContainText('1 original');
   await expect(blocked).toContainText('Mock account');
   await expect(blocked).not.toContainText('Encrypted data already stored in Local mock is not deleted.');
   await expect(blocked.getByRole('button', { name: 'Restore all originals first' })).toBeEnabled();
