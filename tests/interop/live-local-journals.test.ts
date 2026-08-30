@@ -120,6 +120,53 @@ test('local object frames stay bounded, verify every chunk, and wait for peer ac
   db.close();
 });
 
+test('durable local objects expose the provider contract and reject changed replays', async () => {
+  const db = database();
+  new LiveLocalRouteRepository(db).open({
+    operationId: OPERATION_ID,
+    pairingId: PAIRING_ID,
+    operation: 'move',
+    remoteSessionId: REMOTE_SESSION_ID,
+    scopeHash: SCOPE_HASH,
+    at: '2026-08-29T12:00:00.000Z',
+  });
+  const repository = new LiveLocalObjectRepository(db, OPERATION_ID);
+  const store = new LiveLocalObjectStore({ sendBinary: () => undefined }, repository);
+  const prefix = `pairings/${PAIRING_ID}/transfers/${OPERATION_ID}/objects/%_`;
+  const firstPath = `${prefix}first.bin`;
+  const secondPath = `${prefix}second.bin`;
+  const first = Buffer.from('first-ciphertext');
+  const second = Buffer.from('second-ciphertext');
+  const firstSha256 = createHash('sha256').update(first).digest('hex');
+  const secondSha256 = createHash('sha256').update(second).digest('hex');
+  repository.put(firstPath, first, firstSha256);
+  repository.put(secondPath, second, secondSha256);
+
+  assert.equal(await store.authState(), 'connected');
+  assert.deepEqual(await store.verify(firstPath), { sha256: firstSha256, bytes: first.length });
+  assert.deepEqual(await store.quota(), { usedBytes: first.length + second.length, totalBytes: null });
+  assert.deepEqual(await store.list(prefix, null), {
+    entries: [
+      { path: firstPath, bytes: first.length },
+      { path: secondPath, bytes: second.length },
+    ],
+    nextCursor: null,
+  });
+  await assert.rejects(store.list(prefix, 'not-a-cursor'), /Invalid local interoperability cursor/u);
+
+  await store.delete(firstPath);
+  await assert.rejects(store.get(firstPath), /not found/u);
+  const changed = Buffer.from('changed-ciphertext');
+  assert.throws(
+    () => repository.put(secondPath, changed, createHash('sha256').update(changed).digest('hex')),
+    /replayed with different ciphertext/u,
+  );
+  store.clearDurable();
+  assert.deepEqual(await store.quota(), { usedBytes: 0, totalBytes: null });
+  store.close();
+  db.close();
+});
+
 test('bounds aggregate partial-object retention to the negotiated session window', () => {
   const db = database();
   new LiveLocalRouteRepository(db).open({
