@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
-import { syncDirectoryEntry } from '../filesystem/durability.js';
+import { syncDirectoryEntry, syncFileData } from '../filesystem/durability.js';
 import type { EnvelopeKey, KeyResolver } from '../crypto/envelope.js';
 
 // Content-addressed encrypted blob store per ADR-0005 (#70). Plaintext never
@@ -202,12 +202,7 @@ export class BlobStore {
     const stagePath = join(this.tmpDir, `restore-${randomBytes(8).toString('hex')}`);
     try {
       await pipeline(ciphertext, createWriteStream(stagePath, { flags: 'wx' }));
-      const handle = await open(stagePath, 'r');
-      try {
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
+      await syncFileData(stagePath);
       const finalPath = this.sidecarPath(photoId, contentHash);
       await mkdir(dirname(finalPath), { recursive: true });
       try {
@@ -284,12 +279,7 @@ export class BlobStore {
     try {
       await pipeline(plaintext, createEncryptStream(key, { photoId }), out);
       // Durability point 1: the staged ciphertext itself.
-      const handle = await open(stagePath, 'r');
-      try {
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
+      await syncFileData(stagePath);
       const contentHash = hasher.digest('hex');
       const finalPath = destination(contentHash);
       await mkdir(dirname(finalPath), { recursive: true });
@@ -338,12 +328,7 @@ export class BlobStore {
       // Same durability point as put(): the staged bytes themselves fsync
       // BEFORE publishing — a power loss never leaves a present-but-
       // incomplete blob behind a synced ledger row (PR #205 review).
-      const handle = await open(stagePath, 'r');
-      try {
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
+      await syncFileData(stagePath);
       const finalPath = this.originalPath(contentHash);
       await mkdir(dirname(finalPath), { recursive: true });
       try {
@@ -374,12 +359,7 @@ export class BlobStore {
     const finalPath = join(this.viewCacheDir, contentHash);
     try {
       await pipeline(ciphertext, createWriteStream(stagePath, { flags: 'wx' }));
-      const handle = await open(stagePath, 'r');
-      try {
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
+      await syncFileData(stagePath);
       if (!(await this.verifyEnvelopePath(stagePath, contentHash, resolveKey, photoId))) {
         throw new BlobStoreError(`ephemeral blob ${contentHash} failed verification`);
       }
