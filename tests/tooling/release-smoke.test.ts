@@ -77,20 +77,24 @@ describe('packaged release launch smoke (#357)', () => {
 
   test('selects the isolated profile before packaged app-profile configuration', () => {
     const { profile } = smokeApp();
+    const resultPath = join(profile, 'release-import-result.txt');
 
     assert.equal(
       releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
         'Overlook',
         RELEASE_IMPORT_SMOKE_ARGUMENT,
         `--overlook-release-import-profile=${profile}`,
+        `--overlook-release-import-result=${resultPath}`,
       ]),
       profile,
     );
+    assert.match(readFileSync(resultPath, 'utf8'), /overlook-release-import-smoke:progress:profile-bound/u);
     assert.equal(
       releaseImportSmokeProfileIfRequested({ isPackaged: false }, [
         'Overlook',
         RELEASE_IMPORT_SMOKE_ARGUMENT,
         `--overlook-release-import-profile=${profile}`,
+        `--overlook-release-import-result=${resultPath}`,
       ]),
       undefined,
     );

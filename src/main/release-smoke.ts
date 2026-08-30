@@ -1,7 +1,7 @@
-import { realpathSync, writeSync } from 'node:fs';
+import { appendFileSync, realpathSync, writeFileSync, writeSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import { ICLOUD_NATIVE_SMOKE_ARGUMENT, runICloudNativeSmokeIfRequested } from './backup/icloud-drive/native-smoke.js';
 import { ICLOUD_LIVE_CONTRACT_ARGUMENT, runICloudLiveContractIfRequested } from './backup/icloud-drive/live-contract.js';
@@ -17,6 +17,8 @@ export const RELEASE_IMPORT_SMOKE_ERROR_MARKER = 'overlook-release-import-smoke:
 export const RELEASE_IMPORT_SMOKE_PROGRESS_MARKER = 'overlook-release-import-smoke:progress';
 const RELEASE_IMPORT_SOURCE_ARGUMENT = '--overlook-release-import-source=';
 const RELEASE_IMPORT_PROFILE_ARGUMENT = '--overlook-release-import-profile=';
+const RELEASE_IMPORT_RESULT_ARGUMENT = '--overlook-release-import-result=';
+const RELEASE_IMPORT_RESULT_FILE = 'release-import-result.txt';
 
 interface ReleaseSmokeApp {
   readonly isPackaged: boolean;
@@ -35,6 +37,11 @@ export interface ReleaseImportSmokeRequest {
 
 let releaseImportSmokeRunner: (request: ReleaseImportSmokeRequest) => Promise<void> = () =>
   Promise.reject(new Error('import smoke runner unavailable'));
+let releaseImportSmokeResultPath: string | undefined;
+
+function recordReleaseImportSmoke(value: string): void {
+  if (releaseImportSmokeResultPath !== undefined) appendFileSync(releaseImportSmokeResultPath, `${value}\n`, 'utf8');
+}
 
 export function configureReleaseImportSmoke(
   getImportService: () => ImportService,
@@ -42,7 +49,9 @@ export function configureReleaseImportSmoke(
   closeLibrary: () => Promise<void> | undefined,
 ): void {
   releaseImportSmokeRunner = createReleaseImportSmokeRunner(getImportService, requireParts, closeLibrary, (stage) => {
-    writeSync(process.stdout.fd, `${RELEASE_IMPORT_SMOKE_PROGRESS_MARKER}:${stage}\n`);
+    const value = `${RELEASE_IMPORT_SMOKE_PROGRESS_MARKER}:${stage}`;
+    writeSync(process.stdout.fd, `${value}\n`);
+    recordReleaseImportSmoke(value);
   });
 }
 
@@ -69,8 +78,16 @@ export function releaseImportSmokeProfileIfRequested(
   app: ReleaseSmokeProfileApp,
   argv: readonly string[] = process.argv,
 ): string | undefined {
+  releaseImportSmokeResultPath = undefined;
   if (!app.isPackaged || !argv.includes(RELEASE_IMPORT_SMOKE_ARGUMENT)) return undefined;
-  return isolatedReleaseImportProfile(argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '');
+  const profilePath = isolatedReleaseImportProfile(argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '');
+  const resultPath = resolve(argumentValue(argv, RELEASE_IMPORT_RESULT_ARGUMENT) ?? '');
+  if (!isAbsolute(resultPath) || basename(resultPath) !== RELEASE_IMPORT_RESULT_FILE || realpathSync(dirname(resultPath)) !== profilePath) {
+    throw new Error('release import result must be the dedicated marker file in the isolated profile');
+  }
+  releaseImportSmokeResultPath = resultPath;
+  writeFileSync(resultPath, `${RELEASE_IMPORT_SMOKE_PROGRESS_MARKER}:profile-bound\n`, 'utf8');
+  return profilePath;
 }
 
 export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): Promise<ReleaseImportSmokeRequest> {
@@ -102,10 +119,12 @@ export async function exitForReleaseSmokeIfRequested(
       const request = await parseReleaseImportSmokeRequest(app, argv);
       await runImportSmoke(request);
       write(`${RELEASE_IMPORT_SMOKE_READY_MARKER}\n`);
+      recordReleaseImportSmoke(RELEASE_IMPORT_SMOKE_READY_MARKER);
       app.exit(0);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       write(`${RELEASE_IMPORT_SMOKE_ERROR_MARKER}:${message}\n`);
+      recordReleaseImportSmoke(`${RELEASE_IMPORT_SMOKE_ERROR_MARKER}:${message}`);
       app.exit(1);
     }
     return true;

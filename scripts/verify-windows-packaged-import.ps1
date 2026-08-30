@@ -14,6 +14,7 @@ $fixturePath = (Resolve-Path -LiteralPath $Fixture).Path
 $installedExecutable = $null
 $uninstaller = $null
 $profile = Join-Path ([System.IO.Path]::GetTempPath()) "overlook-release-import-smoke-$([Guid]::NewGuid().ToString('N'))"
+$resultPath = Join-Path $profile 'release-import-result.txt'
 
 function Invoke-CheckedProcess {
   param([string]$Path, [string[]]$Arguments)
@@ -46,12 +47,12 @@ try {
   $start.FileName = $installedExecutable
   $start.UseShellExecute = $false
   $start.CreateNoWindow = $true
-  $start.RedirectStandardOutput = $true
-  $start.RedirectStandardError = $true
   foreach ($argument in @(
+    '--disable-gpu',
     '--overlook-release-import-smoke',
     "--overlook-release-import-source=$fixturePath",
     "--overlook-release-import-profile=$profile",
+    "--overlook-release-import-result=$resultPath",
     "--user-data-dir=$profile"
   )) {
     [void]$start.ArgumentList.Add($argument)
@@ -59,20 +60,17 @@ try {
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $start
   if (-not $process.Start()) { throw 'Installed Overlook process did not start.' }
-  $stdout = $process.StandardOutput.ReadToEndAsync()
-  $stderr = $process.StandardError.ReadToEndAsync()
   $timedOut = -not $process.WaitForExit(120000)
   if ($timedOut) {
     $process.Kill($true)
     $process.WaitForExit()
   }
-  $output = $stdout.GetAwaiter().GetResult()
-  $errorOutput = $stderr.GetAwaiter().GetResult()
+  $output = if (Test-Path -LiteralPath $resultPath) { Get-Content -LiteralPath $resultPath -Raw } else { '' }
   if ($timedOut) {
-    throw "Installed Overlook import smoke exceeded 120 seconds.`n$output$errorOutput"
+    throw "Installed Overlook import smoke exceeded 120 seconds.`n$output"
   }
   if ($process.ExitCode -ne 0 -or $output -notmatch 'overlook-release-import-smoke:ready') {
-    throw "Installed import smoke failed with exit $($process.ExitCode).`n$output$errorOutput"
+    throw "Installed import smoke failed with exit $($process.ExitCode).`n$output"
   }
   Write-Host "Windows $Architecture installed import smoke passed."
 } finally {
