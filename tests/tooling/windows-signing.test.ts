@@ -61,12 +61,17 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
   test('historical refs skip only an undeclared Windows interop component', () => {
     const workflow = source('.github/workflows/package.yml');
     assert.match(workflow, /Object\.hasOwn\([\s\S]*optionalDependencies[\s\S]*"@overlook\/windows-interop"\)/u);
-    assert.match(workflow, /if \[ "\$has_windows_interop" = true \]; then/u);
+    assert.match(workflow, /echo "HAS_WINDOWS_INTEROP=\$has_windows_interop" >> "\$GITHUB_ENV"/u);
+    assert.match(workflow, /if \[ "\$HAS_WINDOWS_INTEROP" = true \]; then/u);
     assert.match(workflow, /test -f native\/windows-interop\/install\.cjs/u);
     assert.match(workflow, /test -f native\/windows-interop\/test\.cjs/u);
     assert.match(workflow, /elif \[ -e native\/windows-interop \]; then/u);
     assert.match(workflow, /Windows interop source exists without its optional dependency declaration/u);
     assert.match(workflow, /This ref predates the optional Windows interop component/u);
+    assert.match(workflow, /if \[ "\$WIN_ARCH" = "x64" \] && \[ "\$HAS_WINDOWS_INTEROP" = true \]; then/u);
+    assert.match(workflow, /test -f scripts\/verify-windows-live-local-install\.ps1/u);
+    assert.match(workflow, /Windows interop lifecycle smoke exists without its optional component/u);
+    assert.match(workflow, /This ref predates the optional Windows interop lifecycle smoke/u);
   });
 
   test('SQLite v13 foreign prebuilds are pruned before Windows architecture verification', () => {

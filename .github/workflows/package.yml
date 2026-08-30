@@ -105,6 +105,15 @@ jobs:
           attempts: '2'
           retry-delay-seconds: '5'
 
+      - name: Detect optional Windows interop
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          has_windows_interop=$(node -p '
+            Object.hasOwn(require("./package.json").optionalDependencies ?? {}, "@overlook/windows-interop")
+          ')
+          echo "HAS_WINDOWS_INTEROP=$has_windows_interop" >> "$GITHUB_ENV"
+
       # Build in a step whose env carries no signing secrets (#855): the
       # compound package* scripts used to run `npm run build` under the full
       # signing env, exposing certificate material to electron-vite and every
@@ -129,10 +138,7 @@ jobs:
           WIN_ARCH: ${{ matrix.win-arch }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            has_windows_interop=$(node -p '
-              Object.hasOwn(require("./package.json").optionalDependencies ?? {}, "@overlook/windows-interop")
-            ')
-            if [ "$has_windows_interop" = true ]; then
+            if [ "$HAS_WINDOWS_INTEROP" = true ]; then
               test -f native/windows-interop/install.cjs
               node native/windows-interop/install.cjs "$WIN_ARCH"
               if [ "$WIN_ARCH" = "x64" ]; then
@@ -302,7 +308,8 @@ jobs:
                 "
               done
             fi
-            if [ "$WIN_ARCH" = "x64" ]; then
+            if [ "$WIN_ARCH" = "x64" ] && [ "$HAS_WINDOWS_INTEROP" = true ]; then
+              test -f scripts/verify-windows-live-local-install.ps1
               installer=$(find release -maxdepth 1 -name 'Overlook-*-x64.exe' -print -quit)
               lifecycle_args=()
               if [ "${windows_signed:-false}" = "true" ]; then
@@ -310,6 +317,12 @@ jobs:
               fi
               pwsh -NoProfile -File scripts/verify-windows-live-local-install.ps1 \
                 -Installer "$installer" "${lifecycle_args[@]}"
+            elif [ "$WIN_ARCH" = "x64" ]; then
+              if [ -e scripts/verify-windows-live-local-install.ps1 ]; then
+                echo "::error::Windows interop lifecycle smoke exists without its optional component."
+                exit 1
+              fi
+              echo "This ref predates the optional Windows interop lifecycle smoke; skipping it."
             fi
           else
             # Unsigned mac path. The mac cert must not leak into it: with these
