@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -14,6 +14,7 @@ import {
 } from '../../src/main/release-smoke.js';
 
 function smokeApp(profile = join(tmpdir(), 'overlook-release-import-smoke-test')) {
+  mkdirSync(profile, { recursive: true });
   const exits: number[] = [];
   return {
     app: { isPackaged: true, getPath: () => profile, exit: (code: number) => exits.push(code) },

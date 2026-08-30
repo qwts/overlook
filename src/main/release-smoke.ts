@@ -1,4 +1,5 @@
 import { writeSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
 
@@ -42,14 +43,17 @@ function argumentValue(argv: readonly string[], prefix: string): string | undefi
   return argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 }
 
-export function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): ReleaseImportSmokeRequest {
+export async function parseReleaseImportSmokeRequest(
+  app: ReleaseSmokeApp,
+  argv: readonly string[],
+): Promise<ReleaseImportSmokeRequest> {
   if (!app.isPackaged) throw new Error('release import smoke requires a packaged application');
   const sourcePath = argumentValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT) ?? '';
   const profilePath = argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '';
   if (!isAbsolute(sourcePath)) throw new Error('release import source must be an absolute path');
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
-  const resolvedProfile = resolve(profilePath);
-  const tempRelation = relative(resolve(tmpdir()), resolvedProfile);
+  const resolvedProfile = await realpath(resolve(profilePath));
+  const tempRelation = relative(await realpath(resolve(tmpdir())), resolvedProfile);
   if (
     tempRelation === '' ||
     tempRelation.startsWith('..') ||
@@ -58,7 +62,7 @@ export function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: reado
   ) {
     throw new Error('release import profile must be an isolated Overlook smoke directory under the system temp directory');
   }
-  if (resolve(app.getPath('userData')) !== resolvedProfile) {
+  if ((await realpath(resolve(app.getPath('userData')))) !== resolvedProfile) {
     throw new Error('release import profile does not match Electron userData');
   }
   return { sourcePath: resolve(sourcePath), profilePath: resolvedProfile };
@@ -78,7 +82,7 @@ export async function exitForReleaseSmokeIfRequested(
   }
   if (argv.includes(RELEASE_IMPORT_SMOKE_ARGUMENT)) {
     try {
-      const request = parseReleaseImportSmokeRequest(app, argv);
+      const request = await parseReleaseImportSmokeRequest(app, argv);
       await runImportSmoke(request);
       write(`${RELEASE_IMPORT_SMOKE_READY_MARKER}\n`);
       app.exit(0);
