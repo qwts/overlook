@@ -54,4 +54,11 @@ describe('cross-platform test commands (#1083)', () => {
     assert.ok(config.entry.includes('src/renderer/src/main.tsx'));
     assert.ok(config.entry.includes('src/renderer/src/capture-frame.ts'));
   });
+
+  test('Playwright builds through the Windows command interpreter', () => {
+    const setup = readFileSync(path.join(root, 'tests/e2e/global-setup.ts'), 'utf8');
+    assert.match(setup, /'cmd\.exe'/u);
+    assert.match(setup, /'npm run build'/u);
+    assert.doesNotMatch(setup, /'npm\.cmd'/u);
+  });
 });
