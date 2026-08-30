@@ -43,10 +43,7 @@ function argumentValue(argv: readonly string[], prefix: string): string | undefi
   return argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 }
 
-export async function parseReleaseImportSmokeRequest(
-  app: ReleaseSmokeApp,
-  argv: readonly string[],
-): Promise<ReleaseImportSmokeRequest> {
+export async function parseReleaseImportSmokeRequest(app: ReleaseSmokeApp, argv: readonly string[]): Promise<ReleaseImportSmokeRequest> {
   if (!app.isPackaged) throw new Error('release import smoke requires a packaged application');
   const sourcePath = argumentValue(argv, RELEASE_IMPORT_SOURCE_ARGUMENT) ?? '';
   const profilePath = argumentValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT) ?? '';
