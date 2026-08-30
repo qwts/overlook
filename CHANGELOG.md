@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.0
+
+### Minor Changes
+
+- fd6113f: Route authenticated live local Move and Sync sessions through the existing encrypted transport and durable journals.
+
 ## 0.73.0
 
 ### Minor Changes
