@@ -1,11 +1,30 @@
 import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 
-type DirectoryHandle = Pick<FileHandle, 'close' | 'sync'>;
-type OpenDirectory = (path: string) => Promise<DirectoryHandle>;
+type SyncHandle = Pick<FileHandle, 'close' | 'sync'>;
+type OpenDirectory = (path: string) => Promise<SyncHandle>;
+type OpenWritableFile = (path: string, flags: 'r+') => Promise<SyncHandle>;
 
-async function openDirectory(path: string): Promise<DirectoryHandle> {
+async function openDirectory(path: string): Promise<SyncHandle> {
   return open(path, 'r');
+}
+
+async function openWritableFile(path: string, flags: 'r+'): Promise<SyncHandle> {
+  return open(path, flags);
+}
+
+/**
+ * Flushes an Overlook-owned staging file before atomic publication. Windows
+ * requires write authority on the handle passed to fsync; reopening the file
+ * read-only returns EPERM even though the file itself remains writable.
+ */
+export async function syncFileData(path: string, openHandle: OpenWritableFile = openWritableFile): Promise<void> {
+  const handle = await openHandle(path, 'r+');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
 }
 
 /**

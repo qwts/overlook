@@ -1,12 +1,12 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { link, mkdir, open, rm } from 'node:fs/promises';
+import { link, mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
-import { syncDirectoryEntry } from '../filesystem/durability.js';
+import { syncDirectoryEntry, syncFileData } from '../filesystem/durability.js';
 
 export type ProtectedBlobKind = 'original' | 'thumb' | 'mid';
 
@@ -32,15 +32,6 @@ function assertRef(blobRef: string): void {
 function isErrno(error: unknown, code: string): boolean {
   // type-coverage:ignore-next-line -- narrowing the fs error shape
   return error instanceof Error && (error as NodeJS.ErrnoException).code === code;
-}
-
-async function syncFile(path: string): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
 }
 
 export class ProtectedBlobStore {
@@ -136,7 +127,7 @@ export class ProtectedBlobStore {
     });
     try {
       await pipeline(input.ciphertext, createWriteStream(stagePath, { flags: 'wx' }));
-      await syncFile(stagePath);
+      await syncFileData(stagePath);
       const sha256 = hasher.digest('hex');
       if (sha256 !== input.sha256 || bytes !== input.bytes) {
         throw new ProtectedBlobStoreError(`protected ${input.kind} ciphertext failed manifest verification`);
@@ -191,7 +182,7 @@ export class ProtectedBlobStore {
         createEncryptStream({ id: PROTECTED_ENVELOPE_KEY_ID, key: albumKey }, { photoId: this.envelopeContext(albumId, blobRef, kind) }),
         createWriteStream(stagePath, { flags: 'wx' }),
       );
-      await syncFile(stagePath);
+      await syncFileData(stagePath);
       const plaintextHash = hasher.digest('hex');
       if (expectedHash !== undefined && plaintextHash !== expectedHash) {
         throw new ProtectedBlobStoreError(`protected ${kind} plaintext failed content-hash verification`);
