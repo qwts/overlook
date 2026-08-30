@@ -153,8 +153,24 @@
   text-align: start;
 }
 
-.ovl-restore__library:not(:disabled) {
+.ovl-restore__librarySelect {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+
+.ovl-restore__librarySelect:not(:disabled) {
   cursor: pointer;
+}
+
+.ovl-restore__librarySelect:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .ovl-restore__library--selected {
@@ -162,7 +178,7 @@
   box-shadow: 0 0 0 1px var(--accent-cyan-dim);
 }
 
-.ovl-restore__library:disabled {
+.ovl-restore__librarySelect:disabled {
   opacity: 0.7;
 }
 
@@ -207,6 +223,17 @@
   user-select: text;
 }
 
+.ovl-restore__verifyList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.ovl-restore__verifyList li > span:last-child {
+  color: var(--text-faint);
+}
+
 .ovl-restore__verifyActions {
   flex-wrap: wrap;
 }
@@ -228,6 +255,11 @@
 .ovl-restore__errorText {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.ovl-restore__errorDetails .ovl-copyable-value {
+  margin-top: var(--space-2);
+  align-items: flex-start;
 }
 
 /* Partial-restore NOT FOUND report (#915): the path list is machine data —

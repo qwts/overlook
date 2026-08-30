@@ -352,6 +352,18 @@
   color: var(--text-muted);
 }
 
+.ovl-settings__disconnectLibraries li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.ovl-settings__disconnectIdentifier {
+  color: var(--text-muted);
+}
+
 .ovl-settings__custodyRequirement div {
   display: flex;
   min-width: 0;

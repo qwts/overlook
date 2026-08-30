@@ -7,6 +7,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
+import { AnnouncerProvider } from '../../src/renderer/src/components/LiveAnnouncer.js';
 import type { RestoreStatusSnapshot } from '../../src/shared/backup/restore-contract.js';
 import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
 
@@ -111,7 +112,9 @@ test('reopening a running restore shows done/total progress instead of setup', a
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -142,7 +145,9 @@ test('verify scan shows a progress bar instead of a spinner-only empty state', a
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -173,7 +178,9 @@ test('a reopened running dialog follows status-changed to the complete screen', 
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -230,7 +237,9 @@ test('a finished verify stays on the results screen even when nothing is missing
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();
@@ -281,7 +290,9 @@ test('Do nothing dismisses the verify plan instead of only hiding the results (#
       root = createRoot(container as HTMLElement);
       root.render(
         <IntlHost>
-          <RestoreWorkflow context="settings" />
+          <AnnouncerProvider>
+            <RestoreWorkflow context="settings" />
+          </AnnouncerProvider>
         </IntlHost>,
       );
       await Promise.resolve();

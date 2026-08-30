@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import type { CustodyRequirement, ProviderConnectResult } from '../../../shared/backup/provider-descriptor.js';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 import { Button } from '../components/Button.js';
+import { CopyableValue } from '../components/CopyableValue.js';
 import { Dialog } from '../components/Dialog.js';
 import { Icon } from '../components/Icon.js';
 import { useFormats } from '../i18n/use-formats.js';
@@ -62,6 +63,9 @@ const messages = defineMessages({
       'Reconnect {name} as {account} to recover access to {count, plural, one {# cloud-only original} other {# cloud-only originals}}.',
   },
   countAndBytes: { id: 'settings.storage.custody.countAndBytes', defaultMessage: '{count} · {bytes}' },
+  copyAccountId: { id: 'settings.storage.custody.copyAccountId', defaultMessage: 'provider account ID' },
+  copyLibraryId: { id: 'settings.storage.custody.copyLibraryId', defaultMessage: 'library ID {libraryId}' },
+  copyError: { id: 'settings.storage.custody.copyError', defaultMessage: 'recovery error' },
 });
 
 export interface DisconnectProviderDialogProps {
@@ -157,39 +161,73 @@ export function DisconnectProviderDialog(props: DisconnectProviderDialogProps): 
                   })}
                 </span>
               </div>
-              <ul className="ovl-settings__disconnectLibraries mono-data">
+              <CopyableValue
+                value={custody.credential.accountId}
+                label={intl.formatMessage(messages.copyAccountId)}
+                className="ovl-settings__disconnectIdentifier"
+              />
+              <ul className="ovl-settings__disconnectLibraries">
                 {custody.libraries.map((library) => (
                   <li key={library.libraryId}>
-                    {library.legacyUnbound
-                      ? intl.formatMessage(messages.libraryWithLegacy, {
-                          library: intl.formatMessage(messages.libraryRisk, {
+                    <span className="mono-data">
+                      {library.legacyUnbound
+                        ? intl.formatMessage(messages.libraryWithLegacy, {
+                            library: intl.formatMessage(messages.libraryRisk, {
+                              name: library.name,
+                              count: library.items,
+                              bytes: formatBytes(library.bytes),
+                            }),
+                            legacy: intl.formatMessage(messages.legacy),
+                          })
+                        : intl.formatMessage(messages.libraryRisk, {
                             name: library.name,
                             count: library.items,
                             bytes: formatBytes(library.bytes),
-                          }),
-                          legacy: intl.formatMessage(messages.legacy),
-                        })
-                      : intl.formatMessage(messages.libraryRisk, {
-                          name: library.name,
-                          count: library.items,
-                          bytes: formatBytes(library.bytes),
-                        })}
+                          })}
+                    </span>
+                    <CopyableValue
+                      value={library.libraryId}
+                      label={intl.formatMessage(messages.copyLibraryId, { libraryId: library.libraryId })}
+                    />
                   </li>
                 ))}
               </ul>
               {custody.unverifiedLibraries === undefined || custody.unverifiedLibraries.length === 0 ? null : (
-                <p>
-                  {intl.formatMessage(messages.unverified, {
-                    libraries: custody.unverifiedLibraries.map((library) => library.name).join(', '),
-                  })}
-                </p>
+                <>
+                  <p>
+                    {intl.formatMessage(messages.unverified, {
+                      libraries: custody.unverifiedLibraries.map((library) => library.name).join(', '),
+                    })}
+                  </p>
+                  <ul className="ovl-settings__disconnectLibraries">
+                    {custody.unverifiedLibraries.map((library) => (
+                      <li key={library.libraryId}>
+                        <span>{library.name}</span>
+                        <CopyableValue
+                          value={library.libraryId}
+                          label={intl.formatMessage(messages.copyLibraryId, { libraryId: library.libraryId })}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </>
           ) : null}
           {!props.loading && !ordinaryAllowed && !atRisk ? (
-            <p className="ovl-settings__disconnectError">{props.result?.reason ?? intl.formatMessage(messages.unavailable)}</p>
+            props.result?.reason === null || props.result?.reason === undefined ? (
+              <p className="ovl-settings__disconnectError">{intl.formatMessage(messages.unavailable)}</p>
+            ) : (
+              <CopyableValue
+                value={props.result.reason}
+                label={intl.formatMessage(messages.copyError)}
+                className="ovl-settings__disconnectError"
+              />
+            )
           ) : null}
-          {props.error === null ? null : <p className="ovl-settings__disconnectError">{props.error}</p>}
+          {props.error === null ? null : (
+            <CopyableValue value={props.error} label={intl.formatMessage(messages.copyError)} className="ovl-settings__disconnectError" />
+          )}
           {props.restoreSummary === null ? null : <p className="mono-data">{props.restoreSummary}</p>}
         </div>
       </Dialog>
@@ -251,6 +289,7 @@ export function CustodyRequirementBanner({
             count: requirement.items,
           })}
         </span>
+        <CopyableValue value={requirement.accountId} label={intl.formatMessage(messages.copyAccountId)} />
         <span className="mono-data">
           {intl.formatMessage(messages.countAndBytes, {
             count: formatCount(requirement.items),

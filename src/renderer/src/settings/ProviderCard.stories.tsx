@@ -57,6 +57,7 @@ export const GoogleDriveKnownCapacity: Story = {
     const card = within(canvasElement);
     await expect(card.getByRole('progressbar')).toBeInTheDocument();
     await expect(card.getByText(/of 2 TB used/u)).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Copy provider account' })).toBeVisible();
   },
 };
 
@@ -116,5 +117,6 @@ export const ConnectError: Story = {
   play: async ({ canvasElement }) => {
     const card = within(canvasElement);
     await expect(card.getByText('Google Drive sign-in was cancelled. Try connecting again.')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Copy provider error' })).toBeVisible();
   },
 };

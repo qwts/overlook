@@ -5,6 +5,7 @@ import './settings.css';
 import { useFormats } from '../i18n/use-formats.js';
 import { Badge } from '../components/Badge';
 import { Button, type ButtonVariant } from '../components/Button';
+import { CopyableValue } from '../components/CopyableValue';
 import { Icon } from '../components/Icon';
 import { ProgressBar } from '../components/ProgressBar';
 
@@ -51,6 +52,8 @@ const messages = defineMessages({
   capacityUnavailable: { id: 'settings.provider.capacityUnavailable', defaultMessage: 'Account capacity unavailable.' },
   regionLabel: { id: 'settings.provider.regionLabel', defaultMessage: '{name} backup' },
   connectHint: { id: 'settings.provider.connectHint', defaultMessage: 'Link a provider to store encrypted originals off-device.' },
+  copyAccount: { id: 'settings.provider.copyAccount', defaultMessage: 'provider account' },
+  copyError: { id: 'settings.provider.copyError', defaultMessage: 'provider error' },
 });
 
 export function ProviderCard(props: ProviderCardProps): ReactElement {
@@ -85,14 +88,20 @@ export function ProviderCard(props: ProviderCardProps): ReactElement {
           )}
         </div>
 
-        {account === null ? null : <div className="ovl-settings__providerMeta mono-data">{account}</div>}
+        {account === null ? null : (
+          <CopyableValue value={account} label={intl.formatMessage(messages.copyAccount)} className="ovl-settings__providerMeta" />
+        )}
 
         {connection === 'checking' ? (
           <div className="ovl-settings__providerMeta">{intl.formatMessage(messages.checkingConnection)}</div>
         ) : connection === 'error' ? (
           // Prefer the backend's actionable reason (OAuth/config/custody failure)
           // when a connect attempt supplied one; else the generic status copy.
-          <div className="ovl-settings__providerMeta">{props.message ?? intl.formatMessage(messages.couldNotCheck)}</div>
+          props.message === null ? (
+            <div className="ovl-settings__providerMeta">{intl.formatMessage(messages.couldNotCheck)}</div>
+          ) : (
+            <CopyableValue value={props.message} label={intl.formatMessage(messages.copyError)} className="ovl-settings__providerMeta" />
+          )
         ) : connected ? (
           <>
             {capacity.kind === 'known' ? (
@@ -118,8 +127,10 @@ export function ProviderCard(props: ProviderCardProps): ReactElement {
 
             {props.capabilitiesLine === null ? null : <div className="ovl-settings__providerMeta mono-data">{props.capabilitiesLine}</div>}
           </>
+        ) : props.message === null ? (
+          <div className="ovl-settings__providerMeta">{intl.formatMessage(messages.connectHint)}</div>
         ) : (
-          <div className="ovl-settings__providerMeta">{props.message ?? intl.formatMessage(messages.connectHint)}</div>
+          <CopyableValue value={props.message} label={intl.formatMessage(messages.copyError)} className="ovl-settings__providerMeta" />
         )}
       </div>
 

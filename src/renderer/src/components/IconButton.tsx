@@ -2,8 +2,8 @@ import { forwardRef } from 'react';
 import type { ButtonHTMLAttributes } from 'react';
 
 import './controls.css';
-import { Icon, type IconName } from './Icon';
-import type { ControlSize } from './Button';
+import { Icon, type IconName } from './Icon.js';
+import type { ControlSize } from './Button.js';
 
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'> {
   readonly icon: IconName;
