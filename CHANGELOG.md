@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.3
+
+### Patch Changes
+
+- 00424bd: Allow Windows imports to flush writable staging files before publication without `fsync` failing with `EPERM`.
+
 ## 0.74.2
 
 ### Patch Changes
