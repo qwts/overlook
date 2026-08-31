@@ -16,9 +16,6 @@ $fixturePath = (Resolve-Path -LiteralPath $Fixture).Path
 $harnessElectronPath = (Resolve-Path -LiteralPath $HarnessElectron).Path
 $installedExecutable = $null
 $uninstaller = $null
-$stagedHarnessExecutable = $null
-$stagedHarnessArchive = $null
-$stagedHarnessUnpacked = $null
 $profile = Join-Path ([System.IO.Path]::GetTempPath()) "overlook-release-import-smoke-$([Guid]::NewGuid().ToString('N'))"
 $resultPath = Join-Path $profile 'release-import-result.txt'
 
@@ -51,42 +48,33 @@ try {
   $installedResources = Join-Path (Split-Path -Parent $installedExecutable) 'resources'
   $installedArchive = Join-Path $installedResources 'app.asar'
   $installedUnpacked = Join-Path $installedResources 'app.asar.unpacked'
-  $harnessResources = Join-Path (Split-Path -Parent $harnessElectronPath) 'resources'
-  $harnessExecutable = Join-Path (Split-Path -Parent $harnessElectronPath) 'OverlookSmoke.exe'
-  $harnessArchive = Join-Path $harnessResources 'app.asar'
-  $harnessUnpacked = Join-Path $harnessResources 'app.asar.unpacked'
   if (-not (Test-Path -LiteralPath $installedArchive)) { throw 'Installed app.asar was not found.' }
-  if (Test-Path -LiteralPath $harnessExecutable) { throw 'Electron harness unexpectedly contains OverlookSmoke.exe.' }
-  if (Test-Path -LiteralPath $harnessArchive) { throw 'Electron harness unexpectedly contains app.asar.' }
-  if (Test-Path -LiteralPath $harnessUnpacked) { throw 'Electron harness unexpectedly contains app.asar.unpacked.' }
-  Copy-Item -LiteralPath $harnessElectronPath -Destination $harnessExecutable
-  $stagedHarnessExecutable = $harnessExecutable
-  Copy-Item -LiteralPath $installedArchive -Destination $harnessArchive
-  $stagedHarnessArchive = $harnessArchive
-  if (Test-Path -LiteralPath $installedUnpacked) {
-    Copy-Item -LiteralPath $installedUnpacked -Destination $harnessUnpacked -Recurse
-    $stagedHarnessUnpacked = $harnessUnpacked
-  }
-  $smokeExecutable = $harnessExecutable
+  if (-not (Test-Path -LiteralPath $installedUnpacked)) { throw 'Installed app.asar.unpacked was not found.' }
+  $smokeExecutable = $harnessElectronPath
 
   # GitHub's hosted Windows service session can start the signed executable's
-  # native-host mode but stalls before Electron's packaged app entrypoint. Stage
-  # the installed app.asar and app.asar.unpacked inside a clean, same-version,
-  # same-architecture Electron distribution. Launching that distribution with
-  # app.asar in its resources directory retains app.isPackaged=true and exercises
-  # the shipped code/native modules without the branded executable bootstrap.
+  # native-host mode but stalls before its packaged app entrypoint. Use a clean,
+  # same-version, same-architecture Electron distribution to load the installed
+  # app.asar explicitly. The app admits this unpackaged Electron path only when
+  # getAppPath() resolves to a real app.asar and the dedicated harness marker is
+  # present, so the gate exercises the shipped code and adjacent native modules
+  # without depending on the broken branded bootstrap.
   Write-Host "Launching installed application through: $smokeExecutable"
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $startInfo.FileName = $smokeExecutable
   $startInfo.UseShellExecute = $false
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
+  $startInfo.ArgumentList.Add('--inspect=0')
+  $startInfo.ArgumentList.Add('--remote-debugging-port=0')
+  $startInfo.ArgumentList.Add($installedArchive)
   $startInfo.ArgumentList.Add('--enable-logging=stderr')
   $startInfo.ArgumentList.Add('--overlook-release-import-smoke')
   $startInfo.ArgumentList.Add("--overlook-release-import-source=$fixturePath")
   $startInfo.ArgumentList.Add("--overlook-release-import-profile=$profile")
   $startInfo.ArgumentList.Add("--overlook-release-import-result=$resultPath")
   $startInfo.Environment['ELECTRON_ENABLE_LOGGING'] = 'true'
+  $startInfo.Environment['OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS'] = '1'
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $startInfo
   if (-not $process.Start()) { throw 'Installed import smoke process did not start.' }
@@ -114,15 +102,6 @@ try {
 } finally {
   if ($null -ne $uninstaller -and (Test-Path -LiteralPath $uninstaller)) {
     Invoke-CheckedProcess $uninstaller @('/S')
-  }
-  if ($null -ne $stagedHarnessArchive -and (Test-Path -LiteralPath $stagedHarnessArchive)) {
-    Remove-Item -LiteralPath $stagedHarnessArchive -Force
-  }
-  if ($null -ne $stagedHarnessUnpacked -and (Test-Path -LiteralPath $stagedHarnessUnpacked)) {
-    Remove-Item -LiteralPath $stagedHarnessUnpacked -Recurse -Force
-  }
-  if ($null -ne $stagedHarnessExecutable -and (Test-Path -LiteralPath $stagedHarnessExecutable)) {
-    Remove-Item -LiteralPath $stagedHarnessExecutable -Force
   }
   if (Test-Path -LiteralPath $profile) {
     Remove-Item -LiteralPath $profile -Recurse -Force

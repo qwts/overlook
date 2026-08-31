@@ -69,10 +69,9 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.doesNotMatch(installedJob, /ref: \$\{\{ inputs\.ref \}\}/u);
     assert.match(smoke, /ProcessArchitecture/u);
     assert.match(smoke, /installedArchive[\s\S]*app\.asar/u);
-    assert.match(smoke, /Copy-Item -LiteralPath \$installedArchive -Destination \$harnessArchive/u);
-    assert.match(smoke, /Copy-Item -LiteralPath \$installedUnpacked -Destination \$harnessUnpacked -Recurse/u);
-    assert.match(smoke, /Copy-Item -LiteralPath \$harnessElectronPath -Destination \$harnessExecutable/u);
-    assert.match(smoke, /\$smokeExecutable = \$harnessExecutable/u);
+    assert.match(smoke, /ArgumentList\.Add\(\$installedArchive\)/u);
+    assert.match(smoke, /OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS/u);
+    assert.match(smoke, /\$smokeExecutable = \$harnessElectronPath/u);
     assert.match(smoke, /--overlook-release-import-smoke/u);
     assert.match(smoke, /ArgumentList\.Add\("--overlook-release-import-source=\$fixturePath"\)/u);
     assert.match(smoke, /ArgumentList\.Add\("--overlook-release-import-profile=\$profile"\)/u);

@@ -160,7 +160,7 @@ Four overrides exist, each with a removal condition:
   a matching native runner. The verifier asserts the runner architecture,
   installs silently, then uses the artifact's exact Electron version and architecture,
   downloaded from Electron's official release and checked against its published
-  SHA-256, to stage and load the installed archive and unpacked native modules in dedicated
+  SHA-256, to explicitly load the installed archive and adjacent unpacked native modules in dedicated
   packaged-only import mode. This avoids the hosted service session's desktop
   bootstrap stall while still verifying the database record, decrypted content
   hash, no plaintext-at-rest leak, and copy-source preservation before a

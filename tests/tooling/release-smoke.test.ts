@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -98,6 +98,36 @@ describe('packaged release launch smoke (#357)', () => {
         `--overlook-release-import-result=${resultPath}`,
       ]),
       undefined,
+    );
+  });
+
+  test('admits only a real app.asar through the explicit installed-artifact harness', async () => {
+    const { profile } = smokeApp(join(tmpdir(), `overlook-release-import-smoke-${Date.now()}`));
+    const archive = join(profile, 'app.asar');
+    const source = join(tmpdir(), 'overlook-release-import-fixture.jpg');
+    const result = join(profile, 'release-import-result.txt');
+    writeFileSync(archive, 'packaged bytes');
+    const app = { isPackaged: false, getAppPath: () => archive, getPath: () => profile, exit: () => undefined };
+    const argv = [
+      'electron',
+      RELEASE_IMPORT_SMOKE_ARGUMENT,
+      `--overlook-release-import-source=${source}`,
+      `--overlook-release-import-profile=${profile}`,
+      `--overlook-release-import-result=${result}`,
+    ];
+    const environment = { OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS: '1' };
+
+    await assert.rejects(parseReleaseImportSmokeRequest(app, argv), /packaged application archive/u);
+    assert.equal(releaseImportSmokeProfileIfRequested(app, argv, environment), profile);
+    assert.deepEqual(await parseReleaseImportSmokeRequest(app, argv, environment), {
+      sourcePath: source,
+      profilePath: await realpath(profile),
+    });
+    await assert.rejects(
+      parseReleaseImportSmokeRequest({ ...app, getAppPath: () => join(profile, 'not-an-archive') }, argv, {
+        OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS: '1',
+      }),
+      /packaged application archive/u,
     );
   });
 
