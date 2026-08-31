@@ -58,6 +58,7 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /path: smoke-tools/u);
     assert.match(workflow, /This ref predates the packaged import-smoke capability/u);
     assert.match(workflow, /Historical ref has no compatible packaged import-smoke mode/u);
+    assert.match(workflow, /release-smoke-artifact\/release\/windows-import-smoke\.json/u);
     assert.match(workflow, /electron-v\$version-win32-\$\{\{ matrix\.arch \}\}\.zip/u);
     assert.match(workflow, /Get-FileHash .* -Algorithm SHA256/u);
     assert.match(workflow, /-HarnessElectron .*electron-harness\/dist\/electron\.exe/u);
