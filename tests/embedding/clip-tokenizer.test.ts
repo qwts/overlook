@@ -12,4 +12,14 @@ describe('CLIP tokenizer', () => {
   test('rejects a malformed tokenizer asset', () => {
     assert.throws(() => createClipTokenizer({}), /invalid CLIP tokenizer/);
   });
+
+  test('applies ranked byte-pair merges and retains unmatched symbols', () => {
+    const tokenize = createClipTokenizer({
+      model: {
+        merges: ['a b'],
+        vocab: { ab: 7, 'c</w>': 8 },
+      },
+    });
+    assert.deepEqual(tokenize('abc'), [49_406, 7, 8, 49_407]);
+  });
 });
