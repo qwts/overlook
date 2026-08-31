@@ -20,7 +20,9 @@ function Scenario({ query, mode, search }: ScenarioProps) {
     dispatch({ type: 'searchMode/set', mode });
     dispatch({ type: 'search/status', search });
   }, [dispatch, mode, query, search]);
-  if (state.query !== query || state.searchMode !== mode || state.search !== search) return null;
+  // The final setup dispatch is the readiness boundary. Do not compare the
+  // live mode after setup: the story must remain mounted when the user changes it.
+  if (state.query !== query || state.search !== search) return null;
   return <Toolbar platform="darwin" />;
 }
 
