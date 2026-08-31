@@ -1,5 +1,11 @@
 # photos
 
+## 0.75.0
+
+### Minor Changes
+
+- 02c864e: Add on-device semantic photo search with automatic keyword fusion, explicit search modes, and truthful fallback status.
+
 ## 0.74.6
 
 ### Patch Changes
