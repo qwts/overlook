@@ -57,14 +57,14 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateComp
 // previous set is dropped instead of appended. `exhausted` tells the grid
 // the loaded count IS the filtered total (counts can't answer for filters).
 export function useLibraryPhotos(): { readonly loadMore: () => void; readonly exhausted: boolean } {
-  const { source, query, chips, sortOrder, album, photos } = useAppState();
+  const { source, query, searchMode, chips, sortOrder, album, photos } = useAppState();
   const dispatch = useAppDispatch();
   const cursorRef = useRef<PageCursor | null>(null);
   const requestRef = useRef(0);
   const inFlightRef = useRef(false);
   // Exhaustion is keyed to the visible set: switching sets changes the key,
   // which resets `exhausted` derivationally (no setState-in-effect).
-  const setKey = `${source}|${query}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}`;
+  const setKey = `${source}|${query}|${searchMode}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}`;
   const [exhaustedKey, setExhaustedKey] = useState<string | null>(null);
   const exhausted = exhaustedKey === setKey;
 
@@ -74,11 +74,12 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       limit: PAGE_SIZE,
       ...(source === 'recent' ? { recentSince: recentSinceIso() } : {}),
       ...(query === '' ? {} : { query }),
+      searchMode,
       ...(chipsActive(chips) ? { chips } : {}),
       ...(sortOrder === 'date' ? {} : { order: sortOrder }),
       ...(album === null ? {} : { albumId: album }),
     }),
-    [source, query, chips, sortOrder, album],
+    [source, query, searchMode, chips, sortOrder, album],
   );
 
   const fetchFirstPage = useCallback(
@@ -88,12 +89,13 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       cursorRef.current = null;
       void window.overlook.library
         .page(baseRequest())
-        .then(({ photos, nextCursor }) => {
+        .then(({ photos, nextCursor, search }) => {
           if (requestRef.current !== requestId) {
             return;
           }
           cursorRef.current = nextCursor;
           setExhaustedKey(nextCursor === null ? setKey : null);
+          dispatch({ type: 'search/status', search });
           dispatch({ type: 'photos/loaded', photos, append: false, invalidateCompleteSelection });
         })
         .finally(() => {
@@ -159,12 +161,13 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
     inFlightRef.current = true;
     void window.overlook.library
       .page({ ...baseRequest(), cursor })
-      .then(({ photos, nextCursor }) => {
+      .then(({ photos, nextCursor, search }) => {
         if (requestRef.current !== requestId) {
           return;
         }
         cursorRef.current = nextCursor;
         setExhaustedKey(nextCursor === null ? setKey : null);
+        dispatch({ type: 'search/status', search });
         dispatch({ type: 'photos/loaded', photos, append: true });
       })
       .finally(() => {

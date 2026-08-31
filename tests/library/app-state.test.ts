@@ -16,6 +16,22 @@ function apply(state: AppState, ...actions: AppAction[]): AppState {
 }
 
 describe('app state reducer', () => {
+  test('tracks requested and applied search modes independently', () => {
+    const requested = apply(initialAppState, { type: 'searchMode/set', mode: 'semantic' });
+    const reported = apply(requested, {
+      type: 'search/status',
+      search: { requestedMode: 'semantic', appliedMode: 'keyword', fallbackReason: 'indexing', indexed: 4, total: 10 },
+    });
+    assert.equal(reported.searchMode, 'semantic');
+    assert.deepEqual(reported.search, {
+      requestedMode: 'semantic',
+      appliedMode: 'keyword',
+      fallbackReason: 'indexing',
+      indexed: 4,
+      total: 10,
+    });
+  });
+
   test('zoom clamps to the design range', () => {
     assert.equal(initialAppState.zoom, ZOOM_DEFAULT);
     assert.equal(apply(initialAppState, { type: 'zoom/set', zoom: 10 }).zoom, ZOOM_MIN);

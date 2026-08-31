@@ -29,7 +29,7 @@ describe('embedding execution-provider fallback', () => {
     const worker = source('src/main/embedding/embedding-worker.ts');
     assert.match(worker, /Buffer\.from\(request\.bytes\.buffer, request\.bytes\.byteOffset, request\.bytes\.byteLength\)/u);
     assert.doesNotMatch(worker, /Buffer\.from\(request\.bytes\)/u);
-    assert.match(worker, /\.finally\(\(\) => bytes\.fill\(0\)\)/u);
+    assert.match(worker, /\.finally\(\(\) => bytes\?\.fill\(0\)\)/u);
   });
 
   test('packaging unpacks shared libraries only for the embedding native runtimes', () => {

@@ -348,7 +348,17 @@ export const channels = {
       limit: z.number().int().positive().max(500),
       cursor: pageCursorSchema.optional(),
     }),
-    z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
+    z.object({
+      photos: z.array(photoRecordSchema).readonly(),
+      nextCursor: pageCursorSchema.nullable(),
+      search: z.object({
+        requestedMode: z.enum(['auto', 'keyword', 'semantic']),
+        appliedMode: z.enum(['keyword', 'semantic', 'fused']),
+        fallbackReason: z.enum(['disabled', 'unavailable', 'indexing', 'busy', 'error']).nullable(),
+        indexed: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+      }),
+    }),
   ),
   ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),

@@ -50,6 +50,12 @@ function vector(fill: number): Int8Array {
   return new Int8Array(EMBEDDING_DIMENSIONS).fill(fill);
 }
 
+function basis(dimension: number): Int8Array {
+  const result = new Int8Array(EMBEDDING_DIMENSIONS);
+  result[dimension] = 127;
+  return result;
+}
+
 function openSeeded(path = tempDbPath()): {
   readonly path: string;
   readonly db: ReturnType<typeof openLibraryDatabase>;
@@ -120,6 +126,27 @@ describe('sqlite-vec SQLCipher composition (#391)', () => {
 });
 
 describe('EmbeddingRepository', () => {
+  test('ranks cosine neighbors while preserving ordinary library filters', () => {
+    const { db, photos, embeddings } = openSeeded();
+    const closest = { ...photo('P-CLOSEST', 'c'.repeat(64)), favorite: false };
+    const favorite = { ...photo('P-FAVORITE', 'd'.repeat(64)), favorite: true };
+    photos.insert(closest);
+    photos.insert(favorite);
+    embeddings.put({ photoId: closest.id, contentHash: closest.contentHash }, MODEL_VERSION, basis(0));
+    embeddings.put({ photoId: favorite.id, contentHash: favorite.contentHash }, MODEL_VERSION, basis(1));
+
+    assert.deepEqual(
+      embeddings.nearest(MODEL_VERSION, basis(0), { source: 'all' }, 10).map(({ photoId }) => photoId),
+      ['P-CLOSEST', 'P-FAVORITE'],
+    );
+    assert.deepEqual(
+      embeddings.nearest(MODEL_VERSION, basis(0), { source: 'favorites' }, 10).map(({ photoId }) => photoId),
+      ['P-FAVORITE'],
+      'semantic candidates use the same source predicate as keyword queries',
+    );
+    db.close();
+  });
+
   test('the database is the resumable queue and completed rows are not repeated', () => {
     const { db, photos, embeddings } = openSeeded();
     const first = photo('P-FIRST', '1'.repeat(64));

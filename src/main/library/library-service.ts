@@ -18,6 +18,8 @@ import type {
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
 import type { PhotoMetadataUpdate, PhotoTagManagement } from '../../shared/library/photo-metadata.js';
+import type { EmbeddingService } from '../embedding/embedding-service.js';
+import { SemanticSearch } from './semantic-search.js';
 
 // The renderer's typed window into the library (#71) — the contract M04
 // builds against. Owns pendingCount (design §backup dirtiness) and emits
@@ -33,6 +35,7 @@ export class LibraryService {
   private readonly repo: PhotosRepository;
   private readonly historyRepo: HistoryLibraryRepository;
   private readonly metadataRepo: PhotoMetadataRepository;
+  private readonly semanticSearch: SemanticSearch;
 
   private readonly db: BetterSqlite3.Database;
 
@@ -44,6 +47,7 @@ export class LibraryService {
     this.repo = new PhotosRepository(db);
     this.historyRepo = new HistoryLibraryRepository(db);
     this.metadataRepo = new PhotoMetadataRepository(db);
+    this.semanticSearch = new SemanticSearch(db);
   }
 
   // Moodboard persistence (#515 / #694). Boards are album-class organizational
@@ -66,6 +70,18 @@ export class LibraryService {
 
   page(request: PageRequest): PageResult {
     return this.repo.page(request);
+  }
+
+  searchPage(request: PageRequest, embeddings: EmbeddingService): Promise<PageResult> {
+    return this.semanticSearch.page(request, embeddings);
+  }
+
+  searchSelectAllIds(request: LibraryQuery, embeddings: EmbeddingService): Promise<readonly string[]> {
+    return this.semanticSearch.ids(request, embeddings);
+  }
+
+  async searchSelectionRange(request: SelectionRangeRequest, embeddings: EmbeddingService): Promise<SelectionRangeResult> {
+    return { photoIds: await this.semanticSearch.selectionRange(request, embeddings) };
   }
 
   selectAllIds(request: LibraryQuery): readonly string[] {

@@ -1,6 +1,12 @@
 import { Worker } from 'node:worker_threads';
 
-import type { EmbeddingWorkerData, EmbeddingWorkerRequest, EmbeddingWorkerResponse, EmbeddingWorkerShutdown } from './embedding-worker.js';
+import type {
+  EmbeddingWorkerData,
+  EmbeddingWorkerPayload,
+  EmbeddingWorkerRequest,
+  EmbeddingWorkerResponse,
+  EmbeddingWorkerShutdown,
+} from './embedding-worker.js';
 
 export interface EmbeddingPoolOptions extends EmbeddingWorkerData {
   readonly workerUrl: URL;
@@ -28,6 +34,10 @@ export class EmbeddingInputError extends Error {
   override readonly name = 'EmbeddingInputError';
 }
 
+export class EmbeddingPoolBusyError extends Error {
+  override readonly name = 'EmbeddingPoolBusyError';
+}
+
 function abortError(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : new Error('embedding job aborted');
 }
@@ -45,8 +55,17 @@ export class EmbeddingPool {
   constructor(private readonly options: EmbeddingPoolOptions) {}
 
   embed(bytes: Buffer, signal?: AbortSignal): Promise<Int8Array> {
+    const transferred = new Uint8Array(bytes);
+    return this.post({ kind: 'image', bytes: transferred }, [transferred.buffer], signal);
+  }
+
+  embedText(text: string, signal?: AbortSignal): Promise<Int8Array> {
+    return this.post({ kind: 'text', text }, [], signal);
+  }
+
+  private post(request: EmbeddingWorkerPayload, transfer: readonly ArrayBuffer[], signal?: AbortSignal): Promise<Int8Array> {
     if (this.closed) return Promise.reject(new Error('embedding pool is closed'));
-    if (this.active !== undefined) return Promise.reject(new Error('embedding pool accepts one job at a time'));
+    if (this.active !== undefined) return Promise.reject(new EmbeddingPoolBusyError('embedding pool accepts one job at a time'));
     if (signal?.aborted === true) return Promise.reject(abortError(signal));
     const worker = this.getWorker();
     const id = this.nextId++;
@@ -70,8 +89,7 @@ export class EmbeddingPool {
         reject,
         removeAbort: onAbort === undefined || signal === undefined ? undefined : () => signal.removeEventListener('abort', onAbort),
       };
-      const transferred = new Uint8Array(bytes);
-      worker.postMessage({ jobId: id, bytes: transferred } satisfies EmbeddingWorkerRequest, [transferred.buffer]);
+      worker.postMessage({ ...request, jobId: id } satisfies EmbeddingWorkerRequest, transfer);
     });
   }
 
@@ -110,7 +128,12 @@ export class EmbeddingPool {
   private getWorker(): Worker {
     if (this.worker !== undefined) return this.worker;
     const worker = new Worker(this.options.workerUrl, {
-      workerData: { modelPath: this.options.modelPath, providers: this.options.providers } satisfies EmbeddingWorkerData,
+      workerData: {
+        modelPath: this.options.modelPath,
+        providers: this.options.providers,
+        ...(this.options.textModelPath === undefined ? {} : { textModelPath: this.options.textModelPath }),
+        ...(this.options.tokenizerPath === undefined ? {} : { tokenizerPath: this.options.tokenizerPath }),
+      } satisfies EmbeddingWorkerData,
     });
     worker.on('message', (response: EmbeddingWorkerResponse) => {
       const job = this.active;

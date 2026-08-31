@@ -8,6 +8,7 @@ import {
 } from '../db/embedding-repository.js';
 import type { ModelAssetManager, ModelDownloadProgress } from './model-assets.js';
 import { EMBEDDING_MODEL_MANIFEST } from './model-manifest.js';
+import { EmbeddingPoolBusyError } from './embedding-pool.js';
 
 export type EmbeddingPauseReason = 'user' | 'import' | 'backup' | 'battery';
 export type EmbeddingPhase = 'disabled' | 'unavailable' | 'downloading' | 'indexing' | 'paused' | 'ready' | 'error';
@@ -32,12 +33,17 @@ export interface EmbeddingServiceOptions {
   readonly pauseReason: () => Exclude<EmbeddingPauseReason, 'user'> | null;
   readonly load: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Buffer | null>;
   readonly embed: (bytes: Buffer, signal: AbortSignal) => Promise<Int8Array | null>;
+  readonly embedText?: ((text: string, signal: AbortSignal) => Promise<Int8Array>) | undefined;
   readonly emit: (status: EmbeddingStatus) => void;
   readonly available?: boolean;
   readonly unavailableReason?: string;
   readonly pausePollMs?: number;
   readonly downloadPublishIntervalMs?: number;
 }
+
+export type EmbeddingQueryFallback = 'disabled' | 'unavailable' | 'indexing' | 'busy' | 'error';
+export type EmbeddingQueryResult =
+  { readonly embedding: Int8Array; readonly fallback: null } | { readonly embedding: null; readonly fallback: EmbeddingQueryFallback };
 
 /** Query-backed, single-flight indexer. Completed rows are the resume cursor. */
 export class EmbeddingService {
@@ -132,6 +138,21 @@ export class EmbeddingService {
     if (this.options.available === false || photoIds.length === 0) return;
     this.options.repository.clearDeferred(EMBEDDING_MODEL_MANIFEST.version, photoIds);
     this.notifyWorkAvailable();
+  }
+
+  async query(text: string): Promise<EmbeddingQueryResult> {
+    const status = this.status();
+    if (status.phase === 'disabled') return { embedding: null, fallback: 'disabled' };
+    if (status.phase === 'unavailable' || this.options.embedText === undefined) return { embedding: null, fallback: 'unavailable' };
+    if (status.phase === 'error') return { embedding: null, fallback: 'error' };
+    if (status.phase !== 'ready') return { embedding: null, fallback: 'indexing' };
+    const controller = new AbortController();
+    try {
+      return { embedding: await this.options.embedText(text, controller.signal), fallback: null };
+    } catch (error) {
+      if (error instanceof EmbeddingPoolBusyError) return { embedding: null, fallback: 'busy' };
+      return { embedding: null, fallback: 'error' };
+    }
   }
 
   async close(): Promise<void> {

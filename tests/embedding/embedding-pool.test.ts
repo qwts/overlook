@@ -38,6 +38,19 @@ import { parentPort } from 'node:worker_threads';
 parentPort.on('message', () => {});
 `;
 
+const TEXT_WORKER = `
+import { parentPort } from 'node:worker_threads';
+parentPort.on('message', (message) => {
+  if (message.shutdown) { process.exit(0); return; }
+  parentPort.postMessage({
+    jobId: message.jobId,
+    ok: true,
+    embedding: new Int8Array(message.kind === 'text' && message.text === 'a city street' ? [9] : [1]),
+    provider: 'scripted',
+  });
+});
+`;
+
 describe('embedding pool worker retirement (#843)', () => {
   test('ACCEPTANCE: close() during an in-flight job lets it finish — no mid-run terminate', async () => {
     const pool = poolWith(COOPERATIVE_WORKER);
@@ -85,5 +98,11 @@ describe('embedding pool worker retirement (#843)', () => {
     const pool = poolWith(COOPERATIVE_WORKER);
     await pool.close();
     await assert.rejects(pool.embed(Buffer.from([1])), /closed/);
+  });
+
+  test('text queries share the single worker protocol', async () => {
+    const pool = poolWith(TEXT_WORKER);
+    assert.deepEqual(await pool.embedText('a city street'), new Int8Array([9]));
+    await pool.close();
   });
 });

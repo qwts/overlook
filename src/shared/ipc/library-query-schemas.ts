@@ -13,6 +13,7 @@ export const libraryQuerySchema = z.object({
   source: sourceFilterSchema,
   recentSince: z.string().optional(),
   query: z.string().optional(),
+  searchMode: z.enum(['auto', 'keyword', 'semantic']).optional(),
   chips: chipFiltersSchema.optional(),
   order: z.enum(['date', 'name', 'size']).optional(),
   albumId: z.string().optional(),

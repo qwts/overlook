@@ -185,7 +185,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     authorizePassword: options.authorizePassword,
     deletePermanently: (photoIds) => options.getPurge().deletePermanently(photoIds),
   });
-  registerLibraryHandlers(options.getLibrary, options.onManifestChanged, options.getActivity);
+  registerLibraryHandlers(options.getLibrary, options.onManifestChanged, options.getActivity, options.getEmbedding);
   registerAlbumHandlers(options.getLibrary, ulid, options.getActivity, options.onManifestChanged);
   registerBoardHandlers(options.getLibrary, options.getActivity, options.onManifestChanged);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);

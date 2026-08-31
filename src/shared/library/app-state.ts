@@ -1,4 +1,4 @@
-import type { ChipFilters, PhotoRecord, SortOrder, SourceFilter } from './types.js';
+import type { ChipFilters, PageResult, PhotoRecord, SearchMode, SortOrder, SourceFilter } from './types.js';
 
 // App state backbone (#73) — the mock's state shape as a pure reducer, kept
 // process-free so the unit lane floors it. The renderer provides it via
@@ -20,6 +20,8 @@ export interface AppState {
    * tiles to reload without a navigation. */
   readonly thumbEpoch: Readonly<Record<string, number>>;
   readonly query: string;
+  readonly searchMode: SearchMode;
+  readonly search: PageResult['search'];
   readonly zoom: number;
   readonly view: ViewMode;
   readonly source: SourceFilter;
@@ -70,6 +72,8 @@ export const initialAppState: AppState = {
   photos: [],
   thumbEpoch: {},
   query: '',
+  searchMode: 'auto',
+  search: { requestedMode: 'auto', appliedMode: 'keyword', fallbackReason: null, indexed: 0, total: 0 },
   zoom: ZOOM_DEFAULT,
   view: 'grid',
   source: 'all',
@@ -107,6 +111,8 @@ export type AppAction =
     }
   | { type: 'thumbs/invalidated'; photoIds: readonly string[] }
   | { type: 'query/set'; query: string }
+  | { type: 'searchMode/set'; mode: SearchMode }
+  | { type: 'search/status'; search: PageResult['search'] }
   | { type: 'zoom/set'; zoom: number }
   | { type: 'view/set'; view: ViewMode }
   | { type: 'source/set'; source: SourceFilter }
@@ -197,6 +203,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'query/set':
       return { ...state, query: action.query, selectionMode: 'explicit' };
+    case 'searchMode/set':
+      return { ...state, searchMode: action.mode, selectionMode: 'explicit' };
+    case 'search/status':
+      return { ...state, search: action.search };
     case 'zoom/set':
       return { ...state, zoom: Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, action.zoom)) };
     case 'view/set':
