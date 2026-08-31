@@ -27,7 +27,7 @@ const applicable: ApplicableTheme = {
   id: installed.id,
   meta: installed.meta,
   warnings: installed.warnings,
-  tokens: { '--surface-window': 'rgb(5% 6% 10%)', '--accent-iris': 'rgb(53% 47% 100%)' },
+  tokens: { '--surface-window': 'rgb(5% 6% 10%)', '--accent-iris': 'rgb(37% 25% 75%)' },
 };
 
 function installStub(): void {
