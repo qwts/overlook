@@ -5,13 +5,21 @@ import './styles/index.css';
 import { App } from './App';
 import { IntlHost } from './i18n/IntlHost';
 import { installAppearanceObserver } from './theme/appearance';
+import { installPersistedThemeObserver } from './theme/persisted-theme';
+import { documentThemeLayer } from './theme/document-theme-layer';
+import { installApplicationThemeLayer } from './theme/user-theme-layer';
+
+const userThemeLayer = documentThemeLayer(document);
+installApplicationThemeLayer(userThemeLayer);
 
 installAppearanceObserver({
   root: document.documentElement,
   media: window.matchMedia('(prefers-color-scheme: dark)'),
   contrastMedia: window.matchMedia('(prefers-contrast: more)'),
   settings: window.overlook.settings,
+  userTheme: userThemeLayer,
 });
+installPersistedThemeObserver({ layer: userThemeLayer, themes: window.overlook.themes, settings: window.overlook.settings });
 
 const container = document.getElementById('root');
 if (container === null) {

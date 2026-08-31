@@ -13,13 +13,14 @@ function removeUnavailableMockSelection(store: ScopedSettingsStore): void {
   if (!mockAvailable && store.get().providerId === 'mock') store.set({ providerId: null });
 }
 
-export function configureSettingsLibrary(dataDir: () => string): void {
+export function configureSettingsLibrary(dataDir: () => string): () => string {
   libraryDataDir = dataDir;
   if (settingsStore !== undefined) activateSettingsLibrary();
   if (!appearanceHostInstalled) {
     installAppearanceHost(getSettingsStore());
     appearanceHostInstalled = true;
   }
+  return dataDir;
 }
 
 export function getSettingsStore(): ScopedSettingsStore {

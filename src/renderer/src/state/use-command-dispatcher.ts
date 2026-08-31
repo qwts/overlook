@@ -5,6 +5,7 @@ import { resolveCommand, type CommandId, type CommandPlatform, type CommandSurfa
 import { directionOf } from '../../../shared/i18n/locales.js';
 import { useAppDispatch, useAppState } from './app-state-context';
 import { lightboxStepForKey } from './lightbox-direction';
+import { getApplicationThemeLayer } from '../theme/user-theme-layer';
 
 function commandPlatform(platform: string): CommandPlatform {
   if (platform === 'darwin') return 'darwin';
@@ -31,6 +32,9 @@ export function useCommandDispatcher(
     const surface: CommandSurface = state.lightboxId === null ? 'grid' : 'lightbox';
     const execute = (id: CommandId, event: KeyboardEvent): boolean => {
       switch (id) {
+        case 'view.appearance.reset':
+          void window.overlook.themes.reset().then(() => getApplicationThemeLayer().reset());
+          return true;
         case 'app.settings.open':
         case 'app.settings.open.storage':
         case 'app.settings.open.transfer':

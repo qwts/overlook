@@ -75,6 +75,7 @@ export type CommandId =
   | 'view.inspector.toggle'
   | 'view.inspector.detach'
   | 'view.sidebar.toggle'
+  | 'view.appearance.reset'
   | 'view.mode.grid'
   | 'view.mode.list'
   | 'view.mode.feed'
@@ -158,6 +159,7 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'view.inspector.toggle': { id: 'commands.view.inspector.toggle', defaultMessage: 'Show or hide Inspector' },
   'view.inspector.detach': { id: 'commands.view.inspector.detach', defaultMessage: 'Open Inspector in Separate Window' },
   'view.sidebar.toggle': { id: 'commands.view.sidebar.toggle', defaultMessage: 'Toggle Sidebar' },
+  'view.appearance.reset': { id: 'commands.view.appearance.reset', defaultMessage: 'Reset Appearance' },
   'view.mode.grid': { id: 'commands.view.mode.grid', defaultMessage: 'Grid' },
   'view.mode.list': { id: 'commands.view.mode.list', defaultMessage: 'List' },
   'view.mode.feed': { id: 'commands.view.mode.feed', defaultMessage: 'Feed' },
@@ -404,6 +406,17 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     surfaces: [],
     target: 'window',
     native: { menu: 'view', lockSafe: false, queueable: false },
+  },
+  {
+    id: 'view.appearance.reset',
+    label: label('view.appearance.reset', 'Reset Appearance'),
+    surfaces: GLOBAL_SURFACES,
+    target: 'application',
+    key: 'r',
+    primaryModifier: true,
+    alt: true,
+    shift: true,
+    native: { menu: 'view', lockSafe: true, queueable: false },
   },
   {
     id: 'view.mode.grid',
