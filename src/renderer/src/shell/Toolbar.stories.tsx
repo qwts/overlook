@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import type { PageResult, SearchMode } from '../../../shared/library/types.js';
-import { AppStateProvider, useAppDispatch, useAppState } from '../state/app-state-context';
+import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { Toolbar } from './Toolbar';
 
 interface ScenarioProps {
@@ -13,16 +13,12 @@ interface ScenarioProps {
 }
 
 function Scenario({ query, mode, search }: ScenarioProps) {
-  const state = useAppState();
   const dispatch = useAppDispatch();
   useEffect(() => {
     dispatch({ type: 'query/set', query });
     dispatch({ type: 'searchMode/set', mode });
     dispatch({ type: 'search/status', search });
   }, [dispatch, mode, query, search]);
-  // The final setup dispatch is the readiness boundary. Do not compare the
-  // live mode after setup: the story must remain mounted when the user changes it.
-  if (state.query !== query || state.search !== search) return null;
   return <Toolbar platform="darwin" />;
 }
 
@@ -51,7 +47,7 @@ export const Modes: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('status')).toHaveTextContent('Keyword + semantic results · 24 of 24 photos indexed');
+    await expect(await canvas.findByRole('status')).toHaveTextContent('Keyword + semantic results · 24 of 24 photos indexed');
     await userEvent.click(canvas.getByRole('radio', { name: 'Semantic' }));
     await expect(canvas.getByRole('radio', { name: 'Semantic' })).toBeChecked();
     await userEvent.click(canvas.getByRole('radio', { name: 'Keyword' }));
@@ -80,7 +76,7 @@ export const IndexingFallback: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('status')).toHaveTextContent(
+    await expect(await canvas.findByRole('status')).toHaveTextContent(
       'Semantic is still indexing; showing keyword results · 7 of 24 photos indexed',
     );
   },
