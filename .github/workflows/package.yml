@@ -345,7 +345,8 @@ jobs:
             '--overlook-release-import-smoke',
             'OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE',
             'OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE',
-            'OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT'
+            'OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT',
+            'OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS'
           )
           $supported = Test-Path -LiteralPath $sourcePath
           if ($supported) {
