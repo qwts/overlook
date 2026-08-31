@@ -2,6 +2,7 @@ import type { z } from 'zod';
 
 import type { channels, events, FocusChangedPayload, PingRequest, PingResponse } from './channels.js';
 import type { llmChannels } from './llm-channels.js';
+import type { themeChannels } from './theme-channels.js';
 
 type Req<C extends { request: z.ZodType }> = z.input<C['request']>;
 type Res<C extends { response: z.ZodType }> = z.output<C['response']>;
@@ -269,6 +270,20 @@ export interface OverlookApi {
     readonly get: () => Promise<Res<typeof channels.settingsGet>>;
     readonly set: (request: Req<typeof channels.settingsSet>) => Promise<Res<typeof channels.settingsSet>>;
     readonly onChanged: (listener: (payload: z.output<typeof events.settingsChanged.payload>) => void) => () => void;
+  };
+  readonly themes: {
+    readonly list: () => Promise<Res<typeof themeChannels.themeList>>;
+    readonly pickImport: () => Promise<Res<typeof themeChannels.themePickImport>>;
+    readonly importPath: (request: Req<typeof themeChannels.themeImportPath>) => Promise<Res<typeof themeChannels.themeImportPath>>;
+    readonly active: () => Promise<Res<typeof themeChannels.themeActive>>;
+    readonly preview: (request: Req<typeof themeChannels.themePreview>) => Promise<Res<typeof themeChannels.themePreview>>;
+    readonly previewHealthy: (
+      request: Req<typeof themeChannels.themePreviewHealthy>,
+    ) => Promise<Res<typeof themeChannels.themePreviewHealthy>>;
+    readonly confirm: (request: Req<typeof themeChannels.themeConfirm>) => Promise<Res<typeof themeChannels.themeConfirm>>;
+    readonly cancel: (request: Req<typeof themeChannels.themeCancel>) => Promise<Res<typeof themeChannels.themeCancel>>;
+    readonly remove: (request: Req<typeof themeChannels.themeRemove>) => Promise<Res<typeof themeChannels.themeRemove>>;
+    readonly reset: () => Promise<Res<typeof themeChannels.themeReset>>;
   };
   readonly embedding: {
     readonly status: () => Promise<Res<typeof channels.embeddingStatus>>;

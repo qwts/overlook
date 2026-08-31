@@ -24,6 +24,7 @@ export interface ApplicationMenuOptions {
   readonly subscribeLock: (listener: () => void) => () => void;
   readonly providerBusy: () => boolean;
   readonly locale: () => string;
+  readonly resetAppearance: () => void;
 }
 
 function commandPlatform(): CommandPlatform {
@@ -164,6 +165,10 @@ export class ApplicationMenuController {
       void shell.openExternal(HELP_URL);
       return;
     }
+    if (id === 'view.appearance.reset') {
+      this.options.resetAppearance();
+      return;
+    }
 
     const win = this.activeWindow() ?? createWindow();
     requestNativeWindowAttention(win, {
@@ -187,13 +192,14 @@ export class ApplicationMenuController {
 
 let installedController: ApplicationMenuController | undefined;
 
-export function installApplicationMenu(lock: AppLockControllerLike, providerBusy: () => boolean): void {
+export function installApplicationMenu(lock: AppLockControllerLike, providerBusy: () => boolean, resetAppearance: () => void): void {
   installedController = new ApplicationMenuController({
     lockState: () => lock.snapshot().state,
     lockNow: () => lock.lock(),
     subscribeLock: (listener) => lock.subscribe(listener),
     providerBusy,
     locale: () => resolveActiveLocale(getSettingsStore().get().language),
+    resetAppearance,
   });
   installedController.install();
 }

@@ -81,6 +81,7 @@ import { createEmbeddingApplicationRuntime } from './embedding/embedding-applica
 import type { EmbeddingService } from './embedding/embedding-service.js';
 import { EgressRuntime } from './egress-runtime.js';
 import { applicationEvents } from './application-events.js';
+import { installThemeRuntime } from './theme/theme-runtime.js';
 // Test/dev steering hooks (#72/#129) are unpackaged-only; runtime tuning stays outside this gate.
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
 
@@ -103,16 +104,15 @@ if (!productionInterop.headlessRequested) {
 }
 
 // Lazy bootstrap: no keychain or database access before the renderer's first library call.
-let libraryService: LibraryService | undefined;
+let libraryService: LibraryService | undefined, releaseLibraryLock: (() => void) | undefined;
 const registryRuntime = new LibraryRegistryRuntime({
   userDataDir: () => app.getPath('userData'),
   lockHolder: (dir) => readLockHolder(dir, instanceId),
 });
-const libraryDataDir = (): string => registryRuntime.dataDir();
-configureSettingsLibrary(libraryDataDir);
+const libraryDataDir = configureSettingsLibrary(() => registryRuntime.dataDir());
+const resetAppearance = installThemeRuntime();
 
 const instanceId = ulid();
-let releaseLibraryLock: (() => void) | undefined;
 let libraryParts: LibraryParts | undefined, releasedMaster: Buffer | undefined;
 
 function getLibraryService(): LibraryService {
@@ -802,7 +802,7 @@ void externalOpen.whenReady().then(async () => {
   await recoverInterruptedActivation(restorePaths(libraryDataDir()));
   const lock = getAppLockController();
   await lock.initialize();
-  installApplicationMenu(lock, custodyWorkActive);
+  installApplicationMenu(lock, custodyWorkActive, resetAppearance);
   externalOpen.followAuthorization(lock);
   registerIpcHandlers(() => getSettingsStore().get().language);
   registerRelocationHandlers(getRelocationRuntime, () => pickLibraryDirectory(harnessEnv('OVERLOOK_PICK_LIBRARY_DIR')));

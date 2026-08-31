@@ -58,6 +58,7 @@ export const en: Readonly<Record<string, string>> = {
   "commands.selection.clear": "Clear selection",
   "commands.selection.selectAll": "Select all photos",
   "commands.trash.empty": "Empty Trash…",
+  "commands.view.appearance.reset": "Reset Appearance",
   "commands.view.inspector.detach": "Open Inspector in Separate Window",
   "commands.view.inspector.toggle": "Show or hide Inspector",
   "commands.view.lightbox.close": "Exit lightbox",

@@ -19,6 +19,11 @@ export interface AppearanceSettingsClient {
   onChanged(listener: (payload: { settings: Pick<AppSettings, 'appearance'> }) => void): () => void;
 }
 
+export interface UserThemeBaseSource {
+  base(): ResolvedAppearance | null;
+  subscribe(listener: () => void): () => void;
+}
+
 export function resolveAppearance(appearance: Appearance, prefersDark: boolean): ResolvedAppearance {
   return appearance === 'system' ? (prefersDark ? 'dark' : 'light') : appearance;
 }
@@ -28,6 +33,7 @@ export function installAppearanceObserver(options: {
   readonly media: AppearanceMediaQuery;
   readonly contrastMedia: AppearanceMediaQuery;
   readonly settings: AppearanceSettingsClient;
+  readonly userTheme?: UserThemeBaseSource;
 }): () => void {
   const bootTheme = options.root.dataset.theme;
   let appearance: Appearance = bootTheme === 'dark' || bootTheme === 'light' ? bootTheme : 'system';
@@ -35,7 +41,7 @@ export function installAppearanceObserver(options: {
   let active = true;
 
   const apply = (): void => {
-    const resolved = resolveAppearance(appearance, options.media.matches);
+    const resolved = options.userTheme?.base() ?? resolveAppearance(appearance, options.media.matches);
     options.root.dataset.theme = resolved;
     options.root.style.colorScheme = resolved;
   };
@@ -51,6 +57,7 @@ export function installAppearanceObserver(options: {
     appearance = settings.appearance;
     apply();
   });
+  const unsubscribeTheme = options.userTheme?.subscribe(apply) ?? (() => undefined);
 
   options.media.addEventListener('change', onMediaChanged);
   options.contrastMedia.addEventListener('change', applyContrast);
@@ -65,6 +72,7 @@ export function installAppearanceObserver(options: {
   return () => {
     active = false;
     unsubscribe();
+    unsubscribeTheme();
     options.media.removeEventListener('change', onMediaChanged);
     options.contrastMedia.removeEventListener('change', applyContrast);
   };

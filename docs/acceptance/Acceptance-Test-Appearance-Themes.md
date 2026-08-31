@@ -19,6 +19,41 @@ token use, and standard/high-contrast passes over both first-party themes.
 6. Toggle the operating-system high-contrast preference. Confirm it strengthens
    the current base appearance without changing the persisted selection.
 
+## User themes
+
+1. In **Settings → General → Custom themes**, import a valid
+   `*.overlook-theme.json` file by picker and by drag-drop. Confirm its name,
+   version, swatches, and contrast warnings appear without exposing a local path.
+2. Preview the theme. Confirm its declared Dark or Light base applies beneath
+   the custom color layer, the confirmation countdown is visible, and **Revert**
+   restores the prior first-party or custom theme atomically.
+3. Preview again and choose **Keep theme**. Quit and relaunch; confirm the custom
+   theme is active on every renderer surface and remains listed as Active.
+4. Import malformed JSON, an unsupported schema version, an unknown-only token
+   map, an invisible body/surface pair, and values containing `var()`, `url()`,
+   `@import`, or declaration punctuation. Confirm each is refused with precise
+   paths/messages and the current UI remains unchanged.
+5. Import a theme below 4.5:1 but above the 1.5:1 hard floor. Confirm warnings
+   name every failing pair and ratio before the theme can be kept.
+6. Remove the active custom theme. Confirm the previously selected first-party
+   appearance returns. Delete an active theme file outside the app and relaunch;
+   confirm Overlook skips it, clears the stale pointer, and displays a notice.
+
+## Recovery paths
+
+1. While a preview is open, let the countdown expire. Confirm the prior theme
+   returns and relaunch does not apply the previewed theme.
+2. Repeat while terminating or stalling the renderer before its health
+   acknowledgement. Confirm main does not persist the preview.
+3. From native chrome choose **View → Reset Appearance** (also verify
+   Command/Control+Option/Alt+Shift+R). Confirm the profile changes to Dark with
+   no custom theme, including while the renderer is locked or unreadable.
+4. Launch once with `--reset-theme`. Confirm Dark loads with no custom theme even
+   when the prior persisted file is malformed. This flag and the native command
+   must not depend on renderer IPC cooperation.
+5. Enable OS high contrast and Windows forced colors while a custom theme is
+   active. Confirm system accessibility colors override user-theme values.
+
 ## Persistence and first paint
 
 1. Select Light, quit, and relaunch. Confirm the initial native window background

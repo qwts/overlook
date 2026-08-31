@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, type Dispatch } from 'react';
 import type { CommandId, CommandSurface } from '../../../shared/commands/registry.js';
 import type { AppAction, AppState } from '../../../shared/library/app-state.js';
 import type { SettingsSection } from '../settings/SettingsDialog';
+import { getApplicationThemeLayer } from '../theme/user-theme-layer';
 import { deletePhoto } from './delete-photo';
 
 /**
@@ -79,6 +80,9 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
       };
       if (commandId.startsWith('album.reorder.')) return;
       switch (commandId) {
+        case 'view.appearance.reset':
+          void window.overlook.themes.reset().then(() => getApplicationThemeLayer().reset());
+          return;
         case 'app.settings.open':
           openSettings('general');
           return;
