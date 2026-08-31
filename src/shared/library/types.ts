@@ -91,6 +91,14 @@ export interface PageCursor {
    * page — an ISO string (date), lowercased name, or byte count (size). */
   readonly sortKey: string | number;
   readonly id: string;
+  /** Search continuations pin the projection that produced their rank key so
+   * BM25 and reciprocal-rank scores are never interpreted as each other. */
+  readonly search?:
+    | {
+        readonly appliedMode: AppliedSearchMode;
+        readonly fallbackReason: SearchFallbackReason | null;
+      }
+    | undefined;
 }
 
 /** Toolbar filter chips (design §Toolbar) — AND-combined. */
@@ -112,6 +120,8 @@ export interface LibraryQuery {
   readonly query?: string | undefined;
   /** Auto fuses keyword and semantic candidates when the semantic index is ready. */
   readonly searchMode?: SearchMode | undefined;
+  /** Selection requests pin the projection already shown by the grid. */
+  readonly searchProjection?: AppliedSearchMode | undefined;
   readonly chips?: ChipFilters | undefined;
   /** Defaults to 'date' (newest first). */
   readonly order?: SortOrder | undefined;

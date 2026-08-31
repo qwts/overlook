@@ -7,6 +7,7 @@ import { PhotosRepository } from '../db/photos-repository.js';
 import type {
   AppliedSearchMode,
   LibraryQuery,
+  PageCursor,
   PageRequest,
   PageResult,
   SearchFallbackReason,
@@ -14,8 +15,7 @@ import type {
 } from '../../shared/library/types.js';
 
 const RRF_K = 60;
-const MIN_CANDIDATES = 1_000;
-const MAX_CANDIDATES = 5_000;
+export const SEMANTIC_CANDIDATE_LIMIT = 2_000;
 
 interface RankedPhoto {
   readonly id: string;
@@ -29,6 +29,14 @@ export interface SemanticEmbeddingFacade {
 
 function reciprocalRank(rank: number): number {
   return 1 / (RRF_K + rank);
+}
+
+function searchCursor(
+  cursor: PageCursor | null,
+  appliedMode: AppliedSearchMode,
+  fallbackReason: SearchFallbackReason | null,
+): PageCursor | null {
+  return cursor === null ? null : { ...cursor, search: { appliedMode, fallbackReason } };
 }
 
 export function reciprocalRankFusion(
@@ -72,21 +80,39 @@ export class SemanticSearch {
       indexed: status.completed,
       total: status.total,
     });
-    const keywordPage = (fallbackReason: SearchFallbackReason | null): PageResult => ({
-      ...this.photos.page(request),
-      search: metadata('keyword', fallbackReason),
-    });
+    const keywordPage = (fallbackReason: SearchFallbackReason | null): PageResult => {
+      const page = this.photos.page(request);
+      return {
+        ...page,
+        nextCursor: searchCursor(page.nextCursor, 'keyword', fallbackReason),
+        search: metadata('keyword', fallbackReason),
+      };
+    };
+
+    const cursorProjection = request.cursor?.search;
+    if (request.cursor !== undefined && (cursorProjection === undefined || cursorProjection.appliedMode === 'keyword')) {
+      return keywordPage(cursorProjection?.fallbackReason ?? null);
+    }
 
     const query = await embeddingService.query(request.query);
-    if (query.embedding === null) return keywordPage(query.fallback);
+    if (query.embedding === null) {
+      if (cursorProjection?.appliedMode === 'semantic' || cursorProjection?.appliedMode === 'fused') {
+        return { photos: [], nextCursor: null, search: metadata(cursorProjection.appliedMode, null) };
+      }
+      return keywordPage(query.fallback);
+    }
 
-    const candidateLimit = Math.min(MAX_CANDIDATES, Math.max(MIN_CANDIDATES, request.limit * 4));
     try {
       const semantic = this.embeddings
-        .nearest(EMBEDDING_MODEL_MANIFEST.version, query.embedding, request, candidateLimit)
+        .nearest(EMBEDDING_MODEL_MANIFEST.version, query.embedding, request, SEMANTIC_CANDIDATE_LIMIT)
         .map(({ photoId }) => photoId);
-      const appliedMode: AppliedSearchMode = requestedMode === 'semantic' ? 'semantic' : 'fused';
-      const keyword = appliedMode === 'fused' ? this.photos.searchIds(request, candidateLimit) : [];
+      const appliedMode: AppliedSearchMode =
+        cursorProjection?.appliedMode === 'semantic' || cursorProjection?.appliedMode === 'fused'
+          ? cursorProjection.appliedMode
+          : requestedMode === 'semantic'
+            ? 'semantic'
+            : 'fused';
+      const keyword = appliedMode === 'fused' ? this.photos.searchIds(request, SEMANTIC_CANDIDATE_LIMIT) : [];
       const ranked = reciprocalRankFusion(keyword, semantic, appliedMode);
       const afterCursor = ranked.filter((item) => {
         if (request.cursor === undefined) return true;
@@ -99,7 +125,7 @@ export class SemanticSearch {
         photos: this.photos.records(page.map(({ id }) => id)),
         nextCursor:
           page.length === request.limit && afterCursor.length > request.limit && last !== undefined
-            ? { sortKey: last.score, id: last.id }
+            ? searchCursor({ sortKey: last.score, id: last.id }, appliedMode, null)
             : null,
         search: metadata(appliedMode, null),
       };
@@ -110,19 +136,25 @@ export class SemanticSearch {
 
   async ids(request: LibraryQuery, getEmbeddingService: () => SemanticEmbeddingFacade): Promise<readonly string[]> {
     const requestedMode = request.searchMode ?? 'auto';
-    if (request.query?.trim() === '' || request.query === undefined || requestedMode === 'keyword') {
+    if (
+      request.query?.trim() === '' ||
+      request.query === undefined ||
+      requestedMode === 'keyword' ||
+      request.searchProjection === 'keyword'
+    ) {
       return this.photos.selectAllIds(request);
     }
     const embeddingService = getEmbeddingService();
     const query = await embeddingService.query(request.query);
-    if (query.embedding === null) return this.photos.selectAllIds(request);
+    if (query.embedding === null) {
+      return request.searchProjection === 'semantic' || request.searchProjection === 'fused' ? [] : this.photos.selectAllIds(request);
+    }
     try {
-      const status = embeddingService.status();
       const semantic = this.embeddings
-        .nearest(EMBEDDING_MODEL_MANIFEST.version, query.embedding, request, Math.max(1, status.completed))
+        .nearest(EMBEDDING_MODEL_MANIFEST.version, query.embedding, request, SEMANTIC_CANDIDATE_LIMIT)
         .map(({ photoId }) => photoId);
-      const appliedMode: AppliedSearchMode = requestedMode === 'semantic' ? 'semantic' : 'fused';
-      const keyword = appliedMode === 'fused' ? this.photos.selectAllIds(request) : [];
+      const appliedMode: AppliedSearchMode = request.searchProjection ?? (requestedMode === 'semantic' ? 'semantic' : 'fused');
+      const keyword = appliedMode === 'fused' ? this.photos.searchIds(request, SEMANTIC_CANDIDATE_LIMIT) : [];
       return reciprocalRankFusion(keyword, semantic, appliedMode).map(({ id }) => id);
     } finally {
       query.embedding.fill(0);

@@ -14,6 +14,7 @@ export const libraryQuerySchema = z.object({
   recentSince: z.string().optional(),
   query: z.string().optional(),
   searchMode: z.enum(['auto', 'keyword', 'semantic']).optional(),
+  searchProjection: z.enum(['keyword', 'semantic', 'fused']).optional(),
   chips: chipFiltersSchema.optional(),
   order: z.enum(['date', 'name', 'size']).optional(),
   albumId: z.string().optional(),

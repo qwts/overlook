@@ -14,7 +14,7 @@ function hasActiveChips(chips: LibraryQuery['chips']): boolean {
 
 /** Resolves Select All against the complete current collection, not loaded rows. */
 export function useSelectAll(): () => void {
-  const { source, query, searchMode, chips, sortOrder, album, protectedAlbum, selectionRevision } = useAppState();
+  const { source, query, searchMode, search, chips, sortOrder, album, protectedAlbum, selectionRevision } = useAppState();
   const dispatch = useAppDispatch();
   const requestRef = useRef(0);
   const scopeKeyRef = useRef('');
@@ -25,11 +25,12 @@ export function useSelectAll(): () => void {
       ...(source === 'recent' ? { recentSince: recentSinceIso() } : {}),
       ...(query === '' ? {} : { query }),
       searchMode,
+      ...(query === '' ? {} : { searchProjection: search.appliedMode }),
       ...(hasActiveChips(chips) ? { chips } : {}),
       ...(sortOrder === 'date' ? {} : { order: sortOrder }),
       ...(album === null ? {} : { albumId: album }),
     }),
-    [album, chips, query, searchMode, sortOrder, source],
+    [album, chips, query, search.appliedMode, searchMode, sortOrder, source],
   );
   const scopeKey = JSON.stringify(request);
   useLayoutEffect(() => {

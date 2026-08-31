@@ -9,7 +9,13 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EMBEDDING_DIMENSIONS } from '../../src/main/db/embedding-repository.js';
 import { EMBEDDING_MODEL_MANIFEST } from '../../src/main/embedding/model-manifest.js';
 import { seedSemanticIndex, seedSynthetic } from '../../src/main/library/seed.js';
-import { reciprocalRankFusion, SemanticSearch, type SemanticEmbeddingFacade } from '../../src/main/library/semantic-search.js';
+import {
+  reciprocalRankFusion,
+  SEMANTIC_CANDIDATE_LIMIT,
+  SemanticSearch,
+  type SemanticEmbeddingFacade,
+} from '../../src/main/library/semantic-search.js';
+import type { PageCursor } from '../../src/shared/library/types.js';
 
 function searchWorld(count = 16): {
   readonly db: ReturnType<typeof openLibraryDatabase>;
@@ -74,13 +80,13 @@ describe('semantic search ranking', () => {
     assert.equal(semantic.photos[0]?.id, '01J8SYNTH0000000');
     assert.notEqual(semantic.nextCursor, null);
 
-    const fused = await world.search.page(
-      { source: 'all', limit: 2, query: 'Lisbon', searchMode: 'auto', cursor: semantic.nextCursor ?? undefined },
+    const continuation = await world.search.page(
+      { source: 'all', limit: 2, query: 'a neon tram at dusk', searchMode: 'semantic', cursor: semantic.nextCursor ?? undefined },
       () => world.embeddings,
     );
-    assert.equal(fused.search.appliedMode, 'fused');
-    assert.equal(fused.search.fallbackReason, null);
-    assert.ok(fused.photos.every((photo) => !semantic.photos.some(({ id }) => id === photo.id)));
+    assert.equal(continuation.search.appliedMode, 'semantic');
+    assert.equal(continuation.search.fallbackReason, null);
+    assert.ok(continuation.photos.every((photo) => !semantic.photos.some(({ id }) => id === photo.id)));
   });
 
   test('falls back to keyword results with typed indexing metadata', async (context) => {
@@ -95,6 +101,61 @@ describe('semantic search ranking', () => {
     assert.equal(page.search.appliedMode, 'keyword');
     assert.equal(page.search.fallbackReason, 'indexing');
     assert.ok(page.photos.length > 0);
+  });
+
+  test('pins cursor ranking across semantic availability transitions', async (context) => {
+    const world = searchWorld();
+    context.after(() => world.db.close());
+    const fallback: SemanticEmbeddingFacade = {
+      status: world.embeddings.status,
+      query: () => Promise.resolve({ embedding: null, fallback: 'indexing' }),
+    };
+
+    const keyword = await world.search.page({ source: 'all', limit: 1, query: 'Lisbon', searchMode: 'auto' }, () => fallback);
+    assert.deepEqual(keyword.nextCursor?.search, { appliedMode: 'keyword', fallbackReason: 'indexing' });
+    let semanticQueries = 0;
+    const keywordContinuation = await world.search.page(
+      { source: 'all', limit: 1, query: 'Lisbon', searchMode: 'auto', cursor: keyword.nextCursor ?? undefined },
+      () => ({ ...world.embeddings, query: (text) => ((semanticQueries += 1), world.embeddings.query(text)) }),
+    );
+    assert.equal(semanticQueries, 0, 'a keyword cursor never enters the semantic ranker');
+    assert.equal(keywordContinuation.search.appliedMode, 'keyword');
+    assert.equal(keywordContinuation.search.fallbackReason, 'indexing');
+    assert.ok(keywordContinuation.photos.every((photo) => !keyword.photos.some(({ id }) => id === photo.id)));
+    assert.ok(
+      (
+        await world.search.ids({ source: 'all', query: 'Lisbon', searchMode: 'auto', searchProjection: 'keyword' }, () => {
+          throw new Error('keyword selection must not enter the semantic ranker');
+        })
+      ).length > 0,
+    );
+
+    const semantic = await world.search.page(
+      { source: 'all', limit: 1, query: 'a neon tram at dusk', searchMode: 'semantic' },
+      () => world.embeddings,
+    );
+    assert.deepEqual(semantic.nextCursor?.search, { appliedMode: 'semantic', fallbackReason: null });
+    const unavailableContinuation = await world.search.page(
+      {
+        source: 'all',
+        limit: 1,
+        query: 'a neon tram at dusk',
+        searchMode: 'semantic',
+        cursor: semantic.nextCursor ?? undefined,
+      },
+      () => fallback,
+    );
+    assert.deepEqual(unavailableContinuation.photos, []);
+    assert.equal(unavailableContinuation.nextCursor, null);
+    assert.equal(unavailableContinuation.search.appliedMode, 'semantic');
+    assert.deepEqual(
+      await world.search.ids(
+        { source: 'all', query: 'a neon tram at dusk', searchMode: 'semantic', searchProjection: 'semantic' },
+        () => fallback,
+      ),
+      [],
+      'selection must not switch a visible semantic projection to keyword results',
+    );
   });
 
   test('keeps Select All and range selection on the semantic projection', async (context) => {
@@ -124,5 +185,27 @@ describe('semantic search ranking', () => {
         })
       ).length > 0,
     );
+  });
+
+  test('bounds Select All to the exact pageable semantic projection', async (context) => {
+    const world = searchWorld(SEMANTIC_CANDIDATE_LIMIT + 1);
+    context.after(() => world.db.close());
+    const request = {
+      source: 'all' as const,
+      query: 'tram',
+      searchMode: 'semantic' as const,
+      searchProjection: 'semantic' as const,
+    };
+    const ids = await world.search.ids(request, () => world.embeddings);
+    assert.equal(ids.length, SEMANTIC_CANDIDATE_LIMIT);
+
+    const paged: string[] = [];
+    let cursor: PageCursor | undefined;
+    do {
+      const page = await world.search.page({ ...request, limit: 500, cursor }, () => world.embeddings);
+      paged.push(...page.photos.map(({ id }) => id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    assert.deepEqual(paged, ids);
   });
 });

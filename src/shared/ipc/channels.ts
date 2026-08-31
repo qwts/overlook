@@ -76,7 +76,16 @@ function defineChannel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
 
 const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload): EventDefinition<TPayload> => ({ name, payload });
 
-const pageCursorSchema = z.object({ sortKey: z.union([z.string(), z.number()]), id: z.string() });
+const pageCursorSchema = z.object({
+  sortKey: z.union([z.string(), z.number()]),
+  id: z.string(),
+  search: z
+    .object({
+      appliedMode: z.enum(['keyword', 'semantic', 'fused']),
+      fallbackReason: z.enum(['disabled', 'unavailable', 'indexing', 'busy', 'error']).nullable(),
+    })
+    .optional(),
+});
 
 const libraryChangedSchema = z.object({
   photoIds: z.array(z.string()),

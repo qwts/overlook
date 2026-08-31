@@ -10,16 +10,21 @@ ADR-0018 query path on top of [#391](https://github.com/qwts/overlook/issues/391
    vectors, and returns cosine-ranked photos that need not contain query words.
 3. Auto mode fuses keyword and semantic candidates with reciprocal-rank fusion
    (`k = 60`) and a stable photo-ID tie break.
-4. Paging, Select All, and range selection use the same logical projection.
+4. Paging, Select All, and range selection use the same bounded candidate
+   projection, so bulk actions cannot target results the grid cannot page.
 5. Source, album, favorite, RAW, offloaded, and local-only filters are identical
    on keyword and semantic candidates.
 6. Disabled, unavailable, incomplete, busy, and failed semantic paths fall back
    to keyword search. Typed IPC reports requested mode, applied mode, fallback
    reason, and indexed/total counts; the Toolbar exposes the state in a polite
    live region.
-7. The existing 250 ms input debounce and request-generation check prevent
+7. Page cursors carry the applied projection. A keyword fallback remains on
+   BM25 ranking if indexing finishes mid-scroll; a semantic continuation stops
+   instead of reinterpreting its reciprocal-rank cursor if embeddings become
+   unavailable.
+8. The existing 250 ms input debounce and request-generation check prevent
    stale responses from replacing a newer query.
-8. The 200K performance lane measures cosine KNN, fusion, hydration, and IPC
+9. The 200K performance lane measures cosine KNN, fusion, hydration, and IPC
    with a fixed offline query vector, then adds the production text tower's
    separately enforced 40 ms maximum. This conservative composed bound is
    checked against the ADR-0018 900 ms median ratchet without downloading model
