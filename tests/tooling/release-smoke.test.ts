@@ -116,6 +116,25 @@ describe('packaged release launch smoke (#357)', () => {
     );
   });
 
+  test('does not conflate case-distinct directories when filesystem identity is available', { skip: process.platform === 'win32' }, () => {
+    const suffix = `${process.pid}-${Date.now()}`;
+    const profile = join(tmpdir(), `overlook-release-import-smoke-Case-${suffix}`);
+    const otherProfile = join(tmpdir(), `overlook-release-import-smoke-case-${suffix}`);
+    mkdirSync(profile);
+    mkdirSync(otherProfile);
+
+    assert.throws(
+      () =>
+        releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+          'Overlook',
+          RELEASE_IMPORT_SMOKE_ARGUMENT,
+          `--overlook-release-import-profile=${profile}`,
+          `--overlook-release-import-result=${join(otherProfile, 'release-import-result.txt')}`,
+        ]),
+      /release import result must be the dedicated marker file/u,
+    );
+  });
+
   test('admits only a real app.asar through the explicit installed-artifact harness', async () => {
     const { profile } = smokeApp(join(tmpdir(), `overlook-release-import-smoke-${Date.now()}`));
     const archive = join(profile, 'app.asar');

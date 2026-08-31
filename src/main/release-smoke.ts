@@ -99,10 +99,8 @@ function sameDirectory(leftPath: string, rightPath: string): boolean {
   const resolvedRight = realpathSync.native(resolve(rightPath));
   const leftStat = statSync(resolvedLeft);
   const rightStat = statSync(resolvedRight);
-  return (
-    (leftStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino) ||
-    resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
-  );
+  if (leftStat.ino !== 0 && rightStat.ino !== 0) return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+  return process.platform === 'win32' ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase() : resolvedLeft === resolvedRight;
 }
 
 export function releaseImportSmokeProfileIfRequested(
