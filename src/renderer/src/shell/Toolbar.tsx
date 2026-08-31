@@ -57,6 +57,7 @@ const messages = defineMessages({
   searchKeywordStatus: { id: 'toolbar.search.status.keyword', defaultMessage: 'Keyword results' },
   searchFallbackStatus: { id: 'toolbar.search.status.fallback', defaultMessage: 'Semantic {reason}; showing keyword results' },
   searchIndexStatus: { id: 'toolbar.search.status.index', defaultMessage: '{indexed} of {total} photos indexed' },
+  searchStatusWithIndex: { id: 'toolbar.search.status.withIndex', defaultMessage: '{status} · {index}' },
 });
 
 const fallbackMessages = defineMessages({
@@ -252,13 +253,15 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
             : null}
           {state.query === '' ? null : (
             <span className="ovl-toolbar__hint mono-data" role="status" aria-live="polite">
-              {searchStatus}
               {state.search.total === 0
-                ? null
-                : ` · ${intl.formatMessage(messages.searchIndexStatus, {
-                    indexed: state.search.indexed,
-                    total: state.search.total,
-                  })}`}
+                ? searchStatus
+                : intl.formatMessage(messages.searchStatusWithIndex, {
+                    status: searchStatus,
+                    index: intl.formatMessage(messages.searchIndexStatus, {
+                      indexed: state.search.indexed,
+                      total: state.search.total,
+                    }),
+                  })}
             </span>
           )}
         </div>

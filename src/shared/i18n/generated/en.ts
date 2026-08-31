@@ -746,6 +746,7 @@ export const en: Readonly<Record<string, string>> = {
   "toolbar.search.status.index": "{indexed} of {total} photos indexed",
   "toolbar.search.status.keyword": "Keyword results",
   "toolbar.search.status.semantic": "Semantic results",
+  "toolbar.search.status.withIndex": "{status} · {index}",
   "toolbar.transfer": "Transfer & Sync",
   "toolbar.view": "View",
   "toolbar.view.grid": "Grid",

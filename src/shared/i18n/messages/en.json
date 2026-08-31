@@ -2225,6 +2225,9 @@
   "toolbar.search.status.semantic": {
     "defaultMessage": "Semantic results"
   },
+  "toolbar.search.status.withIndex": {
+    "defaultMessage": "{status} · {index}"
+  },
   "toolbar.transfer": {
     "defaultMessage": "Transfer & Sync"
   },
