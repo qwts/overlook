@@ -55,23 +55,22 @@ try {
   # retaining app.isPackaged=true, so the gate exercises the shipped code and
   # native modules without depending on a hosted desktop bootstrap.
   Write-Host "Launching installed application through: $smokeExecutable"
-  $smokeEnvironment = @{
-    OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE = $fixturePath
-    OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE = $profile
-    OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT = $resultPath
-  }
-  $previousEnvironment = @{}
-  foreach ($entry in $smokeEnvironment.GetEnumerator()) {
-    $previousEnvironment[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key, 'Process')
-    [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
-  }
-  try {
-    $process = Start-Process -FilePath $smokeExecutable -ArgumentList '--overlook-release-import-smoke' -PassThru
-  } finally {
-    foreach ($entry in $previousEnvironment.GetEnumerator()) {
-      [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
-    }
-  }
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $smokeExecutable
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $startInfo.ArgumentList.Add('--enable-logging=stderr')
+  $startInfo.ArgumentList.Add('--overlook-release-import-smoke')
+  $startInfo.ArgumentList.Add("--overlook-release-import-source=$fixturePath")
+  $startInfo.ArgumentList.Add("--overlook-release-import-profile=$profile")
+  $startInfo.ArgumentList.Add("--overlook-release-import-result=$resultPath")
+  $startInfo.Environment['ELECTRON_ENABLE_LOGGING'] = 'true'
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $startInfo
+  if (-not $process.Start()) { throw 'Installed import smoke process did not start.' }
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
   $launchedCommandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)" -ErrorAction SilentlyContinue).CommandLine
   if ($null -ne $launchedCommandLine) { Write-Host "Installed process command line: $launchedCommandLine" }
   $timedOut = -not $process.WaitForExit(120000)
@@ -79,12 +78,16 @@ try {
     $process.Kill($true)
     $process.WaitForExit()
   }
+  $stdout = $stdoutTask.GetAwaiter().GetResult()
+  $stderr = $stderrTask.GetAwaiter().GetResult()
+  if ($stdout.Length -gt 0) { Write-Host "Installed process stdout:`n$stdout" }
+  if ($stderr.Length -gt 0) { Write-Host "Installed process stderr:`n$stderr" }
   $output = if (Test-Path -LiteralPath $resultPath) { Get-Content -LiteralPath $resultPath -Raw } else { '' }
   if ($timedOut) {
-    throw "Installed Overlook import smoke exceeded 120 seconds.`n$output"
+    throw "Installed Overlook import smoke exceeded 120 seconds.`n$output`n$stderr"
   }
   if ($process.ExitCode -ne 0 -or $output -notmatch 'overlook-release-import-smoke:ready') {
-    throw "Installed import smoke failed with exit $($process.ExitCode).`n$output"
+    throw "Installed import smoke failed with exit $($process.ExitCode).`n$output`n$stderr"
   }
   Write-Host "Windows $Architecture installed import smoke passed."
 } finally {

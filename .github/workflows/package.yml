@@ -93,7 +93,6 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          architecture: ${{ matrix.arch }}
           cache: npm
 
       - name: Install dependencies
@@ -337,6 +336,40 @@ jobs:
             node scripts/verify-macos-heic-preview.mjs "$app" tests/fixtures/heic/iphone-13-pro.heic
           fi
 
+      - name: Describe installed import smoke capability
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $sourcePath = 'src/main/release-smoke.ts'
+          $requiredMarkers = @(
+            '--overlook-release-import-smoke',
+            'OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE',
+            'OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE',
+            'OVERLOOK_RELEASE_IMPORT_SMOKE_RESULT'
+          )
+          $supported = Test-Path -LiteralPath $sourcePath
+          if ($supported) {
+            $source = Get-Content -LiteralPath $sourcePath -Raw
+            $supported = @($requiredMarkers | Where-Object { -not $source.Contains($_) }).Count -eq 0
+          }
+
+          $electronVersion = $null
+          if ($supported) {
+            $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+            $electronVersion = $package.devDependencies.electron
+            if ($electronVersion -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Installed import smoke requires an exact Electron version; found '$electronVersion'."
+            }
+          } else {
+            Write-Host 'This ref predates the packaged import-smoke capability; its installed smoke will be skipped.'
+          }
+
+          [ordered]@{
+            schemaVersion = 1
+            supported = $supported
+            electronVersion = $electronVersion
+          } | ConvertTo-Json | Set-Content -LiteralPath release/windows-import-smoke.json -Encoding utf8NoBOM
+
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -347,6 +380,7 @@ jobs:
             release/*.dmg
             release/*.zip
             release/*.exe
+            release/windows-import-smoke.json
             release/sbom.cyclonedx.json
             THIRD-PARTY-NOTICES.md
           retention-days: 14
@@ -365,30 +399,67 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      - name: Checkout smoke verifier and fixture
+      # github.workflow_sha identifies the revision containing this reusable
+      # workflow. Keep executable smoke tooling at that trusted revision; the
+      # packaged ref may be a historical release-recovery input.
+      - name: Checkout trusted smoke verifier and fixture
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.workflow_sha }}
+          path: smoke-tools
           persist-credentials: false
       - name: Download matching Windows artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: overlook-windows-${{ matrix.arch }}
           path: release-smoke-artifact
-      - name: Setup matching Electron harness
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v6.2.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install pinned dependencies
-        run: npm ci
+      - name: Read packaged smoke capability
+        id: smoke
+        shell: pwsh
+        run: |
+          $manifestPath = 'release-smoke-artifact/windows-import-smoke.json'
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw 'Windows artifact is missing its installed import-smoke capability manifest.'
+          }
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.schemaVersion -ne 1) { throw "Unsupported smoke manifest schema $($manifest.schemaVersion)." }
+          if (-not $manifest.supported) {
+            'available=false' >> $env:GITHUB_OUTPUT
+            Write-Host 'Historical ref has no compatible packaged import-smoke mode; skipping installed execution.'
+            exit 0
+          }
+          if ($manifest.electronVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid Electron version '$($manifest.electronVersion)' in smoke manifest."
+          }
+          'available=true' >> $env:GITHUB_OUTPUT
+          "electron-version=$($manifest.electronVersion)" >> $env:GITHUB_OUTPUT
+      - name: Download and verify matching Electron harness
+        if: steps.smoke.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $version = '${{ steps.smoke.outputs.electron-version }}'
+          $archiveName = "electron-v$version-win32-${{ matrix.arch }}.zip"
+          $releaseUrl = "https://github.com/electron/electron/releases/download/v$version"
+          New-Item -ItemType Directory -Path electron-harness | Out-Null
+          Invoke-WebRequest -Uri "$releaseUrl/SHASUMS256.txt" -OutFile electron-harness/SHASUMS256.txt
+          Invoke-WebRequest -Uri "$releaseUrl/$archiveName" -OutFile "electron-harness/$archiveName"
+
+          $archivePattern = [Regex]::Escape($archiveName)
+          $checksumLine = Get-Content -LiteralPath electron-harness/SHASUMS256.txt |
+            Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?$archivePattern$" }
+          if (@($checksumLine).Count -ne 1) { throw "No unique official checksum found for $archiveName." }
+          $expected = ([Regex]::Match($checksumLine, '^([0-9a-fA-F]{64})')).Groups[1].Value.ToLowerInvariant()
+          $actual = (Get-FileHash -LiteralPath "electron-harness/$archiveName" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Electron harness checksum mismatch: expected $expected; got $actual." }
+          Expand-Archive -LiteralPath "electron-harness/$archiveName" -DestinationPath electron-harness/dist
       - name: Install and run real import smoke
+        if: steps.smoke.outputs.available == 'true'
         shell: pwsh
         run: |
           $installer = Get-ChildItem -LiteralPath release-smoke-artifact -Filter "Overlook-*-${{ matrix.arch }}.exe" -File -Recurse | Select-Object -First 1
           if ($null -eq $installer) { throw 'Matching NSIS installer was not downloaded.' }
-          ./scripts/verify-windows-packaged-import.ps1 `
+          ./smoke-tools/scripts/verify-windows-packaged-import.ps1 `
             -Installer $installer.FullName `
-            -Fixture (Resolve-Path -LiteralPath tests/fixtures/exif/exif-full.jpg).Path `
+            -Fixture (Resolve-Path -LiteralPath smoke-tools/tests/fixtures/exif/exif-full.jpg).Path `
             -Architecture '${{ matrix.arch }}' `
-            -HarnessElectron (Resolve-Path -LiteralPath node_modules/electron/dist/electron.exe).Path
+            -HarnessElectron (Resolve-Path -LiteralPath electron-harness/dist/electron.exe).Path

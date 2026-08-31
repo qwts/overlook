@@ -188,10 +188,13 @@ run it when packaging risk changes (Electron bumps, native modules, builder
 config). After packaging, matching native x64 and ARM64 runners install each NSIS
 artifact, import a checked-in fixture through the production copy path, verify
 encrypted custody and source preservation, and uninstall in cleanup. Native
-execution uses the pinned Electron version for the runner architecture to load
-the installed `app.asar` and unpacked native modules; this keeps the smoke
+execution downloads the artifact's exact Electron version for the runner
+architecture from Electron's official release and verifies its published SHA-256
+before loading the installed `app.asar` and unpacked native modules. This keeps the smoke
 packaged-only while avoiding GitHub's non-interactive service-session stall in
-the signed desktop executable bootstrap. Native
+the signed desktop executable bootstrap. Historical refs without the packaged
+smoke contract publish an explicit unsupported capability and skip this newer
+gate, preserving release recovery. Native
 modules stay in `dependencies`; the reviewed install step lays
 down Node-API prebuilds, SQLite's inferred `binding.gyp` install is explicitly
 denied, and `npmRebuild: false` prevents electron-rebuild from mistaking that
