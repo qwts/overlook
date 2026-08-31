@@ -84,7 +84,7 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
-  const projectionKey = `${state.source}|${state.query}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
+  const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
   const selectionAnchorRef = useRef<string | null>(null);
   const rangeRequestRef = useRef(0);
   const projectionKeyRef = useRef(projectionKey);
@@ -110,6 +110,8 @@ export function LibraryGridView({
           targetId: photoId,
           ...(state.source === 'recent' ? { recentSince: recentSinceIso() } : {}),
           ...(state.query === '' ? {} : { query: state.query }),
+          searchMode: state.searchMode,
+          ...(state.query === '' ? {} : { searchProjection: state.search.appliedMode }),
           ...(Object.values(state.chips).some(Boolean) ? { chips: state.chips } : {}),
           ...(state.sortOrder === 'date' ? {} : { order: state.sortOrder }),
           ...(state.album === null ? {} : { albumId: state.album }),
@@ -124,7 +126,17 @@ export function LibraryGridView({
           dispatch({ type: 'selection/replaced', photoIds });
         });
     },
-    [dispatch, projectionKey, state.album, state.chips, state.query, state.sortOrder, state.source],
+    [
+      dispatch,
+      projectionKey,
+      state.album,
+      state.chips,
+      state.query,
+      state.search.appliedMode,
+      state.searchMode,
+      state.sortOrder,
+      state.source,
+    ],
   );
   // Purge ceremony (#121): the Trash pill's permanent-delete action opens the confirm over
   // a SNAPSHOT of the selection — global shortcuts (⌘A) stay live while

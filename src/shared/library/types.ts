@@ -82,12 +82,23 @@ export type LibraryMembershipChange = 'none' | 'favorite' | 'album' | 'library';
 /** The grid's sort orders (#113): date newest-first, name A→Z, size
  * largest-first (decisions recorded on the PR). */
 export type SortOrder = 'date' | 'name' | 'size';
+export type SearchMode = 'auto' | 'keyword' | 'semantic';
+export type AppliedSearchMode = 'keyword' | 'semantic' | 'fused';
+export type SearchFallbackReason = 'disabled' | 'unavailable' | 'indexing' | 'busy' | 'error';
 
 export interface PageCursor {
   /** The active ordering's sort expression at the last row of the previous
    * page — an ISO string (date), lowercased name, or byte count (size). */
   readonly sortKey: string | number;
   readonly id: string;
+  /** Search continuations pin the projection that produced their rank key so
+   * BM25 and reciprocal-rank scores are never interpreted as each other. */
+  readonly search?:
+    | {
+        readonly appliedMode: AppliedSearchMode;
+        readonly fallbackReason: SearchFallbackReason | null;
+      }
+    | undefined;
 }
 
 /** Toolbar filter chips (design §Toolbar) — AND-combined. */
@@ -107,6 +118,10 @@ export interface LibraryQuery {
    * (#390). Falls back to a case-insensitive substring match if the query
    * has no tokenizable content. */
   readonly query?: string | undefined;
+  /** Auto fuses keyword and semantic candidates when the semantic index is ready. */
+  readonly searchMode?: SearchMode | undefined;
+  /** Selection requests pin the projection already shown by the grid. */
+  readonly searchProjection?: AppliedSearchMode | undefined;
   readonly chips?: ChipFilters | undefined;
   /** Defaults to 'date' (newest first). */
   readonly order?: SortOrder | undefined;
@@ -122,6 +137,13 @@ export interface PageRequest extends LibraryQuery {
 export interface PageResult {
   readonly photos: readonly PhotoRecord[];
   readonly nextCursor: PageCursor | null;
+  readonly search: {
+    readonly requestedMode: SearchMode;
+    readonly appliedMode: AppliedSearchMode;
+    readonly fallbackReason: SearchFallbackReason | null;
+    readonly indexed: number;
+    readonly total: number;
+  };
 }
 
 export interface SelectionRangeRequest {
@@ -130,6 +152,7 @@ export interface SelectionRangeRequest {
   readonly targetId: string;
   readonly recentSince?: string | undefined;
   readonly query?: string | undefined;
+  readonly searchMode?: SearchMode | undefined;
   readonly chips?: ChipFilters | undefined;
   readonly order?: SortOrder | undefined;
   readonly albumId?: string | undefined;

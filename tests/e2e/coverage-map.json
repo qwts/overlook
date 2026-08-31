@@ -2,6 +2,34 @@
   "$comment": "Acceptance coverage ledger (#82, ADR-0001): every user-facing flow declares how it is covered — automated (playwright-e2e / storybook / unit-dom), manual (with a reason), or deferred (with an issue). check-e2e-coverage-map.mjs validates shape and path existence; check-acceptance-coverage-diff.mjs forces updates alongside renderer changes. Each epic seeds its own entries.",
   "entries": [
     {
+      "id": "392-semantic-search",
+      "wiki": "Acceptance-Test-Semantic-Search",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/semantic-search.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/Toolbar.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/db/embedding-repository.test.ts",
+            "tests/embedding/clip-tokenizer.test.ts",
+            "tests/embedding/embedding-pool.test.ts",
+            "tests/library/semantic-search.test.ts",
+            "tests/library/app-state.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Search.md in packaged macOS and Windows builds to verify real model retrieval quality, assistive-technology announcements, and foreground/background scheduling with production assets."
+        }
+      ]
+    },
+    {
       "id": "visual-accessibility-preferences",
       "wiki": "Accessibility-Audit-2026-07",
       "coverage": [

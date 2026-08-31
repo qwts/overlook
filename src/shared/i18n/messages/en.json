@@ -2183,8 +2183,50 @@
   "toolbar.search": {
     "defaultMessage": "Search library"
   },
-  "toolbar.search.hint": {
-    "defaultMessage": "Semantic search — coming soon"
+  "toolbar.search.fallback.busy": {
+    "defaultMessage": "is busy"
+  },
+  "toolbar.search.fallback.disabled": {
+    "defaultMessage": "is off"
+  },
+  "toolbar.search.fallback.error": {
+    "defaultMessage": "had an error"
+  },
+  "toolbar.search.fallback.indexing": {
+    "defaultMessage": "is still indexing"
+  },
+  "toolbar.search.fallback.unavailable": {
+    "defaultMessage": "is unavailable"
+  },
+  "toolbar.search.mode": {
+    "defaultMessage": "Search mode"
+  },
+  "toolbar.search.mode.auto": {
+    "defaultMessage": "Auto"
+  },
+  "toolbar.search.mode.keyword": {
+    "defaultMessage": "Keyword"
+  },
+  "toolbar.search.mode.semantic": {
+    "defaultMessage": "Semantic"
+  },
+  "toolbar.search.status.fallback": {
+    "defaultMessage": "Semantic {reason}; showing keyword results"
+  },
+  "toolbar.search.status.fused": {
+    "defaultMessage": "Keyword + semantic results"
+  },
+  "toolbar.search.status.index": {
+    "defaultMessage": "{indexed} of {total} photos indexed"
+  },
+  "toolbar.search.status.keyword": {
+    "defaultMessage": "Keyword results"
+  },
+  "toolbar.search.status.semantic": {
+    "defaultMessage": "Semantic results"
+  },
+  "toolbar.search.status.withIndex": {
+    "defaultMessage": "{status} · {index}"
   },
   "toolbar.transfer": {
     "defaultMessage": "Transfer & Sync"

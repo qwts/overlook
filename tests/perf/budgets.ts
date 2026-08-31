@@ -18,6 +18,9 @@ export const BUDGETS = {
   countsMs: 500,
   /** Median substring search page over IPC. */
   searchMs: 600,
+  /** ADR-0018 composed bound: the 40 ms text-tower ratchet plus the 200K
+   * cosine KNN, RRF, hydration, and IPC measurement. */
+  semanticSearchMs: 900,
   /** Dropped-frame share during sustained scroll, any zoom. Zoom 96 is
    * the pressure point (most tiles/viewport — image-decode churn); #124
    * owns driving this ratchet toward 0.1. */
@@ -38,6 +41,8 @@ export interface PerfReport {
   readonly page500Ms: number;
   readonly countsMs: number;
   readonly searchMs: number;
+  readonly semanticVectorSearchMs: number;
+  readonly semanticSearchMs: number;
   readonly scroll: Record<'zoom96' | 'zoom160' | 'zoom320', ScrollStats>;
   readonly importPhotosPerSec: number;
   readonly mainRssMb: number;

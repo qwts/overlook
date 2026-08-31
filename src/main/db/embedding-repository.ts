@@ -1,6 +1,8 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { queryAll, queryGet, runNamed } from './sql.js';
+import type { LibraryQuery } from '../../shared/library/types.js';
+import { buildQueryPlan } from './photo-query.js';
 
 export const EMBEDDING_DIMENSIONS = 512;
 
@@ -13,6 +15,11 @@ export interface EmbeddingIndexStatus {
   readonly total: number;
   readonly completed: number;
   readonly pending: number;
+}
+
+export interface SemanticCandidate {
+  readonly photoId: string;
+  readonly distance: number;
 }
 
 interface EmbeddingIdRow {
@@ -82,6 +89,26 @@ export class EmbeddingRepository {
       { modelVersion },
     ) ?? { total: 0, completed: 0 };
     return { ...row, pending: row.total - row.completed };
+  }
+
+  nearest(modelVersion: string, embedding: Int8Array, request: LibraryQuery, limit: number): readonly SemanticCandidate[] {
+    if (!Number.isSafeInteger(limit) || limit <= 0) throw new RangeError('semantic candidate limit must be a positive safe integer');
+    const plan = buildQueryPlan({ ...request, query: undefined });
+    return queryAll<SemanticCandidate>(
+      this.db,
+      `SELECT e.photo_id AS photoId,
+              vec_distance_cosine(v.embedding, vec_int8(@embedding)) AS distance
+         FROM photo_embeddings e
+         JOIN photo_embedding_vectors v ON v.embedding_id = e.embedding_id
+         JOIN ordinary_visible_photos p ON p.id = e.photo_id
+         LEFT JOIN sync_ledger l ON l.photo_id = p.id
+        WHERE e.model_version = @modelVersion
+          AND e.content_hash = p.content_hash
+          AND ${plan.whereClause}
+        ORDER BY distance, p.id
+        LIMIT @limit`,
+      { ...plan.params, modelVersion, embedding: embeddingBytes(embedding), limit },
+    );
   }
 
   put(candidate: EmbeddingCandidate, modelVersion: string, embedding: Int8Array, embeddedAt = new Date().toISOString()): void {

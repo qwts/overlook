@@ -1,19 +1,22 @@
 import { parentPort, workerData } from 'node:worker_threads';
+import { readFile } from 'node:fs/promises';
 
 import * as ort from 'onnxruntime-node';
 import sharp from 'sharp';
 
 import { EMBEDDING_DIMENSIONS } from '../db/embedding-repository.js';
+import { CLIP_TEXT_LENGTH, createClipTokenizer } from './clip-tokenizer.js';
 
 export interface EmbeddingWorkerData {
   readonly modelPath: string;
+  readonly textModelPath?: string;
+  readonly tokenizerPath?: string;
   readonly providers: readonly string[];
 }
 
-export interface EmbeddingWorkerRequest {
-  readonly jobId: number;
-  readonly bytes: Uint8Array;
-}
+export type EmbeddingWorkerPayload =
+  { readonly kind: 'image'; readonly bytes: Uint8Array } | { readonly kind: 'text'; readonly text: string };
+export type EmbeddingWorkerRequest = EmbeddingWorkerPayload & { readonly jobId: number };
 
 /** Cooperative shutdown (#843): the worker exits itself once the in-flight
  * job settles. terminate() mid-inference aborts the WHOLE app — onnxruntime's
@@ -36,14 +39,16 @@ const MEAN = [0.481_454_66, 0.457_827_5, 0.408_210_73] as const;
 const STD = [0.268_629_54, 0.261_302_58, 0.275_777_11] as const;
 const options = workerData as EmbeddingWorkerData;
 
-let session: Promise<{ readonly session: ort.InferenceSession; readonly provider: string }> | undefined;
+let visionSession: Promise<{ readonly session: ort.InferenceSession; readonly provider: string }> | undefined;
+let textSession: Promise<{ readonly session: ort.InferenceSession; readonly provider: string }> | undefined;
+let tokenizer: Promise<(text: string) => readonly number[]> | undefined;
 
-async function createSession(): Promise<{ readonly session: ort.InferenceSession; readonly provider: string }> {
+async function createSession(modelPath: string): Promise<{ readonly session: ort.InferenceSession; readonly provider: string }> {
   let lastError: unknown;
   for (const provider of options.providers) {
     try {
       return {
-        session: await ort.InferenceSession.create(options.modelPath, { executionProviders: [provider] }),
+        session: await ort.InferenceSession.create(modelPath, { executionProviders: [provider] }),
         provider,
       };
     } catch (error) {
@@ -89,8 +94,8 @@ function quantize(output: ort.Tensor): Int8Array {
 }
 
 async function embed(bytes: Uint8Array): Promise<{ readonly embedding: Int8Array; readonly provider: string }> {
-  session ??= createSession();
-  const active = await session;
+  visionSession ??= createSession(options.modelPath);
+  const active = await visionSession;
   let prepared: Awaited<ReturnType<typeof inputTensor>>;
   try {
     prepared = await inputTensor(bytes);
@@ -109,6 +114,29 @@ async function embed(bytes: Uint8Array): Promise<{ readonly embedding: Int8Array
   }
 }
 
+async function embedText(text: string): Promise<{ readonly embedding: Int8Array; readonly provider: string }> {
+  if (options.textModelPath === undefined || options.tokenizerPath === undefined) {
+    throw new Error('text embedding assets are not configured');
+  }
+  textSession ??= createSession(options.textModelPath);
+  tokenizer ??= readFile(options.tokenizerPath, 'utf8').then((contents) => createClipTokenizer(JSON.parse(contents) as unknown));
+  const [active, tokenize] = await Promise.all([textSession, tokenizer]);
+  const ids = tokenize(text);
+  const inputIds = new BigInt64Array(CLIP_TEXT_LENGTH);
+  const attentionMask = new BigInt64Array(CLIP_TEXT_LENGTH);
+  for (let index = 0; index < ids.length; index += 1) {
+    inputIds[index] = BigInt(ids[index]!);
+    attentionMask[index] = 1n;
+  }
+  const outputs = await active.session.run({
+    input_ids: new ort.Tensor('int64', inputIds, [1, CLIP_TEXT_LENGTH]),
+    attention_mask: new ort.Tensor('int64', attentionMask, [1, CLIP_TEXT_LENGTH]),
+  });
+  const output = outputs['text_embeds'] ?? outputs[active.session.outputNames[0] ?? ''];
+  if (output === undefined) throw new Error('text model returned no text embedding');
+  return { embedding: quantize(output), provider: active.provider };
+}
+
 let current: Promise<unknown> = Promise.resolve();
 
 parentPort?.on('message', (request: EmbeddingWorkerRequest | EmbeddingWorkerShutdown) => {
@@ -123,8 +151,8 @@ parentPort?.on('message', (request: EmbeddingWorkerRequest | EmbeddingWorkerShut
     }
     return;
   }
-  const bytes = Buffer.from(request.bytes.buffer, request.bytes.byteOffset, request.bytes.byteLength);
-  current = embed(bytes)
+  const bytes = request.kind === 'text' ? undefined : Buffer.from(request.bytes.buffer, request.bytes.byteOffset, request.bytes.byteLength);
+  current = (request.kind === 'text' ? embedText(request.text) : embed(bytes!))
     .then(({ embedding, provider }) => {
       parentPort?.postMessage({
         jobId: request.jobId,
@@ -141,5 +169,5 @@ parentPort?.on('message', (request: EmbeddingWorkerRequest | EmbeddingWorkerShut
         error: error instanceof Error ? error.message : String(error),
       } satisfies EmbeddingWorkerResponse);
     })
-    .finally(() => bytes.fill(0));
+    .finally(() => bytes?.fill(0));
 });

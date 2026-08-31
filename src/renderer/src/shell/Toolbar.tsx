@@ -4,7 +4,7 @@ import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN } from '../../../shared/library/app-state.js';
 import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
-import type { ChipFilters } from '../../../shared/library/types.js';
+import type { ChipFilters, SearchMode } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { Icon } from '../components/Icon';
@@ -48,6 +48,24 @@ const messages = defineMessages({
   filterRaw: { id: 'toolbar.filter.raw', defaultMessage: 'RAW' },
   filterOffloaded: { id: 'toolbar.filter.offloaded', defaultMessage: 'Offloaded' },
   filterLocalOnly: { id: 'toolbar.filter.localOnly', defaultMessage: 'Local only' },
+  searchMode: { id: 'toolbar.search.mode', defaultMessage: 'Search mode' },
+  searchAuto: { id: 'toolbar.search.mode.auto', defaultMessage: 'Auto' },
+  searchSemantic: { id: 'toolbar.search.mode.semantic', defaultMessage: 'Semantic' },
+  searchKeyword: { id: 'toolbar.search.mode.keyword', defaultMessage: 'Keyword' },
+  searchFusedStatus: { id: 'toolbar.search.status.fused', defaultMessage: 'Keyword + semantic results' },
+  searchSemanticStatus: { id: 'toolbar.search.status.semantic', defaultMessage: 'Semantic results' },
+  searchKeywordStatus: { id: 'toolbar.search.status.keyword', defaultMessage: 'Keyword results' },
+  searchFallbackStatus: { id: 'toolbar.search.status.fallback', defaultMessage: 'Semantic {reason}; showing keyword results' },
+  searchIndexStatus: { id: 'toolbar.search.status.index', defaultMessage: '{indexed} of {total} photos indexed' },
+  searchStatusWithIndex: { id: 'toolbar.search.status.withIndex', defaultMessage: '{status} · {index}' },
+});
+
+const fallbackMessages = defineMessages({
+  disabled: { id: 'toolbar.search.fallback.disabled', defaultMessage: 'is off' },
+  unavailable: { id: 'toolbar.search.fallback.unavailable', defaultMessage: 'is unavailable' },
+  indexing: { id: 'toolbar.search.fallback.indexing', defaultMessage: 'is still indexing' },
+  busy: { id: 'toolbar.search.fallback.busy', defaultMessage: 'is busy' },
+  error: { id: 'toolbar.search.fallback.error', defaultMessage: 'had an error' },
 });
 
 const filterLabels: Record<keyof ChipFilters, (typeof messages)[keyof typeof messages]> = {
@@ -95,6 +113,18 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
   };
 
   const anyFilter = Object.values(state.chips).some(Boolean);
+  const searchStatus =
+    state.search.fallbackReason === null
+      ? intl.formatMessage(
+          state.search.appliedMode === 'fused'
+            ? messages.searchFusedStatus
+            : state.search.appliedMode === 'semantic'
+              ? messages.searchSemanticStatus
+              : messages.searchKeywordStatus,
+        )
+      : intl.formatMessage(messages.searchFallbackStatus, {
+          reason: intl.formatMessage(fallbackMessages[state.search.fallbackReason]),
+        });
   return (
     <section className="ovl-toolbar titlebar-no-drag" aria-label={intl.formatMessage(messages.region)}>
       <div className="ovl-toolbar__row" role="toolbar" aria-label={intl.formatMessage(messages.region)}>
@@ -108,6 +138,18 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
           shortcut={formatShortcut(commandById('app.search.focus'), platform)}
           width={300}
           label={intl.formatMessage(messages.search)}
+        />
+        <Segmented<SearchMode>
+          label={intl.formatMessage(messages.searchMode)}
+          options={[
+            { value: 'auto', label: intl.formatMessage(messages.searchAuto) },
+            { value: 'semantic', label: intl.formatMessage(messages.searchSemantic) },
+            { value: 'keyword', label: intl.formatMessage(messages.searchKeyword) },
+          ]}
+          value={state.searchMode}
+          onChange={(mode) => {
+            dispatch({ type: 'searchMode/set', mode });
+          }}
         />
         <IconButton
           icon="funnel"
@@ -193,23 +235,35 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
           <FormattedMessage id="toolbar.import" defaultMessage="Import" />
         </Button>
       </div>
-      {filterOpen ? (
+      {filterOpen || state.query !== '' ? (
         <div className="ovl-toolbar__chips" data-testid="chip-row">
-          {FILTERS.map(({ key, icon }) => (
-            <Chip
-              key={key}
-              icon={icon}
-              selected={state.chips[key] === true}
-              onClick={() => {
-                dispatch({ type: 'chip/toggled', chip: key });
-              }}
-            >
-              {intl.formatMessage(filterLabels[key])}
-            </Chip>
-          ))}
-          <span className="ovl-toolbar__hint mono-data">
-            <FormattedMessage id="toolbar.search.hint" defaultMessage="Semantic search — coming soon" />
-          </span>
+          {filterOpen
+            ? FILTERS.map(({ key, icon }) => (
+                <Chip
+                  key={key}
+                  icon={icon}
+                  selected={state.chips[key] === true}
+                  onClick={() => {
+                    dispatch({ type: 'chip/toggled', chip: key });
+                  }}
+                >
+                  {intl.formatMessage(filterLabels[key])}
+                </Chip>
+              ))
+            : null}
+          {state.query === '' ? null : (
+            <span className="ovl-toolbar__hint mono-data" role="status" aria-live="polite">
+              {state.search.total === 0
+                ? searchStatus
+                : intl.formatMessage(messages.searchStatusWithIndex, {
+                    status: searchStatus,
+                    index: intl.formatMessage(messages.searchIndexStatus, {
+                      indexed: state.search.indexed,
+                      total: state.search.total,
+                    }),
+                  })}
+            </span>
+          )}
         </div>
       ) : null}
     </section>

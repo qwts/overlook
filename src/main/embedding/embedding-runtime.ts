@@ -34,6 +34,8 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
   const pool = new EmbeddingPool({
     workerUrl: options.workerUrl,
     modelPath: assets.assetPath('vision_model_int8.onnx'),
+    textModelPath: assets.assetPath('text_model_int8.onnx'),
+    tokenizerPath: assets.assetPath('tokenizer.json'),
     providers: options.providers,
   });
   const service = new EmbeddingService({
@@ -66,6 +68,7 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
         throw error;
       }
     },
+    embedText: (text, signal) => pool.embedText(text, signal),
     emit: options.emit,
     ...(options.available === undefined ? {} : { available: options.available }),
     ...(options.unavailableReason === undefined ? {} : { unavailableReason: options.unavailableReason }),

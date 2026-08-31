@@ -218,7 +218,47 @@ export class PhotosRepository {
     const last = rows[rows.length - 1];
     const nextCursor: PageCursor | null =
       rows.length === request.limit && last !== undefined ? { sortKey: last.sort_key, id: last.id } : null;
-    return { photos: rows.map(toRecord), nextCursor };
+    return {
+      photos: rows.map(toRecord),
+      nextCursor,
+      search: {
+        requestedMode: request.searchMode ?? 'auto',
+        appliedMode: 'keyword',
+        fallbackReason: null,
+        indexed: 0,
+        total: 0,
+      },
+    };
+  }
+
+  /** Top keyword candidates used by ADR-0018 reciprocal-rank fusion. */
+  searchIds(request: LibraryQuery, limit: number): readonly string[] {
+    const plan = buildQueryPlan(request);
+    const order = request.order ?? 'date';
+    return queryAll<{ id: string }>(
+      this.db,
+      `${plan.ftsQuery !== null ? selectRankedWithProjection('p.id') : selectWithProjection(order, 'p.id')}
+       WHERE ${plan.whereClause}
+       ${plan.orderByClause}
+       LIMIT @limit`,
+      { ...plan.params, limit },
+    ).map(({ id }) => id);
+  }
+
+  /** Hydrates a pre-ranked projection without allowing SQL ordering input. */
+  records(photoIds: readonly string[]): readonly PhotoRecord[] {
+    if (photoIds.length === 0) return [];
+    const rows = queryAll<PhotoRow>(
+      this.db,
+      `${select('date')}
+       WHERE p.id IN (SELECT value FROM json_each(@photoIds))`,
+      { photoIds: JSON.stringify(photoIds) },
+    );
+    const byId = new Map(rows.map((row) => [row.id, toRecord(row)]));
+    return photoIds.flatMap((id) => {
+      const photo = byId.get(id);
+      return photo === undefined ? [] : [photo];
+    });
   }
 
   /** Returns every ID in the logical collection, independent of paging. */

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { EmbeddingCandidateStaleError, EMBEDDING_DIMENSIONS, type EmbeddingCandidate } from '../../src/main/db/embedding-repository.js';
+import { EmbeddingPoolBusyError } from '../../src/main/embedding/embedding-pool.js';
 import { EmbeddingService, type EmbeddingStatus } from '../../src/main/embedding/embedding-service.js';
 
 const CANDIDATES: readonly EmbeddingCandidate[] = [
@@ -29,6 +30,7 @@ function world(
     readonly downloadProgressEvents?: number;
     readonly load?: (candidate: EmbeddingCandidate) => Promise<Buffer | null>;
     readonly embed?: (candidate: EmbeddingCandidate, signal: AbortSignal) => Promise<Int8Array>;
+    readonly embedText?: (text: string, signal: AbortSignal) => Promise<Int8Array>;
   } = {},
 ): ServiceWorld {
   const candidates = [...(options.candidates ?? CANDIDATES)];
@@ -104,6 +106,7 @@ function world(
       if (candidate === undefined) throw new Error('fixture candidate was not loaded');
       return options.embed?.(candidate, signal) ?? new Int8Array(EMBEDDING_DIMENSIONS);
     },
+    ...(options.embedText === undefined ? {} : { embedText: options.embedText }),
     emit: (status) => statuses.push(status),
     ...(options.available === undefined ? {} : { available: options.available }),
     ...(options.available === false ? { unavailableReason: 'fixture runtime unavailable' } : {}),
@@ -295,5 +298,48 @@ describe('EmbeddingService', () => {
     assert.equal(subject.service.disable().phase, 'disabled');
     assert.equal(subject.service.status().pending, 1);
     await subject.service.close();
+  });
+
+  test('query reports every readiness and worker-contention outcome', async () => {
+    const disabled = world();
+    assert.deepEqual(await disabled.service.query('tram'), { embedding: null, fallback: 'disabled' });
+    await disabled.service.close();
+
+    const unavailable = world({ available: false, embedText: () => Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS)) });
+    assert.deepEqual(await unavailable.service.query('tram'), { embedding: null, fallback: 'unavailable' });
+    await unavailable.service.close();
+
+    const indexing = world({ installed: false, embedText: () => Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS)) });
+    indexing.service.enable();
+    assert.deepEqual(await indexing.service.query('tram'), { embedding: null, fallback: 'indexing' });
+    await indexing.service.close();
+
+    const ready = world({
+      candidates: [],
+      initiallyEnabled: true,
+      embedText: (text) => Promise.resolve(new Int8Array([text.length])),
+    });
+    ready.service.start();
+    await waitFor(ready, 'ready');
+    const result = await ready.service.query('tram');
+    assert.equal(result.fallback, null);
+    assert.deepEqual(result.embedding, new Int8Array([4]));
+    await ready.service.close();
+
+    const busy = world({
+      candidates: [],
+      initiallyEnabled: true,
+      embedText: () => Promise.reject(new EmbeddingPoolBusyError()),
+    });
+    busy.service.start();
+    await waitFor(busy, 'ready');
+    assert.deepEqual(await busy.service.query('tram'), { embedding: null, fallback: 'busy' });
+    await busy.service.close();
+
+    const failed = world({ candidates: [], initiallyEnabled: true, embedText: () => Promise.reject(new Error('fixture failed')) });
+    failed.service.start();
+    await waitFor(failed, 'ready');
+    assert.deepEqual(await failed.service.query('tram'), { embedding: null, fallback: 'error' });
+    await failed.service.close();
   });
 });

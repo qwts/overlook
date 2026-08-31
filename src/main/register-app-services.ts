@@ -62,6 +62,8 @@ import type { PhotoKitService } from './photo-kit/photo-kit-service.js';
 import { registerPhotoKitHandlers } from './photo-kit/photo-kit-ipc.js';
 import type { FileProviderService } from './file-provider/file-provider-service.js';
 import { registerFileProviderHandlers } from './file-provider/file-provider-ipc.js';
+import { EMBEDDING_DIMENSIONS } from './db/embedding-repository.js';
+import type { SemanticEmbeddingFacade } from './library/semantic-search.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -98,6 +100,24 @@ export interface AppServicesOptions {
   readonly onImported: () => void;
   readonly onImportRendererReady: () => void;
   readonly broadcast: (name: string, payload: unknown) => void;
+}
+
+function getSearchEmbeddings(options: AppServicesOptions): SemanticEmbeddingFacade {
+  const fixtureDimension = options.harnessEnv('OVERLOOK_SEMANTIC_QUERY_DIMENSION');
+  if (fixtureDimension === undefined || options.harnessEnv('OVERLOOK_E2E') === undefined) return options.getEmbedding();
+  const dimension = Number(fixtureDimension);
+  if (!Number.isSafeInteger(dimension) || dimension < 0 || dimension >= EMBEDDING_DIMENSIONS) {
+    throw new Error('OVERLOOK_SEMANTIC_QUERY_DIMENSION must identify a vector dimension');
+  }
+  const service = options.getEmbedding();
+  return {
+    status: () => service.status(),
+    query: () => {
+      const embedding = new Int8Array(EMBEDDING_DIMENSIONS);
+      embedding[dimension] = 127;
+      return Promise.resolve({ embedding, fallback: null });
+    },
+  };
 }
 
 async function pickImportFolder(options: AppServicesOptions): Promise<string | null> {
@@ -185,7 +205,7 @@ export function registerAppServices(options: AppServicesOptions): void {
     authorizePassword: options.authorizePassword,
     deletePermanently: (photoIds) => options.getPurge().deletePermanently(photoIds),
   });
-  registerLibraryHandlers(options.getLibrary, options.onManifestChanged, options.getActivity);
+  registerLibraryHandlers(options.getLibrary, options.onManifestChanged, options.getActivity, () => getSearchEmbeddings(options));
   registerAlbumHandlers(options.getLibrary, ulid, options.getActivity, options.onManifestChanged);
   registerBoardHandlers(options.getLibrary, options.getActivity, options.onManifestChanged);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);

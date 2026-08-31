@@ -20,6 +20,7 @@ import { SCROLL_TRIAL_COUNT, summarizeScrollTrials, type ScrollStats, type Scrol
 const LIBRARY_SIZE = Number(process.env['OVERLOOK_PERF_SIZE'] ?? '200000');
 const QUERY_ROUNDS = 5;
 const IMPORT_FILES = 100;
+const TEXT_QUERY_BUDGET_MS = 40;
 
 function median(samples: readonly number[]): number {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -74,6 +75,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     ...process.env,
     OVERLOOK_USER_DATA: userData,
     OVERLOOK_INSECURE_KEYSTORE: '1',
+    OVERLOOK_SEMANTIC_QUERY_DIMENSION: '0',
   };
 
   // Seeding run (untimed): materialize the library once, then close — the
@@ -110,8 +112,18 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       // candidate set (#390; the FTS index replaced the old instr() scan).
       `window.overlook.library.page({ source: 'all', limit: 500, query: 'lisbon' })`,
     );
+    const semanticVectorSearchMs = await queryMedianMs(
+      page,
+      `window.overlook.library.page({ source: 'all', limit: 500, query: 'a neon tram at dusk', searchMode: 'auto' })`,
+    );
+    // Routine CI stays offline, so it uses the deterministic query vector and
+    // composes that measurement with the production text tower's separately
+    // enforced ADR maximum. The sum is a conservative end-to-end bound.
+    const semanticSearchMs = semanticVectorSearchMs + TEXT_QUERY_BUDGET_MS;
 
-    console.log(`[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms`);
+    console.log(
+      `[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms semantic-vector=${semanticVectorSearchMs.toFixed(0)}ms semantic-composed=${semanticSearchMs.toFixed(0)}ms`,
+    );
 
     // Import throughput: unique real files through the full pipeline
     // (copy + encrypt + record + thumbs).
@@ -150,6 +162,8 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       page500Ms,
       countsMs,
       searchMs,
+      semanticVectorSearchMs,
+      semanticSearchMs,
       scroll,
       importPhotosPerSec,
       mainRssMb,
@@ -163,6 +177,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     expect(page500Ms, 'page(500) median').toBeLessThan(BUDGETS.page500Ms);
     expect(countsMs, 'counts median').toBeLessThan(BUDGETS.countsMs);
     expect(searchMs, 'search median').toBeLessThan(BUDGETS.searchMs);
+    expect(semanticSearchMs, 'semantic/fused search median').toBeLessThan(BUDGETS.semanticSearchMs);
     for (const [zoom, stats] of Object.entries(scroll)) {
       expect(stats.medianDropRate, `${zoom} median drop rate`).toBeLessThan(BUDGETS.scrollDropRate);
       expect(stats.maxWorstMs, `${zoom} maximum worst frame`).toBeLessThan(BUDGETS.scrollWorstMs);

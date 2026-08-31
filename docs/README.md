@@ -35,6 +35,7 @@ existing links resolve — never add content there.
 - [Architecture Decision Records](./adr/Architecture-Decision-Records.md) — ADR index + template
 - [Deterministic Reviewed Sync acceptance](./acceptance/Acceptance-Test-Deterministic-Reviewed-Sync.md) — replay, conflict, tombstone, and restart evidence
 - [Semantic embedding index acceptance](./acceptance/Acceptance-Test-Semantic-Embedding-Index.md) — #391 model checkpoint, encrypted lifecycle, scheduler, and packaged evidence
+- [Semantic search acceptance](./acceptance/Acceptance-Test-Semantic-Search.md) — #392 text queries, fused ranking, fallback UX, selection parity, and performance
 - [Security Review M11](./Security-Review-M11.md) — crypto/IPC/plaintext audit (#129) + accepted deviations
 - [Live Local Interop Threat Model](./Live-Local-Interop-Threat-Model.md) — #543 origin, capability, replay, downgrade, and resource-exhaustion boundary
 - [Live Local Interop acceptance](./acceptance/Acceptance-Test-Live-Local-Interop-Transport.md) — #543 rendezvous, capability, loopback, backpressure, and follow-up gates

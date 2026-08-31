@@ -76,7 +76,16 @@ function defineChannel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
 
 const defineEvent = <TPayload extends z.ZodType>(name: string, payload: TPayload): EventDefinition<TPayload> => ({ name, payload });
 
-const pageCursorSchema = z.object({ sortKey: z.union([z.string(), z.number()]), id: z.string() });
+const pageCursorSchema = z.object({
+  sortKey: z.union([z.string(), z.number()]),
+  id: z.string(),
+  search: z
+    .object({
+      appliedMode: z.enum(['keyword', 'semantic', 'fused']),
+      fallbackReason: z.enum(['disabled', 'unavailable', 'indexing', 'busy', 'error']).nullable(),
+    })
+    .optional(),
+});
 
 const libraryChangedSchema = z.object({
   photoIds: z.array(z.string()),
@@ -348,7 +357,17 @@ export const channels = {
       limit: z.number().int().positive().max(500),
       cursor: pageCursorSchema.optional(),
     }),
-    z.object({ photos: z.array(photoRecordSchema).readonly(), nextCursor: pageCursorSchema.nullable() }),
+    z.object({
+      photos: z.array(photoRecordSchema).readonly(),
+      nextCursor: pageCursorSchema.nullable(),
+      search: z.object({
+        requestedMode: z.enum(['auto', 'keyword', 'semantic']),
+        appliedMode: z.enum(['keyword', 'semantic', 'fused']),
+        fallbackReason: z.enum(['disabled', 'unavailable', 'indexing', 'busy', 'error']).nullable(),
+        indexed: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+      }),
+    }),
   ),
   ...librarySelection.librarySelectionChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
