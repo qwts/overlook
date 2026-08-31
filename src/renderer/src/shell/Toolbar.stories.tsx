@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
+import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { PageResult, SearchMode } from '../../../shared/library/types.js';
 import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { Toolbar } from './Toolbar';
@@ -10,6 +11,11 @@ interface ScenarioProps {
   readonly query: string;
   readonly mode: SearchMode;
   readonly search: PageResult['search'];
+}
+
+function installStub(): void {
+  const library = { onPendingCountChanged: () => () => undefined } as unknown as OverlookApi['library'];
+  (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library };
 }
 
 function Scenario({ query, mode, search }: ScenarioProps) {
@@ -34,6 +40,12 @@ const meta: Meta<typeof SearchToolbar> = {
   title: 'App/Toolbar/Search',
   component: SearchToolbar,
   parameters: { layout: 'fullscreen' },
+  decorators: [
+    (Story) => {
+      installStub();
+      return <Story />;
+    },
+  ],
 };
 
 export default meta;
