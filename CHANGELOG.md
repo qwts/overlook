@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.5
+
+### Patch Changes
+
+- 92f834f: Add required native Windows x64 and ARM64 import validation to pull request, main, and release CI.
+
 ## 0.74.4
 
 ### Patch Changes
