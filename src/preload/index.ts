@@ -43,6 +43,9 @@ const photoKitCancel = createInvoker(channels.photoKitCancel, invokeTransport);
 const fileProviderStatus = createInvoker(channels.fileProviderStatus, invokeTransport);
 const fileProviderDisable = createInvoker(channels.fileProviderDisable, invokeTransport);
 const settingsGet = createInvoker(channels.settingsGet, invokeTransport);
+const themeList = createInvoker(channels.themeList, invokeTransport);
+const themePickImport = createInvoker(channels.themePickImport, invokeTransport);
+const themeActive = createInvoker(channels.themeActive, invokeTransport);
 const embeddingStatus = createInvoker(channels.embeddingStatus, invokeTransport);
 const embeddingEnable = createInvoker(channels.embeddingEnable, invokeTransport);
 const embeddingDisable = createInvoker(channels.embeddingDisable, invokeTransport);
@@ -325,6 +328,18 @@ const overlook: OverlookApi = {
     get: async () => settingsGet({}),
     set: createInvoker(channels.settingsSet, invokeTransport),
     onChanged: createSubscriber(events.settingsChanged, subscribeTransport),
+  }),
+  themes: Object.freeze({
+    list: async () => themeList({}),
+    pickImport: async () => themePickImport({}),
+    importPath: createInvoker(channels.themeImportPath, invokeTransport),
+    active: async () => themeActive({}),
+    preview: createInvoker(channels.themePreview, invokeTransport),
+    previewHealthy: createInvoker(channels.themePreviewHealthy, invokeTransport),
+    confirm: createInvoker(channels.themeConfirm, invokeTransport),
+    cancel: createInvoker(channels.themeCancel, invokeTransport),
+    remove: createInvoker(channels.themeRemove, invokeTransport),
+    reset: async () => createInvoker(channels.themeReset, invokeTransport)({}),
   }),
   embedding: Object.freeze({
     status: async () => embeddingStatus({}),

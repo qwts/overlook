@@ -263,6 +263,9 @@
   "commands.trash.empty": {
     "defaultMessage": "Empty Trash…"
   },
+  "commands.view.appearance.reset": {
+    "defaultMessage": "Reset Appearance"
+  },
   "commands.view.inspector.detach": {
     "defaultMessage": "Open Inspector in Separate Window"
   },
@@ -1634,6 +1637,12 @@
   "settings.general.appearance.system": {
     "defaultMessage": "System"
   },
+  "settings.general.customThemes": {
+    "defaultMessage": "Custom themes"
+  },
+  "settings.general.customThemes.hint": {
+    "defaultMessage": "Import JSON color themes, inspect contrast warnings, and preview before keeping changes."
+  },
   "settings.general.language": {
     "defaultMessage": "Language"
   },
@@ -1900,6 +1909,63 @@
   },
   "settings.storage.disconnect.unverified": {
     "defaultMessage": "Open {libraries} before disconnecting so Overlook can verify their cloud-only custody."
+  },
+  "settings.theme.active": {
+    "defaultMessage": "Active"
+  },
+  "settings.theme.dropHint": {
+    "defaultMessage": "Choose or drop one .overlook-theme.json file"
+  },
+  "settings.theme.empty": {
+    "defaultMessage": "No custom themes installed."
+  },
+  "settings.theme.failed": {
+    "defaultMessage": "The theme operation failed. Try again."
+  },
+  "settings.theme.invalidDrop": {
+    "defaultMessage": "Drop exactly one .overlook-theme.json file."
+  },
+  "settings.theme.invalidNotice": {
+    "defaultMessage": "The active theme no longer validated, so Overlook restored the first-party appearance."
+  },
+  "settings.theme.keep": {
+    "defaultMessage": "Keep theme"
+  },
+  "settings.theme.keepBody": {
+    "defaultMessage": "The preview will revert automatically in {seconds} seconds."
+  },
+  "settings.theme.keepTitle": {
+    "defaultMessage": "Keep this theme?"
+  },
+  "settings.theme.missingNotice": {
+    "defaultMessage": "The active theme file was missing, so Overlook restored the first-party appearance."
+  },
+  "settings.theme.pathlessDrop": {
+    "defaultMessage": "This file has no readable local path. Use the picker instead."
+  },
+  "settings.theme.preview": {
+    "defaultMessage": "Preview"
+  },
+  "settings.theme.remove": {
+    "defaultMessage": "Remove"
+  },
+  "settings.theme.reset": {
+    "defaultMessage": "Reset appearance"
+  },
+  "settings.theme.revert": {
+    "defaultMessage": "Revert"
+  },
+  "settings.theme.swatches": {
+    "defaultMessage": "{name} color swatches"
+  },
+  "settings.theme.unavailable": {
+    "defaultMessage": "The theme is no longer available."
+  },
+  "settings.theme.version": {
+    "defaultMessage": "v{version}"
+  },
+  "settings.theme.warningCount": {
+    "defaultMessage": "{count, plural, one {# warning} other {# warnings}}"
   },
   "settings.title": {
     "defaultMessage": "Settings"

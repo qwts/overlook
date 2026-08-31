@@ -48,6 +48,7 @@ import { nativeDragChannels } from './native-drag-channels.js';
 import { photoKitChannels, photoKitEvents } from './photo-kit-channels.js';
 import { fileProviderChannels } from './file-provider-channels.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../library/photo-metadata.js';
+import { themeChannels } from './theme-channels.js';
 
 // Central IPC contract registry: every renderer↔main channel and main→renderer
 // event is declared here with request/response (or payload) schemas. Main
@@ -784,6 +785,7 @@ export const channels = {
   // at this boundary.
   settingsGet: defineChannel('settings:get', z.object({}), z.object({ settings: settingsSchema })),
   settingsSet: defineChannel('settings:set', z.object({ patch: settingsPatchSchema }), z.object({ settings: settingsSchema })),
+  ...themeChannels,
   ...diagnosticsChannels,
   libraryStats: defineChannel(
     'library:stats',

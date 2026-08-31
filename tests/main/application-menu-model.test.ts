@@ -96,6 +96,8 @@ test('macOS menu items are the exact per-menu spec order (#689)', () => {
     'Show or hide Inspector',
     'Open Inspector in Separate Window',
     'Toggle Sidebar',
+    '—',
+    'Reset Appearance',
   ]);
 });
 
@@ -106,6 +108,7 @@ test('macOS accelerators are generated from registry bindings (#689)', () => {
   assert.equal(find(template, 'photo.export')?.accelerator, 'CommandOrControl+Shift+E');
   assert.equal(find(template, 'library.move')?.accelerator, 'CommandOrControl+Shift+M');
   assert.equal(find(template, 'view.inspector.detach')?.accelerator, 'CommandOrControl+Shift+I');
+  assert.equal(find(template, 'view.appearance.reset')?.accelerator, 'CommandOrControl+Alt+Shift+R');
   assert.equal(find(template, 'selection.selectAll')?.accelerator, 'CommandOrControl+A');
   // Menu-item ids stay unique even though Export projects into File + Photo.
   assert.equal(new Set(ids(template)).size, ids(template).length);
@@ -148,6 +151,7 @@ test('Photo menu is target-aware: Restore in Trash, membership otherwise (#689)'
 
 test('menu enablement fails closed for lock, modal, target, and active-work state (#689)', () => {
   assert.equal(commandEnabled('app.settings.open.privacy', { ...grid, surface: 'locked' }), true);
+  assert.equal(commandEnabled('view.appearance.reset', { ...grid, surface: 'locked' }), true);
   assert.equal(commandEnabled('library.import', { ...grid, surface: 'locked' }), false);
   assert.equal(commandEnabled('library.import', { ...grid, providerBusy: true }), false);
   assert.equal(commandEnabled('photo.trash', { ...grid, surface: 'lightbox', hasTarget: true, targetTrashable: true }), true);

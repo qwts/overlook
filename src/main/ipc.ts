@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- IPC registration is intentionally large */
-import { BrowserWindow, clipboard, ipcMain } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 
@@ -43,6 +43,7 @@ import type {
 } from './crypto/app-lock-controller.js';
 import type { TouchIdEnableResult, TouchIdStatus } from './crypto/touch-id.js';
 import type { DiagnosticEvent } from './diagnostics/event-contract.js';
+import type { ThemeService } from './theme/theme-service.js';
 import { mutateWithActivity } from './activity/activity-publication.js';
 import type { ActivityFacade } from './activity/activity-publication.js';
 import { moveCompensationCommand, trashCommand } from './history/command-drafts.js';
@@ -580,6 +581,66 @@ export function registerSettingsHandlers(getFacade: () => SettingsFacade): void 
   );
   ipcMain.handle(channels.settingsSet.name, (_event, request: unknown) =>
     wrapHandler(channels.settingsSet, ({ patch }) => ({ settings: getFacade().set(patch) }))(request),
+  );
+}
+
+export function registerThemeHandlers(service: ThemeService): void {
+  const boundSenders = new WeakSet<Electron.WebContents>();
+  const bindSender = (sender: Electron.WebContents): void => {
+    if (boundSenders.has(sender)) return;
+    boundSenders.add(sender);
+    const cancel = (): void => service.cancelForSender(sender.id);
+    sender.on('render-process-gone', cancel);
+    sender.on('unresponsive', cancel);
+    sender.once('destroyed', cancel);
+  };
+  ipcMain.handle(channels.themeList.name, (event, request: unknown) =>
+    wrapHandler(channels.themeList, async () => {
+      bindSender(event.sender);
+      return service.list();
+    })(request),
+  );
+  ipcMain.handle(channels.themePickImport.name, (event, request: unknown) =>
+    wrapHandler(channels.themePickImport, async () => {
+      const steeredPath = app.isPackaged ? undefined : process.env['OVERLOOK_THEME_IMPORT_SOURCE'];
+      if (steeredPath !== undefined) return service.importPath(steeredPath);
+      const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+      const options: Electron.OpenDialogOptions = {
+        title: 'Import theme',
+        properties: ['openFile'],
+        filters: [{ name: 'Overlook themes', extensions: ['json'] }],
+      };
+      const selection = owner === undefined ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(owner, options);
+      const sourcePath = selection.filePaths[0];
+      return selection.canceled || sourcePath === undefined ? { status: 'cancelled' as const } : service.importPath(sourcePath);
+    })(request),
+  );
+  ipcMain.handle(channels.themeImportPath.name, (_event, request: unknown) =>
+    wrapHandler(channels.themeImportPath, ({ path: sourcePath }) => service.importPath(sourcePath))(request),
+  );
+  ipcMain.handle(channels.themeActive.name, (_event, request: unknown) =>
+    wrapHandler(channels.themeActive, () => service.active())(request),
+  );
+  ipcMain.handle(channels.themePreview.name, (event, request: unknown) =>
+    wrapHandler(channels.themePreview, ({ id }) => {
+      bindSender(event.sender);
+      return service.preview(id, event.sender.id);
+    })(request),
+  );
+  ipcMain.handle(channels.themePreviewHealthy.name, (event, request: unknown) =>
+    wrapHandler(channels.themePreviewHealthy, ({ previewId }) => ({ accepted: service.healthy(previewId, event.sender.id) }))(request),
+  );
+  ipcMain.handle(channels.themeConfirm.name, (event, request: unknown) =>
+    wrapHandler(channels.themeConfirm, ({ previewId }) => service.confirm(previewId, event.sender.id))(request),
+  );
+  ipcMain.handle(channels.themeCancel.name, (event, request: unknown) =>
+    wrapHandler(channels.themeCancel, ({ previewId }) => ({ cancelled: service.cancel(previewId, event.sender.id) }))(request),
+  );
+  ipcMain.handle(channels.themeRemove.name, (_event, request: unknown) =>
+    wrapHandler(channels.themeRemove, ({ id }) => service.remove(id))(request),
+  );
+  ipcMain.handle(channels.themeReset.name, (_event, request: unknown) =>
+    validateHandler(channels.themeReset, () => ({ settings: service.reset() }))(request),
   );
 }
 

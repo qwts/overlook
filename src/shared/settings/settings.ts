@@ -3,6 +3,7 @@ import { providerIdSchema } from '../backup/provider-descriptor.js';
 import { llmProviderIdSchema } from '../llm/provider.js';
 import { isQuickActionCommandId, type QuickActionCommandId } from '../commands/registry.js';
 import { DEFAULT_TRASH_RETENTION, trashRetentionSchema } from '../library/trash.js';
+import { themeIdSchema } from '../theme/theme-file.js';
 
 export const CURRENT_DIAGNOSTICS_CONSENT_VERSION = 1 as const;
 
@@ -34,6 +35,8 @@ export const settingsSchema = z.object({
   language: z.string().min(1).nullable(),
   /** First-party theme, or the live operating-system preference. */
   appearance: z.enum(['dark', 'light', 'system']),
+  /** Installed user-theme id; the profile-scoped theme file is authoritative. */
+  userTheme: themeIdSchema.nullable(),
   /** Ordered Command-hover actions. Empty disables the overlay. */
   quickActions: quickActionsSchema,
   /** Locked true by design: imports always generate thumbnails. */
@@ -76,6 +79,7 @@ export type SettingsPatch = z.output<typeof settingsPatchSchema>;
 /** ADR-0017 §6: these preferences follow the app profile, not a library. */
 export const profileSettingsSchema = settingsSchema.pick({
   appearance: true,
+  userTheme: true,
   language: true,
   quickActions: true,
   shareDiagnostics: true,
@@ -88,6 +92,7 @@ export const profileSettingsSchema = settingsSchema.pick({
 /** ADR-0017 §6: these policies belong to exactly one library directory. */
 export const librarySettingsSchema = settingsSchema.omit({
   appearance: true,
+  userTheme: true,
   language: true,
   quickActions: true,
   shareDiagnostics: true,
@@ -104,6 +109,7 @@ export const defaultSettings: AppSettings = {
   sortOrder: 'date',
   language: null,
   appearance: 'dark',
+  userTheme: null,
   quickActions: [...DEFAULT_QUICK_ACTIONS],
   thumbnailsOnImport: true,
   autoBackupOnImport: true,
@@ -124,6 +130,7 @@ export const defaultSettings: AppSettings = {
 
 export const defaultProfileSettings: ProfileSettings = {
   appearance: defaultSettings.appearance,
+  userTheme: defaultSettings.userTheme,
   language: defaultSettings.language,
   quickActions: defaultSettings.quickActions,
   shareDiagnostics: defaultSettings.shareDiagnostics,
@@ -150,6 +157,7 @@ export const defaultLibrarySettings: LibrarySettings = {
 const profileRecoverySchema = z
   .object({
     appearance: settingsSchema.shape.appearance.catch(defaultProfileSettings.appearance),
+    userTheme: settingsSchema.shape.userTheme.catch(defaultProfileSettings.userTheme),
     language: settingsSchema.shape.language.catch(defaultProfileSettings.language),
     quickActions: settingsSchema.shape.quickActions.catch([...defaultProfileSettings.quickActions]),
     shareDiagnostics: settingsSchema.shape.shareDiagnostics.catch(defaultProfileSettings.shareDiagnostics),
@@ -191,6 +199,7 @@ export function recoverLibrarySettings(raw: unknown): LibrarySettings {
 export function profileSettingsOf(settings: AppSettings): ProfileSettings {
   return {
     appearance: settings.appearance,
+    userTheme: settings.userTheme,
     language: settings.language,
     quickActions: settings.quickActions,
     shareDiagnostics: settings.shareDiagnostics,
@@ -249,6 +258,7 @@ export function mergeSettings(current: AppSettings, patch: SettingsPatch): AppSe
     sortOrder: patch.sortOrder ?? current.sortOrder,
     language: patch.language !== undefined ? patch.language : current.language,
     appearance: patch.appearance ?? current.appearance,
+    userTheme: patch.userTheme !== undefined ? patch.userTheme : current.userTheme,
     quickActions: patch.quickActions ?? current.quickActions,
     thumbnailsOnImport: true,
     autoBackupOnImport: patch.autoBackupOnImport ?? current.autoBackupOnImport,

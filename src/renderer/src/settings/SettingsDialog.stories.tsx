@@ -14,6 +14,8 @@ import { PROVIDER_AUTHORIZATION_REMOVAL } from '../../../shared/destructive-acti
 import { AppStateProvider } from '../state/app-state-context';
 import type { QuickActionCommandId } from '../../../shared/commands/registry.js';
 import { createEmbeddingStoryController } from '../../../../.storybook/embedding-story-controller';
+import { documentThemeLayer } from '../theme/document-theme-layer';
+import { installApplicationThemeLayer } from '../theme/user-theme-layer';
 
 // #112–#114 exit criteria: the 640px two-pane frame (Storage & Backup opens
 // by default, nav switches panes, keyboard-operable, Esc closes), the
@@ -44,6 +46,7 @@ function installStub(options?: {
   readonly custodyRequirements?: ProviderConnectionStatus['custodyRequirements'];
   readonly disconnectPreflight?: ProviderConnectResult;
 }): void {
+  installApplicationThemeLayer(documentThemeLayer(document));
   let current: AppSettings = { ...defaultSettings };
   const nonInteractiveIdentity = { interactiveAuth: false, reconnectRequired: false, accountIdentity: 'stable-subject' } as const;
   const mockProvider = {
@@ -479,6 +482,21 @@ function installStub(options?: {
   };
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = {
     settings: settingsApi,
+    themes: {
+      list: () => Promise.resolve({ themes: [], activeId: current.userTheme }),
+      pickImport: () => Promise.resolve({ status: 'cancelled' }),
+      importPath: () => Promise.resolve({ status: 'cancelled' }),
+      active: () => Promise.resolve({ theme: null, notice: null }),
+      preview: () => Promise.reject(new Error('No story theme installed')),
+      previewHealthy: () => Promise.resolve({ accepted: false }),
+      confirm: () => Promise.resolve({ confirmed: false, settings: current }),
+      cancel: () => Promise.resolve({ cancelled: false }),
+      remove: () => Promise.resolve({ removed: false, settings: current }),
+      reset: () => {
+        apply({ appearance: 'dark', userTheme: null });
+        return Promise.resolve({ settings: current });
+      },
+    },
     embedding: createEmbeddingStoryController().api,
     backup: backupApi,
     keys: keysApi,

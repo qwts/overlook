@@ -40,6 +40,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'library.switch':
     case 'help.shortcuts':
     case 'help.open':
+    case 'view.appearance.reset':
       return true;
     case 'app.settings.open.transfer':
       return context.pcloudEnabled;
@@ -149,6 +150,7 @@ function accelerator(command: CommandDescriptor): string | undefined {
   if (command.key === undefined) return undefined;
   const parts: string[] = [];
   if (command.primaryModifier === true) parts.push('CommandOrControl');
+  if (command.alt === true) parts.push('Alt');
   if (command.shift === true || command.key === '?') parts.push('Shift');
   const key = command.key === '?' ? '/' : command.key === 'Escape' ? 'Esc' : command.key;
   parts.push(key.length === 1 ? key.toUpperCase() : key);
@@ -287,6 +289,8 @@ function macApplicationMenuTemplate(
         commandItem('view.inspector.toggle', context, dispatch, translate, { type: 'checkbox', checked: context.inspectorOpen }),
         commandItem('view.inspector.detach', context, dispatch, translate),
         commandItem('view.sidebar.toggle', context, dispatch, translate),
+        separator,
+        commandItem('view.appearance.reset', context, dispatch, translate),
       ],
     },
     {
