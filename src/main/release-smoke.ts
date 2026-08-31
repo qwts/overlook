@@ -1,7 +1,7 @@
 import { appendFileSync, realpathSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 
 import { ICLOUD_NATIVE_SMOKE_ARGUMENT, runICloudNativeSmokeIfRequested } from './backup/icloud-drive/native-smoke.js';
 import { ICLOUD_LIVE_CONTRACT_ARGUMENT, runICloudLiveContractIfRequested } from './backup/icloud-drive/live-contract.js';
@@ -87,14 +87,15 @@ function isReleaseImportRuntime(app: ReleaseSmokeProfileApp, environment: NodeJS
 
 function isolatedReleaseImportProfile(profilePath: string): string {
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
-  const resolvedProfile = realpathSync(resolve(profilePath));
-  const tempRelation = relative(realpathSync(resolve(tmpdir())), resolvedProfile);
-  if (
-    tempRelation === '' ||
-    tempRelation.startsWith('..') ||
-    isAbsolute(tempRelation) ||
-    !tempRelation.split(/[\\/]/u).some((part) => part.startsWith('overlook-release-import-smoke-'))
-  ) {
+  const resolvedProfile = realpathSync.native(resolve(profilePath));
+  const resolvedParent = realpathSync.native(dirname(resolvedProfile));
+  const resolvedTemp = realpathSync.native(resolve(tmpdir()));
+  const parentStat = statSync(resolvedParent);
+  const tempStat = statSync(resolvedTemp);
+  const sameDirectory =
+    (parentStat.ino !== 0 && parentStat.dev === tempStat.dev && parentStat.ino === tempStat.ino) ||
+    resolvedParent.toLowerCase() === resolvedTemp.toLowerCase();
+  if (!sameDirectory || !basename(resolvedProfile).startsWith('overlook-release-import-smoke-')) {
     throw new Error('release import profile must be an isolated Overlook smoke directory under the system temp directory');
   }
   return resolvedProfile;

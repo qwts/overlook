@@ -67,6 +67,7 @@ try {
   $startInfo.RedirectStandardError = $true
   $startInfo.ArgumentList.Add('--inspect=0')
   $startInfo.ArgumentList.Add('--remote-debugging-port=0')
+  $startInfo.ArgumentList.Add('--noerrdialogs')
   $startInfo.ArgumentList.Add($installedArchive)
   $startInfo.ArgumentList.Add('--enable-logging=stderr')
   $startInfo.ArgumentList.Add('--overlook-release-import-smoke')
