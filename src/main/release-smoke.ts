@@ -87,11 +87,12 @@ function isReleaseImportRuntime(app: ReleaseSmokeProfileApp, environment: NodeJS
 
 function isolatedReleaseImportProfile(profilePath: string): string {
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
-  const resolvedProfile = realpathSync.native(resolve(profilePath));
+  const absoluteProfile = resolve(profilePath);
+  const resolvedProfile = realpathSync.native(absoluteProfile);
   if (!sameDirectory(dirname(resolvedProfile), tmpdir()) || !basename(resolvedProfile).startsWith('overlook-release-import-smoke-')) {
     throw new Error('release import profile must be an isolated Overlook smoke directory under the system temp directory');
   }
-  return resolvedProfile;
+  return absoluteProfile;
 }
 
 function sameDirectory(leftPath: string, rightPath: string): boolean {
