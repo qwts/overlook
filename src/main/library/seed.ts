@@ -5,9 +5,11 @@ import { Readable } from 'node:stream';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey } from '../crypto/envelope.js';
 import { PhotosRepository } from '../db/photos-repository.js';
-import { run, runNamed } from '../db/sql.js';
+import { queryAll, queryGet, run, runNamed } from '../db/sql.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import type { PhotoInsert } from '../../shared/library/types.js';
+import { EMBEDDING_DIMENSIONS, EmbeddingRepository } from '../db/embedding-repository.js';
+import { EMBEDDING_MODEL_MANIFEST } from '../embedding/model-manifest.js';
 
 // Deterministic dev/E2E seed (#72): real encrypted data through the real
 // path — envelope-encrypted blobs, SQLCipher rows, mock-shaped metadata.
@@ -152,4 +154,51 @@ export function seedSynthetic(db: BetterSqlite3.Database, keyId: number, content
     run(db, `UPDATE sync_ledger SET status = 'synced', dirty = 0 WHERE photo_id LIKE '01J8SYNTH%'`);
   })();
   return count;
+}
+
+/** E2E/perf-only deterministic vectors. The production model path is covered
+ * separately; this fixture keeps browser lanes offline and reproducible. */
+export function seedSemanticIndex(db: BetterSqlite3.Database, queryDimension: number): number {
+  if (!Number.isSafeInteger(queryDimension) || queryDimension < 0 || queryDimension >= EMBEDDING_DIMENSIONS) {
+    throw new RangeError('semantic seed dimension is outside the model vector');
+  }
+  const candidates = queryAll<{ photoId: string; contentHash: string }>(
+    db,
+    `SELECT id AS photoId, content_hash AS contentHash
+       FROM ordinary_visible_photos
+      WHERE deleted_at IS NULL
+      ORDER BY id`,
+  );
+  const repository = new EmbeddingRepository(db);
+  if (repository.status(EMBEDDING_MODEL_MANIFEST.version).completed === candidates.length) return 0;
+  repository.deleteModel(EMBEDDING_MODEL_MANIFEST.version);
+  const vectors = Array.from({ length: 8 }, (_, offset) => {
+    const vector = new Int8Array(EMBEDDING_DIMENSIONS);
+    vector[(queryDimension + offset) % EMBEDDING_DIMENSIONS] = 127;
+    return Buffer.from(vector.buffer);
+  });
+  db.transaction(() => {
+    candidates.forEach((candidate, index) => {
+      const vector = vectors[index % vectors.length];
+      if (vector === undefined) throw new Error('semantic seed vector generation failed');
+      const inserted = queryGet<{ embeddingId: number }>(
+        db,
+        `INSERT INTO photo_embeddings (photo_id, content_hash, model_version, embedded_at)
+         VALUES (?, ?, ?, ?)
+         RETURNING embedding_id AS embeddingId`,
+        candidate.photoId,
+        candidate.contentHash,
+        EMBEDDING_MODEL_MANIFEST.version,
+        '2026-07-01T00:00:00.000Z',
+      );
+      if (inserted === undefined) throw new Error('semantic seed metadata insert failed');
+      run(
+        db,
+        'INSERT INTO photo_embedding_vectors (embedding_id, embedding) VALUES (?, vec_int8(?))',
+        BigInt(inserted.embeddingId),
+        vector,
+      );
+    });
+  })();
+  return candidates.length;
 }

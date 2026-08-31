@@ -18,8 +18,7 @@ import type {
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
 import type { PhotoMetadataUpdate, PhotoTagManagement } from '../../shared/library/photo-metadata.js';
-import type { EmbeddingService } from '../embedding/embedding-service.js';
-import { SemanticSearch } from './semantic-search.js';
+import { SemanticSearch, type SemanticEmbeddingFacade } from './semantic-search.js';
 
 // The renderer's typed window into the library (#71) — the contract M04
 // builds against. Owns pendingCount (design §backup dirtiness) and emits
@@ -72,16 +71,16 @@ export class LibraryService {
     return this.repo.page(request);
   }
 
-  searchPage(request: PageRequest, embeddings: EmbeddingService): Promise<PageResult> {
-    return this.semanticSearch.page(request, embeddings);
+  searchPage(request: PageRequest, getEmbeddings: () => SemanticEmbeddingFacade): Promise<PageResult> {
+    return this.semanticSearch.page(request, getEmbeddings);
   }
 
-  searchSelectAllIds(request: LibraryQuery, embeddings: EmbeddingService): Promise<readonly string[]> {
-    return this.semanticSearch.ids(request, embeddings);
+  searchSelectAllIds(request: LibraryQuery, getEmbeddings: () => SemanticEmbeddingFacade): Promise<readonly string[]> {
+    return this.semanticSearch.ids(request, getEmbeddings);
   }
 
-  async searchSelectionRange(request: SelectionRangeRequest, embeddings: EmbeddingService): Promise<SelectionRangeResult> {
-    return { photoIds: await this.semanticSearch.selectionRange(request, embeddings) };
+  async searchSelectionRange(request: SelectionRangeRequest, getEmbeddings: () => SemanticEmbeddingFacade): Promise<SelectionRangeResult> {
+    return { photoIds: await this.semanticSearch.selectionRange(request, getEmbeddings) };
   }
 
   selectAllIds(request: LibraryQuery): readonly string[] {

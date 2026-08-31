@@ -1,4 +1,4 @@
-import { seedLibrary, seedSynthetic } from './seed.js';
+import { seedLibrary, seedSemanticIndex, seedSynthetic } from './seed.js';
 import type { LibraryService } from './library-service.js';
 import type { LibraryParts } from './library-parts.js';
 
@@ -44,5 +44,10 @@ export async function runDevSeeds(options: DevSeedOptions): Promise<void> {
     if (parts !== undefined && parts.photos() === 0) {
       seedSynthetic(parts.db, parts.currentKey().id, 'synthetic', syntheticCount);
     }
+  }
+  const semanticDimension = Number(options.harnessEnv('OVERLOOK_SEMANTIC_QUERY_DIMENSION') ?? 'NaN');
+  if (options.harnessEnv('OVERLOOK_E2E') !== undefined && Number.isSafeInteger(semanticDimension)) {
+    const parts = options.open();
+    if (parts !== undefined && parts.photos() > 0) seedSemanticIndex(parts.db, semanticDimension);
   }
 }

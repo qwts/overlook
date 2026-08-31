@@ -12,7 +12,10 @@ import type { EnvelopeKey } from '../../src/main/crypto/envelope.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryAll } from '../../src/main/db/sql.js';
-import { sampleJpeg, SEED_ALBUMS, seedLibrary, seedSynthetic } from '../../src/main/library/seed.js';
+import { EMBEDDING_DIMENSIONS, EmbeddingRepository } from '../../src/main/db/embedding-repository.js';
+import { EMBEDDING_MODEL_MANIFEST } from '../../src/main/embedding/model-manifest.js';
+import { sampleJpeg, SEED_ALBUMS, seedLibrary, seedSemanticIndex, seedSynthetic } from '../../src/main/library/seed.js';
+import { SemanticSearch } from '../../src/main/library/semantic-search.js';
 
 const KEY: EnvelopeKey = { id: 1, key: randomBytes(32) };
 
@@ -121,5 +124,23 @@ describe('dev seed', () => {
     const inserted = seedSynthetic(db, 1, 'synthetic', 5000);
     assert.equal(inserted, 5000);
     assert.equal(repo.stats().photos, 5002);
+  });
+
+  test('offline semantic fixtures cover every seeded photo and are idempotent', async () => {
+    const { db } = await seeded(16);
+    assert.equal(seedSemanticIndex(db, 0), 16);
+    assert.equal(seedSemanticIndex(db, 0), 0);
+    const query = new Int8Array(EMBEDDING_DIMENSIONS);
+    query[0] = 127;
+    const nearest = new EmbeddingRepository(db).nearest(EMBEDDING_MODEL_MANIFEST.version, query, { source: 'all' }, 1);
+    assert.equal(nearest[0]?.photoId, '01J8SEEDPHOTO0000');
+  });
+
+  test('ordinary paging does not initialize semantic embeddings', async () => {
+    const { db } = await seeded(4);
+    const page = await new SemanticSearch(db).page({ source: 'all', limit: 1 }, () => {
+      throw new Error('semantic embeddings must remain lazy without a search query');
+    });
+    assert.equal(page.photos.length, 1);
   });
 });

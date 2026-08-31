@@ -74,6 +74,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     ...process.env,
     OVERLOOK_USER_DATA: userData,
     OVERLOOK_INSECURE_KEYSTORE: '1',
+    OVERLOOK_SEMANTIC_QUERY_DIMENSION: '0',
   };
 
   // Seeding run (untimed): materialize the library once, then close — the
@@ -110,8 +111,14 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       // candidate set (#390; the FTS index replaced the old instr() scan).
       `window.overlook.library.page({ source: 'all', limit: 500, query: 'lisbon' })`,
     );
+    const semanticSearchMs = await queryMedianMs(
+      page,
+      `window.overlook.library.page({ source: 'all', limit: 500, query: 'a neon tram at dusk', searchMode: 'auto' })`,
+    );
 
-    console.log(`[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms`);
+    console.log(
+      `[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms semantic=${semanticSearchMs.toFixed(0)}ms`,
+    );
 
     // Import throughput: unique real files through the full pipeline
     // (copy + encrypt + record + thumbs).
@@ -150,6 +157,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       page500Ms,
       countsMs,
       searchMs,
+      semanticSearchMs,
       scroll,
       importPhotosPerSec,
       mainRssMb,
@@ -163,6 +171,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     expect(page500Ms, 'page(500) median').toBeLessThan(BUDGETS.page500Ms);
     expect(countsMs, 'counts median').toBeLessThan(BUDGETS.countsMs);
     expect(searchMs, 'search median').toBeLessThan(BUDGETS.searchMs);
+    expect(semanticSearchMs, 'semantic/fused search median').toBeLessThan(BUDGETS.semanticSearchMs);
     for (const [zoom, stats] of Object.entries(scroll)) {
       expect(stats.medianDropRate, `${zoom} median drop rate`).toBeLessThan(BUDGETS.scrollDropRate);
       expect(stats.maxWorstMs, `${zoom} maximum worst frame`).toBeLessThan(BUDGETS.scrollWorstMs);

@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { EmbeddingService } from '../embedding/embedding-service.js';
+import type { EmbeddingQueryResult, EmbeddingStatus } from '../embedding/embedding-service.js';
 import { EMBEDDING_MODEL_MANIFEST } from '../embedding/model-manifest.js';
 import { EmbeddingRepository } from '../db/embedding-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
@@ -20,6 +20,11 @@ const MAX_CANDIDATES = 5_000;
 interface RankedPhoto {
   readonly id: string;
   readonly score: number;
+}
+
+export interface SemanticEmbeddingFacade {
+  readonly status: () => EmbeddingStatus;
+  readonly query: (text: string) => Promise<EmbeddingQueryResult>;
 }
 
 function reciprocalRank(rank: number): number {
@@ -52,8 +57,13 @@ export class SemanticSearch {
     this.photos = new PhotosRepository(db);
   }
 
-  async page(request: PageRequest, embeddingService: EmbeddingService): Promise<PageResult> {
+  async page(request: PageRequest, getEmbeddingService: () => SemanticEmbeddingFacade): Promise<PageResult> {
     const requestedMode = request.searchMode ?? 'auto';
+    if (request.query?.trim() === '' || request.query === undefined || requestedMode === 'keyword') {
+      return this.photos.page(request);
+    }
+
+    const embeddingService = getEmbeddingService();
     const status = embeddingService.status();
     const metadata = (appliedMode: AppliedSearchMode, fallbackReason: SearchFallbackReason | null) => ({
       requestedMode,
@@ -66,8 +76,6 @@ export class SemanticSearch {
       ...this.photos.page(request),
       search: metadata('keyword', fallbackReason),
     });
-
-    if (request.query?.trim() === '' || request.query === undefined || requestedMode === 'keyword') return keywordPage(null);
 
     const query = await embeddingService.query(request.query);
     if (query.embedding === null) return keywordPage(query.fallback);
@@ -100,11 +108,12 @@ export class SemanticSearch {
     }
   }
 
-  async ids(request: LibraryQuery, embeddingService: EmbeddingService): Promise<readonly string[]> {
+  async ids(request: LibraryQuery, getEmbeddingService: () => SemanticEmbeddingFacade): Promise<readonly string[]> {
     const requestedMode = request.searchMode ?? 'auto';
     if (request.query?.trim() === '' || request.query === undefined || requestedMode === 'keyword') {
       return this.photos.selectAllIds(request);
     }
+    const embeddingService = getEmbeddingService();
     const query = await embeddingService.query(request.query);
     if (query.embedding === null) return this.photos.selectAllIds(request);
     try {
@@ -120,8 +129,8 @@ export class SemanticSearch {
     }
   }
 
-  async selectionRange(request: SelectionRangeRequest, embeddingService: EmbeddingService): Promise<readonly string[]> {
-    const ids = await this.ids(request, embeddingService);
+  async selectionRange(request: SelectionRangeRequest, getEmbeddingService: () => SemanticEmbeddingFacade): Promise<readonly string[]> {
+    const ids = await this.ids(request, getEmbeddingService);
     const anchorIndex = ids.indexOf(request.anchorId);
     const targetIndex = ids.indexOf(request.targetId);
     if (anchorIndex === -1 || targetIndex === -1) return [];

@@ -29,7 +29,7 @@ import type {
 import type { ImportService } from './import/import-service.js';
 import { requireMoveImportConfirmation, type ImportMoveSource } from './import/import-move-confirmation.js';
 import type { LibraryService } from './library/library-service.js';
-import type { EmbeddingService } from './embedding/embedding-service.js';
+import type { SemanticEmbeddingFacade } from './library/semantic-search.js';
 import type { ProtectedLibraryService } from './library/protected-library-service.js';
 import type { ProtectedExportFacade } from './export/protected-export-runtime.js';
 import { ExportDestinationAuthority } from './export/export-destination-authority.js';
@@ -220,21 +220,21 @@ export function registerLibraryHandlers(
   getService: () => LibraryService,
   onDeleted?: (deleted: number) => void,
   getActivity?: () => ActivityFacade,
-  getEmbedding?: () => EmbeddingService,
+  getEmbedding?: () => SemanticEmbeddingFacade,
 ): void {
   const page = (request: unknown): unknown =>
     wrapHandler(channels.libraryPage, (req) =>
-      getEmbedding === undefined ? getService().page(req) : getService().searchPage(req, getEmbedding()),
+      getEmbedding === undefined ? getService().page(req) : getService().searchPage(req, getEmbedding),
     )(request);
   ipcMain.handle(channels.libraryPage.name, (_event, request: unknown) => page(request));
   ipcMain.handle(channels.librarySelectAll.name, (_event, request: unknown) =>
     wrapHandler(channels.librarySelectAll, async (req) => ({
-      photoIds: getEmbedding === undefined ? getService().selectAllIds(req) : await getService().searchSelectAllIds(req, getEmbedding()),
+      photoIds: getEmbedding === undefined ? getService().selectAllIds(req) : await getService().searchSelectAllIds(req, getEmbedding),
     }))(request),
   );
   ipcMain.handle(channels.librarySelectionRange.name, (_event, request: unknown) =>
     wrapHandler(channels.librarySelectionRange, (req) =>
-      getEmbedding === undefined ? getService().selectionRange(req) : getService().searchSelectionRange(req, getEmbedding()),
+      getEmbedding === undefined ? getService().selectionRange(req) : getService().searchSelectionRange(req, getEmbedding),
     )(request),
   );
   ipcMain.handle(channels.libraryGet.name, (_event, request: unknown) =>
