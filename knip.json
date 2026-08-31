@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["tests/**/*.test.ts", "tests/dom/css-loader.ts", "tests/dom/register.ts", "tests/e2e/**/*.spec.ts", "scripts/*.mjs"],
+  "entry": [
+    "src/renderer/src/main.tsx",
+    "src/renderer/src/capture-frame.ts",
+    "tests/**/*.test.ts",
+    "tests/dom/css-loader.ts",
+    "tests/dom/register.ts",
+    "tests/e2e/**/*.spec.ts",
+    "scripts/*.mjs"
+  ],
   "project": ["src/**/*.{ts,tsx}", "tests/**/*.ts", "!tests/fixtures/**", "scripts/**/*.mjs"],
   "ignoreExportsUsedInFile": true,
   "ignoreBinaries": ["ditto", "plutil", "mount", "ioreg", "otool", "reg"],

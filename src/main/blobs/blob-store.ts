@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { link, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
@@ -43,6 +43,12 @@ function assertHash(hash: string): void {
 function isErrno(error: unknown, code: string): boolean {
   // type-coverage:ignore-next-line -- narrowing the fs error shape
   return error instanceof Error && (error as NodeJS.ErrnoException).code === code;
+}
+
+function recursiveEntryPath(entry: { readonly name: string; readonly parentPath: string }): string {
+  // Node 24 can surface an absolute Dirent.name for recursive reads on Windows.
+  // Treat the resolved path as authoritative and derive logical names from it.
+  return isAbsolute(entry.name) ? entry.name : join(entry.parentPath, entry.name);
 }
 
 /** Reads the key id out of an existing envelope header (magic|ver|keyId). */
@@ -98,8 +104,9 @@ export class BlobStore {
     const out: { hash: string; ageMs: number }[] = [];
     for (const entry of await readdir(this.blobsDir, { recursive: true, withFileTypes: true })) {
       if (entry.isFile()) {
-        const info = await stat(join(entry.parentPath, entry.name));
-        out.push({ hash: entry.name, ageMs: now - info.mtimeMs });
+        const path = recursiveEntryPath(entry);
+        const info = await stat(path);
+        out.push({ hash: basename(path), ageMs: now - info.mtimeMs });
       }
     }
     return out;
@@ -112,8 +119,9 @@ export class BlobStore {
     const ages = new Map<string, number>();
     for (const entry of await readdir(this.thumbsDir, { recursive: true, withFileTypes: true })) {
       if (entry.isFile()) {
-        const hash = entry.name.replace(/\.(thumb|mid)$/u, '');
-        const info = await stat(join(entry.parentPath, entry.name));
+        const path = recursiveEntryPath(entry);
+        const hash = basename(path).replace(/\.(thumb|mid)$/u, '');
+        const info = await stat(path);
         const ageMs = now - info.mtimeMs;
         ages.set(hash, Math.min(ages.get(hash) ?? Number.POSITIVE_INFINITY, ageMs));
       }
@@ -235,8 +243,9 @@ export class BlobStore {
     const out: { photoId: string; hash: string; ageMs: number }[] = [];
     for (const entry of await readdir(this.sidecarsDir, { recursive: true, withFileTypes: true })) {
       if (entry.isFile()) {
-        const info = await stat(join(entry.parentPath, entry.name));
-        out.push({ photoId: basename(entry.parentPath), hash: entry.name, ageMs: now - info.mtimeMs });
+        const path = recursiveEntryPath(entry);
+        const info = await stat(path);
+        out.push({ photoId: basename(dirname(path)), hash: basename(path), ageMs: now - info.mtimeMs });
       }
     }
     return out;

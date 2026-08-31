@@ -124,7 +124,7 @@ describe('PhotoKit explicit transfer service (#798)', () => {
     const review = await service.reviewImport();
     assert.equal(review.status, 'ready');
     assert.equal((await service.runImport(review.reviewId!, ['asset'])).imported, 1);
-    assert.match(importedPath, /photokit-transfers\/transfer-/u);
+    assert.match(importedPath.replaceAll('\\', '/'), /photokit-transfers\/transfer-/u);
     await assert.rejects(service.runImport(review.reviewId!, ['other']), /stale or invalid/u);
   });
 

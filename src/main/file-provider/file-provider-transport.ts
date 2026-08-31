@@ -71,12 +71,15 @@ export class FileProviderTransport {
     await unlink(this.endpointPath()).catch((error: unknown) => {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
     });
+    const closed =
+      server !== undefined && server.listening
+        ? new Promise<void>((resolve, reject) => server.close((error) => (error === undefined ? resolve() : reject(error))))
+        : Promise.resolve();
     for (const socket of this.sockets) socket.destroy();
-    this.sockets.clear();
-    if (server !== undefined && server.listening) {
-      await new Promise<void>((resolve, reject) => server.close((error) => (error === undefined ? resolve() : reject(error))));
-    }
     await Promise.allSettled([...this.activeRequests]);
+    server?.closeAllConnections();
+    this.sockets.clear();
+    await closed;
   }
 
   private async listen(): Promise<void> {

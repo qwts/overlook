@@ -22,10 +22,11 @@ export async function requireMoveImportConfirmation(
   source: ImportMoveSource,
   confirmMove?: (source: ImportMoveSource) => Promise<boolean>,
   recheckContentAdmission?: () => void,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<boolean> {
   if (mode !== 'move') return true;
   const paths = source.files ?? (source.path === undefined ? [] : [source.path]);
-  if (paths.length === 0 || paths.some((candidate) => !isCanonicalImportPath(candidate))) {
+  if (paths.length === 0 || paths.some((candidate) => !isCanonicalImportPath(candidate, platform))) {
     throw new Error('Move import sources must use absolute paths without non-canonical segments');
   }
   const confirmed = (await confirmMove?.(source)) === true;

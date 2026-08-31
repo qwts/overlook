@@ -68,7 +68,7 @@ import { ProtectedRuntime } from './library/protected-runtime.js';
 import { registerAppServices } from './register-app-services.js';
 import { devSeedAccess, runDevSeeds } from './library/dev-seed.js';
 import { ThumbService } from './thumbs/thumb-service.js';
-import { exitForReleaseSmokeIfRequested } from './release-smoke.js';
+import { configureReleaseImportSmoke, exitForReleaseSmokeIfRequested, releaseImportSmokeProfileIfRequested } from './release-smoke.js';
 import { registerEarlyRuntime } from './early-runtime.js';
 import { installApplicationMenu, refreshApplicationMenu } from './application-menu.js';
 import { interopRuntimeBusy, lockInteropRuntime } from './interop/runtime.js';
@@ -78,7 +78,6 @@ import { WorkTracker } from './work-tracker.js';
 import type { LibraryParts } from './library/library-parts.js';
 import type { EmbeddingRuntime } from './embedding/embedding-runtime.js';
 import { createEmbeddingApplicationRuntime } from './embedding/embedding-application-runtime.js';
-import type { EmbeddingService } from './embedding/embedding-service.js';
 import { EgressRuntime } from './egress-runtime.js';
 import { applicationEvents } from './application-events.js';
 import { installThemeRuntime } from './theme/theme-runtime.js';
@@ -86,8 +85,7 @@ import { installThemeRuntime } from './theme/theme-runtime.js';
 const harnessEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
 
 // Configure the stable profile identity before the first userData lookup.
-const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA']);
-
+const userDataOverride = configureAppProfile(app, process.env['OVERLOOK_USER_DATA'], releaseImportSmokeProfileIfRequested(app));
 const productionInterop = createProductionInteropAppRuntime({
   harnessEnv,
   library: () => requireParts('inbound Move'),
@@ -97,7 +95,6 @@ const productionInterop = createProductionInteropAppRuntime({
 const externalOpen = productionInterop.headlessRequested
   ? createHeadlessExternalOpenRuntime()
   : createExternalOpenRuntime({ isolatedHarnessProfile: userDataOverride !== undefined && userDataOverride !== '' });
-
 if (!productionInterop.headlessRequested) {
   registerSingleInstance();
   registerEarlyRuntime();
@@ -334,7 +331,7 @@ const changeProviderWork = (delta: 1 | -1): void => {
 
 const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
-function getEmbeddingService(): EmbeddingService {
+function getEmbeddingService() {
   embeddingRuntime ??= createEmbeddingApplicationRuntime({
     parts: requireParts('embedding service'),
     importBusy: () => importRuntime?.service.busy() === true,
@@ -713,6 +710,8 @@ async function closeLibrary(mode: 'restore' | 'lock' | 'switch'): Promise<void> 
   await releaseLibraryLockAfter(() => closeLibraryResources(mode), release);
   releaseLibraryLock = undefined;
 }
+
+configureReleaseImportSmoke(getImportService, requireParts, () => libraryService && closeLibrary('lock'));
 
 const { switchLibrary, getRelocationRuntime, settleRelocationJournals, reportStartupFailures } = createLibraryLifecycle({
   registryRuntime,

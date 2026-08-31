@@ -40,7 +40,10 @@ export function parseMountOutput(output: string): MountEntry[] {
 }
 
 export function classifyForMounts(entries: readonly MountEntry[], target: string): VolumeClassification {
-  const resolved = path.resolve(target);
+  // `mount` reports POSIX paths even when these pure parser tests execute on a
+  // Windows runner. Preserve that path grammar instead of rewriting `/Volumes`
+  // beneath the current Windows drive.
+  const resolved = target.startsWith('/') ? path.posix.resolve(target) : path.resolve(target);
   let best: MountEntry | null = null;
   for (const entry of entries) {
     const inside = resolved === entry.mountPoint || resolved.startsWith(entry.mountPoint === '/' ? '/' : `${entry.mountPoint}/`);
