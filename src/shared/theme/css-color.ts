@@ -178,13 +178,16 @@ export function parseCssColor(input: string): ParsedCssColor {
   throw new Error(`unsupported color function ${name ?? ''}()`.trim());
 }
 
-export function compositeColor(foreground: ParsedCssColor, background: ParsedCssColor): SrgbColor {
+export function compositeColor(foreground: ParsedCssColor, background: ParsedCssColor): ParsedCssColor {
   const opacity = foreground.alpha + background.alpha * (1 - foreground.alpha);
-  if (opacity === 0) return srgb(0, 0, 0);
-  return srgb(
-    ...(foreground.srgb.map(
-      (channel, index) =>
-        (channel * foreground.alpha + (background.srgb[index] ?? 0) * background.alpha * (1 - foreground.alpha)) / opacity,
-    ) as [number, number, number]),
+  if (opacity === 0) return canonical(srgb(0, 0, 0), 0);
+  return canonical(
+    srgb(
+      ...(foreground.srgb.map(
+        (channel, index) =>
+          (channel * foreground.alpha + (background.srgb[index] ?? 0) * background.alpha * (1 - foreground.alpha)) / opacity,
+      ) as [number, number, number]),
+    ),
+    opacity,
   );
 }

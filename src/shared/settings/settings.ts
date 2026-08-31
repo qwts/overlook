@@ -3,6 +3,7 @@ import { providerIdSchema } from '../backup/provider-descriptor.js';
 import { llmProviderIdSchema } from '../llm/provider.js';
 import { isQuickActionCommandId, type QuickActionCommandId } from '../commands/registry.js';
 import { DEFAULT_TRASH_RETENTION, trashRetentionSchema } from '../library/trash.js';
+import { themeIdSchema } from '../theme/theme-file.js';
 
 export const CURRENT_DIAGNOSTICS_CONSENT_VERSION = 1 as const;
 
@@ -35,7 +36,7 @@ export const settingsSchema = z.object({
   /** First-party theme, or the live operating-system preference. */
   appearance: z.enum(['dark', 'light', 'system']),
   /** Installed user-theme id; the profile-scoped theme file is authoritative. */
-  userTheme: z.string().min(1).max(128).nullable(),
+  userTheme: themeIdSchema.nullable(),
   /** Ordered Command-hover actions. Empty disables the overlay. */
   quickActions: quickActionsSchema,
   /** Locked true by design: imports always generate thumbnails. */

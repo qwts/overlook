@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { settingsSchema } from '../settings/settings.js';
-import { themeMetaSchema, themeValidationErrorSchema, themeWarningSchema } from '../theme/theme-file.js';
+import { themeIdSchema, themeMetaSchema, themeValidationErrorSchema, themeWarningSchema } from '../theme/theme-file.js';
 import type { ChannelDefinition } from './channels.js';
 
 const defineChannel = <TRequest extends z.ZodType, TResponse extends z.ZodType>(
@@ -10,7 +10,6 @@ const defineChannel = <TRequest extends z.ZodType, TResponse extends z.ZodType>(
   response: TResponse,
 ): ChannelDefinition<TRequest, TResponse> => ({ name, request, response });
 
-export const themeIdSchema = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,126}[a-z0-9])?$/, 'Invalid theme id');
 const canonicalColorSchema = z.string().regex(/^rgb\([\d.]+% [\d.]+% [\d.]+%(?: \/ [\d.]+)?\)$/);
 
 export const installedThemeSchema = z.object({

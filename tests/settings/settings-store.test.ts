@@ -81,6 +81,7 @@ describe('settings store (#111)', () => {
         sortOrder: 'name',
         bandwidthLimit: 'fast',
         wifiOnly: false,
+        userTheme: '../unsafe',
         thumbnailsOnImport: false,
         reOffloadAfterViewing: 'sometimes',
       }),
@@ -90,6 +91,7 @@ describe('settings store (#111)', () => {
     const settings = storeIn(dir).get();
     assert.equal(settings.sortOrder, 'name', 'good key kept');
     assert.equal(settings.wifiOnly, false, 'good key kept');
+    assert.equal(settings.userTheme, null, 'unsafe persisted theme id recovers without blocking settings');
     assert.equal(settings.bandwidthLimit, defaultSettings.bandwidthLimit, 'bad key → its default');
     assert.equal(settings.thumbnailsOnImport, true, 'locked key cannot be persisted off');
     assert.equal(settings.reOffloadAfterViewing, true, 'invalid custody policy recovers to its safe default');
@@ -137,6 +139,7 @@ describe('settings store (#111)', () => {
     assert.deepEqual(await handler({ patch: { sortOrder: 'random' } }), invalid, 'unknown enum value');
     assert.deepEqual(await handler({ patch: { trashRetention: '14' } }), invalid, 'retention is the bounded ADR enum');
     assert.deepEqual(await handler({ patch: { providerId: '../cloud' } }), invalid, 'unsafe provider registry key');
+    assert.deepEqual(await handler({ patch: { userTheme: '../theme' } }), invalid, 'unsafe user-theme id');
     assert.deepEqual(await handler({ patch: { diagnosticsConsentVersion: 1 } }), invalid, 'renderer cannot forge consent policy');
     assert.deepEqual(await handler({ patch: { quickActions: ['photo.export', 'photo.export'] } }), invalid, 'Quick Action IDs are unique');
     assert.deepEqual(await handler({ patch: { quickActions: ['library.import'] } }), invalid, 'only eligible commands persist');

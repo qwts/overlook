@@ -640,7 +640,7 @@ export function registerThemeHandlers(service: ThemeService): void {
     wrapHandler(channels.themeRemove, ({ id }) => service.remove(id))(request),
   );
   ipcMain.handle(channels.themeReset.name, (_event, request: unknown) =>
-    wrapHandler(channels.themeReset, () => ({ settings: service.reset() }))(request),
+    validateHandler(channels.themeReset, () => ({ settings: service.reset() }))(request),
   );
 }
 

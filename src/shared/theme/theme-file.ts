@@ -60,6 +60,7 @@ export const THEME_TOKENS = [
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];
 export const THEME_TOKENS_VERSION = 1 as const;
+export const themeIdSchema = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,126}[a-z0-9])?$/, 'Invalid theme id');
 
 export const themeMetaSchema = z
   .object({
@@ -191,7 +192,10 @@ function effectiveColor(
 }
 
 function ratioOf(foreground: ParsedCssColor, background: ParsedCssColor): number {
-  return contrastRatio(compositeColor(foreground, background), compositeColor(background, parseCssColor('#ffffff')));
+  const backing = parseCssColor('#ffffff');
+  const renderedBackground = compositeColor(background, backing);
+  const renderedForeground = compositeColor(compositeColor(foreground, background), backing);
+  return contrastRatio(renderedForeground.srgb, renderedBackground.srgb);
 }
 
 function contrastVerdicts(

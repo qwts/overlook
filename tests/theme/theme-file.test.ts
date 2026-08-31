@@ -53,6 +53,13 @@ describe('user-theme contract (#396)', () => {
     });
     assert.equal(invisible.ok, false);
     if (!invisible.ok) assert.match(invisible.errors[0]?.message ?? '', /minimum is 1\.5:1/);
+
+    const translucent = validateThemeFile({
+      ...validTheme,
+      tokens: { '--text-body': 'rgb(0 0 0 / 10%)', '--surface-window': 'rgb(255 255 255 / 0%)' },
+    });
+    assert.equal(translucent.ok, false);
+    if (!translucent.ok) assert.match(translucent.errors[0]?.message ?? '', /minimum is 1\.5:1/);
   });
 
   test('surfaces low-contrast warnings without blocking import', () => {

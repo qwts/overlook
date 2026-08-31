@@ -3,9 +3,8 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import path from 'node:path';
 
 import type { ApplicableTheme, InstalledTheme, ThemeImportResult } from '../../shared/ipc/theme-channels.js';
-import { themeIdSchema } from '../../shared/ipc/theme-channels.js';
 import type { AppSettings, SettingsPatch } from '../../shared/settings/settings.js';
-import { validateThemeFile, type ParsedThemeFile, type ThemeValidationError } from '../../shared/theme/theme-file.js';
+import { themeIdSchema, validateThemeFile, type ParsedThemeFile, type ThemeValidationError } from '../../shared/theme/theme-file.js';
 
 const THEME_SUFFIX = '.overlook-theme.json';
 const MAX_THEME_BYTES = 256 * 1024;
