@@ -46,7 +46,7 @@ test('a validated user theme previews, persists across restart, and removes back
     await second.page.getByRole('button', { name: 'Settings' }).click();
     await second.page.getByRole('tab', { name: 'General' }).click();
     await expect(second.page.getByText('Orchid')).toBeVisible();
-    await second.page.getByRole('button', { name: 'Remove' }).click();
+    await second.page.getByTestId('settings-pane').getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(second.page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(second.page.getByText('No custom themes installed.')).toBeVisible();
   } finally {
