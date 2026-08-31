@@ -101,6 +101,21 @@ describe('packaged release launch smoke (#357)', () => {
     );
   });
 
+  test('requires the result marker path itself to be absolute', () => {
+    const { profile } = smokeApp();
+
+    assert.throws(
+      () =>
+        releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+          'Overlook',
+          RELEASE_IMPORT_SMOKE_ARGUMENT,
+          `--overlook-release-import-profile=${profile}`,
+          '--overlook-release-import-result=release-import-result.txt',
+        ]),
+      /release import result must be the dedicated marker file/u,
+    );
+  });
+
   test('admits only a real app.asar through the explicit installed-artifact harness', async () => {
     const { profile } = smokeApp(join(tmpdir(), `overlook-release-import-smoke-${Date.now()}`));
     const archive = join(profile, 'app.asar');

@@ -88,17 +88,21 @@ function isReleaseImportRuntime(app: ReleaseSmokeProfileApp, environment: NodeJS
 function isolatedReleaseImportProfile(profilePath: string): string {
   if (!isAbsolute(profilePath)) throw new Error('release import profile must be an absolute path');
   const resolvedProfile = realpathSync.native(resolve(profilePath));
-  const resolvedParent = realpathSync.native(dirname(resolvedProfile));
-  const resolvedTemp = realpathSync.native(resolve(tmpdir()));
-  const parentStat = statSync(resolvedParent);
-  const tempStat = statSync(resolvedTemp);
-  const sameDirectory =
-    (parentStat.ino !== 0 && parentStat.dev === tempStat.dev && parentStat.ino === tempStat.ino) ||
-    resolvedParent.toLowerCase() === resolvedTemp.toLowerCase();
-  if (!sameDirectory || !basename(resolvedProfile).startsWith('overlook-release-import-smoke-')) {
+  if (!sameDirectory(dirname(resolvedProfile), tmpdir()) || !basename(resolvedProfile).startsWith('overlook-release-import-smoke-')) {
     throw new Error('release import profile must be an isolated Overlook smoke directory under the system temp directory');
   }
   return resolvedProfile;
+}
+
+function sameDirectory(leftPath: string, rightPath: string): boolean {
+  const resolvedLeft = realpathSync.native(resolve(leftPath));
+  const resolvedRight = realpathSync.native(resolve(rightPath));
+  const leftStat = statSync(resolvedLeft);
+  const rightStat = statSync(resolvedRight);
+  return (
+    (leftStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino) ||
+    resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+  );
 }
 
 export function releaseImportSmokeProfileIfRequested(
@@ -111,8 +115,9 @@ export function releaseImportSmokeProfileIfRequested(
   const profilePath = isolatedReleaseImportProfile(
     smokeValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT, RELEASE_IMPORT_PROFILE_ENV, environment) ?? '',
   );
-  const resultPath = resolve(smokeValue(argv, RELEASE_IMPORT_RESULT_ARGUMENT, RELEASE_IMPORT_RESULT_ENV, environment) ?? '');
-  if (!isAbsolute(resultPath) || basename(resultPath) !== RELEASE_IMPORT_RESULT_FILE || realpathSync(dirname(resultPath)) !== profilePath) {
+  const resultValue = smokeValue(argv, RELEASE_IMPORT_RESULT_ARGUMENT, RELEASE_IMPORT_RESULT_ENV, environment) ?? '';
+  const resultPath = resolve(resultValue);
+  if (!isAbsolute(resultValue) || basename(resultPath) !== RELEASE_IMPORT_RESULT_FILE || !sameDirectory(dirname(resultPath), profilePath)) {
     throw new Error('release import result must be the dedicated marker file in the isolated profile');
   }
   releaseImportSmokeResultPath = resultPath;
@@ -130,7 +135,7 @@ export async function parseReleaseImportSmokeRequest(
   const profilePath = smokeValue(argv, RELEASE_IMPORT_PROFILE_ARGUMENT, RELEASE_IMPORT_PROFILE_ENV, environment) ?? '';
   if (!isAbsolute(sourcePath)) throw new Error('release import source must be an absolute path');
   const resolvedProfile = await realpath(isolatedReleaseImportProfile(profilePath));
-  if ((await realpath(resolve(app.getPath('userData')))) !== resolvedProfile) {
+  if (!sameDirectory(app.getPath('userData'), resolvedProfile)) {
     throw new Error('release import profile does not match Electron userData');
   }
   return { sourcePath: resolve(sourcePath), profilePath: resolvedProfile };
