@@ -1,5 +1,11 @@
 # photos
 
+## 0.74.6
+
+### Patch Changes
+
+- 16b8048: Add safe profile-scoped user theme import, validation, preview, persistence, removal, and native recovery controls.
+
 ## 0.74.5
 
 ### Patch Changes
