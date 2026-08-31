@@ -19,8 +19,11 @@ ADR-0018 query path on top of [#391](https://github.com/qwts/overlook/issues/391
    live region.
 7. The existing 250 ms input debounce and request-generation check prevent
    stale responses from replacing a newer query.
-8. The 200K performance lane measures text-query embedding, cosine KNN, fusion,
-   hydration, and IPC together against the ADR-0018 900 ms median ratchet.
+8. The 200K performance lane measures cosine KNN, fusion, hydration, and IPC
+   with a fixed offline query vector, then adds the production text tower's
+   separately enforced 40 ms maximum. This conservative composed bound is
+   checked against the ADR-0018 900 ms median ratchet without downloading model
+   assets in routine CI.
 
 Evidence:
 

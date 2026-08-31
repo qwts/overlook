@@ -20,6 +20,7 @@ import { SCROLL_TRIAL_COUNT, summarizeScrollTrials, type ScrollStats, type Scrol
 const LIBRARY_SIZE = Number(process.env['OVERLOOK_PERF_SIZE'] ?? '200000');
 const QUERY_ROUNDS = 5;
 const IMPORT_FILES = 100;
+const TEXT_QUERY_BUDGET_MS = 40;
 
 function median(samples: readonly number[]): number {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -111,13 +112,17 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       // candidate set (#390; the FTS index replaced the old instr() scan).
       `window.overlook.library.page({ source: 'all', limit: 500, query: 'lisbon' })`,
     );
-    const semanticSearchMs = await queryMedianMs(
+    const semanticVectorSearchMs = await queryMedianMs(
       page,
       `window.overlook.library.page({ source: 'all', limit: 500, query: 'a neon tram at dusk', searchMode: 'auto' })`,
     );
+    // Routine CI stays offline, so it uses the deterministic query vector and
+    // composes that measurement with the production text tower's separately
+    // enforced ADR maximum. The sum is a conservative end-to-end bound.
+    const semanticSearchMs = semanticVectorSearchMs + TEXT_QUERY_BUDGET_MS;
 
     console.log(
-      `[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms semantic=${semanticSearchMs.toFixed(0)}ms`,
+      `[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms semantic-vector=${semanticVectorSearchMs.toFixed(0)}ms semantic-composed=${semanticSearchMs.toFixed(0)}ms`,
     );
 
     // Import throughput: unique real files through the full pipeline
@@ -157,6 +162,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
       page500Ms,
       countsMs,
       searchMs,
+      semanticVectorSearchMs,
       semanticSearchMs,
       scroll,
       importPhotosPerSec,
