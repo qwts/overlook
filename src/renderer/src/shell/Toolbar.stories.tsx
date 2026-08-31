@@ -64,6 +64,8 @@ export const Modes: Story = {
     await expect(canvas.getByRole('radio', { name: 'Semantic' })).toBeChecked();
     await userEvent.click(canvas.getByRole('radio', { name: 'Keyword' }));
     await expect(canvas.getByRole('radio', { name: 'Keyword' })).toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: 'Filters' }));
+    await expect(canvas.getByRole('button', { name: 'RAW' })).toBeVisible();
   },
 };
 

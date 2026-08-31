@@ -67,10 +67,10 @@
   margin-inline-start: var(--space-1);
 }
 
-/* At 200% Electron zoom the 1280px default window exposes a 640 CSS-pixel
- * viewport. Wrap before the toolbar can widen the root document and push
- * fixed/overlay controls outside the reachable viewport. */
-@media (max-width: 860px) {
+/* The search-mode control makes the complete command strip wider than the
+ * 1280px default window. Compact the fixed items and allow wrapping before
+ * either ordinary-width or 200%-zoom layouts clip actions offscreen. */
+@media (max-width: 1360px) {
   .ovl-toolbar__row {
     flex-wrap: wrap;
     height: auto;

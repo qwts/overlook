@@ -73,7 +73,19 @@ test('search + chips filter the library live; impossible filter shows the empty 
     await search.fill('');
     await expect(grid.locator('.ovl-grid__cell')).toHaveCount(12);
 
-    await page.getByRole('button', { name: 'Filters' }).click();
+    const importButton = page.getByRole('button', { name: 'Import', exact: true });
+    await expect(importButton).toBeVisible();
+    await expect
+      .poll(async () => {
+        const bounds = await importButton.boundingBox();
+        const viewportWidth = await page.evaluate<number>('window.innerWidth');
+        return bounds !== null && bounds.x + bounds.width <= viewportWidth;
+      })
+      .toBe(true);
+
+    const filterToggle = page.getByRole('button', { name: 'Filters' });
+    await filterToggle.click();
+    await expect(filterToggle).toHaveAttribute('aria-pressed', 'true');
     const rawFilter = page.getByRole('button', { name: 'RAW' });
     await expect(rawFilter).toBeVisible();
     await rawFilter.press('Enter');
