@@ -415,59 +415,67 @@ describe('ADR-0029 corrupt control handling (#543)', () => {
 });
 
 describe('ADR-0029 user-scoped control seams (#543)', () => {
-  test('uses an owned mode-0700 Unix directory and a privacy-safe per-user Windows pipe name', async () => {
-    const runtimeDirectory = await mkdtemp('/tmp/ovl-live-local-');
-    const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
-    assert.equal(endpoint, join(runtimeDirectory, 'com.qwts.overlook.interop.sock'));
-    assert.equal((await stat(runtimeDirectory)).mode & 0o777, 0o700);
+  test(
+    'uses an owned mode-0700 Unix directory and a privacy-safe per-user Windows pipe name',
+    { skip: process.platform === 'win32' },
+    async () => {
+      const runtimeDirectory = await mkdtemp('/tmp/ovl-live-local-');
+      const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
+      assert.equal(endpoint, join(runtimeDirectory, 'com.qwts.overlook.interop.sock'));
+      assert.equal((await stat(runtimeDirectory)).mode & 0o777, 0o700);
 
-    const sid = 'S-1-5-21-123456789-987654321-111111111-1001';
-    const pipe = windowsNamedPipeForUser(sid);
-    assert.match(pipe.path, /^\\\\\.\\pipe\\com\.qwts\.overlook\.interop-[a-f0-9]{24}$/u);
-    assert.equal(pipe.path.includes(sid), false);
-    assert.equal(pipe.sddl, `D:P(A;;FA;;;${sid})`);
-    assert.throws(() => windowsNamedPipeForUser('Everyone'));
+      const sid = 'S-1-5-21-123456789-987654321-111111111-1001';
+      const pipe = windowsNamedPipeForUser(sid);
+      assert.match(pipe.path, /^\\\\\.\\pipe\\com\.qwts\.overlook\.interop-[a-f0-9]{24}$/u);
+      assert.equal(pipe.path.includes(sid), false);
+      assert.equal(pipe.sddl, `D:P(A;;FA;;;${sid})`);
+      assert.throws(() => windowsNamedPipeForUser('Everyone'));
 
-    const target = await mkdtemp('/tmp/ovl-live-local-target-');
-    const link = `${target}-link`;
-    await symlink(target, link);
-    await assert.rejects(
-      prepareUnixControlEndpoint(link),
-      (error: unknown) => error instanceof LiveLocalError && error.code === 'wrong-authority',
-    );
-  });
+      const target = await mkdtemp('/tmp/ovl-live-local-target-');
+      const link = `${target}-link`;
+      await symlink(target, link);
+      await assert.rejects(
+        prepareUnixControlEndpoint(link),
+        (error: unknown) => error instanceof LiveLocalError && error.code === 'wrong-authority',
+      );
+    },
+  );
 
-  test('uses a real user-scoped Unix rendezvous to distinguish absent, locked, incompatible, and running', async () => {
-    const runtimeDirectory = await mkdtemp('/tmp/ovl-live-local-control-');
-    const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
-    await assert.rejects(
-      requestUnixControl(endpoint, bootstrapRequest()),
-      (error: unknown) => classifyControlEndpointFailure(error) === 'not-running',
-    );
+  test(
+    'uses a real user-scoped Unix rendezvous to distinguish absent, locked, incompatible, and running',
+    { skip: process.platform === 'win32' },
+    async () => {
+      const runtimeDirectory = await mkdtemp('/tmp/ovl-live-local-control-');
+      const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
+      await assert.rejects(
+        requestUnixControl(endpoint, bootstrapRequest()),
+        (error: unknown) => classifyControlEndpointFailure(error) === 'not-running',
+      );
 
-    let state: LiveLocalBootstrapState = 'locked';
-    const broker = new LiveLocalCapabilityBroker({
-      expectedExtensionId: EXTENSION_ID,
-      endpoint: 'ws://127.0.0.1:49152',
-    });
-    const server = createNetServer((socket) => {
-      void readControlFrame(new ByteReader(socket))
-        .then((request) => socket.end(encodeControlFrame(broker.issue(state, request))))
-        .catch(() => socket.destroy());
-    });
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(endpoint, resolve);
-    });
-    try {
-      assert.equal((await requestUnixControl(endpoint, bootstrapRequest())).state, 'locked');
-      state = 'running';
-      assert.equal((await requestUnixControl(endpoint, bootstrapRequest({ protocolMin: 2, protocolMax: 2 }))).state, 'incompatible');
-      assert.equal((await requestUnixControl(endpoint, bootstrapRequest())).state, 'running');
-    } finally {
-      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
-    }
-  });
+      let state: LiveLocalBootstrapState = 'locked';
+      const broker = new LiveLocalCapabilityBroker({
+        expectedExtensionId: EXTENSION_ID,
+        endpoint: 'ws://127.0.0.1:49152',
+      });
+      const server = createNetServer((socket) => {
+        void readControlFrame(new ByteReader(socket))
+          .then((request) => socket.end(encodeControlFrame(broker.issue(state, request))))
+          .catch(() => socket.destroy());
+      });
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(endpoint, resolve);
+      });
+      try {
+        assert.equal((await requestUnixControl(endpoint, bootstrapRequest())).state, 'locked');
+        state = 'running';
+        assert.equal((await requestUnixControl(endpoint, bootstrapRequest({ protocolMin: 2, protocolMax: 2 }))).state, 'incompatible');
+        assert.equal((await requestUnixControl(endpoint, bootstrapRequest())).state, 'running');
+      } finally {
+        await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+      }
+    },
+  );
 });
 
 describe('ADR-0029 real loopback WebSocket prototype (#543)', () => {

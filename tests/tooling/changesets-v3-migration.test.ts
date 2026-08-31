@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -34,7 +35,7 @@ describe('Changesets v3 migration (#1018)', () => {
     assert.match(dependabot.slice(releaseVersioning, catchAll), /- '@changesets\/\*'/u);
   });
 
-  test('status and version include a private package when the opt-in is enabled', () => {
+  test('status and version include a private package when the opt-in is enabled', async () => {
     const fixture = mkdtempSync(join(tmpdir(), 'overlook-changesets-v3-'));
     const changesetDir = join(fixture, '.changeset');
     const cli = join(root, 'node_modules/@changesets/cli/bin.js');
@@ -78,7 +79,7 @@ describe('Changesets v3 migration (#1018)', () => {
       assert.equal(json(join(fixture, 'package.json'))['version'], '1.0.1');
       assert.equal(existsSync(join(changesetDir, 'private-app.md')), false);
     } finally {
-      rmSync(fixture, { recursive: true, force: true });
+      await rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   });
 });

@@ -135,7 +135,7 @@ describe('production live local bootstrap (#544)', () => {
     await sessions.close();
   });
 
-  test('classifies desktop state and redeems one authenticated control session', async () => {
+  test('classifies desktop state and redeems one authenticated control session', { skip: process.platform === 'win32' }, async () => {
     const profile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
     const temporary = await mkdtemp(join(tmpdir(), 'overlook-live-tmp-'));
     let state: 'locked' | 'running' = 'locked';
@@ -201,52 +201,56 @@ describe('production live local bootstrap (#544)', () => {
     await assert.rejects(stat(endpoint), (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT');
   });
 
-  test('refuses foreign endpoint files, a second live peer, and unsupported platforms', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
-    const temporary = await mkdtemp(join(tmpdir(), 'overlook-live-tmp-'));
-    const runtimeDirectory = liveLocalRuntimeDirectory(profile, temporary);
-    const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
-    await writeFile(endpoint, 'not a socket');
-    const blocked = new LiveLocalBridge({
-      platform: 'darwin',
-      profileDirectory: profile,
-      temporaryDirectory: temporary,
-      expectedExtensionId: EXTENSION_ID,
-      bootstrapState: () => 'locked',
-    });
-    await assert.rejects(blocked.start(), /not an owned socket/u);
+  test(
+    'refuses foreign endpoint files, a second live peer, and unsupported platforms',
+    { skip: process.platform === 'win32' },
+    async () => {
+      const profile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
+      const temporary = await mkdtemp(join(tmpdir(), 'overlook-live-tmp-'));
+      const runtimeDirectory = liveLocalRuntimeDirectory(profile, temporary);
+      const endpoint = await prepareUnixControlEndpoint(runtimeDirectory);
+      await writeFile(endpoint, 'not a socket');
+      const blocked = new LiveLocalBridge({
+        platform: 'darwin',
+        profileDirectory: profile,
+        temporaryDirectory: temporary,
+        expectedExtensionId: EXTENSION_ID,
+        bootstrapState: () => 'locked',
+      });
+      await assert.rejects(blocked.start(), /not an owned socket/u);
 
-    const otherProfile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
-    const first = new LiveLocalBridge({
-      platform: 'darwin',
-      profileDirectory: otherProfile,
-      temporaryDirectory: temporary,
-      expectedExtensionId: EXTENSION_ID,
-      bootstrapState: () => 'locked',
-    });
-    const second = new LiveLocalBridge({
-      platform: 'darwin',
-      profileDirectory: otherProfile,
-      temporaryDirectory: temporary,
-      expectedExtensionId: EXTENSION_ID,
-      bootstrapState: () => 'locked',
-    });
-    try {
-      await first.start();
-      await assert.rejects(second.start(), /already exists/u);
-    } finally {
-      await first.close();
-    }
-    const unsupported = new LiveLocalBridge({
-      platform: 'linux',
-      profileDirectory: otherProfile,
-      temporaryDirectory: temporary,
-      expectedExtensionId: EXTENSION_ID,
-      bootstrapState: () => 'running',
-    });
-    assert.equal(await unsupported.start(), false);
-    await unsupported.close();
-  });
+      const otherProfile = await mkdtemp(join(tmpdir(), 'overlook-live-profile-'));
+      const first = new LiveLocalBridge({
+        platform: 'darwin',
+        profileDirectory: otherProfile,
+        temporaryDirectory: temporary,
+        expectedExtensionId: EXTENSION_ID,
+        bootstrapState: () => 'locked',
+      });
+      const second = new LiveLocalBridge({
+        platform: 'darwin',
+        profileDirectory: otherProfile,
+        temporaryDirectory: temporary,
+        expectedExtensionId: EXTENSION_ID,
+        bootstrapState: () => 'locked',
+      });
+      try {
+        await first.start();
+        await assert.rejects(second.start(), /already exists/u);
+      } finally {
+        await first.close();
+      }
+      const unsupported = new LiveLocalBridge({
+        platform: 'linux',
+        profileDirectory: otherProfile,
+        temporaryDirectory: temporary,
+        expectedExtensionId: EXTENSION_ID,
+        bootstrapState: () => 'running',
+      });
+      assert.equal(await unsupported.start(), false);
+      await unsupported.close();
+    },
+  );
 
   test('composes the protected current-user Windows pipe for desktop and native-host bootstrap', async () => {
     const sid = 'S-1-5-21-111-222-333-1001';

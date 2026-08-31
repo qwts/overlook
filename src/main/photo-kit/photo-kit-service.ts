@@ -85,7 +85,8 @@ async function validateMaterialization(
   await Promise.all(
     materialized.map(async (asset) => {
       const [details, parentPath] = await Promise.all([lstat(asset.path), realpath(path.dirname(asset.path))]);
-      if (!details.isFile() || details.isSymbolicLink() || parentPath !== scratchPath || (details.mode & 0o077) !== 0) {
+      const unsafeMode = process.platform !== 'win32' && (details.mode & 0o077) !== 0;
+      if (!details.isFile() || details.isSymbolicLink() || parentPath !== scratchPath || unsafeMode) {
         throw new Error('PhotoKit returned an unsafe staging file');
       }
     }),

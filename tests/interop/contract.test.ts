@@ -254,7 +254,7 @@ describe('published interoperability artifacts', () => {
       const relativePath = match.groups['relativePath'] ?? '';
       const contents = readFileSync(path.join(contractDirectory, relativePath));
       assert.equal(createHash('sha256').update(contents).digest('hex'), match.groups['hash']);
-      coveredPaths.add(relativePath);
+      coveredPaths.add(relativePath.replaceAll('\\', '/'));
     }
     for (const schemaFile of Object.keys(createInteropJsonSchemas())) assert.ok(coveredPaths.has(schemaFile));
     assert.ok(coveredPaths.has('acceptance-evidence.json'));
@@ -269,7 +269,7 @@ describe('published interoperability artifacts', () => {
       'valid-pairing-bundle.json',
       'valid-record-message.json',
     ]) {
-      assert.ok(coveredPaths.has(path.join('fixtures', fixtureName)));
+      assert.ok(coveredPaths.has(path.posix.join('fixtures', fixtureName)));
     }
     assert.ok(coveredPaths.has('sealed-blob.md'));
   });

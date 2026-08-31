@@ -79,7 +79,8 @@ describe('Windows arch verification (#683)', () => {
     // (guards against electron-builder naming drift); still unambiguous per leg.
     assert.equal(await resolveUnpackedDir(release, 'x64'), join(release, 'win-arm64-unpacked'));
     // An explicit path always wins.
-    assert.equal(await resolveUnpackedDir(release, 'arm64', '/tmp/explicit'), '/tmp/explicit');
+    const explicit = join(tmpdir(), 'explicit');
+    assert.equal(await resolveUnpackedDir(release, 'arm64', explicit), explicit);
   });
 
   test('fails when no unpacked directory is present', async () => {

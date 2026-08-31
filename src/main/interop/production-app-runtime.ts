@@ -5,6 +5,7 @@ import { imageTrailExtensionId, pcloudFeatureConfig, type PCloudFeatureConfig } 
 import { pickSafeStorage } from '../crypto/safe-storage-runtime.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
+import { RELEASE_IMPORT_SMOKE_ARGUMENT } from '../release-smoke.js';
 import { runICloudNativeHost } from './icloud-native-runtime.js';
 import {
   nativeHostInvocation,
@@ -45,7 +46,8 @@ export function createProductionInteropAppRuntime(options: ProductionInteropAppO
   let desktop: StartedProductionInterop | null = null;
   return {
     nativeHostRequested: invocation.requested,
-    headlessRequested: invocation.requested || registerRequested || unregisterRequested,
+    headlessRequested:
+      invocation.requested || registerRequested || unregisterRequested || process.argv.includes(RELEASE_IMPORT_SMOKE_ARGUMENT),
     pcloud,
     liveLocalEnabled: extensionId !== null,
     runHeadless: async () => {

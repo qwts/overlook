@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 
@@ -175,7 +175,7 @@ describe('BlobStore', () => {
     const stray = await store.putOriginal(Readable.from([randomBytes(64)]), KEY, 'photo-9');
     const orphans = await store.scanOrphans(new Set([known.contentHash]));
     assert.deepEqual(
-      orphans.unknown.map((path) => path.split('/').pop()),
+      orphans.unknown.map((path) => basename(path)),
       [stray.contentHash],
     );
   });

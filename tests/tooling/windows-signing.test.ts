@@ -44,6 +44,39 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /node scripts\/verify-windows-arch\.mjs "\$WIN_ARCH"/u);
   });
 
+  test('runs each installed artifact on a matching native Windows runner', () => {
+    const workflow = source('.github/workflows/package.yml');
+    const smoke = source('scripts/verify-windows-packaged-import.ps1');
+    assert.match(workflow, /^ {2}installed-windows-import:/mu);
+    assert.match(workflow, /arch: x64\s+runner: windows-latest/u);
+    assert.match(workflow, /arch: arm64\s+runner: windows-11-arm/u);
+    assert.match(workflow, /name: overlook-windows-\$\{\{ matrix\.arch \}\}/u);
+    assert.match(workflow, /Get-ChildItem .* -File -Recurse/u);
+    assert.match(workflow, /verify-windows-packaged-import\.ps1/u);
+    assert.match(workflow, /-Architecture '\$\{\{ matrix\.arch \}\}'/u);
+    assert.match(workflow, /ref: \$\{\{ github\.workflow_sha \}\}/u);
+    assert.match(workflow, /path: smoke-tools/u);
+    assert.match(workflow, /This ref predates the packaged import-smoke capability/u);
+    assert.match(workflow, /Historical ref has no compatible packaged import-smoke mode/u);
+    assert.match(workflow, /release-smoke-artifact\/release\/windows-import-smoke\.json/u);
+    assert.match(workflow, /electron-v\$version-win32-\$\{\{ matrix\.arch \}\}\.zip/u);
+    assert.match(workflow, /Get-FileHash .* -Algorithm SHA256/u);
+    assert.match(workflow, /-HarnessElectron .*electron-harness\/dist\/electron\.exe/u);
+    const installedJob = workflow.slice(workflow.indexOf('  installed-windows-import:'));
+    assert.doesNotMatch(installedJob, /actions\/setup-node/u);
+    assert.doesNotMatch(installedJob, /npm (?:ci|install)/u);
+    assert.doesNotMatch(installedJob, /cache: npm/u);
+    assert.doesNotMatch(installedJob, /ref: \$\{\{ inputs\.ref \}\}/u);
+    assert.match(smoke, /ProcessArchitecture/u);
+    assert.match(smoke, /OverlookSmoke\.exe[\s\S]*Copy-Item -LiteralPath \$harnessElectronPath/u);
+    assert.match(smoke, /--overlook-release-import-smoke/u);
+    assert.match(smoke, /ArgumentList\.Add\("--overlook-release-import-source=\$fixturePath"\)/u);
+    assert.match(smoke, /ArgumentList\.Add\("--overlook-release-import-profile=\$profile"\)/u);
+    assert.match(smoke, /ArgumentList\.Add\("--overlook-release-import-result=\$resultPath"\)/u);
+    assert.match(smoke, /overlook-release-import-smoke:ready/u);
+    assert.match(smoke, /Remove-Item -LiteralPath \$profile -Recurse -Force/u);
+  });
+
   test('the x64 package proves native ACL and complete installer lifecycle behavior', () => {
     const workflow = source('.github/workflows/package.yml');
     const installer = source('build/installer.nsh');
