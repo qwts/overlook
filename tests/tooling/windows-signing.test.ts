@@ -53,7 +53,10 @@ describe('Windows ARM64 packaging + signing (#683)', () => {
     assert.match(workflow, /name: overlook-windows-\$\{\{ matrix\.arch \}\}/u);
     assert.match(workflow, /Get-ChildItem .* -File -Recurse/u);
     assert.match(workflow, /verify-windows-packaged-import\.ps1/u);
+    assert.match(workflow, /architecture: \$\{\{ matrix\.arch \}\}/u);
+    assert.match(workflow, /-HarnessElectron .*node_modules\/electron\/dist\/electron\.exe/u);
     assert.match(smoke, /ProcessArchitecture/u);
+    assert.match(smoke, /OverlookSmoke\.exe[\s\S]*Copy-Item -LiteralPath \$harnessElectronPath/u);
     assert.match(smoke, /--overlook-release-import-smoke/u);
     assert.match(smoke, /overlook-release-import-smoke:ready/u);
     assert.match(smoke, /Remove-Item -LiteralPath \$profile -Recurse -Force/u);

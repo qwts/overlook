@@ -93,6 +93,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+          architecture: ${{ matrix.arch }}
           cache: npm
 
       - name: Install dependencies
@@ -374,6 +375,13 @@ jobs:
         with:
           name: overlook-windows-${{ matrix.arch }}
           path: release-smoke-artifact
+      - name: Setup matching Electron harness
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v6.2.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
       - name: Install and run real import smoke
         shell: pwsh
         run: |
@@ -382,4 +390,5 @@ jobs:
           ./scripts/verify-windows-packaged-import.ps1 `
             -Installer $installer.FullName `
             -Fixture (Resolve-Path -LiteralPath tests/fixtures/exif/exif-full.jpg).Path `
-            -Architecture '${{ matrix.arch }}'
+            -Architecture '${{ matrix.arch }}' `
+            -HarnessElectron (Resolve-Path -LiteralPath node_modules/electron/dist/electron.exe).Path

@@ -5,12 +5,15 @@ param(
   [string]$Fixture,
   [Parameter(Mandatory = $true)]
   [ValidateSet('x64', 'arm64')]
-  [string]$Architecture
+  [string]$Architecture,
+  [Parameter(Mandatory = $true)]
+  [string]$HarnessElectron
 )
 
 $ErrorActionPreference = 'Stop'
 $installerPath = (Resolve-Path -LiteralPath $Installer).Path
 $fixturePath = (Resolve-Path -LiteralPath $Fixture).Path
+$harnessElectronPath = (Resolve-Path -LiteralPath $HarnessElectron).Path
 $installedExecutable = $null
 $uninstaller = $null
 $profile = Join-Path ([System.IO.Path]::GetTempPath()) "overlook-release-import-smoke-$([Guid]::NewGuid().ToString('N'))"
@@ -42,8 +45,16 @@ try {
   Invoke-CheckedProcess $installerPath @('/S')
   $installedExecutable = Find-InstalledFile 'Overlook.exe'
   $uninstaller = Find-InstalledFile 'Uninstall Overlook.exe'
+  $smokeExecutable = Join-Path (Split-Path -Parent $installedExecutable) 'OverlookSmoke.exe'
+  Copy-Item -LiteralPath $harnessElectronPath -Destination $smokeExecutable
 
-  Write-Host "Launching installed executable: $installedExecutable"
+  # GitHub's hosted Windows service session can start the signed executable's
+  # native-host mode but stalls before Electron's packaged app entrypoint. A
+  # same-version, same-architecture Electron harness renamed beside the
+  # installed binary loads the installed app.asar and app.asar.unpacked while
+  # retaining app.isPackaged=true, so the gate exercises the shipped code and
+  # native modules without depending on a hosted desktop bootstrap.
+  Write-Host "Launching installed application through: $smokeExecutable"
   $smokeEnvironment = @{
     OVERLOOK_RELEASE_IMPORT_SMOKE_SOURCE = $fixturePath
     OVERLOOK_RELEASE_IMPORT_SMOKE_PROFILE = $profile
@@ -55,7 +66,7 @@ try {
     [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
   }
   try {
-    $process = Start-Process -FilePath $installedExecutable -ArgumentList '--overlook-release-import-smoke' -PassThru
+    $process = Start-Process -FilePath $smokeExecutable -ArgumentList '--overlook-release-import-smoke' -PassThru
   } finally {
     foreach ($entry in $previousEnvironment.GetEnumerator()) {
       [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
