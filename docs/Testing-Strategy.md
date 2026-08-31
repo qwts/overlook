@@ -190,7 +190,8 @@ artifact, import a checked-in fixture through the production copy path, verify
 encrypted custody and source preservation, and uninstall in cleanup. Native
 execution downloads the artifact's exact Electron version for the runner
 architecture from Electron's official release and verifies its published SHA-256
-before loading the installed `app.asar` and unpacked native modules. This keeps the smoke
+before staging the installed `app.asar` and unpacked native modules into that
+clean harness. This keeps the smoke
 packaged-only while avoiding GitHub's non-interactive service-session stall in
 the signed desktop executable bootstrap. Historical refs without the packaged
 smoke contract publish an explicit unsupported capability and skip this newer
