@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -98,6 +98,70 @@ describe('packaged release launch smoke (#357)', () => {
         `--overlook-release-import-result=${resultPath}`,
       ]),
       undefined,
+    );
+  });
+
+  test('requires the result marker path itself to be absolute', () => {
+    const { profile } = smokeApp();
+
+    assert.throws(
+      () =>
+        releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+          'Overlook',
+          RELEASE_IMPORT_SMOKE_ARGUMENT,
+          `--overlook-release-import-profile=${profile}`,
+          '--overlook-release-import-result=release-import-result.txt',
+        ]),
+      /release import result must be the dedicated marker file/u,
+    );
+  });
+
+  test('does not conflate case-distinct directories when filesystem identity is available', { skip: process.platform === 'win32' }, () => {
+    const suffix = `${process.pid}-${Date.now()}`;
+    const profile = join(tmpdir(), `overlook-release-import-smoke-Case-${suffix}`);
+    const otherProfile = join(tmpdir(), `overlook-release-import-smoke-case-${suffix}`);
+    mkdirSync(profile);
+    mkdirSync(otherProfile);
+
+    assert.throws(
+      () =>
+        releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+          'Overlook',
+          RELEASE_IMPORT_SMOKE_ARGUMENT,
+          `--overlook-release-import-profile=${profile}`,
+          `--overlook-release-import-result=${join(otherProfile, 'release-import-result.txt')}`,
+        ]),
+      /release import result must be the dedicated marker file/u,
+    );
+  });
+
+  test('admits only a real app.asar through the explicit installed-artifact harness', async () => {
+    const { profile } = smokeApp(join(tmpdir(), `overlook-release-import-smoke-${Date.now()}`));
+    const archive = join(profile, 'app.asar');
+    const source = join(tmpdir(), 'overlook-release-import-fixture.jpg');
+    const result = join(profile, 'release-import-result.txt');
+    writeFileSync(archive, 'packaged bytes');
+    const app = { isPackaged: false, getAppPath: () => archive, getPath: () => profile, exit: () => undefined };
+    const argv = [
+      'electron',
+      RELEASE_IMPORT_SMOKE_ARGUMENT,
+      `--overlook-release-import-source=${source}`,
+      `--overlook-release-import-profile=${profile}`,
+      `--overlook-release-import-result=${result}`,
+    ];
+    const environment = { OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS: '1' };
+
+    await assert.rejects(parseReleaseImportSmokeRequest(app, argv), /packaged application archive/u);
+    assert.equal(releaseImportSmokeProfileIfRequested(app, argv, environment), profile);
+    assert.deepEqual(await parseReleaseImportSmokeRequest(app, argv, environment), {
+      sourcePath: source,
+      profilePath: await realpath(profile),
+    });
+    await assert.rejects(
+      parseReleaseImportSmokeRequest({ ...app, getAppPath: () => join(profile, 'not-an-archive') }, argv, {
+        OVERLOOK_RELEASE_IMPORT_SMOKE_HARNESS: '1',
+      }),
+      /packaged application archive/u,
     );
   });
 
