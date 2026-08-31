@@ -21,16 +21,22 @@ describe('Move import confirmation boundary', () => {
   test('returns cancellation unless main confirms the exact Move request', async () => {
     const source = { files: ['/drop/a.jpg', '/drop/b.jpg'] };
     let confirmedSource: unknown;
-    assert.equal(await requireMoveImportConfirmation('move', source), false);
+    assert.equal(await requireMoveImportConfirmation('move', source, undefined, undefined, 'darwin'), false);
     assert.equal(
-      await requireMoveImportConfirmation('move', source, (candidate) => {
-        confirmedSource = candidate;
-        return Promise.resolve(false);
-      }),
+      await requireMoveImportConfirmation(
+        'move',
+        source,
+        (candidate) => {
+          confirmedSource = candidate;
+          return Promise.resolve(false);
+        },
+        undefined,
+        'darwin',
+      ),
       false,
     );
     assert.deepEqual(confirmedSource, source);
-    assert.equal(await requireMoveImportConfirmation('move', source, () => Promise.resolve(true)), true);
+    assert.equal(await requireMoveImportConfirmation('move', source, () => Promise.resolve(true), undefined, 'darwin'), true);
   });
 
   test('rechecks content admission after a successful native confirmation', async () => {
@@ -44,6 +50,7 @@ describe('Move import confirmation boundary', () => {
           admitted = true;
           throw new Error('content is locked');
         },
+        'darwin',
       ),
       /content is locked/u,
     );

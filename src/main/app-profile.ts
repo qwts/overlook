@@ -96,7 +96,11 @@ function migrateLegacyProductProfile(appData: string, stableUserData: string): s
   return stableUserData;
 }
 
-export function configureAppProfile(profileApp: ProfileApp, requestedUserData: string | undefined): string | undefined {
+export function configureAppProfile(
+  profileApp: ProfileApp,
+  requestedUserData: string | undefined,
+  verifiedPackagedUserData?: string,
+): string | undefined {
   // app.setName() does not promise to repoint an already-resolved userData
   // path. Capture Electron's packaged default first, then explicitly bind the
   // process to the established Overlook profile (#479). This keeps the
@@ -104,7 +108,7 @@ export function configureAppProfile(profileApp: ProfileApp, requestedUserData: s
   const initialUserData = profileApp.getPath('userData');
   const stableUserData = path.join(profileApp.getPath('appData'), OVERLOOK_PRODUCT_NAME);
   profileApp.setName(OVERLOOK_PRODUCT_NAME);
-  const userDataOverride = profileApp.isPackaged ? undefined : requestedUserData;
+  const userDataOverride = verifiedPackagedUserData ?? (profileApp.isPackaged ? undefined : requestedUserData);
   if (userDataOverride !== undefined && userDataOverride !== '') {
     profileApp.setPath('userData', userDataOverride);
     return userDataOverride;

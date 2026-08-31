@@ -56,7 +56,7 @@ describe('authenticated File Provider extension transport (#797)', () => {
     await transport.start();
     const current = endpoint(directory);
     assert.ok(current.token.length >= 32);
-    assert.equal(statSync(path.join(directory, 'endpoint.json')).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(path.join(directory, 'endpoint.json')).mode & 0o777, 0o600);
     assert.equal((await request(current, '/v1/enumerate?parent=root', 'wrong')).status, 404);
     const response = await request(current, '/v1/enumerate?parent=root');
     assert.equal(response.status, 200);

@@ -96,6 +96,22 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(ci, /arguments-json: '\["playwright","install","--with-deps","chromium"\]'/u);
   });
 
+  test('requires native Windows import evidence at each lifecycle boundary (#1083)', () => {
+    const gate = ci.slice(ci.indexOf('\n  gate:\n'));
+    assert.match(ci, /^ {2}windows-tests:\n {4}name: Windows x64 tests and import$/mu);
+    assert.match(ci, /runs-on: windows-latest/u);
+    assert.match(ci, /name: Configure LF checkout\s+run: git config --global core\.autocrlf false/u);
+    assert.match(ci, /executable: cmd\.exe/u);
+    assert.match(ci, /run: npm run test:inner/u);
+    assert.match(ci, /run: npm run test:e2e:windows-import:inner/u);
+    assert.match(ci, /^ {2}windows-main-smoke:\n {4}name: Windows \$\{\{ matrix\.arch \}\} source import$/mu);
+    assert.match(ci, /arch: arm64\s+runner: windows-11-arm/u);
+    assert.match(ci, /node scripts\/assert-platform\.mjs win32 \$\{\{ matrix\.arch \}\}/u);
+    assert.match(gate, /needs:[\s\S]{0,300}windows-tests,[\s\S]{0,100}windows-main-smoke,[\s\S]{0,300}post-merge,/u);
+    assert.match(gate, /test "\$WINDOWS_TESTS" = success/u);
+    assert.match(gate, /test "\$WINDOWS_MAIN" = success/u);
+  });
+
   test('enforces finite workflow runtime with the reviewed immutable contract', () => {
     const sources = [aca, autoUpdate, ci, closeLinkedIssues, codeql, packageWorkflow, perf, release, versionCut].join('\n');
     assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
