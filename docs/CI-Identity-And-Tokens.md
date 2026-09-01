@@ -45,7 +45,7 @@ tools cannot influence those evidence checks.
 **The App credential may reach only `actions/*` steps and our own `run:` blocks
 — never a third-party action**, whose future versions nobody here controls. When a
 third-party action is the only thing standing between the App credential and the
-run you need, replace it or drop it. Two precedents:
+run you need, replace it or drop it. Third-party `uses:` are SHA-pinned with `# vX.Y.Z` (`pinact run --verify`, config `.pinact.yml`); `ci-policy@5455a3f` is immutable and ignored by both Dependabot and `pinact` (#1038, #1024); the `zizmor` `unpinned-uses` gate (`.github/zizmor.yml`, job `zizmor` in `ci.yml`) blocks any new unpinned reference — only `unpinned-uses` is merge-blocking until `qwts/playbook-engineering#6` ships the shared `security-scan.yml` (see [#716](https://github.com/qwts/overlook/issues/716)). Two precedents:
 
 - versioning is a script in `version-cut.yml` rather than `changesets/action`,
   for exactly this reason;
