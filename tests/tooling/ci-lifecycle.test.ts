@@ -29,7 +29,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
+    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
   });
@@ -39,7 +39,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.match(identityPolicy, /Workflow execution protections\*\* disabled/u);
     assert.match(identityPolicy, /never approve\s+public-fork runs/u);
     assert.match(identityPolicy, /Bind\s+`CodeQL` to the GitHub Advanced Security App/u);
-    assert.match(identityPolicy, /other three contexts\s+to GitHub Actions — never to `chores-dumb`/u);
+    assert.match(identityPolicy, /other four contexts\s+to GitHub Actions — never to `chores-dumb`/u);
     assert.match(identityPolicy, /only its stable `E2E gate` verdict belongs in branch protection/u);
   });
 
@@ -48,7 +48,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     for (const workflow of workflows) {
       assert.match(workflow, /^ {2}policy:$/mu);
       assert.match(workflow, /authorization-only: 'true'/u);
-      assert.match(workflow, /ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
+      assert.match(workflow, /ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     }
     for (const [workflow, jobs] of [
       [autoUpdate, ['update']],
@@ -117,7 +117,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
     assert.match(sources, /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@b146b85da189d188f71cda59d363eec7272e498e/u);
     assert.match(ci, /name: Workflow runtime policy/u);
-    assert.match(ci, /ref: 5455a3f5939369ea843b1bbb4d2573739f4381a6/u);
+    assert.match(ci, /ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.match(ci, /runtime-policy\.mjs --root "\$GITHUB_WORKSPACE"/u);
     assert.match(ci, /WORKFLOW_RUNTIME: \$\{\{ needs\.workflow-runtime\.result \}\}/u);
     assert.match(ci, /test "\$WORKFLOW_RUNTIME" = success/u);

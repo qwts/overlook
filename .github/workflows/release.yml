@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
         with:
           authorization-only: 'true'
 
@@ -43,7 +43,7 @@ jobs:
     needs: policy
     name: Verify release evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -153,7 +153,7 @@ jobs:
     name: Publish prerelease
     needs: [verify, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     permissions:
       contents: write
     env:

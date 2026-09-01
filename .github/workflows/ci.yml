@@ -61,7 +61,7 @@ jobs:
       release_gate_mode: ${{ steps.policy.outputs.release_gate_mode }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
 
   merge-evidence:
     name: Verify merged commit evidence
@@ -114,6 +114,23 @@ jobs:
           fi
           echo "validated=$validated" >> "$GITHUB_OUTPUT"
 
+  zizmor:
+    name: zizmor / unpinned-uses
+    needs: policy
+    if: always() && needs.policy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
+
   ci:
     name: Complete suite
     needs: [policy, merge-evidence, preflight-evidence]
@@ -127,7 +144,7 @@ jobs:
     # --timeout-s values never apply here; the per-step timeout-minutes below are what
     # bound an individual hang, and this is the backstop over their sum plus checkout/
     # npm ci/lint/format/build/Playwright-install.
-    timeout-minutes: 65
+    timeout-minutes: 102
     env:
       INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/node_modules/.interop-image-trail
 
@@ -281,7 +298,7 @@ jobs:
       needs.policy.outputs.run_full == 'true' &&
       needs.preflight-evidence.outputs.validated != 'true'
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 67
     env:
       INTEROP_IMAGE_TRAIL_ROOT: ${{ github.workspace }}/node_modules/.interop-image-trail
       OVERLOOK_E2E_WORKERS: '1'
@@ -349,7 +366,7 @@ jobs:
           - arch: arm64
             runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 47
     env:
       OVERLOOK_E2E_WORKERS: '1'
       OVERLOOK_E2E_RETRIES: '0'
@@ -401,7 +418,7 @@ jobs:
     # guard's --timeout-s 1800 (30 min). 45 keeps headroom over the test step's 30 —
     # checkout/npm ci/Electron system deps run before the test step and the report
     # upload runs after it.
-    timeout-minutes: 45
+    timeout-minutes: 93
     env:
       OVERLOOK_E2E_WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_workers || '1' }}
       OVERLOOK_E2E_RETRIES: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_retries || '0' }}
@@ -565,7 +582,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: qwts/playbook-engineering
-          ref: 5455a3f5939369ea843b1bbb4d2573739f4381a6
+          ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85
           path: .ci-runtime-policy
           sparse-checkout: tools/ci-runtime
           persist-credentials: false
