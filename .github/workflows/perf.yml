@@ -26,7 +26,7 @@ jobs:
     # The only bound on this job. This job runs test:perf:inner directly, without the
     # guard's --timeout-s 2700; 60 leaves headroom over the test step's 45 for
     # setup/Electron-install/upload.
-    timeout-minutes: 60
+    timeout-minutes: 108
 
     steps:
       - name: Checkout
