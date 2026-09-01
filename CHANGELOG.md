@@ -1,5 +1,11 @@
 # photos
 
+## 0.75.1
+
+### Patch Changes
+
+- 7dd55ce: Pin third-party Actions to SHAs and add constrained zizmor unpinned-uses gate (#716)
+
 ## 0.75.0
 
 ### Minor Changes
