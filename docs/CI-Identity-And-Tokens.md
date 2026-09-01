@@ -45,7 +45,7 @@ tools cannot influence those evidence checks.
 **The App credential may reach only `actions/*` steps and our own `run:` blocks
 — never a third-party action**, whose future versions nobody here controls. When a
 third-party action is the only thing standing between the App credential and the
-run you need, replace it or drop it. Third-party `uses:` are SHA-pinned with `# vX.Y.Z` (`pinact run --verify`, config `.pinact.yml`); `ci-policy@5455a3f` is immutable and ignored by both Dependabot and `pinact` (#1038, #1024); the `zizmor` `unpinned-uses` gate (`.github/zizmor.yml`, job `zizmor` in `ci.yml`) blocks any new unpinned reference — only `unpinned-uses` is merge-blocking until `qwts/playbook-engineering#6` ships the shared `security-scan.yml` (see [#716](https://github.com/qwts/overlook/issues/716)). Two precedents:
+run you need, replace it or drop it. Third-party `uses:` are SHA-pinned with `# vX.Y.Z` (`pinact run --verify`, config `.pinact.yml`); `ci-policy@40d1c46` is immutable and ignored by both Dependabot and `pinact` (#1038, #1024); the `zizmor` `unpinned-uses` gate (`.github/zizmor.yml`, job `zizmor` in `ci.yml`) blocks any new unpinned reference — only `unpinned-uses` is merge-blocking until `qwts/playbook-engineering#6` ships the shared `security-scan.yml` (see [#716](https://github.com/qwts/overlook/issues/716)). Two precedents:
 
 - versioning is a script in `version-cut.yml` rather than `changesets/action`,
   for exactly this reason;
@@ -127,8 +127,8 @@ after the replacement contexts first report successfully:
 2. Switch **Advanced Security → CodeQL analysis** from default to Advanced
    after a manual CI run proves both configured languages and the stable
    `CodeQL` context. Do not leave a gap in code-scanning enforcement.
-3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, and `CodeQL`. Bind
-   `CodeQL` to the GitHub Advanced Security App and the other three contexts
+3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, `CodeQL`, and `zizmor / unpinned-uses` (added in #716; mark required after its first green report on `main`, per the PR's manual rollout note). Bind
+   `CodeQL` to the GitHub Advanced Security App and the other contexts
    to GitHub Actions — never to `chores-dumb`, which initiates privileged writes
    but does not publish check runs. `E2E` still runs in every complete suite, but
    only its stable `E2E gate` verdict belongs in branch protection. Retain the
