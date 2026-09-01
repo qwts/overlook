@@ -128,7 +128,7 @@ after the replacement contexts first report successfully:
    after a manual CI run proves both configured languages and the stable
    `CodeQL` context. Do not leave a gap in code-scanning enforcement.
 3. Require `CI`, `E2E gate`, `Docs governance / docs-gov`, `CodeQL`, and `zizmor / unpinned-uses` (added in #716; mark required after its first green report on `main`, per the PR's manual rollout note). Bind
-   `CodeQL` to the GitHub Advanced Security App and the other contexts
+   `CodeQL` to the GitHub Advanced Security App and the other four contexts
    to GitHub Actions — never to `chores-dumb`, which initiates privileged writes
    but does not publish check runs. `E2E` still runs in every complete suite, but
    only its stable `E2E gate` verdict belongs in branch protection. Retain the
