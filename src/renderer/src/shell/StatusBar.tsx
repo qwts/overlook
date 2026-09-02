@@ -22,6 +22,7 @@ const messages = defineMessages({
     id: 'statusbar.coverage.removalPending',
     defaultMessage: '{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal',
   },
+  allBackedUp: { id: 'statusbar.sync.allBackedUp', defaultMessage: 'All backed up' },
   backedUpExceptLocalOnly: {
     id: 'statusbar.sync.backedUpExceptLocalOnly',
     defaultMessage: 'Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}',
@@ -134,7 +135,7 @@ export function StatusBar({
           <Icon name="cloud-check" size={12} strokeWidth={2} />
           {stats !== null && stats.excludedCount > 0
             ? intl.formatMessage(messages.backedUpExceptLocalOnly, { count: stats.excludedCount })
-            : 'All backed up'}
+            : intl.formatMessage(messages.allBackedUp)}
           {' · '}
           {state.lastBackupLabel}
         </span>

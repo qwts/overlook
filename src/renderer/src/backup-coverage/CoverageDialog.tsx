@@ -23,6 +23,7 @@ const messages = defineMessages({
   titleKeep: { id: 'coverage.dialog.title.keep', defaultMessage: 'Keep on this device only' },
   titleRemove: { id: 'coverage.dialog.title.remove', defaultMessage: 'Remove the cloud copy?' },
   loading: { id: 'coverage.dialog.loading', defaultMessage: 'Checking cloud copies…' },
+  reasonRow: { id: 'coverage.dialog.reasonRow', defaultMessage: '{count} · {reason}' },
   summary: {
     id: 'coverage.dialog.summary',
     defaultMessage:
@@ -178,7 +179,10 @@ export function CoverageDialog({ photoIds, onClose, onComplete }: CoverageDialog
                 <ul>
                   {[...reasons].map(([reason, count]) => (
                     <li key={reason}>
-                      {formatCount(count)} · {intl.formatMessage(messages[REASON_MESSAGES[reason]])}
+                      {intl.formatMessage(messages.reasonRow, {
+                        count: formatCount(count),
+                        reason: intl.formatMessage(messages[REASON_MESSAGES[reason]]),
+                      })}
                     </li>
                   ))}
                 </ul>

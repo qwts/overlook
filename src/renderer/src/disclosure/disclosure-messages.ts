@@ -44,6 +44,7 @@ export const disclosureMessages = defineMessages({
     defaultMessage: '{disclosed, plural, one {# photo} other {# photos}} of {present}',
   },
   previewWithheld: { id: 'disclosure.preview.withheld', defaultMessage: 'Withheld' },
+  previewLoading: { id: 'disclosure.preview.loading', defaultMessage: 'Checking what would leave…' },
   previewNothing: { id: 'disclosure.preview.nothing', defaultMessage: 'No classified metadata is present in this selection.' },
   previewEmbedded: {
     id: 'disclosure.preview.embedded',

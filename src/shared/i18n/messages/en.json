@@ -539,6 +539,9 @@
   "coverage.dialog.loading": {
     "defaultMessage": "Checking cloud copies…"
   },
+  "coverage.dialog.reasonRow": {
+    "defaultMessage": "{count} · {reason}"
+  },
   "coverage.dialog.remote": {
     "defaultMessage": "{count, plural, one {# encrypted copy} other {# encrypted copies}} ({bytes}) will be removed from {provider}."
   },
@@ -715,6 +718,9 @@
   },
   "disclosure.preview.heading": {
     "defaultMessage": "What leaves"
+  },
+  "disclosure.preview.loading": {
+    "defaultMessage": "Checking what would leave…"
   },
   "disclosure.preview.nothing": {
     "defaultMessage": "No classified metadata is present in this selection."
@@ -2342,6 +2348,12 @@
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
   },
+  "purge.keptLocal.all": {
+    "defaultMessage": "{count, plural, one {This photo is kept on this device only: there is no cloud copy to remove.} other {These photos are kept on this device only: there are no cloud copies to remove.}}"
+  },
+  "purge.keptLocal.some": {
+    "defaultMessage": "{count, plural, one {# of these is kept on this device only and has no cloud copy to remove.} other {# of these are kept on this device only and have no cloud copy to remove.}}"
+  },
   "recoveryKey.drop.empty": {
     "defaultMessage": "Drop one Overlook recovery-key file."
   },
@@ -2788,6 +2800,12 @@
   },
   "settings.keyring.keyName": {
     "defaultMessage": "KEY #{id}"
+  },
+  "settings.keyring.meta": {
+    "defaultMessage": "{fingerprint} · {usage}"
+  },
+  "settings.keyring.noFingerprint": {
+    "defaultMessage": "—"
   },
   "settings.keyring.remove": {
     "defaultMessage": "Remove…"
@@ -3283,6 +3301,9 @@
   },
   "statusbar.inclusion.hiddenByAlbums": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings"
+  },
+  "statusbar.sync.allBackedUp": {
+    "defaultMessage": "All backed up"
   },
   "statusbar.sync.backedUpExceptLocalOnly": {
     "defaultMessage": "Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}"

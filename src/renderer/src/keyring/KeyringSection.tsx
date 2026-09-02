@@ -31,6 +31,8 @@ const messages = defineMessages({
   retired: { id: 'settings.keyring.badge.retired', defaultMessage: 'Retired' },
   absent: { id: 'settings.keyring.badge.absent', defaultMessage: 'Not on this device' },
   imported: { id: 'settings.keyring.badge.imported', defaultMessage: 'Imported' },
+  meta: { id: 'settings.keyring.meta', defaultMessage: '{fingerprint} · {usage}' },
+  noFingerprint: { id: 'settings.keyring.noFingerprint', defaultMessage: '—' },
   usage: {
     id: 'settings.keyring.usage',
     defaultMessage:
@@ -97,11 +99,13 @@ export function KeyringSection(): ReactElement {
                   {key.origin === 'imported' ? <Badge>{intl.formatMessage(messages.imported)}</Badge> : null}
                 </div>
                 <div className="ovl-keyring__meta mono-data">
-                  {key.fingerprint ?? '—'} ·{' '}
-                  {intl.formatMessage(messages.usage, {
-                    photos: key.usage.photos,
-                    sidecars: key.usage.sidecars,
-                    bytes: formatBytes(key.usage.bytes),
+                  {intl.formatMessage(messages.meta, {
+                    fingerprint: key.fingerprint ?? intl.formatMessage(messages.noFingerprint),
+                    usage: intl.formatMessage(messages.usage, {
+                      photos: key.usage.photos,
+                      sidecars: key.usage.sidecars,
+                      bytes: formatBytes(key.usage.bytes),
+                    }),
                   })}
                 </div>
               </div>

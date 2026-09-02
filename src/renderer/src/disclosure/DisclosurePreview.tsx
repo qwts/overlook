@@ -58,7 +58,7 @@ export function DisclosurePreview({
       </div>
       {preview === null ? (
         <p className="ovl-disclosure__hint" data-testid="disclosure-preview-loading">
-          …
+          {intl.formatMessage(disclosureMessages.previewLoading)}
         </p>
       ) : rows.length === 0 ? (
         <p className="ovl-disclosure__hint" data-testid="disclosure-preview-empty">
