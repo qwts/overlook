@@ -208,21 +208,22 @@
    size rule can hide it. Sits opposite the Original marker. */
 .ovl-tile__unknownDimensions {
   position: absolute;
-  top: 6px;
-  inset-inline-end: 6px;
+  /* Inset matches the Original marker (space-2 + space-1). */
+  top: calc(var(--space-2) + var(--space-1));
+  inset-inline-end: calc(var(--space-2) + var(--space-1));
   z-index: 2;
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: calc(var(--space-5) + var(--space-1));
+  height: calc(var(--space-5) + var(--space-1));
+  padding: 0 var(--space-2);
   border: 1px solid var(--border-photo-overlay);
   border-radius: var(--radius-1);
   background: var(--surface-photo-overlay);
   color: var(--text-photo-overlay);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
   pointer-events: none;
 }
 
