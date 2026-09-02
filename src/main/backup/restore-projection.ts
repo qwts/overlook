@@ -36,10 +36,11 @@ export function projectVerifiedManifest(
   if (manifest.schema === 3) return { ...manifest, ...ordinary, protectedPhotos };
   if (manifest.schema === 4) return { ...manifest, ...ordinary, protectedPhotos };
   if (manifest.schema === 5) return { ...manifest, ...ordinary, protectedPhotos };
-  return {
-    ...manifest,
-    ...ordinary,
-    protectedPhotos,
-    sidecars: manifest.sidecars.filter((sidecar) => retainedPhotoIds.has(sidecar.photoId) && !missingPaths.has(sidecar.blobPath)),
-  };
+  const sidecars = manifest.sidecars.filter((sidecar) => retainedPhotoIds.has(sidecar.photoId) && !missingPaths.has(sidecar.blobPath));
+  if (!('variantFamilies' in manifest)) return { ...manifest, ...ordinary, protectedPhotos, sidecars };
+  // A family whose representative was projected out (#496): the variants
+  // share the lost original, so the family has nothing left to represent
+  // and its row would only dangle a foreign key at restore.
+  const variantFamilies = manifest.variantFamilies.filter((family) => retainedPhotoIds.has(family.representativeId));
+  return { ...manifest, ...ordinary, protectedPhotos, sidecars, variantFamilies };
 }

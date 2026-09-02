@@ -12,6 +12,7 @@ import {
   type BackupManifestSnapshotV13,
 } from '../../src/main/backup/backup-manifest.js';
 import type { BackupManifestVariantFamilyV13 } from '../../src/main/backup/backup-manifest-variants.js';
+import { projectVerifiedManifest } from '../../src/main/backup/restore-projection.js';
 import { manifestDerivativeKey, restoreVariantFamilies, variantFamiliesMatch } from '../../src/main/backup/restore-variants.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
@@ -145,6 +146,30 @@ describe('variants in the backup manifest (#496, schema 13)', () => {
         }),
       /not unique/u,
     );
+  });
+
+  test('a verified-only projection drops the family of a lost original along with its variants', () => {
+    const { photos, variants } = open('seeded');
+    const manifest = buildBackupManifestV13({
+      libraryId: LIBRARY,
+      generatedAt: AT,
+      snapshot: snapshotOf(photos, variants.familiesSnapshot()),
+    });
+    const parsed = parseBackupManifest(JSON.parse(JSON.stringify(manifest)));
+    assert.ok(parsed.restorable);
+    const [root, duplicate] = parsed.manifest.photos;
+    assert.ok(root && duplicate);
+    const projected = projectVerifiedManifest(parsed.manifest, [
+      { path: root.blobPath, kind: 'original', photoId: root.id, reason: 'not-found' },
+      { path: duplicate.blobPath, kind: 'original', photoId: duplicate.id, reason: 'not-found' },
+    ]);
+    assert.deepEqual(projected.photos, []);
+    assert.ok('variantFamilies' in projected);
+    assert.deepEqual(projected.variantFamilies, [], 'no representative survives, so no family may dangle');
+    // Losing nothing keeps the family.
+    const intact = projectVerifiedManifest(parsed.manifest, []);
+    assert.ok('variantFamilies' in intact);
+    assert.deepEqual(intact.variantFamilies, [{ contentHash: HASH, representativeId: 'P2' }]);
   });
 
   test('a schema-12 manifest still parses without families, and schema 13 without them does not', () => {

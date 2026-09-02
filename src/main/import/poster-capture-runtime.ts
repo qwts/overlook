@@ -36,6 +36,9 @@ export function createPosterCaptureRuntime(options: PosterCaptureRuntimeOptions)
         photoId: photo.id,
         bytes: frame,
         contentHash: photo.contentHash,
+        // A duplicate's repaired derivatives land under its own key (#496);
+        // omitting it would overwrite the root's tiles.
+        derivativeKey: photo.derivativeKey,
         key: options.currentKey(),
         fileKind: 'png',
         signal,
