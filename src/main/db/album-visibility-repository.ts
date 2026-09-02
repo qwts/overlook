@@ -59,8 +59,12 @@ export function verifyInAllPhotosAsync(db: BetterSqlite3.Database): Promise<AllP
   return Promise.resolve().then(() => verifyInAllPhotos(db));
 }
 
+/** Albums (not folders — those carry their policy in the manifest's folder
+ * list) whose effective policy hides them from All Photos. */
 export function readHiddenAlbumIds(db: BetterSqlite3.Database): string[] {
-  return queryAll<{ id: string }>(db, 'SELECT id FROM albums WHERE show_in_all_photos = 0 ORDER BY position, id').map(({ id }) => id);
+  return queryAll<{ id: string }>(db, `SELECT id FROM albums WHERE show_in_all_photos = 0 AND kind = 'album' ORDER BY position, id`).map(
+    ({ id }) => id,
+  );
 }
 
 /** Sets one album's policy and re-derives its members' flags in the same
@@ -93,9 +97,19 @@ export function writeAlbumVisibility(db: BetterSqlite3.Database, albumId: string
  * the album's photos another visible album keeps in All Photos, and
  * `visibleVia` names those albums so the toggle can offer to reach them. */
 export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
-  const rows = queryAll<{ id: string; name: string; show: number; n: number; elsewhere: number }>(
+  const rows = queryAll<{
+    id: string;
+    name: string;
+    show: number;
+    n: number;
+    elsewhere: number;
+    kind: 'album' | 'folder';
+    parentId: string | null;
+    inherits: number;
+  }>(
     db,
-    `SELECT a.id, a.name, a.show_in_all_photos AS show, count(ap.photo_id) AS n,
+    `SELECT a.id, a.name, a.show_in_all_photos AS show, a.kind, a.parent_id AS parentId, a.inherits_visibility AS inherits,
+            count(ap.photo_id) AS n,
             count(ap.photo_id) FILTER (WHERE EXISTS (
               SELECT 1 FROM album_photos o JOIN albums oa ON oa.id = o.album_id
                WHERE o.photo_id = ap.photo_id AND o.album_id != a.id AND oa.show_in_all_photos = 1
@@ -104,8 +118,29 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
        LEFT JOIN album_photos ap
          ON ap.album_id = a.id
         AND ap.photo_id IN (SELECT id FROM ordinary_visible_photos)
-       GROUP BY a.id ORDER BY a.position`,
+       GROUP BY a.id ORDER BY a.position, a.id`,
   );
+  // A folder counts the distinct photos of every album beneath it (#505).
+  const folderCounts = new Map(
+    queryAll<{ id: string; n: number }>(
+      db,
+      `WITH RECURSIVE tree(root, id) AS (
+         SELECT id, id FROM albums WHERE kind = 'folder'
+         UNION ALL SELECT tree.root, a.id FROM albums a JOIN tree ON a.parent_id = tree.id
+       )
+       SELECT tree.root AS id, count(DISTINCT ap.photo_id) AS n
+         FROM tree JOIN album_photos ap ON ap.album_id = tree.id
+        WHERE ap.photo_id IN (SELECT id FROM ordinary_visible_photos)
+        GROUP BY tree.root`,
+    ).map((row) => [row.id, row.n]),
+  );
+  const tags = new Map<string, string[]>();
+  for (const row of queryAll<{ albumId: string; name: string }>(
+    db,
+    `SELECT l.album_id AS albumId, t.name FROM album_tag_links l JOIN album_tags t ON t.id = l.tag_id ORDER BY t.name COLLATE NOCASE`,
+  )) {
+    tags.set(row.albumId, [...(tags.get(row.albumId) ?? []), row.name]);
+  }
   const via = queryAll<{ albumId: string; id: string; name: string }>(
     db,
     `SELECT DISTINCT ap.album_id AS albumId, oa.id, oa.name, oa.position
@@ -125,9 +160,13 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
-    count: row.n,
+    count: row.kind === 'folder' ? (folderCounts.get(row.id) ?? 0) : row.n,
     showInAllPhotos: row.show === 1,
     visibleElsewhere: row.elsewhere,
     visibleVia: viaByAlbum.get(row.id) ?? [],
+    kind: row.kind,
+    parentId: row.parentId,
+    inheritsVisibility: row.inherits === 1,
+    tags: tags.get(row.id) ?? [],
   }));
 }

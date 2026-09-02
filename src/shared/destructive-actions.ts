@@ -48,6 +48,12 @@ export const destructiveActions = {
     label: 'Delete album',
     survival: 'Photos stay in the library; only the album and its membership are removed.',
   },
+  deleteFolder: {
+    id: 'album.folder.delete',
+    tier: 'structural',
+    label: 'Delete folder',
+    survival: 'Photos stay in the library; only the folder, the albums inside it, and their membership are removed.',
+  },
   removePhotosFromAlbum: {
     id: 'album.remove-photos',
     tier: 'structural',

@@ -15,8 +15,15 @@ export interface AlbumActionMenuProps {
   readonly onTransfer?: (() => void) | undefined;
   /** Collection visibility toggle (#494, ADR-0030 §2). */
   readonly onSetVisibility: (showInAllPhotos: boolean) => void;
+  /** Follow the containing folder's policy again (#505, §2). */
+  readonly onInheritVisibility?: (() => void) | undefined;
   /** Reaches an album that keeps this album's photos in All Photos (§2 disclosure). */
   readonly onOpenAlbum: (albumId: string) => void;
+  /** Folder structure (#505): create inside a folder, move, tag. */
+  readonly onNewAlbumInside?: (() => void) | undefined;
+  readonly onNewFolderInside?: (() => void) | undefined;
+  readonly onMove?: (() => void) | undefined;
+  readonly onTags?: (() => void) | undefined;
   readonly position: number;
   readonly total: number;
   readonly platform: CommandPlatform;
@@ -32,7 +39,12 @@ export function AlbumActionMenu({
   onDelete,
   onTransfer,
   onSetVisibility,
+  onInheritVisibility,
   onOpenAlbum,
+  onNewAlbumInside,
+  onNewFolderInside,
+  onMove,
+  onTags,
   position,
   total,
   platform,
@@ -40,13 +52,15 @@ export function AlbumActionMenu({
   onClose,
 }: AlbumActionMenuProps): ReactElement {
   const intl = useIntl();
+  const folder = album.kind === 'folder';
   const alreadyFirst = intl.formatMessage({ id: 'album.reorder.alreadyFirstShort', defaultMessage: 'Already first' });
   const alreadyLast = intl.formatMessage({ id: 'album.reorder.alreadyLastShort', defaultMessage: 'Already last' });
   // ADR-0030 §2: inclusion wins, so the toggle discloses how many of this
   // album's photos stay in All Photos through another visible album and
-  // offers to reach those albums.
-  const disclosure =
-    album.visibleElsewhere > 0
+  // offers to reach those albums. A collection following its folder says so.
+  const disclosure = album.inheritsVisibility
+    ? intl.formatMessage({ id: 'album.visibility.inherited', defaultMessage: 'Follows the folder setting' })
+    : album.visibleElsewhere > 0
       ? intl.formatMessage(
           {
             id: 'album.visibility.elsewhere',
@@ -64,6 +78,16 @@ export function AlbumActionMenu({
       detail: disclosure,
       separatorBefore: true,
     },
+    ...(onInheritVisibility === undefined || album.parentId === null || album.inheritsVisibility
+      ? []
+      : [
+          {
+            id: 'album.visibility.inherit',
+            label: intl.formatMessage(commandById('album.visibility.inherit').label),
+            icon: 'folder' as const,
+            action: onInheritVisibility,
+          },
+        ]),
     ...(album.showInAllPhotos
       ? []
       : album.visibleVia.map((via): ContextMenuItem => ({
@@ -72,6 +96,52 @@ export function AlbumActionMenu({
           icon: 'album',
           action: () => onOpenAlbum(via.id),
         }))),
+  ];
+  const structureItems: ContextMenuItem[] = [
+    ...(folder && onNewAlbumInside !== undefined
+      ? [
+          {
+            id: 'album.folder.newAlbum',
+            label: intl.formatMessage({ id: 'album.folder.newAlbum', defaultMessage: 'New album inside…' }),
+            icon: 'album' as const,
+            action: onNewAlbumInside,
+            separatorBefore: true,
+          },
+        ]
+      : []),
+    ...(folder && onNewFolderInside !== undefined
+      ? [
+          {
+            id: 'album.folder.new',
+            label: intl.formatMessage({ id: 'album.folder.newInside', defaultMessage: 'New folder inside…' }),
+            icon: 'folder' as const,
+            action: onNewFolderInside,
+            separatorBefore: onNewAlbumInside === undefined,
+          },
+        ]
+      : []),
+    ...(onMove === undefined
+      ? []
+      : [
+          {
+            id: 'album.move',
+            label: intl.formatMessage(commandById('album.move').label),
+            icon: 'folder-open' as const,
+            action: onMove,
+            separatorBefore: !folder,
+          },
+        ]),
+    ...(onTags === undefined
+      ? []
+      : [
+          {
+            id: 'album.tags',
+            label: intl.formatMessage(commandById('album.tags').label),
+            icon: 'group' as const,
+            action: onTags,
+            detail: album.tags.length === 0 ? undefined : album.tags.join(', '),
+          },
+        ]),
   ];
   return (
     <ContextMenu
@@ -112,15 +182,18 @@ export function AlbumActionMenu({
           action: () => onReorder('album.reorder.bottom'),
           disabledReason: position === total - 1 ? alreadyLast : undefined,
         },
+        ...structureItems,
         ...visibilityItems,
         {
           id: 'album.rename',
-          label: intl.formatMessage(commandById('album.rename').label),
-          icon: 'album',
+          label: folder
+            ? intl.formatMessage({ id: 'album.folder.rename', defaultMessage: 'Rename folder…' })
+            : intl.formatMessage(commandById('album.rename').label),
+          icon: folder ? 'folder' : 'album',
           action: onRename,
           separatorBefore: true,
         },
-        ...(onTransfer === undefined
+        ...(onTransfer === undefined || folder
           ? []
           : [
               {
@@ -132,7 +205,9 @@ export function AlbumActionMenu({
             ]),
         {
           id: 'album.delete',
-          label: intl.formatMessage(commandById('album.delete').label),
+          label: folder
+            ? intl.formatMessage({ id: 'album.folder.delete', defaultMessage: 'Delete folder…' })
+            : intl.formatMessage(commandById('album.delete').label),
           icon: 'trash-2',
           action: onDelete,
           danger: true,

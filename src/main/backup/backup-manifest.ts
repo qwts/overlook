@@ -6,8 +6,9 @@ import { mediaInfoSchema } from '../../shared/library/media-info.js';
 import { boardSchema } from '../../shared/moodboard/board.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../../shared/library/photo-metadata.js';
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
+import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 8 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 9 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -420,7 +421,7 @@ export const backupManifestV7Schema = z
 export const backupManifestV8Schema = z
   .strictObject({
     ...backupManifestV7Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(8),
     hiddenAlbumIds: z.array(z.string().min(1)).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -440,6 +441,75 @@ export const backupManifestV8Schema = z
     }
   });
 
+// Album folders and organizational tags (#505, ADR-0030 §1/§5/§7): the tree
+// is library data. Restore validates it here — parents resolve to folders,
+// no cycles, bounded depth, unique positions among siblings — before any
+// row is written. Folders carry their own policy; albums carry whether they
+// follow their folder's. Tags travel by name in their own vocabulary.
+const collectionTagsSchema = z.array(z.string().min(1)).readonly();
+export const backupManifestFolderV9Schema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  createdAt: isoTimestampSchema,
+  position: z.number().int().nonnegative(),
+  parentId: z.string().min(1).nullable(),
+  showInAllPhotos: z.boolean(),
+  tags: collectionTagsSchema,
+});
+export const backupManifestAlbumPlacementV9Schema = z.strictObject({
+  albumId: z.string().min(1),
+  parentId: z.string().min(1).nullable(),
+  inheritsVisibility: z.boolean(),
+  tags: collectionTagsSchema,
+});
+export const backupManifestV9Schema = z
+  .strictObject({
+    ...backupManifestV8Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    folders: z.array(backupManifestFolderV9Schema).readonly(),
+    albumTree: z.array(backupManifestAlbumPlacementV9Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { folders: _folders, albumTree: _albumTree, ...withoutTree } = manifest;
+    const previous = backupManifestV8Schema.safeParse({ ...withoutTree, schema: 8 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-8 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    const albumIds = new Set(manifest.albums.map((album) => album.id));
+    const placed = new Set<string>();
+    for (const [index, placement] of manifest.albumTree.entries()) {
+      if (!albumIds.has(placement.albumId))
+        context.addIssue({ code: 'custom', path: ['albumTree', index], message: 'placement names no album' });
+      if (placed.has(placement.albumId)) context.addIssue({ code: 'custom', path: ['albumTree', index], message: 'album placed twice' });
+      if (placement.inheritsVisibility && placement.parentId === null) {
+        context.addIssue({ code: 'custom', path: ['albumTree', index], message: 'a top-level album has no folder to inherit from' });
+      }
+      placed.add(placement.albumId);
+    }
+    if (placed.size !== albumIds.size) context.addIssue({ code: 'custom', path: ['albumTree'], message: 'every album needs a placement' });
+    for (const [index, folder] of manifest.folders.entries()) {
+      if (albumIds.has(folder.id))
+        context.addIssue({ code: 'custom', path: ['folders', index], message: 'folder id collides with an album' });
+    }
+    const albumPositions = new Map(manifest.albums.map((album) => [album.id, album.position]));
+    for (const issue of albumTreeIssues([
+      ...manifest.folders.map((folder) => ({
+        id: folder.id,
+        kind: 'folder' as const,
+        parentId: folder.parentId,
+        position: folder.position,
+      })),
+      ...manifest.albumTree.map((placement) => ({
+        id: placement.albumId,
+        kind: 'album' as const,
+        parentId: placement.parentId,
+        position: albumPositions.get(placement.albumId) ?? -1,
+      })),
+    ])) {
+      context.addIssue({ code: 'custom', path: ['folders'], message: issue });
+    }
+  });
+
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
 export type BackupManifestPhotoV2 = z.infer<typeof backupManifestPhotoV2Schema>;
 export type BackupManifestAlbumV2 = z.infer<typeof backupManifestAlbumV2Schema>;
@@ -455,8 +525,18 @@ export type BackupManifestSidecarV6 = z.infer<typeof backupManifestSidecarV6Sche
 export type BackupManifestV6 = z.infer<typeof backupManifestV6Schema>;
 export type BackupManifestV7 = z.infer<typeof backupManifestV7Schema>;
 export type BackupManifestV8 = z.infer<typeof backupManifestV8Schema>;
+export type BackupManifestFolderV9 = z.infer<typeof backupManifestFolderV9Schema>;
+export type BackupManifestAlbumPlacementV9 = z.infer<typeof backupManifestAlbumPlacementV9Schema>;
+export type BackupManifestV9 = z.infer<typeof backupManifestV9Schema>;
 export type RestorableBackupManifest =
-  BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6 | BackupManifestV7 | BackupManifestV8;
+  | BackupManifestV2
+  | BackupManifestV3
+  | BackupManifestV4
+  | BackupManifestV5
+  | BackupManifestV6
+  | BackupManifestV7
+  | BackupManifestV8
+  | BackupManifestV9;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -489,6 +569,11 @@ export interface BackupManifestSnapshotV7 extends BackupManifestSnapshotV6 {
 
 export interface BackupManifestSnapshotV8 extends BackupManifestSnapshotV7 {
   readonly hiddenAlbumIds: readonly string[];
+}
+
+export interface BackupManifestSnapshotV9 extends BackupManifestSnapshotV8 {
+  readonly folders: readonly BackupManifestFolderV9[];
+  readonly albumTree: readonly BackupManifestAlbumPlacementV9[];
 }
 
 export type ParsedBackupManifest =
@@ -564,7 +649,15 @@ export function buildBackupManifestV8(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV8;
 }): BackupManifestV8 {
-  return backupManifestV8Schema.parse({
+  return backupManifestV8Schema.parse({ schema: 8, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV9(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV9;
+}): BackupManifestV9 {
+  return backupManifestV9Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -646,10 +739,17 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+  if (version.data.schema === 8) {
     const parsed = backupManifestV8Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-8 manifest: ${z.prettifyError(parsed.error)}`);
+    }
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  }
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+    const parsed = backupManifestV9Schema.safeParse(input);
+    if (!parsed.success) {
+      throw new BackupManifestError(`invalid schema-9 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }

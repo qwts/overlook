@@ -1,0 +1,5 @@
+---
+'overlook': minor
+---
+
+Albums can be organized into **folders**. A folder button next to the Albums heading creates one; a folder's actions menu creates albums or folders inside it, and every album or folder can be moved with **Move to folder…**, reordered among its siblings, and collapsed by clicking the folder row (disclosure is per-profile view state and is not backed up). A folder's **Hide from All Photos** setting is the default for the albums inside it that have not set their own; a child's menu shows when it follows the folder and offers **Use folder setting** to return to it. Albums and folders take organizational **Tags…** in their own vocabulary, separate from photo keywords. Deleting a non-empty folder asks whether to move its contents or to remove the structure, naming the exact number of folders and albums involved; photos are never deleted. Folders nest at most six levels deep, and the tree, folder policies, and tags are library data carried by backup and restore (manifest schema 9, database schema 29).

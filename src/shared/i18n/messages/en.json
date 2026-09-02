@@ -35,6 +35,90 @@
   "album.context.actions": {
     "defaultMessage": "Actions for {album}"
   },
+  "album.folder.create": {
+    "defaultMessage": "Create"
+  },
+  "album.folder.createFailed": {
+    "defaultMessage": "Could not create it. Try again."
+  },
+  "album.folder.creating": {
+    "defaultMessage": "Creating…"
+  },
+  "album.folder.delete": {
+    "defaultMessage": "Delete folder…"
+  },
+  "album.folder.delete.choices": {
+    "defaultMessage": "What happens to its contents"
+  },
+  "album.folder.delete.empty": {
+    "defaultMessage": "The folder is empty. Nothing else is removed."
+  },
+  "album.folder.delete.move": {
+    "defaultMessage": "Move its contents to"
+  },
+  "album.folder.delete.photos": {
+    "defaultMessage": "Photos are never deleted here."
+  },
+  "album.folder.delete.question": {
+    "defaultMessage": "Delete “{name}”?"
+  },
+  "album.folder.delete.recursive": {
+    "defaultMessage": "Also delete {folders, plural, =0 {} one {# folder} other {# folders}}{both, select, yes { and } other {}}{albums, plural, =0 {} one {# album} other {# albums}} inside it"
+  },
+  "album.folder.deleteFailed": {
+    "defaultMessage": "Could not delete this folder. Try again."
+  },
+  "album.folder.deleting": {
+    "defaultMessage": "Deleting…"
+  },
+  "album.folder.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "album.folder.name": {
+    "defaultMessage": "Folder name"
+  },
+  "album.folder.new.title": {
+    "defaultMessage": "New folder"
+  },
+  "album.folder.new.titleIn": {
+    "defaultMessage": "New folder in {folder}"
+  },
+  "album.folder.newAlbum": {
+    "defaultMessage": "New album inside…"
+  },
+  "album.folder.newAlbum.titleIn": {
+    "defaultMessage": "New album in {folder}"
+  },
+  "album.folder.newInside": {
+    "defaultMessage": "New folder inside…"
+  },
+  "album.folder.positionSuffix": {
+    "defaultMessage": "folder {position} of {total}"
+  },
+  "album.folder.rename": {
+    "defaultMessage": "Rename folder…"
+  },
+  "album.move.confirm": {
+    "defaultMessage": "Move"
+  },
+  "album.move.destination": {
+    "defaultMessage": "Folder"
+  },
+  "album.move.failed": {
+    "defaultMessage": "Could not move it. Try again."
+  },
+  "album.move.moving": {
+    "defaultMessage": "Moving…"
+  },
+  "album.move.note": {
+    "defaultMessage": "A visible album adopts the folder’s All Photos setting; a hidden one keeps its own."
+  },
+  "album.move.title": {
+    "defaultMessage": "Move {name}"
+  },
+  "album.move.topLevel": {
+    "defaultMessage": "Top level (no folder)"
+  },
   "album.reorder.alreadyFirst": {
     "defaultMessage": "{name} is already first."
   },
@@ -83,8 +167,29 @@
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
   },
+  "album.tags.label": {
+    "defaultMessage": "Tags, separated by commas"
+  },
+  "album.tags.note": {
+    "defaultMessage": "Tags organize albums and folders in the sidebar. They are separate from photo keywords."
+  },
+  "album.tags.save": {
+    "defaultMessage": "Save"
+  },
+  "album.tags.saveFailed": {
+    "defaultMessage": "Could not save tags. Try again."
+  },
+  "album.tags.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "album.tags.title": {
+    "defaultMessage": "Tags for {name}"
+  },
   "album.visibility.elsewhere": {
     "defaultMessage": "{count, plural, one {# photo stays} other {# photos stay}} in All Photos via other albums"
+  },
+  "album.visibility.inherited": {
+    "defaultMessage": "Follows the folder setting"
   },
   "album.visibility.open": {
     "defaultMessage": "Open {album}"
@@ -110,6 +215,9 @@
   "commands.album.delete": {
     "defaultMessage": "Delete album…"
   },
+  "commands.album.folder.new": {
+    "defaultMessage": "New folder…"
+  },
   "commands.album.hide": {
     "defaultMessage": "Hide from All Photos"
   },
@@ -118,6 +226,9 @@
   },
   "commands.album.membership.remove": {
     "defaultMessage": "Remove from album"
+  },
+  "commands.album.move": {
+    "defaultMessage": "Move to folder…"
   },
   "commands.album.rename": {
     "defaultMessage": "Rename album…"
@@ -137,8 +248,14 @@
   "commands.album.show": {
     "defaultMessage": "Show in All Photos"
   },
+  "commands.album.tags": {
+    "defaultMessage": "Tags…"
+  },
   "commands.album.transfer": {
     "defaultMessage": "Transfer & Sync…"
+  },
+  "commands.album.visibility.inherit": {
+    "defaultMessage": "Use folder setting"
   },
   "commands.app.lock.now": {
     "defaultMessage": "Lock Now"
@@ -2117,14 +2234,26 @@
   "sidebar.album.actions": {
     "defaultMessage": "Actions for {name}"
   },
+  "sidebar.album.created": {
+    "defaultMessage": "Created album {name}"
+  },
   "sidebar.album.hiddenFromAllPhotos": {
     "defaultMessage": "Hidden from All Photos"
+  },
+  "sidebar.album.movedToFolder": {
+    "defaultMessage": "Moved {name} to {folder}"
+  },
+  "sidebar.album.movedToTop": {
+    "defaultMessage": "Moved {name} to the top level"
   },
   "sidebar.album.name": {
     "defaultMessage": "Album name"
   },
   "sidebar.album.new": {
     "defaultMessage": "New album"
+  },
+  "sidebar.album.tagsSaved": {
+    "defaultMessage": "Saved tags for {name}"
   },
   "sidebar.backingUp": {
     "defaultMessage": "Backing up"
@@ -2146,6 +2275,15 @@
   },
   "sidebar.expand": {
     "defaultMessage": "Expand sidebar"
+  },
+  "sidebar.folder.created": {
+    "defaultMessage": "Created folder {name}"
+  },
+  "sidebar.folder.deleted": {
+    "defaultMessage": "Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}} removed · photos kept"
+  },
+  "sidebar.folder.new": {
+    "defaultMessage": "New folder"
   },
   "sidebar.heading.albums": {
     "defaultMessage": "Albums"

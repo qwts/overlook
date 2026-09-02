@@ -21,7 +21,8 @@ export function AlbumPicker({ onPick, onClose, position }: AlbumPickerProps): Re
 
   useEffect(() => {
     void window.overlook.library.albums().then(({ albums: loaded }) => {
-      setAlbums(loaded);
+      // Folders never hold photos (ADR-0030 §1, #505).
+      setAlbums(loaded.filter((album) => album.kind === 'album'));
     });
   }, []);
 

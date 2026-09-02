@@ -187,6 +187,13 @@ export interface AlbumListing extends AlbumSummary {
   readonly showInAllPhotos: boolean;
   readonly visibleElsewhere: number;
   readonly visibleVia: readonly { readonly id: string; readonly name: string }[];
+  /** Folder tree placement and organizational tags (#505, ADR-0030 §1). A
+   * folder's count is the distinct photos of every album beneath it. */
+  readonly kind: 'album' | 'folder';
+  readonly parentId: string | null;
+  /** The policy follows the containing folder (§2) rather than being this collection's own. */
+  readonly inheritsVisibility: boolean;
+  readonly tags: readonly string[];
 }
 
 export interface LibraryStats {

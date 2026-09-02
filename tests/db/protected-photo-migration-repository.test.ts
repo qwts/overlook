@@ -114,7 +114,18 @@ describe('ProtectedPhotoMigrationRepository', () => {
       hiddenByAlbums: 0,
     });
     assert.deepEqual(photos.albums(), [
-      { id: 'ordinary-a', name: 'Ordinary', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+      {
+        id: 'ordinary-a',
+        name: 'Ordinary',
+        count: 0,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+      },
     ]);
     assert.deepEqual(photos.albumMembers('ordinary-a'), []);
     assert.equal(photos.stats().photos, 0);

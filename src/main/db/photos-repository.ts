@@ -14,6 +14,7 @@ import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
+import { createCollection } from './album-tree-repository.js';
 import { readAlbumListings, readHiddenAlbumIds, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
 export { verifyInAllPhotosAsync } from './album-visibility-repository.js';
 import {
@@ -556,7 +557,7 @@ export class PhotosRepository {
     return replaceAlbumOrder(this.db, order);
   }
 
-  reorderAlbum(albumId: string, position: number): AlbumOrderResult {
+  reorderAlbum(albumId: string, position: number): ReturnType<typeof moveAlbum> {
     return moveAlbum(this.db, albumId, position);
   }
 
@@ -584,7 +585,7 @@ export class PhotosRepository {
     | undefined {
     const album = queryGet<{ id: string; name: string; createdAt: string; position: number; showInAllPhotos: number }>(
       this.db,
-      `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ?`,
+      `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ? AND kind = 'album'`,
       albumId,
     );
     return album === undefined
@@ -594,14 +595,15 @@ export class PhotosRepository {
 
   /** Albums CRUD (#117). Deleting an album NEVER deletes photos — the
    * CASCADE clears membership only (Clear-vs-Delete language rules). */
-  createAlbum(id: string, name: string): AlbumListing {
-    runNamed(
-      this.db,
-      `INSERT INTO albums (id, name, created_at, position)
-       VALUES (@id, @name, @createdAt, (SELECT COALESCE(max(position) + 1, 0) FROM albums))`,
-      { id, name, createdAt: new Date().toISOString() },
-    );
-    return { id, name, count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] };
+  createAlbum(
+    id: string,
+    name: string,
+    placement?: { readonly kind?: 'album' | 'folder'; readonly parentId?: string | null },
+  ): AlbumListing {
+    createCollection(this.db, { id, name, kind: placement?.kind ?? 'album', parentId: placement?.parentId ?? null });
+    const album = this.albums().find((listing) => listing.id === id);
+    if (album === undefined) throw new Error(`album ${id} was not created`);
+    return album;
   }
 
   /** Renames; returns the members to re-manifest. */
@@ -640,7 +642,7 @@ export class PhotosRepository {
    * actually joined, each dirtied for the next manifest. */
   addToAlbum(albumId: string, photoIds: readonly string[]): string[] {
     return this.db.transaction(() => {
-      if (queryGet<{ one: number }>(this.db, 'SELECT 1 AS one FROM albums WHERE id = ?', albumId) === undefined) {
+      if (queryGet<{ one: number }>(this.db, `SELECT 1 AS one FROM albums WHERE id = ? AND kind = 'album'`, albumId) === undefined) {
         throw new Error(`album ${albumId} does not exist`);
       }
       const added: string[] = [];
@@ -696,7 +698,7 @@ export class PhotosRepository {
     return this.db.transaction(() => {
       if (sourceAlbumId === targetAlbumId) throw new Error('source and target albums must differ');
       for (const albumId of [sourceAlbumId, targetAlbumId]) {
-        if (queryGet<{ one: number }>(this.db, 'SELECT 1 AS one FROM albums WHERE id = ?', albumId) === undefined) {
+        if (queryGet<{ one: number }>(this.db, `SELECT 1 AS one FROM albums WHERE id = ? AND kind = 'album'`, albumId) === undefined) {
           throw new Error(`album ${albumId} does not exist`);
         }
       }

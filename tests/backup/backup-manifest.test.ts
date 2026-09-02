@@ -199,7 +199,7 @@ describe('backup manifest schema (#289)', () => {
   });
 
   test('unknown schemas fail closed', () => {
-    assert.throws(() => parseBackupManifest({ schema: BACKUP_MANIFEST_SCHEMA_VERSION + 1 }), /unsupported manifest schema 9/u);
+    assert.throws(() => parseBackupManifest({ schema: BACKUP_MANIFEST_SCHEMA_VERSION + 1 }), /unsupported manifest schema 10/u);
   });
 });
 

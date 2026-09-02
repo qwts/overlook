@@ -330,6 +330,22 @@
       ]
     },
     {
+      "id": "505-album-folders",
+      "wiki": "Acceptance-Test-Album-Folders",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/album-folders.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/db/album-folders.test.ts", "tests/backup/album-folders-manifest.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Album-Folders.md for the six-level depth bound, the move-children deletion path, and a backup/restore that preserves folders, placements, folder policies, and tags."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

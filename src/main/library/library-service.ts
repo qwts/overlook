@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { PhotosRepository } from '../db/photos-repository.js';
+import { deleteFolder, moveCollection, setAlbumTags, setCollectionVisibility, type FolderDeletion } from '../db/album-tree-repository.js';
 import { PhotoMetadataRepository, type PhotoMetadataMutationResult } from '../db/photo-metadata-repository.js';
 import { HistoryLibraryRepository } from '../history/history-library-repository.js';
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
@@ -201,12 +202,31 @@ export class LibraryService {
   /** Collection visibility (#494, ADR-0030 §2): the policy is library data;
    * the photos that changed sides are announced so All Photos and the
    * sidebar counts re-evaluate, and the album's own view is untouched. */
-  setAlbumVisibility(albumId: string, showInAllPhotos: boolean): AlbumListing {
-    const changed = this.repo.setAlbumVisibility(albumId, showInAllPhotos);
+  setAlbumVisibility(albumId: string, showInAllPhotos: boolean | 'inherit'): AlbumListing {
+    const changed = setCollectionVisibility(this.db, albumId, showInAllPhotos);
     this.events.libraryChanged(changed, 'library');
+    return this.albumListing(albumId);
+  }
+
+  private albumListing(albumId: string): AlbumListing {
     const album = this.repo.albums().find((listing) => listing.id === albumId);
     if (album === undefined) throw new Error(`album ${albumId} does not exist`);
     return album;
+  }
+
+  /** Folder placement (#505, ADR-0030 §1): cycles and the depth bound are
+   * rejected inside the write; photos that changed sides through inherited
+   * visibility are announced like a policy change. */
+  moveAlbum(albumId: string, parentId: string | null): AlbumListing {
+    const changed = moveCollection(this.db, albumId, parentId);
+    this.events.libraryChanged(changed, changed.length === 0 ? 'none' : 'library');
+    return this.albumListing(albumId);
+  }
+
+  setAlbumTags(albumId: string, tags: readonly string[], newId: () => string): AlbumListing {
+    setAlbumTags(this.db, albumId, tags, newId);
+    this.events.libraryChanged([], 'none');
+    return this.albumListing(albumId);
   }
 
   albums(): AlbumListing[] {
@@ -217,7 +237,7 @@ export class LibraryService {
     return this.repo.albumOrder();
   }
 
-  reorderAlbum(albumId: string, position: number): { changed: boolean; before: readonly string[]; after: readonly string[] } {
+  reorderAlbum(albumId: string, position: number): ReturnType<PhotosRepository['reorderAlbum']> {
     const result = this.repo.reorderAlbum(albumId, position);
     if (result.changed) this.events.libraryChanged([], 'none');
     return result;
@@ -232,8 +252,12 @@ export class LibraryService {
   // Albums CRUD (#117): every mutation pushes targeted change events —
   // membership/rename/delete dirty the affected photos (manifest-relevant
   // per ADR-0007), so pendingCount rides along.
-  createAlbum(id: string, name: string): AlbumListing {
-    const album = this.repo.createAlbum(id, name);
+  createAlbum(
+    id: string,
+    name: string,
+    placement?: { readonly kind?: 'album' | 'folder'; readonly parentId?: string | null },
+  ): AlbumListing {
+    const album = this.repo.createAlbum(id, name, placement);
     this.events.libraryChanged([], 'none');
     return album;
   }
@@ -244,9 +268,17 @@ export class LibraryService {
     this.events.pendingCountChanged(this.repo.pendingCount());
   }
 
-  deleteAlbum(albumId: string): void {
-    const members = this.repo.deleteAlbum(albumId);
-    this.events.libraryChanged(members, 'album', [albumId]);
+  /** Albums delete directly; a folder runs the ADR-0023 Tier M ceremony
+   * (#505) and announces every collection it removed. */
+  deleteAlbum(albumId: string, folder?: FolderDeletion): void {
+    const isFolder = this.repo.albums().find((listing) => listing.id === albumId)?.kind === 'folder';
+    if (isFolder) {
+      const result = deleteFolder(this.db, albumId, folder ?? { mode: 'move', destinationId: null });
+      this.events.libraryChanged(result.members, 'album', result.removedIds);
+    } else {
+      const members = this.repo.deleteAlbum(albumId);
+      this.events.libraryChanged(members, 'album', [albumId]);
+    }
     this.events.pendingCountChanged(this.repo.pendingCount());
   }
 

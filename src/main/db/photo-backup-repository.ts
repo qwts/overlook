@@ -48,7 +48,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
     const photoIds = new Set(photos.map((photo) => photo.id));
     const albumRows = queryAll<{ id: string; name: string; createdAt: string; position: number }>(
       db,
-      `SELECT id, name, created_at AS createdAt, position FROM albums ORDER BY position, id`,
+      `SELECT id, name, created_at AS createdAt, position FROM albums WHERE kind = 'album' ORDER BY position, id`,
     );
     const members = queryAll<{ albumId: string; photoId: string }>(
       db,

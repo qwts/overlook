@@ -74,6 +74,10 @@ export type CommandId =
   | 'album.reorder.down'
   | 'album.reorder.top'
   | 'album.reorder.bottom'
+  | 'album.folder.new'
+  | 'album.move'
+  | 'album.tags'
+  | 'album.visibility.inherit'
   | 'view.inspector.toggle'
   | 'view.inspector.detach'
   | 'view.sidebar.toggle'
@@ -156,6 +160,10 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'album.transfer': { id: 'commands.album.transfer', defaultMessage: 'Transfer & Sync…' },
   'album.hide': { id: 'commands.album.hide', defaultMessage: 'Hide from All Photos' },
   'album.show': { id: 'commands.album.show', defaultMessage: 'Show in All Photos' },
+  'album.folder.new': { id: 'commands.album.folder.new', defaultMessage: 'New folder…' },
+  'album.move': { id: 'commands.album.move', defaultMessage: 'Move to folder…' },
+  'album.tags': { id: 'commands.album.tags', defaultMessage: 'Tags…' },
+  'album.visibility.inherit': { id: 'commands.album.visibility.inherit', defaultMessage: 'Use folder setting' },
   'album.reorder.up': { id: 'commands.album.reorder.up', defaultMessage: 'Move up' },
   'album.reorder.down': { id: 'commands.album.reorder.down', defaultMessage: 'Move down' },
   'album.reorder.top': { id: 'commands.album.reorder.top', defaultMessage: 'Move to top' },
@@ -377,6 +385,10 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'album.transfer', label: label('album.transfer', 'Transfer & Sync…'), surfaces: [], target: 'focused-item' },
   { id: 'album.hide', label: label('album.hide', 'Hide from All Photos'), surfaces: [], target: 'focused-item' },
   { id: 'album.show', label: label('album.show', 'Show in All Photos'), surfaces: [], target: 'focused-item' },
+  { id: 'album.folder.new', label: label('album.folder.new', 'New folder…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.move', label: label('album.move', 'Move to folder…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.tags', label: label('album.tags', 'Tags…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.visibility.inherit', label: label('album.visibility.inherit', 'Use folder setting'), surfaces: [], target: 'focused-item' },
   { id: 'album.reorder.up', label: label('album.reorder.up', 'Move up'), surfaces: [], target: 'focused-item', key: 'ArrowUp', alt: true },
   {
     id: 'album.reorder.down',

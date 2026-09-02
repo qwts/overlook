@@ -735,7 +735,18 @@ describe('albums (#117)', () => {
     const ids = repo.page({ source: 'all', limit: 10 }).photos.map((photo) => photo.id);
 
     const album = repo.createAlbum('ALB1', 'Kyoto trip');
-    const listing = { id: 'ALB1', name: 'Kyoto trip', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] };
+    const listing = {
+      id: 'ALB1',
+      name: 'Kyoto trip',
+      count: 0,
+      showInAllPhotos: true,
+      visibleElsewhere: 0,
+      visibleVia: [],
+      kind: 'album',
+      parentId: null,
+      inheritsVisibility: false,
+      tags: [],
+    };
     assert.deepEqual(album, listing);
     assert.deepEqual(repo.albums().at(-1), listing);
 

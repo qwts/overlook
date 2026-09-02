@@ -113,6 +113,10 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'album.transfer':
     case 'album.hide':
     case 'album.show':
+    case 'album.folder.new':
+    case 'album.move':
+    case 'album.tags':
+    case 'album.visibility.inherit':
     case 'album.reorder.up':
     case 'album.reorder.down':
     case 'album.reorder.top':

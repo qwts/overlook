@@ -5,11 +5,11 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV8,
+  buildBackupManifestV9,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
-  type BackupManifestSnapshotV8,
+  type BackupManifestSnapshotV9,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
@@ -127,6 +127,9 @@ export interface BackupEngineDeps {
   readonly galleryPolicySnapshot?: (() => GalleryPolicy) | undefined;
   /** Albums hidden from All Photos (#494) — library data carried by the manifest. */
   readonly hiddenAlbumIdsSnapshot?: (() => readonly string[]) | undefined;
+  /** Folder tree and organizational tags (#505) — library data carried by
+   * the manifest. Absent = every album is top level with no tags. */
+  readonly albumTreeSnapshot?: (() => Pick<BackupManifestSnapshotV9, 'folders' | 'albumTree'>) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -800,7 +803,7 @@ export class BackupEngine {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
-    const manifest = buildBackupManifestV8({
+    const manifest = buildBackupManifestV9({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -812,7 +815,11 @@ export class BackupEngine {
         sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
-      } satisfies BackupManifestSnapshotV8,
+        ...(this.deps.albumTreeSnapshot?.() ?? {
+          folders: [],
+          albumTree: snapshot.albums.map((album) => ({ albumId: album.id, parentId: null, inheritsVisibility: false, tags: [] })),
+        }),
+      } satisfies BackupManifestSnapshotV9,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

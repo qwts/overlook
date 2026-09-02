@@ -259,6 +259,10 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         case 'album.transfer':
         case 'album.hide':
         case 'album.show':
+        case 'album.folder.new':
+        case 'album.move':
+        case 'album.tags':
+        case 'album.visibility.inherit':
         case 'photo.open':
         case 'photo.offload':
         case 'photo.restoreOriginal':

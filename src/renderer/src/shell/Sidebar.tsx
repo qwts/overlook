@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactElement, Ref } from 'react';
+import type { ReactElement } from 'react';
 import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 import type { MessageDescriptor } from 'react-intl';
 
@@ -12,12 +12,15 @@ import { Tooltip } from '../components/Tooltip';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { AlbumActionMenu } from './AlbumActionMenu';
 import { DeleteAlbumDialog, RenameAlbumDialog } from './AlbumDialogs';
+import { AlbumTagsDialog, DeleteFolderDialog, MoveAlbumDialog, NewCollectionDialog } from './AlbumFolderDialogs';
 import { AlbumDropDialog } from './AlbumDropDialog';
+import { AlbumTree } from './AlbumTree';
+import { SideRow } from './SideRow';
 import { useAlbumPhotoDrop } from './use-album-photo-drop';
 import { ContextMenu } from '../components/ContextMenu';
 import { commandById } from '../../../shared/commands/registry.js';
 import type { CommandPlatform } from '../../../shared/commands/registry.js';
-import { useAlbumReorder, type AlbumReorderCommand } from './use-album-reorder';
+import { useAlbumReorder } from './use-album-reorder';
 
 // The shell stylesheet carries the sidebar/rail rules; importing it here
 // (not just in Shell) keeps the component styled when mounted alone, e.g.
@@ -25,7 +28,6 @@ import { useAlbumReorder, type AlbumReorderCommand } from './use-album-reorder';
 import './shell.css';
 
 const messages = defineMessages({
-  hiddenFromAllPhotos: { id: 'sidebar.album.hiddenFromAllPhotos', defaultMessage: 'Hidden from All Photos' },
   nav: { id: 'sidebar.nav', defaultMessage: 'Library' },
   headingLibrary: { id: 'sidebar.heading.library', defaultMessage: 'Library' },
   headingAlbums: { id: 'sidebar.heading.albums', defaultMessage: 'Albums' },
@@ -33,6 +35,7 @@ const messages = defineMessages({
   expand: { id: 'sidebar.expand', defaultMessage: 'Expand sidebar' },
   collapse: { id: 'sidebar.collapse', defaultMessage: 'Collapse sidebar' },
   newAlbum: { id: 'sidebar.album.new', defaultMessage: 'New album' },
+  newFolder: { id: 'sidebar.folder.new', defaultMessage: 'New folder' },
   albumName: { id: 'sidebar.album.name', defaultMessage: 'Album name' },
   settings: { id: 'sidebar.settings', defaultMessage: 'Settings' },
   encrypted: { id: 'sidebar.encrypted', defaultMessage: 'Library encrypted' },
@@ -47,6 +50,16 @@ const messages = defineMessages({
   sourceOffloaded: { id: 'sidebar.source.offloaded', defaultMessage: 'Offloaded' },
   sourceUnavailable: { id: 'sidebar.source.unavailable', defaultMessage: 'Unavailable' },
   sourceDeleted: { id: 'sidebar.source.deleted', defaultMessage: 'Trash' },
+  createdFolder: { id: 'sidebar.folder.created', defaultMessage: 'Created folder {name}' },
+  createdAlbum: { id: 'sidebar.album.created', defaultMessage: 'Created album {name}' },
+  movedToFolder: { id: 'sidebar.album.movedToFolder', defaultMessage: 'Moved {name} to {folder}' },
+  movedToTop: { id: 'sidebar.album.movedToTop', defaultMessage: 'Moved {name} to the top level' },
+  deletedFolder: {
+    id: 'sidebar.folder.deleted',
+    defaultMessage:
+      'Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}} removed · photos kept',
+  },
+  savedTags: { id: 'sidebar.album.tagsSaved', defaultMessage: 'Saved tags for {name}' },
 });
 
 const SOURCES: readonly { key: SourceFilter; icon: IconName; label: MessageDescriptor }[] = [
@@ -66,6 +79,9 @@ const DERIVED_SOURCES = new Set<SourceFilter>(['raw', 'offloaded', 'unavailable'
 
 // Collapsed state persists across launches under the mock's own key (#238).
 const COLLAPSE_KEY = 'overlook.sidebarCollapsed';
+// Folder disclosure is per-profile view state (ADR-0030 §5, #505): the ids
+// of collapsed folders, never backed up. Folders start expanded.
+const FOLDERS_KEY = 'overlook.albumFoldersCollapsed';
 
 function readCollapsed(): boolean {
   try {
@@ -75,97 +91,14 @@ function readCollapsed(): boolean {
   }
 }
 
-interface SideRowProps {
-  readonly icon: IconName;
-  readonly label: string;
-  readonly count: number | null;
-  readonly active?: boolean;
-  readonly onClick?: ((origin: HTMLButtonElement) => void) | undefined;
-  readonly collapsed?: boolean;
-  readonly buttonRef?: Ref<HTMLButtonElement> | undefined;
-  readonly onOpenActions?: ((position: { readonly x: number; readonly y: number }, origin: HTMLButtonElement) => void) | undefined;
-  readonly statusLabel?: string | undefined;
-  readonly positionLabel?: string | undefined;
-  /** Album hidden from All Photos (#494): a badge that is part of the accessible name. */
-  readonly hiddenLabel?: string | undefined;
-  readonly onReorderShortcut?: ((command: Extract<AlbumReorderCommand, 'album.reorder.up' | 'album.reorder.down'>) => void) | undefined;
-}
-
-function SideRow({
-  icon,
-  label,
-  count,
-  active = false,
-  onClick,
-  collapsed = false,
-  buttonRef,
-  onOpenActions,
-  statusLabel,
-  positionLabel,
-  hiddenLabel,
-  onReorderShortcut,
-}: SideRowProps): ReactElement {
-  const direction = directionOf(useIntl().locale);
-  const { formatCount } = useFormats();
-  const detail = statusLabel ?? (count === null ? null : formatCount(count));
-  const hint = [label, hiddenLabel, detail, positionLabel].filter((part) => part !== null && part !== undefined).join(' · ');
-  const row = (
-    <button
-      ref={buttonRef}
-      type="button"
-      className={`ovl-siderow${active ? ' ovl-siderow--active' : ''}${collapsed ? ' ovl-siderow--collapsed' : ''}`}
-      onClick={onClick === undefined ? undefined : (event) => onClick(event.currentTarget)}
-      disabled={onClick === undefined}
-      // Collapsed rows are icon-only; the hint is their accessible name.
-      aria-label={collapsed ? hint : undefined}
-      aria-haspopup={onOpenActions === undefined ? undefined : 'menu'}
-      onContextMenu={
-        onOpenActions === undefined
-          ? undefined
-          : (event) => {
-              event.preventDefault();
-              onOpenActions({ x: event.clientX, y: event.clientY }, event.currentTarget);
-            }
-      }
-      onKeyDown={
-        onOpenActions === undefined && onReorderShortcut === undefined
-          ? undefined
-          : (event) => {
-              if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && onReorderShortcut !== undefined) {
-                event.preventDefault();
-                onReorderShortcut(event.key === 'ArrowUp' ? 'album.reorder.up' : 'album.reorder.down');
-                return;
-              }
-              if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-                if (onOpenActions === undefined) return;
-                event.preventDefault();
-                const bounds = event.currentTarget.getBoundingClientRect();
-                onOpenActions({ x: direction === 'rtl' ? bounds.left - 214 : bounds.right + 4, y: bounds.top }, event.currentTarget);
-              }
-            }
-      }
-    >
-      <Icon name={icon} size={14} color={active ? 'var(--accent-cyan)' : 'var(--text-faint)'} />
-      {collapsed ? null : <span className="ovl-siderow__label">{label}</span>}
-      {collapsed || hiddenLabel === undefined ? null : (
-        <span className="ovl-siderow__hidden" role="img" aria-label={hiddenLabel} title={hiddenLabel}>
-          <Icon name="eye-off" size={12} />
-        </span>
-      )}
-      {collapsed || detail === null ? null : (
-        <span className={`ovl-siderow__count mono-data${statusLabel === undefined ? '' : ' ovl-siderow__count--status'}`}>{detail}</span>
-      )}
-    </button>
-  );
-  // The rail keeps every destination reachable: the hidden label (and count)
-  // move into an inline-end tooltip, unclipped by the nav's own overflow.
-  return collapsed ? (
-    <Tooltip label={hint} side={direction === 'rtl' ? 'left' : 'right'}>
-      {row}
-    </Tooltip>
-  ) : (
-    row
-  );
+function readCollapsedFolders(): ReadonlySet<string> {
+  try {
+    const raw = window.localStorage.getItem(FOLDERS_KEY);
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
 }
 
 export interface SidebarProps {
@@ -184,6 +117,13 @@ export interface SidebarProps {
   readonly onProtectedOpen?: ((albumId: string, origin: HTMLButtonElement) => void) | undefined;
   readonly onEmptyTrash?: (() => void) | undefined;
 }
+
+type CollectionDialog =
+  | { readonly kind: 'new'; readonly collection: 'album' | 'folder'; readonly parent: AlbumListing | null }
+  | { readonly kind: 'rename'; readonly album: AlbumListing }
+  | { readonly kind: 'delete'; readonly album: AlbumListing }
+  | { readonly kind: 'move'; readonly album: AlbumListing }
+  | { readonly kind: 'tags'; readonly album: AlbumListing };
 
 // The 216px navigation rail (#80) per the design's Sidebar.jsx. Album
 // creation and management are keyboard-accessible here; the backup card
@@ -205,11 +145,13 @@ export function Sidebar({
   const { formatBytes, formatCount } = useFormats();
   const state = useAppState();
   const dispatch = useAppDispatch();
-  const albumDrop = useAlbumPhotoDrop(albums);
+  // Folders never hold photos (ADR-0030 §1): only albums are drop targets.
+  const albumDrop = useAlbumPhotoDrop(albums.filter((album) => album.kind === 'album'));
   const albumReorder = useAlbumReorder(albums);
   // Collapse to the 56px icon rail (#238): labels/counts move to tooltips,
   // headings become dividers, the backup card becomes the shield button.
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [collapsedFolders, setCollapsedFolders] = useState(readCollapsedFolders);
   const [sourceMenu, setSourceMenu] = useState<{ readonly x: number; readonly y: number; readonly origin: HTMLButtonElement } | null>(null);
   const toggleCollapsed = (): void => {
     const next = !collapsed;
@@ -220,6 +162,17 @@ export function Sidebar({
     }
     setCollapsed(next);
   };
+  const toggleFolder = (folderId: string): void => {
+    const next = new Set(collapsedFolders);
+    if (next.has(folderId)) next.delete(folderId);
+    else next.add(folderId);
+    try {
+      window.localStorage.setItem(FOLDERS_KEY, JSON.stringify([...next]));
+    } catch {
+      // Best-effort, like the rail state.
+    }
+    setCollapsedFolders(next);
+  };
   // The card's aggregate bar rides backup:progress (#108); it hides again
   // when the run finishes (done === total).
   const [backupRun, setBackupRun] = useState<{ done: number; total: number } | null>(null);
@@ -227,8 +180,7 @@ export function Sidebar({
   // flow; an inline name row keeps it keyboard-first (Enter/Escape).
   const [namingAlbum, setNamingAlbum] = useState(false);
   const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumListing; readonly x: number; readonly y: number } | null>(null);
-  const [renamingAlbum, setRenamingAlbum] = useState<AlbumSummary | null>(null);
-  const [deletingAlbum, setDeletingAlbum] = useState<AlbumSummary | null>(null);
+  const [dialog, setDialog] = useState<CollectionDialog | null>(null);
   const allPhotosRef = useRef<HTMLButtonElement>(null);
   const albumActionOriginRef = useRef<HTMLElement | null>(null);
   const restoreAlbumActionFocus = (fallback: HTMLElement | null = allPhotosRef.current): void => {
@@ -237,6 +189,25 @@ export function Sidebar({
     requestAnimationFrame(() => {
       (origin?.isConnected === true ? origin : fallback)?.focus();
     });
+  };
+  const closeDialog = (): void => {
+    setDialog(null);
+    restoreAlbumActionFocus();
+  };
+  const toast = (title: string, tone: 'green' | 'neutral' = 'green'): void => {
+    dispatch({ type: 'toast/shown', toast: { title, tone } });
+  };
+  // The opener belongs to a row being removed: move focus to a stable
+  // destination instead of leaving keyboard focus on body.
+  const completeRemoval = (removedIds: readonly string[]): void => {
+    if (state.album !== null && removedIds.includes(state.album)) dispatch({ type: 'source/set', source: 'all' });
+    setDialog(null);
+    albumActionOriginRef.current = null;
+    requestAnimationFrame(() => allPhotosRef.current?.focus());
+  };
+  const openMenuFor = (album: AlbumListing, position: { readonly x: number; readonly y: number }, origin: HTMLElement): void => {
+    albumActionOriginRef.current = origin;
+    setAlbumMenu({ album, ...position });
   };
   useEffect(() => {
     const offProgress = window.overlook.backup.onProgress(({ done, total }) => {
@@ -329,16 +300,29 @@ export function Sidebar({
           <h2 className="ovl-sidebar__headingText">
             <FormattedMessage id="sidebar.heading.albums" defaultMessage="Albums" />
           </h2>
-          <button
-            type="button"
-            className="ovl-sidebar__gear"
-            aria-label={intl.formatMessage(messages.newAlbum)}
-            onClick={() => {
-              setNamingAlbum(true);
-            }}
-          >
-            <Icon name="plus" size={13} color="var(--text-faint)" />
-          </button>
+          <span className="ovl-sidebar__headingActions">
+            <button
+              type="button"
+              className="ovl-sidebar__gear"
+              aria-label={intl.formatMessage(messages.newFolder)}
+              onClick={(event) => {
+                albumActionOriginRef.current = event.currentTarget;
+                setDialog({ kind: 'new', collection: 'folder', parent: null });
+              }}
+            >
+              <Icon name="folder" size={13} color="var(--text-faint)" />
+            </button>
+            <button
+              type="button"
+              className="ovl-sidebar__gear"
+              aria-label={intl.formatMessage(messages.newAlbum)}
+              onClick={() => {
+                setNamingAlbum(true);
+              }}
+            >
+              <Icon name="plus" size={13} color="var(--text-faint)" />
+            </button>
+          </span>
         </div>
       )}
       {namingAlbum && !collapsed ? (
@@ -372,89 +356,18 @@ export function Sidebar({
           defaultMessage="Press Space or Enter to grab. Use arrow keys to move, Space or Enter to drop, and Escape to cancel."
         />
       </span>
-      <ul
-        className="ovl-sidebar__albumlist"
-        aria-label={intl.formatMessage(messages.headingAlbums)}
-        aria-roledescription={albumReorder.grabbedId === null ? undefined : 'reorderable list'}
-      >
-        {albumReorder.albums.map((album, albumIndex) => {
-          const photoDropProps = albumDrop.targetProps(album);
-          const reorderRowProps = albumReorder.rowProps(album);
-          return (
-            // A list item is intentionally the drop boundary; activation remains on its nested button.
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- typed album/photo drop target
-            <li
-              className={`ovl-sidebar__albumrow${albumDrop.feedback?.albumId === album.id ? ` ovl-sidebar__albumrow--drop-${albumDrop.feedback.phase}` : ''}${albumReorder.grabbedId === album.id ? ' ovl-sidebar__albumrow--grabbed' : ''}${albumReorder.draggingId === album.id ? ' ovl-sidebar__albumrow--dragging' : ''}`}
-              key={album.id}
-              onDragEnter={(event) => {
-                reorderRowProps.onDragEnter(event);
-                if (!event.isPropagationStopped()) photoDropProps.onDragEnter(event);
-              }}
-              onDragOver={(event) => {
-                reorderRowProps.onDragOver(event);
-                if (!event.isPropagationStopped()) photoDropProps.onDragOver(event);
-              }}
-              onDragLeave={photoDropProps.onDragLeave}
-              onDrop={(event) => {
-                reorderRowProps.onDrop(event);
-                if (!event.isPropagationStopped()) photoDropProps.onDrop(event);
-              }}
-            >
-              <SideRow
-                icon="album"
-                label={album.name}
-                count={album.count}
-                active={state.album === album.id}
-                collapsed={collapsed}
-                positionLabel={
-                  collapsed
-                    ? intl.formatMessage(
-                        { id: 'album.reorder.positionSuffix', defaultMessage: 'album {position} of {total}' },
-                        { position: albumIndex + 1, total: albumReorder.albums.length },
-                      )
-                    : undefined
-                }
-                statusLabel={albumDrop.feedback?.albumId === album.id ? albumDrop.feedback.label : undefined}
-                hiddenLabel={album.showInAllPhotos ? undefined : intl.formatMessage(messages.hiddenFromAllPhotos)}
-                onClick={() => {
-                  dispatch({ type: 'album/set', albumId: album.id });
-                }}
-                onOpenActions={(position, origin) => {
-                  albumActionOriginRef.current = origin;
-                  setAlbumMenu({ album, ...position });
-                }}
-                onReorderShortcut={(command) => albumReorder.moveByCommand(album, command)}
-              />
-              {collapsed ? null : (
-                <Tooltip label={intl.formatMessage({ id: 'album.reorder.tooltip', defaultMessage: 'Reorder album' })} side="right">
-                  <button type="button" className="ovl-sidebar__album-reorder" {...albumReorder.handleProps(album)}>
-                    <Icon name="grip-vertical" size={15} />
-                  </button>
-                </Tooltip>
-              )}
-              {collapsed ? null : (
-                <button
-                  type="button"
-                  className="ovl-sidebar__album-actions"
-                  aria-label={intl.formatMessage(
-                    { id: 'sidebar.album.actions', defaultMessage: 'Actions for {name}' },
-                    { name: album.name },
-                  )}
-                  aria-haspopup="menu"
-                  tabIndex={-1}
-                  onClick={(event) => {
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    albumActionOriginRef.current = event.currentTarget;
-                    setAlbumMenu({ album, x: direction === 'rtl' ? bounds.left : bounds.right - 190, y: bounds.bottom + 4 });
-                  }}
-                >
-                  <Icon name="sliders-horizontal" size={12} />
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <AlbumTree
+        collapsed={collapsed}
+        activeAlbumId={state.album}
+        isExpanded={(folderId) => !collapsedFolders.has(folderId)}
+        onToggleFolder={toggleFolder}
+        onSelectAlbum={(albumId) => {
+          dispatch({ type: 'album/set', albumId });
+        }}
+        onOpenActions={openMenuFor}
+        albumReorder={albumReorder}
+        albumDrop={albumDrop}
+      />
       {protectedAlbums.length === 0 ? null : collapsed ? (
         <div className="ovl-sidebar__divider" role="presentation" />
       ) : (
@@ -499,11 +412,11 @@ export function Sidebar({
           }}
           onRename={() => {
             setAlbumMenu(null);
-            setRenamingAlbum(albumMenu.album);
+            setDialog({ kind: 'rename', album: albumMenu.album });
           }}
           onDelete={() => {
             setAlbumMenu(null);
-            setDeletingAlbum(albumMenu.album);
+            setDialog({ kind: 'delete', album: albumMenu.album });
           }}
           onSetVisibility={(showInAllPhotos) => {
             const album = albumMenu.album;
@@ -512,9 +425,35 @@ export function Sidebar({
             // The albums list and counts refresh off the library:changed push.
             void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos });
           }}
+          onInheritVisibility={() => {
+            const album = albumMenu.album;
+            setAlbumMenu(null);
+            restoreAlbumActionFocus();
+            void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos: 'inherit' });
+          }}
           onOpenAlbum={(albumId) => {
             setAlbumMenu(null);
             dispatch({ type: 'album/set', albumId });
+          }}
+          onNewAlbumInside={() => {
+            setAlbumMenu(null);
+            setDialog({ kind: 'new', collection: 'album', parent: albumMenu.album });
+          }}
+          onNewFolderInside={() => {
+            setAlbumMenu(null);
+            setDialog({ kind: 'new', collection: 'folder', parent: albumMenu.album });
+          }}
+          onMove={
+            albumMenu.album.parentId !== null || albums.some((album) => album.kind === 'folder' && album.id !== albumMenu.album.id)
+              ? () => {
+                  setAlbumMenu(null);
+                  setDialog({ kind: 'move', album: albumMenu.album });
+                }
+              : undefined
+          }
+          onTags={() => {
+            setAlbumMenu(null);
+            setDialog({ kind: 'tags', album: albumMenu.album });
           }}
           onTransfer={
             onTransferAlbum === undefined
@@ -524,8 +463,8 @@ export function Sidebar({
                   onTransferAlbum(albumMenu.album);
                 }
           }
-          position={albumReorder.albums.findIndex(({ id }) => id === albumMenu.album.id)}
-          total={albumReorder.albums.length}
+          position={albumReorder.placement(albumMenu.album.id).position}
+          total={albumReorder.placement(albumMenu.album.id).total}
           platform={platform}
           onReorder={(command) => {
             const album = albumMenu.album;
@@ -535,46 +474,88 @@ export function Sidebar({
           }}
         />
       )}
-      {renamingAlbum === null ? null : (
+      {dialog?.kind === 'new' ? (
+        <NewCollectionDialog
+          kind={dialog.collection}
+          parent={dialog.parent}
+          onClose={closeDialog}
+          onComplete={(album) => {
+            setDialog(null);
+            toast(intl.formatMessage(album.kind === 'folder' ? messages.createdFolder : messages.createdAlbum, { name: album.name }));
+            restoreAlbumActionFocus();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === 'rename' ? (
         <RenameAlbumDialog
-          key={renamingAlbum.id}
-          album={renamingAlbum}
-          onClose={() => {
-            setRenamingAlbum(null);
-            restoreAlbumActionFocus();
-          }}
+          key={dialog.album.id}
+          album={dialog.album}
+          onClose={closeDialog}
           onComplete={(name) => {
-            setRenamingAlbum(null);
-            dispatch({ type: 'toast/shown', toast: { title: `Renamed album to ${name}`, tone: 'green' } });
+            setDialog(null);
+            toast(`Renamed album to ${name}`);
             restoreAlbumActionFocus();
           }}
         />
-      )}
-      {deletingAlbum === null ? null : (
+      ) : null}
+      {dialog?.kind === 'move' ? (
+        <MoveAlbumDialog
+          key={dialog.album.id}
+          album={dialog.album}
+          albums={albums}
+          onClose={closeDialog}
+          onComplete={(moved) => {
+            setDialog(null);
+            const folder = albums.find((album) => album.id === moved.parentId);
+            toast(
+              folder === undefined
+                ? intl.formatMessage(messages.movedToTop, { name: moved.name })
+                : intl.formatMessage(messages.movedToFolder, { name: moved.name, folder: folder.name }),
+            );
+            restoreAlbumActionFocus();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === 'tags' ? (
+        <AlbumTagsDialog
+          key={dialog.album.id}
+          album={dialog.album}
+          onClose={closeDialog}
+          onComplete={(updated) => {
+            setDialog(null);
+            toast(intl.formatMessage(messages.savedTags, { name: updated.name }));
+            restoreAlbumActionFocus();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === 'delete' && dialog.album.kind === 'folder' ? (
+        <DeleteFolderDialog
+          key={dialog.album.id}
+          folder={dialog.album}
+          albums={albums}
+          onClose={closeDialog}
+          onComplete={(removed) => {
+            const folder = dialog.album;
+            toast(
+              intl.formatMessage(messages.deletedFolder, { name: folder.name, folders: removed.folders, albums: removed.albums }),
+              'neutral',
+            );
+            completeRemoval(albums.filter((album) => album.id === folder.id || album.parentId === folder.id).map((album) => album.id));
+          }}
+        />
+      ) : null}
+      {dialog?.kind === 'delete' && dialog.album.kind === 'album' ? (
         <DeleteAlbumDialog
-          key={deletingAlbum.id}
-          album={deletingAlbum}
-          onClose={() => {
-            setDeletingAlbum(null);
-            restoreAlbumActionFocus();
-          }}
+          key={dialog.album.id}
+          album={dialog.album}
+          onClose={closeDialog}
           onComplete={() => {
-            if (state.album === deletingAlbum.id) dispatch({ type: 'source/set', source: 'all' });
-            dispatch({
-              type: 'toast/shown',
-              toast: {
-                title: `Deleted ${deletingAlbum.name} · ${formatCount(deletingAlbum.count)} ${deletingAlbum.count === 1 ? 'photo' : 'photos'} kept`,
-                tone: 'neutral',
-              },
-            });
-            setDeletingAlbum(null);
-            // The opener belongs to the row being removed. Move focus to a
-            // stable destination instead of leaving keyboard focus on body.
-            albumActionOriginRef.current = null;
-            requestAnimationFrame(() => allPhotosRef.current?.focus());
+            const album = dialog.album;
+            toast(`Deleted ${album.name} · ${formatCount(album.count)} ${album.count === 1 ? 'photo' : 'photos'} kept`, 'neutral');
+            completeRemoval([album.id]);
           }}
         />
-      )}
+      ) : null}
       <div className="ovl-sidebar__spacer" />
       {collapsed ? (
         <Tooltip
