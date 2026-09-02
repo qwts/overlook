@@ -4,7 +4,7 @@
 the library has sealed photos or sidecars under, with its `KEY #N`, the
 `(key_ref, version)` identity's fingerprint, an optional label, what it still
 seals, and whether this device holds the material. The rules are
-[ADR-0032 §2](../adr/ADR-0032-Sharing-And-End-To-End-Encryption.md): a key is
+[ADR-0032 §2](../adr/ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md): a key is
 identified by an opaque 128-bit reference and a version, never by its
 material; the registry rides the backup manifest (schema 15) so a restored
 library keeps every identity; and removing a key is a custody decision that

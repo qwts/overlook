@@ -2,7 +2,7 @@
 
 **Disclosure** (Settings ▸ Privacy) lists every classifiable metadata field
 with its class. The rules are
-[ADR-0032 §6](../adr/ADR-0032-Sharing-And-End-To-End-Encryption.md):
+[ADR-0032 §6](../adr/ADR-0032-Sharing-And-End-To-End-Encrypted-Collaboration.md):
 **Private** never crosses a disclosure boundary, **Shared** may cross to a
 named, authorized recipient (a folder you choose, Apple Photos, a keyed LLM
 provider, a paired peer), **Public** may cross to an unauthenticated
@@ -46,7 +46,7 @@ capture time`, `DisclosureSettings.stories.tsx › Defaults / Preview`.
    Camera, Lens, Provenance evidence, Precise location, Ratings, Face data
    and Comments, each with a Private / Shared / Public selector; Precise
    location, Ratings and Face data read **Private**, every other field
-   **Shared**, none **Public**. Below it an **Always private** list that has
+   **Shared**, none **Public**. The section ends with an **Always private** list that has
    no controls.
 2. Set **Capture time** to **Private**. **Expected:** the row updates
    immediately; Activity shows "Changed a disclosure class" with the field
@@ -54,7 +54,7 @@ capture time`, `DisclosureSettings.stories.tsx › Defaults / Preview`.
 3. Relaunch and reopen Settings ▸ Privacy. **Expected:** Capture time is
    still Private.
 4. Select one photo → **Export**. **Expected:** the dialog shows **What
-   leaves** above the destination: a **Publishing to a public destination**
+   leaves** section before the destination controls: a **Publishing to a public destination**
    switch (off), one row per field present in the selection with its class,
    how many photos it crosses for and a sample value, and a note that
    capture time is embedded in the original bytes. Because capture time is
