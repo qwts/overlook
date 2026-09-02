@@ -94,6 +94,10 @@ export type CommandId =
   | 'view.lightbox.previous'
   | 'view.lightbox.next'
   | 'photo.favorite.toggle'
+  | 'photo.edit.save'
+  | 'photo.edit.reset'
+  | 'photo.edit.crop'
+  | 'photo.edit.revert'
   | 'photo.original.mark'
   | 'photo.original.unmark'
   | 'photo.open'
@@ -187,6 +191,10 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'view.lightbox.previous': { id: 'commands.view.lightbox.previous', defaultMessage: 'Previous photo' },
   'view.lightbox.next': { id: 'commands.view.lightbox.next', defaultMessage: 'Next photo' },
   'photo.favorite.toggle': { id: 'commands.photo.favorite.toggle', defaultMessage: 'Toggle favorite' },
+  'photo.edit.save': { id: 'commands.photo.edit.save', defaultMessage: 'Save edits' },
+  'photo.edit.reset': { id: 'commands.photo.edit.reset', defaultMessage: 'Reset edits' },
+  'photo.edit.crop': { id: 'commands.photo.edit.crop', defaultMessage: 'Crop' },
+  'photo.edit.revert': { id: 'commands.photo.edit.revert', defaultMessage: 'Revert to previous edit' },
   'photo.original.mark': { id: 'commands.photo.original.mark', defaultMessage: 'Mark as Original' },
   'photo.original.unmark': { id: 'commands.photo.original.unmark', defaultMessage: 'Remove Original protection' },
   'photo.open': { id: 'commands.photo.open', defaultMessage: 'Open' },
@@ -516,6 +524,18 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     native: { menu: 'photo', lockSafe: false, queueable: false },
     quickAction: { icon: 'star', availability: 'anywhere', target: 'photo' },
   },
+  // Persisted edits (#493): resolved on the lightbox surface, executed by the viewport.
+  {
+    id: 'photo.edit.save',
+    label: label('photo.edit.save', 'Save edits'),
+    surfaces: ['lightbox'],
+    target: 'focused-item',
+    key: 's',
+    primaryModifier: true,
+  },
+  { id: 'photo.edit.reset', label: label('photo.edit.reset', 'Reset edits'), surfaces: ['lightbox'], target: 'focused-item' },
+  { id: 'photo.edit.crop', label: label('photo.edit.crop', 'Crop'), surfaces: ['lightbox'], target: 'focused-item', key: 'c' },
+  { id: 'photo.edit.revert', label: label('photo.edit.revert', 'Revert to previous edit'), surfaces: ['lightbox'], target: 'focused-item' },
   {
     id: 'photo.original.mark',
     label: label('photo.original.mark', 'Mark as Original'),

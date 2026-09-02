@@ -378,6 +378,28 @@
       ]
     },
     {
+      "id": "493-persisted-edits",
+      "wiki": "Acceptance-Test-Persisted-Edits",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/photo-edits.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/lightbox/Lightbox.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/library/edit-revision.test.ts",
+            "tests/library/photo-edit-service.test.ts",
+            "tests/db/edit-revisions.test.ts",
+            "tests/backup/edit-revisions-manifest.test.ts",
+            "tests/import/thumbnail-pool.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Persisted-Edits.md for the offloaded-original deferral, the newer-format view-only state, the relaunch check, and the restore fidelity check over a real library."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

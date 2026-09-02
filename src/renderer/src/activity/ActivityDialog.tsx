@@ -67,6 +67,7 @@ const eventMessages: Readonly<Record<ActivityEventType, { readonly id: string; r
     defaultMessage: 'Moved {count, plural, one {# photo} other {# photos}} between albums',
   },
   'photo.favorite-changed': { id: 'activity.event.favorite', defaultMessage: 'Changed a favorite' },
+  'photo.edited': { id: 'activity.event.edited', defaultMessage: 'Saved an edit' },
   'photo.trashed': {
     id: 'activity.event.trashed',
     defaultMessage: 'Moved {count, plural, one {# photo} other {# photos}} to Trash',

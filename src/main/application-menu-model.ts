@@ -141,6 +141,10 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'view.lightbox.flipHorizontal':
     case 'view.lightbox.flipVertical':
     case 'view.lightbox.orientationReset':
+    case 'photo.edit.save':
+    case 'photo.edit.reset':
+    case 'photo.edit.crop':
+    case 'photo.edit.revert':
     case 'grid.focus.left':
     case 'grid.focus.right':
     case 'grid.focus.up':

@@ -62,7 +62,7 @@ const build = (patch: Partial<BackupManifestSnapshotV9>) =>
 
 describe('album folders in backup manifests (#505)', () => {
   test('schema 9 carries folders, placements, and tags, and round-trips through the parser', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 10);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 11);
     const manifest = build({});
     assert.equal(manifest.schema, 9);
     const parsed = parseBackupManifest(JSON.parse(JSON.stringify(manifest)) as unknown);

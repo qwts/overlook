@@ -251,6 +251,12 @@ const overlook: OverlookApi = {
     setPredicate: createInvoker(channels.albumSetPredicate, invokeTransport),
     duplicate: createInvoker(channels.albumDuplicate, invokeTransport),
   }),
+  edits: Object.freeze({
+    head: createInvoker(channels.photoEditHead, invokeTransport),
+    save: createInvoker(channels.photoEditSave, invokeTransport),
+    reset: createInvoker(channels.photoEditReset, invokeTransport),
+    revert: createInvoker(channels.photoEditRevert, invokeTransport),
+  }),
   boards: Object.freeze({
     list: async () => boardList({}),
     get: createInvoker(channels.boardGet, invokeTransport),

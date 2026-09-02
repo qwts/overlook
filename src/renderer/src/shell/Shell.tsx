@@ -726,6 +726,20 @@ export function Shell({
                 toast: { title: `Restore failed — still in ${state.providerLabel}`, tone: 'red', action: 'retry-backup' },
               });
             }}
+            onEditResult={(result) => {
+              dispatch({ type: 'pendingCount/set', count: result.pendingCount });
+              if (result.derivatives === 'deferred') {
+                dispatch({
+                  type: 'toast/shown',
+                  toast: { title: 'Edit saved — thumbnails update once the original is local again', tone: 'amber' },
+                });
+              } else if (result.derivatives === 'failed') {
+                dispatch({ type: 'toast/shown', toast: { title: 'Edit saved — thumbnails could not be regenerated', tone: 'red' } });
+              }
+            }}
+            onEditError={() => {
+              dispatch({ type: 'toast/shown', toast: { title: 'Edit could not be saved', tone: 'red' } });
+            }}
             onRepairDimensions={(width, height) => {
               void window.overlook.library.repairDimensions({ id: current.id, width, height }).then(({ pendingCount }) => {
                 dispatch({ type: 'pendingCount/set', count: pendingCount });

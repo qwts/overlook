@@ -1,4 +1,10 @@
 import { z } from 'zod';
+
+import {
+  backupManifestEditRevisionV11Schema,
+  checkEditRevisionLinks,
+  type BackupManifestEditRevisionV11,
+} from './backup-manifest-edit-revisions.js';
 import { activityEventTypes } from '../../shared/activity/types.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
 
@@ -8,7 +14,7 @@ import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../..
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 10 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 11 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -531,7 +537,7 @@ export const backupManifestSmartAlbumV10Schema = z.strictObject({
 export const backupManifestV10Schema = z
   .strictObject({
     ...backupManifestV9Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(10),
     smartAlbums: z.array(backupManifestSmartAlbumV10Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -571,6 +577,23 @@ export const backupManifestV10Schema = z
     }
   });
 
+// Schema 11 (#493): the schema-10 records plus every carried photo's edit
+// revisions; the record shape and link checks live in backup-manifest-edit-revisions.ts.
+export const backupManifestV11Schema = z
+  .strictObject({
+    ...backupManifestV10Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    editRevisions: z.array(backupManifestEditRevisionV11Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { editRevisions: _editRevisions, ...withoutEdits } = manifest;
+    const previous = backupManifestV10Schema.safeParse({ ...withoutEdits, schema: 10 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-10 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    checkEditRevisionLinks(manifest, context);
+  });
+
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
 export type BackupManifestPhotoV2 = z.infer<typeof backupManifestPhotoV2Schema>;
 export type BackupManifestAlbumV2 = z.infer<typeof backupManifestAlbumV2Schema>;
@@ -591,6 +614,7 @@ export type BackupManifestAlbumPlacementV9 = z.infer<typeof backupManifestAlbumP
 export type BackupManifestV9 = z.infer<typeof backupManifestV9Schema>;
 export type BackupManifestSmartAlbumV10 = z.infer<typeof backupManifestSmartAlbumV10Schema>;
 export type BackupManifestV10 = z.infer<typeof backupManifestV10Schema>;
+export type BackupManifestV11 = z.infer<typeof backupManifestV11Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -600,7 +624,8 @@ export type RestorableBackupManifest =
   | BackupManifestV7
   | BackupManifestV8
   | BackupManifestV9
-  | BackupManifestV10;
+  | BackupManifestV10
+  | BackupManifestV11;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -642,6 +667,10 @@ export interface BackupManifestSnapshotV9 extends BackupManifestSnapshotV8 {
 
 export interface BackupManifestSnapshotV10 extends BackupManifestSnapshotV9 {
   readonly smartAlbums: readonly BackupManifestSmartAlbumV10[];
+}
+
+export interface BackupManifestSnapshotV11 extends BackupManifestSnapshotV10 {
+  readonly editRevisions: readonly BackupManifestEditRevisionV11[];
 }
 
 export type ParsedBackupManifest =
@@ -733,7 +762,15 @@ export function buildBackupManifestV10(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV10;
 }): BackupManifestV10 {
-  return backupManifestV10Schema.parse({
+  return backupManifestV10Schema.parse({ schema: 10, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV11(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV11;
+}): BackupManifestV11 {
+  return backupManifestV11Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -829,10 +866,17 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+  if (version.data.schema === 10) {
     const parsed = backupManifestV10Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-10 manifest: ${z.prettifyError(parsed.error)}`);
+    }
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  }
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+    const parsed = backupManifestV11Schema.safeParse(input);
+    if (!parsed.success) {
+      throw new BackupManifestError(`invalid schema-11 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }

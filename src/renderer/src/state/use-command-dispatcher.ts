@@ -159,6 +159,11 @@ export function useCommandDispatcher(
         case 'view.lightbox.flipHorizontal':
         case 'view.lightbox.flipVertical':
         case 'view.lightbox.orientationReset':
+        case 'photo.edit.save':
+        case 'photo.edit.reset':
+        case 'photo.edit.crop':
+        case 'photo.edit.revert':
+          // Owned by the lightbox viewport (#493); it intercepts them in capture phase.
           return false;
         case 'help.shortcuts':
           onHelp(surface);

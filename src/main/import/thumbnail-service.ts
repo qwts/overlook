@@ -4,6 +4,7 @@ import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey } from '../crypto/envelope.js';
 import type { ThumbnailDerivatives, ThumbnailPool } from './thumbnail-pool.js';
 import type { FileKind } from '../../shared/library/types.js';
+import type { EditTransform } from '../../shared/library/edit-revision.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
 
 // Thumbnail generation service (#86): pool output → encrypted blob store.
@@ -27,6 +28,8 @@ export interface ThumbnailRequest {
   readonly contentHash: string;
   readonly key: EnvelopeKey;
   readonly fileKind?: FileKind | undefined;
+  /** Persisted edits baked into the derivatives (#493); absent = as imported. */
+  readonly transform?: EditTransform | undefined;
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -53,7 +56,7 @@ export class ThumbnailService {
   }
 
   private async generateAndStore(request: ThumbnailRequest, replace: boolean): Promise<ThumbnailOutcome> {
-    const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind);
+    const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind, request.transform);
     if (derivatives === null) {
       return { generated: false, width: null, height: null };
     }

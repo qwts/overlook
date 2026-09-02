@@ -14,6 +14,7 @@ export const activityEventTypes = [
   'album.membership-moved',
   'board.layout-changed',
   'photo.favorite-changed',
+  'photo.edited',
   'photo.trashed',
   'photo.restored',
   'photo.exported',

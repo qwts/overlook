@@ -40,6 +40,7 @@ import * as librarySelection from './library-selection-channels.js';
 import { libraryQuerySchema } from './library-query-schemas.js';
 import { galleryPolicySchema } from '../library/gallery-policy.js';
 import { albumChannels, albumListingSchema } from './album-channels.js';
+import { photoEditChannels } from './photo-edit-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
@@ -578,6 +579,8 @@ export const channels = {
   // never deletes photos (Clear-vs-Delete rules); membership edits dirty
   // the ledger (manifest-relevant, ADR-0007).
   ...albumChannels,
+  // Persisted edits (#493, ADR-0031 §2): immutable revision documents per photo.
+  ...photoEditChannels,
   ...boardChannels,
   ...embeddingChannels,
   // Import sources (#84): discovery + the source-card scan. Copying is #87.

@@ -5,14 +5,16 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV10,
+  buildBackupManifestV11,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
+  type BackupManifestSnapshotV11,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
+import type { BackupManifestEditRevisionV11 } from './backup-manifest-edit-revisions.js';
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
@@ -130,6 +132,9 @@ export interface BackupEngineDeps {
   /** Folder tree and organizational tags (#505) — library data carried by
    * the manifest. Absent = every album is top level with no tags. */
   readonly albumTreeSnapshot?: (() => Pick<BackupManifestSnapshotV10, 'folders' | 'albumTree' | 'smartAlbums'>) | undefined;
+  /** Edit revisions (#493, ADR-0031 §7) for the carried photos, head flagged.
+   * Absent = no revisions (tests, pre-#493 callers). */
+  readonly editRevisionsSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestEditRevisionV11[]) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -803,7 +808,8 @@ export class BackupEngine {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
-    const manifest = buildBackupManifestV10({
+    const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
+    const manifest = buildBackupManifestV11({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -812,7 +818,7 @@ export class BackupEngine {
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-        sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
+        sidecars: await this.sidecarManifestObjects(carriedPhotoIds),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
         ...(this.deps.albumTreeSnapshot?.() ?? {
@@ -820,7 +826,8 @@ export class BackupEngine {
           albumTree: snapshot.albums.map((album) => ({ albumId: album.id, parentId: null, inheritsVisibility: false, tags: [] })),
           smartAlbums: [],
         }),
-      } satisfies BackupManifestSnapshotV10,
+        editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
+      } satisfies BackupManifestSnapshotV11,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

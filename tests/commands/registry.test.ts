@@ -110,3 +110,20 @@ test('transient orientation commands use physical keys and Option/Alt inverse bi
   assert.equal(formatShortcut(inverse, 'win32'), 'Alt+R');
   assert.equal(formatAriaShortcut(inverse, 'darwin'), 'Alt+R');
 });
+
+test('persisted-edit commands resolve only on the lightbox surface (#493)', () => {
+  const lightbox: CommandContext = { ...gridContext, surface: 'lightbox' };
+  assert.equal(resolveCommand({ key: 's', metaKey: true }, lightbox)?.id, 'photo.edit.save');
+  assert.equal(resolveCommand({ key: 'c' }, lightbox)?.id, 'photo.edit.crop');
+  assert.notEqual(resolveCommand({ key: 's', metaKey: true }, gridContext)?.id, 'photo.edit.save');
+  assert.notEqual(resolveCommand({ key: 'c' }, gridContext)?.id, 'photo.edit.crop');
+  assert.equal(resolveCommand({ key: 's', metaKey: true }, { ...lightbox, editable: true }), null);
+  assert.equal(resolveCommand({ key: 's', ctrlKey: true }, { ...lightbox, platform: 'win32' })?.id, 'photo.edit.save');
+  assert.match(formatShortcut(commandById('photo.edit.save'), 'darwin'), /S$/u);
+  // Reset and Revert are toolbar-only: no key, so nothing to conflict with.
+  assert.equal(commandById('photo.edit.reset').key, undefined);
+  assert.equal(commandById('photo.edit.revert').key, undefined);
+  for (const id of ['photo.edit.save', 'photo.edit.reset', 'photo.edit.crop', 'photo.edit.revert'] as const) {
+    assert.deepEqual(commandById(id).surfaces, ['lightbox']);
+  }
+});

@@ -383,6 +383,18 @@
   "commands.library.switch": {
     "defaultMessage": "Switch Library…"
   },
+  "commands.photo.edit.crop": {
+    "defaultMessage": "Crop"
+  },
+  "commands.photo.edit.reset": {
+    "defaultMessage": "Reset edits"
+  },
+  "commands.photo.edit.revert": {
+    "defaultMessage": "Revert to previous edit"
+  },
+  "commands.photo.edit.save": {
+    "defaultMessage": "Save edits"
+  },
   "commands.photo.export": {
     "defaultMessage": "Export…"
   },
@@ -799,6 +811,33 @@
   },
   "inspector.copy.fileName": {
     "defaultMessage": "filename"
+  },
+  "inspector.edits.applied": {
+    "defaultMessage": "Applied"
+  },
+  "inspector.edits.cropped": {
+    "defaultMessage": "Cropped to {width}% × {height}%"
+  },
+  "inspector.edits.flipped": {
+    "defaultMessage": "Flipped"
+  },
+  "inspector.edits.none": {
+    "defaultMessage": "Original — no edits"
+  },
+  "inspector.edits.revisions": {
+    "defaultMessage": "Revisions"
+  },
+  "inspector.edits.rotated": {
+    "defaultMessage": "Rotated {degrees}°"
+  },
+  "inspector.edits.separator": {
+    "defaultMessage": "·"
+  },
+  "inspector.edits.title": {
+    "defaultMessage": "Edits"
+  },
+  "inspector.edits.unsupported": {
+    "defaultMessage": "Newer format — view only"
   },
   "inspector.file.dimensionMismatch": {
     "defaultMessage": "DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA"
@@ -1327,6 +1366,27 @@
   },
   "lightbox.animation.stop": {
     "defaultMessage": "Show static poster"
+  },
+  "lightbox.edit.cropApply": {
+    "defaultMessage": "Apply crop (Enter)"
+  },
+  "lightbox.edit.cropCancel": {
+    "defaultMessage": "Cancel crop (Esc)"
+  },
+  "lightbox.edit.cropClear": {
+    "defaultMessage": "Clear crop"
+  },
+  "lightbox.edit.cropSurface": {
+    "defaultMessage": "Crop area — drag to frame the photo"
+  },
+  "lightbox.edit.toolbar": {
+    "defaultMessage": "Edit controls"
+  },
+  "lightbox.edit.unsaved": {
+    "defaultMessage": "Unsaved edit"
+  },
+  "lightbox.edit.unsupported": {
+    "defaultMessage": "Edited with a newer version of Overlook — showing the original, view only"
   },
   "lightbox.image.loading": {
     "defaultMessage": "Loading full-resolution image…"

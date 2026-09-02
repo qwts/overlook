@@ -8,6 +8,7 @@ import portraitPhoto from '../../../../tests/fixtures/photos/street-city.jpg';
 import { Lightbox, type LightboxProps } from './Lightbox';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
+import type { EditHeadPayload } from '../../../shared/ipc/photo-edit-channels.js';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 
 // #92 exit criteria: chrome hides after 2.2s idle and wakes on mousemove
@@ -812,5 +813,60 @@ export const AnimatedWithoutReducedMotionPlaysImmediately: Story = {
     const image = canvas.getByRole<HTMLImageElement>('img', { name: ANIMATED_PHOTO.fileName });
     await expect(image.src).toContain(portraitPhoto);
     await expect(canvas.queryByRole('button', { name: 'Play animation' })).not.toBeInTheDocument();
+  },
+};
+
+// Persisted edits (#493): the viewport opens on the head's transform, the
+// edit toolbar tracks dirtiness, and Crop opens the drawing surface.
+const EDIT_HEAD: NonNullable<EditHeadPayload['head']> = {
+  id: '01J8ED00000000000000000001',
+  parentId: null,
+  createdAt: '2026-09-01T10:00:00.000Z',
+  operations: [{ type: 'rotate', version: 1, quarterTurns: 1 }],
+  transform: { quarterTurns: 1, flipped: false, crop: null },
+  unsupported: null,
+};
+
+function editStub(head: EditHeadPayload['head']): OverlookApi['edits'] {
+  const payload: EditHeadPayload = { photoId: PHOTO.id, head, history: head === null ? [] : [{ ...head, current: true }] };
+  const result = { ...payload, changed: true, derivatives: 'regenerated' as const, pendingCount: 1 };
+  return {
+    head: () => Promise.resolve(payload),
+    save: () => Promise.resolve(result),
+    reset: () => Promise.resolve(result),
+    revert: () => Promise.resolve(result),
+  };
+}
+
+export const PersistedRotation: Story = {
+  args: { editApi: editStub(EDIT_HEAD) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvas.getByTestId('lightbox-viewport');
+    await waitFor(() => expect(viewport).toHaveAttribute('data-orientation-turns', '1'));
+    await expect(viewport).toHaveAttribute('data-edit-dirty', 'false');
+    await expect(canvas.getByTestId('lightbox-edit-save')).toBeDisabled();
+    await expect(canvas.getByTestId('lightbox-edit-reset')).toBeEnabled();
+    // Turning again makes the draft dirty and arms Save.
+    await userEvent.click(canvas.getByRole('button', { name: /^Rotate clockwise/u }));
+    await expect(viewport).toHaveAttribute('data-orientation-turns', '2');
+    await expect(viewport).toHaveAttribute('data-edit-dirty', 'true');
+    await expect(canvas.getByTestId('lightbox-edit-save')).toBeEnabled();
+  },
+};
+
+export const CropMode: Story = {
+  args: { editApi: editStub(null) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvas.getByTestId('lightbox-viewport');
+    await waitFor(() => expect(canvas.getByTestId('lightbox-edit-crop')).toBeEnabled());
+    await userEvent.click(canvas.getByTestId('lightbox-edit-crop'));
+    await expect(viewport).toHaveAttribute('data-edit-mode', 'crop');
+    await expect(canvas.getByTestId('lightbox-crop')).toBeVisible();
+    await expect(canvas.getByTestId('lightbox-crop-apply')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect(viewport).toHaveAttribute('data-edit-mode', 'view');
+    await expect(canvas.queryByTestId('lightbox-crop')).toBeNull();
   },
 };

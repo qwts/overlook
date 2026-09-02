@@ -168,6 +168,12 @@ export interface OverlookApi {
     readonly setPredicate: (request: Req<typeof channels.albumSetPredicate>) => Promise<Res<typeof channels.albumSetPredicate>>;
     readonly duplicate: (request: Req<typeof channels.albumDuplicate>) => Promise<Res<typeof channels.albumDuplicate>>;
   };
+  readonly edits: {
+    readonly head: (request: Req<typeof channels.photoEditHead>) => Promise<Res<typeof channels.photoEditHead>>;
+    readonly save: (request: Req<typeof channels.photoEditSave>) => Promise<Res<typeof channels.photoEditSave>>;
+    readonly reset: (request: Req<typeof channels.photoEditReset>) => Promise<Res<typeof channels.photoEditReset>>;
+    readonly revert: (request: Req<typeof channels.photoEditRevert>) => Promise<Res<typeof channels.photoEditRevert>>;
+  };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;
     readonly get: (request: Req<typeof channels.boardGet>) => Promise<Res<typeof channels.boardGet>>;

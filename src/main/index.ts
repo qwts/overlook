@@ -23,9 +23,7 @@ import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
 import type { ImportRuntime, ImportService } from './import/import-runtime.js';
 import { createImportApplicationRuntime } from './import/import-application-runtime.js';
-import type { RawRepairService } from './import/raw-repair-service.js';
-import type { PosterCaptureService } from './import/poster-capture-service.js';
-import { buildMaintenanceServices } from './import/maintenance-runtime.js';
+import { buildMaintenanceServices, type MaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
 import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
@@ -221,7 +219,7 @@ function requireParts(what: string): LibraryParts {
 }
 
 let importRuntime: ImportRuntime | undefined;
-let rawRepairService: RawRepairService | undefined, posterCaptureService: PosterCaptureService | undefined;
+let maintenance: MaintenanceServices | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
@@ -233,7 +231,7 @@ function getImportService(): ImportService {
       imported: (photoIds) => {
         applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         ensureMaintenanceServices();
-        void posterCaptureService?.capture().catch(() => undefined);
+        void maintenance?.posterCapture.capture().catch(() => undefined);
         embeddingRuntime?.service.notifyWorkAvailable();
       },
       resumed: () => {
@@ -249,16 +247,17 @@ function getImportService(): ImportService {
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
 // post-import background passes over the same library parts; they share one
 // bootstrap so the runtime factories stay thin.
-function ensureMaintenanceServices(): void {
-  if (rawRepairService !== undefined && posterCaptureService !== undefined) return;
+function ensureMaintenanceServices(): MaintenanceServices {
+  if (maintenance !== undefined) return maintenance;
   getImportService();
   const parts = libraryParts;
   const runtime = importRuntime;
   if (parts === undefined || runtime === undefined) throw new Error('library bootstrap failed; background maintenance unavailable');
   const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-  const services = buildMaintenanceServices({
+  maintenance = buildMaintenanceServices({
     parts,
     runtime,
+    appVersion: app.getVersion(),
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
     emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
@@ -267,8 +266,7 @@ function ensureMaintenanceServices(): void {
     scheduleAutoBackup,
     embeddingEligible: notifyEmbeddingEligibilityChanged,
   });
-  rawRepairService = services.rawRepair;
-  posterCaptureService = services.posterCapture;
+  return maintenance;
 }
 
 let thumbService: ThumbService | undefined, fullService: FullService | undefined;
@@ -391,8 +389,8 @@ let purgeService: PurgeService | undefined,
 const startupMaintenance = new StartupMaintenance({
   purge: () => getPurgeService().purgeExpired(),
   repair: () => consistencyChecker?.repair(),
-  rawRepair: () => (ensureMaintenanceServices(), rawRepairService)?.repair(),
-  posterCapture: () => (ensureMaintenanceServices(), posterCaptureService)?.capture(),
+  rawRepair: () => ensureMaintenanceServices().rawRepair.repair(),
+  posterCapture: () => ensureMaintenanceServices().posterCapture.capture(),
   verifySearchIndex: () => libraryParts && verifySearchIndexAsync(libraryParts.db),
   verifyAllPhotosFlag: () => libraryParts && verifyInAllPhotosAsync(libraryParts.db),
 });
@@ -659,8 +657,8 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
-  rawRepairService?.close();
-  posterCaptureService?.close();
+  maintenance?.rawRepair.close();
+  maintenance?.posterCapture.close();
   for (const controller of activeBackupControllers) controller.abort();
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     Promise.all([productionInterop.lockDesktop(), closeProductionInboundMoveLibrary()]),
@@ -696,7 +694,7 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   }
   providerRuntime?.renewReconnectVerificationLifecycle();
   [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
-  [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
+  [maintenance, thumbService, fullService] = [undefined, undefined, undefined];
   [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
   [purgeService, purgeRuntime] = [undefined, undefined];
@@ -838,6 +836,7 @@ void externalOpen.whenReady().then(async () => {
     },
     getProtected: getProtectedRuntime,
     getThumbs: getThumbService,
+    getEdits: () => ensureMaintenanceServices().photoEdits,
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
