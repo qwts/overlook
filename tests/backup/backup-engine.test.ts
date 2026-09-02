@@ -179,7 +179,7 @@ describe('backup engine (#105)', () => {
     // restore without a local DB depends on it (PR #203 review, P1).
     const sealed = await buffer(await w.provider.getStream('manifest/gen-1.ovlk'));
     const manifest = JSON.parse(sealed.toString('utf8')) as { schema: number; generatedAt: string; photos: { id: string }[] };
-    assert.equal(manifest.schema, 6);
+    assert.equal(manifest.schema, 7);
     assert.equal(manifest.photos.length, 3);
     assert.equal((await w.provider.list('recovery')).length, 1, 'the fresh-machine key bootstrap landed first');
     assert.deepEqual(w.bootstrapGenerations, [1]);
