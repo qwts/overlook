@@ -484,6 +484,7 @@ export function LibraryGridView({
         isOriginal={photo.isOriginal}
         status={photo.syncState}
         previewFailure={photo.previewFailure}
+        unknownDimensions={photo.dimensionStatus === 'unavailable'}
         duration={tileMedia?.duration}
         preserved={tileMedia?.preserved ?? false}
         placeholder={tileMedia?.placeholder}

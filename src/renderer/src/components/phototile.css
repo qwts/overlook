@@ -204,6 +204,28 @@
   z-index: 2;
 }
 
+/* Unknown-dimension indicator (#512): the row's size is not known, so no
+   size rule can hide it. Sits opposite the Original marker. */
+.ovl-tile__unknownDimensions {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border-photo-overlay);
+  border-radius: var(--radius-1);
+  background: var(--surface-photo-overlay);
+  color: var(--text-photo-overlay);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .ovl-tile__original {
   position: absolute;
   top: 6px;
