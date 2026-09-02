@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "name": "Solarized Dusk",
+    "author": "Overlook examples",
+    "version": "1.0.0",
+    "base": "dark",
+    "tokensVersion": 1
+  },
+  "tokens": {
+    "--surface-window": "#002b36",
+    "--surface-panel": "#073642",
+    "--surface-card": "#0b3d4a",
+    "--surface-raised": "#164b58",
+    "--text-body": "#eee8d5",
+    "--text-muted": "#b8c2c2",
+    "--text-faint": "#b0bcbc",
+    "--text-on-accent": "#002b36",
+    "--accent-iris": "#4aa3e0",
+    "--accent-cyan-bright": "#2aa198",
+    "--accent-violet": "#8b8fd8",
+    "--accent-amber": "#b58900",
+    "--accent-green": "#859900",
+    "--accent-red": "#e8645f",
+    "--accent-iris-dim": "rgb(74 163 224 / 16%)",
+    "--accent-amber-dim": "rgb(181 137 0 / 16%)",
+    "--accent-green-dim": "rgb(133 153 0 / 16%)",
+    "--accent-red-dim": "rgb(232 100 95 / 16%)",
+    "--border-1": "rgb(238 232 213 / 10%)",
+    "--border-2": "rgb(238 232 213 / 18%)",
+    "--scrim": "rgb(0 21 27 / 72%)",
+    "--btn-primary-hover": "#63b3ea",
+    "--btn-primary-press": "#3a93d0",
+    "--text-over-danger": "#fdf6e3"
+  }
+}

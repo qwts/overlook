@@ -69,6 +69,7 @@ existing links resolve — never add content there.
 - [Keyboard Commands](./Keyboard-Commands.md) — active shortcuts, grid focus behavior, and command-registry extension rules
 - [Gallery Quick Actions acceptance](./acceptance/Acceptance-Test-Quick-Actions.md) — configurable Command-hover actions, targeting, cleanup, and alternative access
 - [Appearance themes acceptance](./acceptance/Acceptance-Test-Appearance-Themes.md) — Dark/Light/System live switching, first paint, native chrome, and dual-theme stories
+- [Theming reference](./Theming.md) — `.overlook-theme.json` format, every user-themable token with its role, the export → edit → import workflow, an LLM prompt, and example themes
 
 ## Maintenance Convention
 

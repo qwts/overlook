@@ -991,6 +991,28 @@
       ]
     },
     {
+      "id": "397-theme-template-export",
+      "wiki": "Acceptance-Test-Appearance-Themes",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/theme-template-export.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/ThemeManager.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/theme/theme-template.test.ts", "tests/theme/theme-service.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Appearance-Themes.md step 7 in a packaged build to verify the native save dialog, the exported file under Light and under an active custom theme, and the unchanged re-import."
+        }
+      ]
+    },
+    {
       "id": "m09-settings-storage",
       "wiki": "User-Story-M09-Settings-preferences",
       "coverage": [
