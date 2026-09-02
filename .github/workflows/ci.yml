@@ -295,8 +295,7 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            detail=$(sed -e 's/\x1b\[[0-9;]*m//g' test-results/stories-output.log | grep -E '●|✕|axe violations|Tests:|Test Suites:|budget' | grep -v 'throw new Error' | head -c 6000 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/%0A/g')
-            echo "::error file=.storybook/test-runner.ts,line=1,title=Storybook failure::$detail"
+            node scripts/annotate-storybook-failures.mjs test-results/stories-output.log
           fi
           exit "$status"
 
