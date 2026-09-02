@@ -837,6 +837,7 @@ void externalOpen.whenReady().then(async () => {
     getProtected: getProtectedRuntime,
     getThumbs: getThumbService,
     getEdits: () => ensureMaintenanceServices().photoEdits,
+    getProvenance: () => ensureMaintenanceServices().provenance,
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,

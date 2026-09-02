@@ -66,6 +66,8 @@ import { EMBEDDING_DIMENSIONS } from './db/embedding-repository.js';
 import type { SemanticEmbeddingFacade } from './library/semantic-search.js';
 import { registerPhotoEditHandlers } from './library/photo-edit-ipc.js';
 import type { PhotoEditService } from './library/photo-edit-service.js';
+import { registerProvenanceHandlers } from './library/provenance-ipc.js';
+import type { ProvenanceService } from './library/provenance-service.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -80,6 +82,7 @@ export interface AppServicesOptions {
   readonly getProtected: () => ProtectedRuntime;
   readonly getThumbs: () => ThumbService;
   readonly getEdits: () => PhotoEditService;
+  readonly getProvenance: () => ProvenanceService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -212,6 +215,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerAlbumHandlers(options.getLibrary, ulid, options.getActivity, options.onManifestChanged);
   registerBoardHandlers(options.getLibrary, options.getActivity, options.onManifestChanged);
   registerPhotoEditHandlers(options.getEdits, options.requireContentAccess, options.getActivity, options.onManifestChanged);
+  registerProvenanceHandlers(options.getProvenance, options.requireContentAccess, options.onManifestChanged);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);
   registerHistoryHandlers(options.getHistory, options.requireContentAccess);
   registerProtectedAlbumHandlers(

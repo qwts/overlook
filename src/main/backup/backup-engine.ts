@@ -5,16 +5,17 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV11,
+  buildBackupManifestV12,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
-  type BackupManifestSnapshotV11,
+  type BackupManifestSnapshotV12,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
 import type { BackupManifestEditRevisionV11 } from './backup-manifest-edit-revisions.js';
+import type { BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
@@ -135,6 +136,8 @@ export interface BackupEngineDeps {
   /** Edit revisions (#493, ADR-0031 §7) for the carried photos, head flagged.
    * Absent = no revisions (tests, pre-#493 callers). */
   readonly editRevisionsSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestEditRevisionV11[]) | undefined;
+  /** Provenance evidence of the carried photos (schema 12, #495). */
+  readonly provenanceSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestProvenanceV12[]) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -809,7 +812,7 @@ export class BackupEngine {
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
-    const manifest = buildBackupManifestV11({
+    const manifest = buildBackupManifestV12({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -827,7 +830,8 @@ export class BackupEngine {
           smartAlbums: [],
         }),
         editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
-      } satisfies BackupManifestSnapshotV11,
+        provenance: this.deps.provenanceSnapshot?.(carriedPhotoIds) ?? [],
+      } satisfies BackupManifestSnapshotV12,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

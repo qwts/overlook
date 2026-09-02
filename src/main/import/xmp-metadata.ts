@@ -15,7 +15,8 @@ function decodeXml(value: string): string {
     .replace(/&amp;/gu, '&');
 }
 
-function plainXmlText(value: string): string | null {
+/** Decoded text of an element body that carries no markup; null otherwise. */
+export function plainXmlText(value: string): string | null {
   const trimmed = value.trim();
   return /[<>]/u.test(trimmed) ? null : decodeXml(trimmed);
 }

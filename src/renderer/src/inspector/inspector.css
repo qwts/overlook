@@ -88,6 +88,20 @@
   flex-wrap: wrap;
 }
 
+/* Provenance (#495): the limitation copy under the evidence rows, and the
+ * Re-check action. Tone overrides ride inline tokens (stale = amber). */
+.ovl-inspector__provenanceNote {
+  margin: var(--space-1) 0 0;
+  font: var(--type-meta);
+  color: var(--text-muted);
+}
+
+.ovl-inspector__provenanceActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
 .ovl-inspector__metadataEditor {
   padding: calc(var(--space-2) + var(--space-1) / 2) calc(var(--space-3) + var(--space-1) / 2);
   border-bottom: 1px solid var(--border-1);

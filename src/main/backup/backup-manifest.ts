@@ -5,6 +5,7 @@ import {
   checkEditRevisionLinks,
   type BackupManifestEditRevisionV11,
 } from './backup-manifest-edit-revisions.js';
+import { backupManifestProvenanceV12Schema, checkProvenanceLinks, type BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
 import { activityEventTypes } from '../../shared/activity/types.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
 
@@ -14,7 +15,7 @@ import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../..
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 11 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 12 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -582,7 +583,7 @@ export const backupManifestV10Schema = z
 export const backupManifestV11Schema = z
   .strictObject({
     ...backupManifestV10Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(11),
     editRevisions: z.array(backupManifestEditRevisionV11Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -592,6 +593,23 @@ export const backupManifestV11Schema = z
       context.addIssue({ code: 'custom', message: `schema-10 records are inconsistent: ${z.prettifyError(previous.error)}` });
     }
     checkEditRevisionLinks(manifest, context);
+  });
+
+// Schema 12 (#495): the schema-11 records plus every carried photo's
+// provenance evidence; the record shape and link checks live in backup-manifest-provenance.ts.
+export const backupManifestV12Schema = z
+  .strictObject({
+    ...backupManifestV11Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    provenance: z.array(backupManifestProvenanceV12Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { provenance: _provenance, ...withoutProvenance } = manifest;
+    const previous = backupManifestV11Schema.safeParse({ ...withoutProvenance, schema: 11 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-11 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    checkProvenanceLinks(manifest, context);
   });
 
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
@@ -615,6 +633,7 @@ export type BackupManifestV9 = z.infer<typeof backupManifestV9Schema>;
 export type BackupManifestSmartAlbumV10 = z.infer<typeof backupManifestSmartAlbumV10Schema>;
 export type BackupManifestV10 = z.infer<typeof backupManifestV10Schema>;
 export type BackupManifestV11 = z.infer<typeof backupManifestV11Schema>;
+export type BackupManifestV12 = z.infer<typeof backupManifestV12Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -625,7 +644,8 @@ export type RestorableBackupManifest =
   | BackupManifestV8
   | BackupManifestV9
   | BackupManifestV10
-  | BackupManifestV11;
+  | BackupManifestV11
+  | BackupManifestV12;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -671,6 +691,10 @@ export interface BackupManifestSnapshotV10 extends BackupManifestSnapshotV9 {
 
 export interface BackupManifestSnapshotV11 extends BackupManifestSnapshotV10 {
   readonly editRevisions: readonly BackupManifestEditRevisionV11[];
+}
+
+export interface BackupManifestSnapshotV12 extends BackupManifestSnapshotV11 {
+  readonly provenance: readonly BackupManifestProvenanceV12[];
 }
 
 export type ParsedBackupManifest =
@@ -770,7 +794,15 @@ export function buildBackupManifestV11(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV11;
 }): BackupManifestV11 {
-  return backupManifestV11Schema.parse({
+  return backupManifestV11Schema.parse({ schema: 11, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV12(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV12;
+}): BackupManifestV12 {
+  return backupManifestV12Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -798,87 +830,41 @@ function upgradeLegacyManifest(manifest: RestorableBackupManifest): RestorableBa
   };
 }
 
+/** Every restorable schema by version; anything else is unsupported. */
+const RESTORABLE_SCHEMAS: ReadonlyMap<number, z.ZodType<RestorableBackupManifest>> = new Map<number, z.ZodType<RestorableBackupManifest>>([
+  [2, backupManifestV2Schema],
+  [3, backupManifestV3Schema],
+  [4, backupManifestV4Schema],
+  [5, backupManifestV5Schema],
+  [6, backupManifestV6Schema],
+  [7, backupManifestV7Schema],
+  [8, backupManifestV8Schema],
+  [9, backupManifestV9Schema],
+  [10, backupManifestV10Schema],
+  [11, backupManifestV11Schema],
+  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV12Schema],
+]);
+
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {
   const version = z.object({ schema: z.number().int() }).safeParse(input);
   if (!version.success) {
     throw new BackupManifestError('manifest is missing a numeric schema version');
   }
-  if (version.data.schema === 1) {
+  const schema = version.data.schema;
+  if (schema === 1) {
     const parsed = backupManifestV1Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-1 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: false, manifest: parsed.data };
   }
-  if (version.data.schema === 2) {
-    const parsed = backupManifestV2Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-2 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  const restorable = RESTORABLE_SCHEMAS.get(schema);
+  if (restorable === undefined) {
+    throw new BackupManifestError(`unsupported manifest schema ${String(schema)}`);
   }
-  if (version.data.schema === 3) {
-    const parsed = backupManifestV3Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-3 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  const parsed = restorable.safeParse(input);
+  if (!parsed.success) {
+    throw new BackupManifestError(`invalid schema-${String(schema)} manifest: ${z.prettifyError(parsed.error)}`);
   }
-  if (version.data.schema === 4) {
-    const parsed = backupManifestV4Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-4 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 5) {
-    const parsed = backupManifestV5Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-5 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 6) {
-    const parsed = backupManifestV6Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-6 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 7) {
-    const parsed = backupManifestV7Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-7 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 8) {
-    const parsed = backupManifestV8Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-8 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 9) {
-    const parsed = backupManifestV9Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-9 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === 10) {
-    const parsed = backupManifestV10Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-10 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
-    const parsed = backupManifestV11Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-11 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  throw new BackupManifestError(`unsupported manifest schema ${String(version.data.schema)}`);
+  return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
 }

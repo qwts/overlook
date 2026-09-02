@@ -5,11 +5,13 @@ import { migrateAlbumVisibility } from './album-visibility-migration.js';
 import { migrateGalleryPolicy } from './gallery-policy-migration.js';
 import { migrateSmartAlbums } from './smart-album-migration.js';
 import { migrateEditRevisions } from './edit-revision-migration.js';
+import { migratePhotoProvenance } from './provenance-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
 // stays a ledger: gallery inclusion rules (#512), collection visibility
 // (#494), folders + organizational tags (#505), and Smart Albums (#514).
-// ADR-0031 §2/§8 edit revisions (#493) follow as 31.
+// ADR-0031 §2/§8 edit revisions (#493) follow as 31 and §5 provenance
+// evidence (#495) as 32.
 export const COLLECTION_MIGRATIONS: readonly {
   readonly version: number;
   readonly name: string;
@@ -20,4 +22,5 @@ export const COLLECTION_MIGRATIONS: readonly {
   { version: 29, name: 'album-folders', up: migrateAlbumFolders },
   { version: 30, name: 'smart-albums', up: migrateSmartAlbums },
   { version: 31, name: 'edit-revisions', up: migrateEditRevisions },
+  { version: 32, name: 'photo-provenance', up: migratePhotoProvenance },
 ];

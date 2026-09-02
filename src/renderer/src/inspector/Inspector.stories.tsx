@@ -5,6 +5,8 @@ import { Inspector } from './Inspector';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
+import type { ProvenancePayload } from '../../../shared/ipc/provenance-channels.js';
+import { PROVENANCE_EVALUATOR, type ProvenanceSource } from '../../../shared/library/provenance.js';
 
 // #94 exit criteria: §4 visual match — grouped truth rows, interpunct mono
 // values, RAF → RAW badge, missing EXIF rows OMITTED (never fabricated).
@@ -46,6 +48,32 @@ const PHOTO: PhotoRecord = {
   metadataVersion: 1,
 };
 
+// #495: provenance evidence as main would report it, per tier. The stories
+// stub the bridge because no fixture can produce Verified or Detected from
+// bytes in a build without a validator or detector.
+function provenanceOf(
+  tier: 'verified' | 'declared' | 'detected' | 'unknown',
+  sources: readonly ProvenanceSource[],
+  extra: Partial<ProvenancePayload> = {},
+): ProvenancePayload {
+  return {
+    photoId: PHOTO.id,
+    evidence: {
+      version: 1,
+      subjectHash: PHOTO.contentHash,
+      evaluator: PROVENANCE_EVALUATOR,
+      evaluatedAt: '2026-09-02T10:00:00.000Z',
+      network: false,
+      tier,
+      sources,
+    },
+    unsupported: null,
+    stale: false,
+    status: 'evaluated',
+    ...extra,
+  };
+}
+
 const meta: Meta<typeof Inspector> = {
   title: 'App/Inspector',
   component: Inspector,
@@ -78,7 +106,12 @@ const meta: Meta<typeof Inspector> = {
         photoCustodyStatus: () => Promise.resolve(custodyStatus),
         onEphemeralState: () => () => undefined,
       } as unknown as OverlookApi['backup'];
-      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup };
+      const provenancePayload = (context.parameters['provenance'] as ProvenancePayload | undefined) ?? provenanceOf('unknown', []);
+      const provenance = {
+        get: () => Promise.resolve(provenancePayload),
+        refresh: () => Promise.resolve(provenancePayload),
+      } as unknown as OverlookApi['provenance'];
+      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance };
       return (
         <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
           <Story />
@@ -247,5 +280,145 @@ export const EditableMetadata: Story = {
     await expect(canvas.getByRole('button', { name: 'Remove Portfolio' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Save metadata' }));
     await expect(await canvas.findByText('Updated 1; 0 unchanged; 0 unavailable.')).toBeVisible();
+  },
+};
+
+export const ProvenanceVerified: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: provenanceOf('verified', [
+      {
+        kind: 'credential',
+        format: 'c2pa',
+        container: 'jpeg-app11',
+        bytes: 18_432,
+        outcome: 'valid',
+        validator: 'c2pa validator 1.0 · default trust list',
+        reason: 'signature and hard bindings validate for these bytes',
+      },
+      { kind: 'declaration', origin: 'xmp', field: 'xmp:CreatorTool', value: 'Adobe Firefly 3.0', claim: 'generated' },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByTestId('inspector-provenance');
+    await expect(section).toHaveAttribute('data-tier', 'verified');
+    await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Verified provenance');
+    await expect(canvas.getByText('Content Credentials valid for these bytes')).toBeVisible();
+    await expect(canvas.getByText('Validated locally against c2pa validator 1.0 · default trust list.')).toBeVisible();
+  },
+};
+
+export const ProvenanceDeclared: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: provenanceOf('declared', [
+      {
+        kind: 'declaration',
+        origin: 'xmp',
+        field: 'Iptc4xmpExt:DigitalSourceType',
+        value: 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia',
+        claim: 'generated',
+      },
+      { kind: 'declaration', origin: 'exif', field: 'Software', value: 'Midjourney v6', claim: 'generated' },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('AI-generated — declared by metadata, not verified')).toBeVisible();
+    await expect(canvas.getByText('Software: Midjourney v6')).toBeVisible();
+    await expect(canvas.getByText('Declarations can be added, changed, or removed by any tool. They are not proof.')).toBeVisible();
+  },
+};
+
+export const ProvenanceCredentialUnverifiable: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: provenanceOf('declared', [
+      {
+        kind: 'credential',
+        format: 'c2pa',
+        container: 'jpeg-app11',
+        bytes: 18_432,
+        outcome: 'unverifiable',
+        validator: null,
+        reason: 'credential container present; this build has no C2PA validator or trust policy',
+      },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Content Credentials present — not validated by this build')).toBeVisible();
+    await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Declared');
+    await expect(canvas.queryByText('Verified provenance')).toBeNull();
+  },
+};
+
+export const ProvenanceCredentialInvalid: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: provenanceOf('declared', [
+      {
+        kind: 'credential',
+        format: 'c2pa',
+        container: 'jpeg-app11',
+        bytes: 18_432,
+        outcome: 'invalid',
+        validator: 'c2pa validator 1.0 · default trust list',
+        reason: 'hard binding does not match these bytes',
+      },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Content Credentials invalid for these bytes')).toBeVisible();
+    await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Declared');
+  },
+};
+
+export const ProvenanceDetected: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: provenanceOf('detected', [
+      {
+        kind: 'detector',
+        name: 'watermark-detector',
+        version: '2.1',
+        result: 'positive',
+        confidence: 0.83,
+        limits: 'Trained on one generator family; recompression and crops lower recall; false positives occur on noisy scans.',
+      },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByTestId('inspector-provenance');
+    await expect(section).toHaveAttribute('data-tier', 'detected');
+    await expect(canvas.getByText('Detector report — not verified')).toBeVisible();
+    await expect(canvas.getByText('watermark-detector 2.1 · positive · 83%')).toBeVisible();
+    await expect(canvas.getByText(/Detectors have false positives and false negatives\. Trained on one generator family/u)).toBeVisible();
+  },
+};
+
+export const ProvenanceUnknownStale: Story = {
+  args: { photo: PHOTO },
+  parameters: { provenance: provenanceOf('unknown', [], { stale: true, status: 'deferred' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('No supported evidence')).toBeVisible();
+    await expect(canvas.getByText('Unknown is not a claim that a person made this image.')).toBeVisible();
+    await expect(canvas.getByText('Re-check needed — the bytes or the checker changed')).toBeVisible();
+    await expect(canvas.getByText('Original not local — checked when it returns')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Re-check' })).toBeEnabled();
+  },
+};
+
+export const ProvenanceUnsupported: Story = {
+  args: { photo: PHOTO },
+  parameters: {
+    provenance: { ...provenanceOf('unknown', []), evidence: null, unsupported: 'evidence format 2 is newer than this app' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(await within(canvasElement).findByText('Newer evidence format — view only')).toBeVisible();
   },
 };

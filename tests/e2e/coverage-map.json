@@ -400,6 +400,28 @@
       ]
     },
     {
+      "id": "495-ai-provenance",
+      "wiki": "Acceptance-Test-AI-Provenance",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/provenance.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/inspector/Inspector.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/library/provenance.test.ts",
+            "tests/import/provenance-extractor.test.ts",
+            "tests/db/provenance.test.ts",
+            "tests/library/provenance-service.test.ts",
+            "tests/backup/provenance-manifest.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-AI-Provenance.md for the offloaded-original deferral and stale flag, the relaunch check, the restore fidelity check, and the purge cascade over a real library."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

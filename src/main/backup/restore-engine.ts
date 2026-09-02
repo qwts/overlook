@@ -17,6 +17,7 @@ import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-policy.js';
 import { albumVisibilityMatches, restoreAlbumVisibility } from './restore-album-visibility.js';
 import { editRevisionsMatch, restoreEditRevisions } from './restore-edit-revisions.js';
+import { provenanceMatches, restoreProvenance } from './restore-provenance.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
@@ -797,6 +798,7 @@ export class RestoreEngine {
       restoreGalleryPolicy(db, candidate.manifest);
       restoreAlbumVisibility(db, candidate.manifest);
       restoreEditRevisions(db, candidate.manifest);
+      restoreProvenance(db, candidate.manifest);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
       if ('sidecars' in candidate.manifest) {
         const sidecarRepo = new SidecarRepository(db);
@@ -872,6 +874,7 @@ export class RestoreEngine {
       if (!galleryPolicyMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored gallery policy mismatch');
       if (!albumVisibilityMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored album visibility mismatch');
       if (!editRevisionsMatch(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored edit revisions mismatch');
+      if (!provenanceMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored provenance mismatch');
     } finally {
       db.close();
     }

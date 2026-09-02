@@ -257,6 +257,10 @@ const overlook: OverlookApi = {
     reset: createInvoker(channels.photoEditReset, invokeTransport),
     revert: createInvoker(channels.photoEditRevert, invokeTransport),
   }),
+  provenance: Object.freeze({
+    get: createInvoker(channels.photoProvenance, invokeTransport),
+    refresh: createInvoker(channels.photoProvenanceRefresh, invokeTransport),
+  }),
   boards: Object.freeze({
     list: async () => boardList({}),
     get: createInvoker(channels.boardGet, invokeTransport),

@@ -923,6 +923,120 @@
   "inspector.metadata.varying": {
     "defaultMessage": "On some selected photos"
   },
+  "inspector.provenance.checked": {
+    "defaultMessage": "Checked"
+  },
+  "inspector.provenance.checking": {
+    "defaultMessage": "Checking…"
+  },
+  "inspector.provenance.claim.capture": {
+    "defaultMessage": "Capture declared"
+  },
+  "inspector.provenance.claim.edited": {
+    "defaultMessage": "AI-edited"
+  },
+  "inspector.provenance.claim.generated": {
+    "defaultMessage": "AI-generated"
+  },
+  "inspector.provenance.claim.tool": {
+    "defaultMessage": "Tool named"
+  },
+  "inspector.provenance.deferred": {
+    "defaultMessage": "Original not local — checked when it returns"
+  },
+  "inspector.provenance.evidence": {
+    "defaultMessage": "Evidence"
+  },
+  "inspector.provenance.local": {
+    "defaultMessage": "Local check only · no network"
+  },
+  "inspector.provenance.note.declared": {
+    "defaultMessage": "Declarations can be added, changed, or removed by any tool. They are not proof."
+  },
+  "inspector.provenance.note.detected": {
+    "defaultMessage": "Detectors have false positives and false negatives. {limits}"
+  },
+  "inspector.provenance.note.unknown": {
+    "defaultMessage": "Unknown is not a claim that a person made this image."
+  },
+  "inspector.provenance.note.verified": {
+    "defaultMessage": "Validated locally against {validator}."
+  },
+  "inspector.provenance.origin.credential": {
+    "defaultMessage": "Credential"
+  },
+  "inspector.provenance.origin.detector": {
+    "defaultMessage": "Detector"
+  },
+  "inspector.provenance.origin.exif": {
+    "defaultMessage": "EXIF"
+  },
+  "inspector.provenance.origin.png": {
+    "defaultMessage": "PNG text"
+  },
+  "inspector.provenance.origin.sidecar": {
+    "defaultMessage": "Sidecar"
+  },
+  "inspector.provenance.origin.xmp": {
+    "defaultMessage": "XMP"
+  },
+  "inspector.provenance.refresh": {
+    "defaultMessage": "Re-check"
+  },
+  "inspector.provenance.stale": {
+    "defaultMessage": "Re-check needed — the bytes or the checker changed"
+  },
+  "inspector.provenance.summary.declared": {
+    "defaultMessage": "{claim} — declared by metadata, not verified"
+  },
+  "inspector.provenance.summary.detected": {
+    "defaultMessage": "Detector report — not verified"
+  },
+  "inspector.provenance.summary.invalid": {
+    "defaultMessage": "Content Credentials invalid for these bytes"
+  },
+  "inspector.provenance.summary.pending": {
+    "defaultMessage": "Not checked yet"
+  },
+  "inspector.provenance.summary.unknown": {
+    "defaultMessage": "No supported evidence"
+  },
+  "inspector.provenance.summary.unsupported": {
+    "defaultMessage": "Newer evidence format — view only"
+  },
+  "inspector.provenance.summary.unverifiable": {
+    "defaultMessage": "Content Credentials present — not validated by this build"
+  },
+  "inspector.provenance.summary.verified": {
+    "defaultMessage": "Content Credentials valid for these bytes"
+  },
+  "inspector.provenance.tier.declared": {
+    "defaultMessage": "Declared"
+  },
+  "inspector.provenance.tier.detected": {
+    "defaultMessage": "Detected"
+  },
+  "inspector.provenance.tier.unknown": {
+    "defaultMessage": "Unknown"
+  },
+  "inspector.provenance.tier.verified": {
+    "defaultMessage": "Verified provenance"
+  },
+  "inspector.provenance.title": {
+    "defaultMessage": "Provenance"
+  },
+  "inspector.provenance.value.credential": {
+    "defaultMessage": "C2PA · {container} · {bytes} bytes · {outcome}"
+  },
+  "inspector.provenance.value.declaration": {
+    "defaultMessage": "{field}: {value}"
+  },
+  "inspector.provenance.value.detector": {
+    "defaultMessage": "{name} {version} · {result}"
+  },
+  "inspector.provenance.value.detectorConfidence": {
+    "defaultMessage": "{name} {version} · {result} · {confidence}"
+  },
   "inspector.selection.next": {
     "defaultMessage": "Next selected photo"
   },

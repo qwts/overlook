@@ -8,6 +8,8 @@ import { createRawRepairRuntime } from './raw-repair-runtime.js';
 import type { RawRepairService } from './raw-repair-service.js';
 import { createPhotoEditRuntime } from '../library/photo-edit-runtime.js';
 import type { PhotoEditService } from '../library/photo-edit-service.js';
+import { createProvenanceRuntime } from '../library/provenance-runtime.js';
+import type { ProvenanceService } from '../library/provenance-service.js';
 
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
 // post-import background passes over the same library parts, and persisted
@@ -34,6 +36,7 @@ export interface MaintenanceServices {
   readonly rawRepair: RawRepairService;
   readonly posterCapture: PosterCaptureService;
   readonly photoEdits: PhotoEditService;
+  readonly provenance: ProvenanceService;
 }
 
 export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceServices {
@@ -81,5 +84,6 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });
-  return { rawRepair, posterCapture, photoEdits };
+  const provenance = createProvenanceRuntime({ parts, scheduleAutoBackup: ctx.scheduleAutoBackup });
+  return { rawRepair, posterCapture, photoEdits, provenance };
 }

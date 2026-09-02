@@ -75,6 +75,7 @@ existing links resolve — never add content there.
 - [Smart Albums acceptance](./acceptance/Acceptance-Test-Smart-Albums.md) — #514 facet filters, union-within-a-facet and explicit composition, saved predicates that re-evaluate, fail-closed unknown documents, and restore fidelity
 - [Feed view acceptance](./acceptance/Acceptance-Test-Feed-View.md) — #516 title / image / description cards over the virtualized engine, progressive loading, the lightbox round trip, in-place edits, and keyboard navigation
 - [Persisted edits acceptance](./acceptance/Acceptance-Test-Persisted-Edits.md) — #493 save / reset / revert / crop in the lightbox, immutable revision history, re-baked derivatives, the Inspector Edits section, fail-closed newer documents, and restore fidelity
+- [AI provenance acceptance](./acceptance/Acceptance-Test-AI-Provenance.md) — #495 evidence tiers (Verified / Declared / Detected / Unknown) in the Inspector, local-only extraction, unverifiable credentials never shown as verified, staleness and deferral, and restore fidelity
 - [Theming reference](./Theming.md) — `.overlook-theme.json` format, every user-themable token with its role, the export → edit → import workflow, an LLM prompt, and example themes
 
 ## Maintenance Convention
