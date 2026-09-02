@@ -283,33 +283,6 @@
       ]
     },
     {
-      "id": "512-gallery-inclusion-rules",
-      "wiki": "Acceptance-Test-Gallery-Inclusion",
-      "coverage": [
-        {
-          "type": "playwright-e2e",
-          "path": "tests/e2e/gallery-inclusion.spec.ts"
-        },
-        {
-          "type": "storybook",
-          "paths": ["src/renderer/src/shell/Sidebar.stories.tsx", "src/renderer/src/settings/SettingsDialog.stories.tsx"]
-        },
-        {
-          "type": "unit-dom",
-          "paths": [
-            "tests/db/gallery-inclusion.test.ts",
-            "tests/db/source-truth.test.ts",
-            "tests/backup/gallery-policy-manifest.test.ts",
-            "tests/library/library-service.test.ts"
-          ]
-        },
-        {
-          "type": "manual",
-          "reason": "Follow docs/acceptance/Acceptance-Test-Gallery-Inclusion.md against a library holding corrupt and undecodable files to verify the Unavailable source, its repair transitions, and a backup/restore that preserves the inclusion rules."
-        }
-      ]
-    },
-    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

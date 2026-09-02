@@ -5,9 +5,8 @@ import type { ActivityEvent } from '../../shared/activity/types.js';
 import { mediaInfoSchema } from '../../shared/library/media-info.js';
 import { boardSchema } from '../../shared/moodboard/board.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../../shared/library/photo-metadata.js';
-import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 7 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 6 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -364,7 +363,7 @@ export const backupManifestSidecarV6Schema = z.strictObject({
 export const backupManifestV6Schema = z
   .strictObject({
     ...backupManifestV5Schema.shape,
-    schema: z.literal(6),
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
     sidecars: z.array(backupManifestSidecarV6Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -398,22 +397,6 @@ export const backupManifestV6Schema = z
     }
   });
 
-// All Photos inclusion rules (#512, ADR-0030 §5): library data, so a restored
-// library shows exactly what the backed-up one showed.
-export const backupManifestV7Schema = z
-  .strictObject({
-    ...backupManifestV6Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
-    galleryPolicy: galleryPolicySchema.strict(),
-  })
-  .superRefine((manifest, context) => {
-    const { galleryPolicy: _galleryPolicy, ...withoutPolicy } = manifest;
-    const previous = backupManifestV6Schema.safeParse({ ...withoutPolicy, schema: 6 });
-    if (!previous.success) {
-      context.addIssue({ code: 'custom', message: `schema-6 records are inconsistent: ${z.prettifyError(previous.error)}` });
-    }
-  });
-
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
 export type BackupManifestPhotoV2 = z.infer<typeof backupManifestPhotoV2Schema>;
 export type BackupManifestAlbumV2 = z.infer<typeof backupManifestAlbumV2Schema>;
@@ -427,9 +410,7 @@ export type BackupManifestBoardV5 = z.infer<typeof backupManifestBoardV5Schema>;
 export type BackupManifestV5 = z.infer<typeof backupManifestV5Schema>;
 export type BackupManifestSidecarV6 = z.infer<typeof backupManifestSidecarV6Schema>;
 export type BackupManifestV6 = z.infer<typeof backupManifestV6Schema>;
-export type BackupManifestV7 = z.infer<typeof backupManifestV7Schema>;
-export type RestorableBackupManifest =
-  BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6 | BackupManifestV7;
+export type RestorableBackupManifest = BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -454,10 +435,6 @@ export interface BackupManifestSnapshotV5 extends BackupManifestSnapshotV4 {
 
 export interface BackupManifestSnapshotV6 extends BackupManifestSnapshotV5 {
   readonly sidecars: readonly BackupManifestSidecarV6[];
-}
-
-export interface BackupManifestSnapshotV7 extends BackupManifestSnapshotV6 {
-  readonly galleryPolicy: BackupManifestV7['galleryPolicy'];
 }
 
 export type ParsedBackupManifest =
@@ -513,19 +490,6 @@ export function buildBackupManifestV6(input: {
   readonly snapshot: BackupManifestSnapshotV6;
 }): BackupManifestV6 {
   return backupManifestV6Schema.parse({
-    schema: 6,
-    libraryId: input.libraryId,
-    generatedAt: input.generatedAt,
-    ...input.snapshot,
-  });
-}
-
-export function buildBackupManifestV7(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV7;
-}): BackupManifestV7 {
-  return backupManifestV7Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -593,17 +557,10 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
-  if (version.data.schema === 6) {
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
     const parsed = backupManifestV6Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-6 manifest: ${z.prettifyError(parsed.error)}`);
-    }
-    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
-  }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
-    const parsed = backupManifestV7Schema.safeParse(input);
-    if (!parsed.success) {
-      throw new BackupManifestError(`invalid schema-7 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }

@@ -95,14 +95,13 @@ describe('source truth (#119)', () => {
   test('EXIT CRITERIA: for every source, sidebar count === full page-walk total', () => {
     const { repo, db } = world();
     const counts = repo.counts(RECENT_SINCE);
-    for (const source of ['all', 'favorites', 'recent', 'raw', 'offloaded', 'unavailable', 'deleted'] as const) {
+    for (const source of ['all', 'favorites', 'recent', 'offloaded', 'deleted'] as const) {
       const ids = walk(repo, source);
       assert.equal(counts[source], ids.length, `${source}: count ${String(counts[source])} vs walk ${String(ids.length)}`);
       assert.equal(new Set(ids).size, ids.length, `${source}: no duplicates across pages`);
     }
-    // And the world actually exercises every source (#512 adds the derived
-    // RAW/Unavailable sources and the inclusion-rule disclosure count).
-    assert.deepEqual(counts, { all: 6, favorites: 2, recent: 2, raw: 2, offloaded: 1, unavailable: 0, deleted: 2, excluded: 0 });
+    // And the world actually exercises every source.
+    assert.deepEqual(counts, { all: 6, favorites: 2, recent: 2, offloaded: 1, deleted: 2 });
     db.close();
   });
 

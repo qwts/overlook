@@ -23,9 +23,6 @@ export interface PhotoTileProps {
   readonly status?: SyncState;
   readonly showStatus?: boolean;
   readonly previewFailure?: PreviewFailureReason | null;
-  /** Dimensions the decoder could not establish (ADR-0030 §4): shown with an
-   * indicator and never treated as zero megapixels by inclusion rules. */
-  readonly unknownDimensions?: boolean;
   /** Video duration in seconds → the monospace duration pill (design §Grid
    * tiles). Null/undefined for stills. */
   readonly duration?: number | null | undefined;
@@ -61,7 +58,6 @@ const messages = defineMessages({
   videoTitle: { id: 'library.photo.video.title', defaultMessage: 'Video' },
   videoPreservedTitle: { id: 'library.photo.video.preservedTitle', defaultMessage: 'Video — preserved on this device' },
   videoPreservedPill: { id: 'library.photo.video.preservedPill', defaultMessage: 'PRESERVED' },
-  unknownDimensions: { id: 'library.photo.unknownDimensions', defaultMessage: 'Dimensions unknown' },
 });
 
 /** Kind iconography for placeholder tiles (design §Grid tiles). */
@@ -97,7 +93,6 @@ export function PhotoTile({
   status = 'local',
   showStatus = true,
   previewFailure,
-  unknownDimensions = false,
   duration,
   preserved = false,
   placeholder,
@@ -227,16 +222,6 @@ export function PhotoTile({
       {showStatus && status !== 'local' ? (
         <span className="ovl-tile__status">
           <StatusGlyph state={status} size={18} />
-        </span>
-      ) : null}
-      {unknownDimensions ? (
-        <span
-          className="ovl-tile__unknownDimensions mono-data"
-          role="img"
-          aria-label={intl.formatMessage(messages.unknownDimensions)}
-          title={intl.formatMessage(messages.unknownDimensions)}
-        >
-          <Icon name="circle-help" size={12} />
         </span>
       ) : null}
       {isOriginal ? (

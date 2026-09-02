@@ -5,15 +5,14 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV7,
+  buildBackupManifestV6,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
-  type BackupManifestSnapshotV7,
+  type BackupManifestSnapshotV6,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
-import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 import type { BackupIntegritySummary } from './integrity-scrubber.js';
@@ -123,8 +122,6 @@ export interface BackupEngineDeps {
   readonly manifestSnapshot: () => BackupManifestSnapshot;
   readonly activitySnapshot?: (() => readonly ActivityEvent[]) | undefined;
   readonly boardsSnapshot?: (() => readonly BackupManifestBoardV5[]) | undefined;
-  /** All Photos inclusion rules (#512) — library data carried by the manifest. */
-  readonly galleryPolicySnapshot?: (() => GalleryPolicy) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -798,7 +795,7 @@ export class BackupEngine {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
-    const manifest = buildBackupManifestV7({
+    const manifest = buildBackupManifestV6({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -808,8 +805,7 @@ export class BackupEngine {
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
         sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
-        galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
-      } satisfies BackupManifestSnapshotV7,
+      } satisfies BackupManifestSnapshotV6,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

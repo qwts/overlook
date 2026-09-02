@@ -53,9 +53,7 @@ const viewMessages = defineMessages({
   all: { id: 'shell.view.all', defaultMessage: 'All Photos' },
   favorites: { id: 'shell.view.favorites', defaultMessage: 'Favorites' },
   recent: { id: 'shell.view.recent', defaultMessage: 'Recent imports' },
-  raw: { id: 'shell.view.raw', defaultMessage: 'RAW' },
   offloaded: { id: 'shell.view.offloaded', defaultMessage: 'Offloaded' },
-  unavailable: { id: 'shell.view.unavailable', defaultMessage: 'Unavailable' },
   deleted: { id: 'shell.view.deleted', defaultMessage: 'Trash' },
   album: { id: 'shell.view.album', defaultMessage: 'Album' },
   protected: { id: 'shell.view.protected', defaultMessage: 'Protected album' },
@@ -813,16 +811,7 @@ export function Shell({
           else dispatch({ type: 'toast/dismissed' });
         }}
       />
-      <StatusBar
-        stats={stats}
-        counts={counts}
-        restore={restore.restoreChip}
-        onRestoreClick={restore.openRestore}
-        onInclusionClick={() => {
-          setSettingsSection('general');
-          dispatch({ type: 'dialog/set', dialog: 'settings', open: true });
-        }}
-      />
+      <StatusBar stats={stats} restore={restore.restoreChip} onRestoreClick={restore.openRestore} />
       <InteropEntryDialog entry={interopEntry} onClose={() => setInteropEntry(null)} />
     </div>
   );

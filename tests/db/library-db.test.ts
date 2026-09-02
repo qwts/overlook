@@ -678,8 +678,13 @@ describe('PhotosRepository', () => {
     repo.insert(deleted);
     run(db, `UPDATE photos SET deleted_at = ? WHERE id = ?`, '2026-07-12T00:00:00.000Z', deleted.id);
 
-    const counts = repo.counts('2026-07-10T00:00:00.000Z');
-    assert.deepEqual(counts, { all: 3, favorites: 1, recent: 1, raw: 3, offloaded: 1, unavailable: 0, deleted: 1, excluded: 0 });
+    assert.deepEqual(repo.counts('2026-07-10T00:00:00.000Z'), {
+      all: 3,
+      favorites: 1,
+      recent: 1,
+      offloaded: 1,
+      deleted: 1,
+    });
     db.close();
   });
 

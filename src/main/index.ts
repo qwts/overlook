@@ -3,7 +3,7 @@ import { buffer } from 'node:stream/consumers';
 import { app, dialog, session } from 'electron';
 
 import { events } from '../shared/ipc/channels.js';
-import { createActivityFacade } from './activity/activity-publication.js';
+import { activityBackupSnapshot, createActivityFacade } from './activity/activity-publication.js';
 import { createHistoryService } from './history/history-runtime.js';
 import { createEmitter } from '../shared/ipc/registry.js';
 import { configureAppProfile } from './app-profile.js';
@@ -17,6 +17,7 @@ import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifySearchIndexAsync } from './db/photos-repository.js';
+import { boardsSnapshot } from './db/board-repository.js';
 import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
@@ -29,7 +30,6 @@ import { buildMaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
 import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
-import { libraryDataBackupDeps } from './backup/library-data-backup-deps.js';
 import { createBackupAuditLogger } from './backup/backup-audit.js';
 import { createBackupIntegrityRuntime } from './backup/integrity-runtime.js';
 import { sealManifestJson } from './backup/manifest-sealer.js';
@@ -487,7 +487,8 @@ function getBackupEngine(): BackupEngine {
       sealRecoveryBootstrap: createRecoveryBootstrapSealer(parts.keyStore, () => getProviderRuntime().libraryId()),
       libraryId: () => getProviderRuntime().libraryId(),
       manifestSnapshot: () => repo.manifestSnapshot(),
-      ...libraryDataBackupDeps(parts.db, repo),
+      activitySnapshot: () => activityBackupSnapshot(parts.db),
+      boardsSnapshot: () => boardsSnapshot(parts.db),
       ...sidecarBackupDeps(parts.db, parts.blobStore),
       // Live reads (#111): every run and every maybeAutoRun sees the
       // store's current values — no restart needed after a settings change.

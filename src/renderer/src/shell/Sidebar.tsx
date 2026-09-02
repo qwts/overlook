@@ -42,9 +42,7 @@ const messages = defineMessages({
   sourceAll: { id: 'sidebar.source.all', defaultMessage: 'All Photos' },
   sourceFavorites: { id: 'sidebar.source.favorites', defaultMessage: 'Favorites' },
   sourceRecent: { id: 'sidebar.source.recent', defaultMessage: 'Recent imports' },
-  sourceRaw: { id: 'sidebar.source.raw', defaultMessage: 'RAW' },
   sourceOffloaded: { id: 'sidebar.source.offloaded', defaultMessage: 'Offloaded' },
-  sourceUnavailable: { id: 'sidebar.source.unavailable', defaultMessage: 'Unavailable' },
   sourceDeleted: { id: 'sidebar.source.deleted', defaultMessage: 'Trash' },
 });
 
@@ -52,16 +50,9 @@ const SOURCES: readonly { key: SourceFilter; icon: IconName; label: MessageDescr
   { key: 'all', icon: 'images', label: messages.sourceAll },
   { key: 'favorites', icon: 'star', label: messages.sourceFavorites },
   { key: 'recent', icon: 'download', label: messages.sourceRecent },
-  { key: 'raw', icon: 'aperture', label: messages.sourceRaw },
   { key: 'offloaded', icon: 'cloud', label: messages.sourceOffloaded },
-  { key: 'unavailable', icon: 'image-off', label: messages.sourceUnavailable },
   { key: 'deleted', icon: 'trash-2', label: messages.sourceDeleted },
 ];
-
-// Derived sources earn their row once they have members (#268 precedent for
-// Offloaded): an always-empty RAW or Unavailable destination reads as broken,
-// and the count is exact the moment real rows exist (#512).
-const DERIVED_SOURCES = new Set<SourceFilter>(['raw', 'offloaded', 'unavailable']);
 
 // Collapsed state persists across launches under the mock's own key (#238).
 const COLLAPSE_KEY = 'overlook.sidebarCollapsed';
@@ -271,7 +262,13 @@ export function Sidebar({
           </h2>
         </div>
       )}
-      {SOURCES.filter(({ key }) => !DERIVED_SOURCES.has(key) || (counts !== null && counts[key] > 0)).map(({ key, icon, label }) => (
+      {SOURCES.filter(
+        // Offloaded only earns its row once something is actually offloaded
+        // (#268) — no in-app flow drives offload yet, so an always-empty
+        // destination reads as broken. Unknown counts keep it hidden too;
+        // it appears the moment real rows exist.
+        ({ key }) => key !== 'offloaded' || (counts !== null && counts.offloaded > 0),
+      ).map(({ key, icon, label }) => (
         <SideRow
           key={key}
           icon={icon}

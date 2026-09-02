@@ -1,48 +1,27 @@
 import { useEffect, useRef, type ReactElement } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
 
 import { useFormats } from '../i18n/use-formats.js';
-import type { LibraryStats, SourceCounts } from '../../../shared/library/types.js';
+import type { LibraryStats } from '../../../shared/library/types.js';
 import type { RestoreProgressContract } from '../../../shared/backup/restore-contract.js';
 import { restoreChipLabel } from '../restore/restore-progress.js';
 import { Icon } from '../components/Icon';
 import { useAppState } from '../state/app-state-context';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 
-const messages = defineMessages({
-  excluded: {
-    id: 'statusbar.inclusion.excluded',
-    defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules',
-  },
-});
-
 // The 26px mono strip (#81) per the design's StatusBar.jsx — always tells
 // the truth about the library. The sync side flips on pendingCount events;
 // the real backup engine (and real lastBackup stamps) land with M08.
 export function StatusBar({
   stats,
-  counts = null,
   restore = null,
   onRestoreClick,
-  onInclusionClick,
 }: {
   readonly stats: LibraryStats | null;
-  /** Sidebar counts; `excluded` drives the All Photos inclusion disclosure (#512). */
-  readonly counts?: SourceCounts | null;
   readonly restore?: RestoreProgressContract | null;
   readonly onRestoreClick?: (() => void) | undefined;
-  readonly onInclusionClick?: (() => void) | undefined;
 }): ReactElement {
   const { formatBytes, formatCount } = useFormats();
-  const intl = useIntl();
   const state = useAppState();
-  // ADR-0030 §4: an All Photos that is filtered must say so and show the
-  // excluded count. Albums, other sources, and explicit search are never
-  // filtered, so the disclosure only appears on the plain All Photos view.
-  const excluded =
-    counts !== null && state.source === 'all' && state.album === null && state.protectedAlbum === null && state.query === ''
-      ? counts.excluded
-      : 0;
   const { announce } = useAnnouncer();
   const syncing = state.pendingCount > 0;
   const provider = state.providerLabel;
@@ -64,17 +43,6 @@ export function StatusBar({
   return (
     <footer className="ovl-statusbar">
       <span data-testid="statusbar-left">{stats === null ? '—' : `${formatCount(stats.photos)} photos · ${formatBytes(stats.bytes)}`}</span>
-      {excluded > 0 ? (
-        <button
-          type="button"
-          className="ovl-statusbar__item ovl-statusbar__item--amber"
-          data-testid="inclusion-status"
-          onClick={onInclusionClick}
-        >
-          <Icon name="eye-off" size={11} strokeWidth={2} />
-          {intl.formatMessage(messages.excluded, { count: excluded })}
-        </button>
-      ) : null}
       <span className="ovl-statusbar__spacer" />
       {restore !== null && restoreLabel !== null ? (
         <button

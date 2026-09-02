@@ -38,7 +38,6 @@ import { interopChannels, interopEvents } from './interop-channels.js';
 import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
 import { libraryQuerySchema } from './library-query-schemas.js';
-import { galleryPolicySchema } from '../library/gallery-policy.js';
 import { albumChannels } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
@@ -394,20 +393,9 @@ export const channels = {
       all: z.number(),
       favorites: z.number(),
       recent: z.number(),
-      raw: z.number(),
       offloaded: z.number(),
-      unavailable: z.number(),
       deleted: z.number(),
-      excluded: z.number().int().nonnegative(),
     }),
-  ),
-  // All Photos inclusion rules (#512, ADR-0030 §4): read and written in the
-  // encrypted library; main compiles them, the renderer only displays them.
-  libraryGalleryPolicy: defineChannel('library:gallery-policy', z.object({}), z.object({ policy: galleryPolicySchema })),
-  librarySetGalleryPolicy: defineChannel(
-    'library:set-gallery-policy',
-    z.object({ policy: galleryPolicySchema }),
-    z.object({ policy: galleryPolicySchema }),
   ),
   libraryAlbums: defineChannel(
     'library:albums',

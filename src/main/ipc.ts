@@ -253,12 +253,6 @@ export function registerLibraryHandlers(
   ipcMain.handle(channels.libraryCounts.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryCounts, ({ recentSince }) => getService().counts(recentSince))(request),
   );
-  ipcMain.handle(channels.libraryGalleryPolicy.name, (_event, request: unknown) =>
-    wrapHandler(channels.libraryGalleryPolicy, () => ({ policy: getService().galleryPolicy() }))(request),
-  );
-  ipcMain.handle(channels.librarySetGalleryPolicy.name, (_event, request: unknown) =>
-    wrapHandler(channels.librarySetGalleryPolicy, ({ policy }) => ({ policy: getService().setGalleryPolicy(policy) }))(request),
-  );
   ipcMain.handle(channels.libraryStats.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryStats, () => getService().stats())(request),
   );

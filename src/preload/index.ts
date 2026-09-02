@@ -36,7 +36,6 @@ const commandContextUpdate = createInvoker(channels.commandContextUpdate, invoke
 const helpOpen = createInvoker(channels.helpOpen, invokeTransport);
 
 const libraryStats = createInvoker(channels.libraryStats, invokeTransport);
-const libraryGalleryPolicy = createInvoker(channels.libraryGalleryPolicy, invokeTransport);
 const nativeDragStatus = createInvoker(channels.nativeDragStatus, invokeTransport);
 const photoKitStatus = createInvoker(channels.photoKitStatus, invokeTransport);
 const photoKitImportReview = createInvoker(channels.photoKitImportReview, invokeTransport);
@@ -190,8 +189,6 @@ const overlook: OverlookApi = {
     toggleFavorites: createInvoker(channels.libraryToggleFavorites, invokeTransport),
     setOriginal: createInvoker(channels.librarySetOriginal, invokeTransport),
     counts: createInvoker(channels.libraryCounts, invokeTransport),
-    galleryPolicy: async () => libraryGalleryPolicy({}),
-    setGalleryPolicy: createInvoker(channels.librarySetGalleryPolicy, invokeTransport),
     stats: async () => libraryStats({}),
     albums: async () => libraryAlbums({}),
     delete: createInvoker(channels.libraryDelete, invokeTransport),
