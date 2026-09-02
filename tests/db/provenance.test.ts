@@ -60,7 +60,7 @@ const AT = '2026-09-02T10:00:00.000Z';
 describe('provenance repository (#495)', () => {
   test('migration 32 creates the table (33 rebuilt photos after it); a photo starts with no record', () => {
     const { db, provenance } = open();
-    assert.equal(MIGRATIONS.at(-1)?.version, 36);
+    assert.equal(MIGRATIONS.at(-1)?.version, 37);
     assert.ok(queryGet(db, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'photo_provenance'`));
     assert.equal(provenance.get('P1'), null);
   });

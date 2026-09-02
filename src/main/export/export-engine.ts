@@ -11,6 +11,16 @@ import type { PhotoRecord } from '../../shared/library/types.js';
 import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
 import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 import { IDENTITY_TRANSFORM, isIdentityTransform, type EditTransform } from '../../shared/library/edit-revision.js';
+import {
+  discloses,
+  EMPTY_DISCLOSURE_OPERATION,
+  permissivePlan,
+  type DisclosureDestination,
+  type DisclosureField,
+  type DisclosureOperation,
+  type DisclosurePlan,
+} from '../../shared/disclosure/policy.js';
+import { embeddedFieldsOf } from '../disclosure/disclosure-service.js';
 
 // Export engine (#97): the decrypt counterpart to import — selected photos
 // become real files in a chosen folder. Streaming decrypt straight to the
@@ -30,6 +40,30 @@ import { IDENTITY_TRANSFORM, isIdentityTransform, type EditTransform } from '../
 
 export type ExportFormat = 'original' | 'jpeg';
 export type ExportMetadataMode = 'original' | 'overlook' | 'none';
+
+/** ADR-0032 §6 operation scope for one export: the recipient class of the
+ * destination and the fields this operation narrows or widens once. Main
+ * recompiles the plan from this; it is intent, never a field list. */
+export interface ExportDisclosureIntent {
+  readonly destination: DisclosureDestination;
+  readonly operation: DisclosureOperation;
+}
+
+export const DEFAULT_EXPORT_DISCLOSURE: ExportDisclosureIntent = { destination: 'shared', operation: EMPTY_DISCLOSURE_OPERATION };
+
+/** Compiles the disclosure plan for one photo and this export. */
+export type ExportDisclosurePlanner = (photoId: string, intent: ExportDisclosureIntent) => DisclosurePlan;
+
+/** The photo as the plan lets it be projected: withheld authored fields read
+ * as absent, so the XMP projection cannot carry them. */
+export function projectForDisclosure(photo: PhotoRecord, plan: DisclosurePlan): PhotoRecord {
+  return {
+    ...photo,
+    title: discloses(plan, 'title') ? photo.title : null,
+    description: discloses(plan, 'description') ? photo.description : null,
+    tags: discloses(plan, 'tags') ? photo.tags : [],
+  };
+}
 export type ExportPayloadMode = 'baked' | 'original-sidecars' | 'original';
 
 export interface ExportEditOptions {
@@ -55,6 +89,12 @@ export interface ExportEditsPreflight {
 
 export function resolvePayloadMode(format: ExportFormat, edits: ExportEditOptions): ExportPayloadMode {
   return edits.mode ?? (format === 'jpeg' ? 'baked' : 'original-sidecars');
+}
+
+/** Embedded fields (inside the original bytes) the plan withholds for this
+ * photo. Non-empty means the originals cannot leave under this plan. */
+export function blockedEmbeddedFields(photo: PhotoRecord, plan: DisclosurePlan): readonly DisclosureField[] {
+  return embeddedFieldsOf(photo).filter((field) => !discloses(plan, field));
 }
 
 function xml(value: string): string {
@@ -125,6 +165,8 @@ export class ExportPreflightError extends Error {
 }
 
 export interface ExportEngineDeps {
+  /** ADR-0032 §6 planner; absent = every field the boundary carries crosses (unit worlds). */
+  readonly disclosure?: ExportDisclosurePlanner | undefined;
   readonly repo: { readonly get: (id: string) => PhotoRecord | undefined };
   readonly blobs: { readonly getStream: (contentHash: string, resolveKey: KeyResolver, photoId: string) => Readable };
   /** Encrypted companion custody (#484); absent = no sidecar support. Only
@@ -226,9 +268,36 @@ export class ExportEngine {
     format: ExportFormat = 'original',
     metadata: ExportMetadataMode = 'original',
     edits: ExportEditOptions = {},
+    disclosure: ExportDisclosureIntent = DEFAULT_EXPORT_DISCLOSURE,
   ): Promise<ExportSummary> {
     const mode = resolvePayloadMode(format, edits);
     const photos = photoIds.map((id) => this.deps.repo.get(id));
+    // ADR-0032 §6: the plan is compiled here, per photo, from intent. The
+    // authored projection carries only disclosed fields; originals carry
+    // embedded fields as they are, so a withheld embedded field refuses the
+    // run before any byte moves — widen it for this export or bake.
+    const plans = new Map(
+      photos.flatMap((photo) =>
+        photo === undefined
+          ? []
+          : [[photo.id, this.deps.disclosure?.(photo.id, disclosure) ?? permissivePlan('export', disclosure.destination)] as const],
+      ),
+    );
+    if (mode !== 'baked') {
+      const blocked = new Map<DisclosureField, number>();
+      for (const photo of photos) {
+        if (photo === undefined) continue;
+        for (const field of blockedEmbeddedFields(photo, plans.get(photo.id) ?? permissivePlan('export'))) {
+          blocked.set(field, (blocked.get(field) ?? 0) + 1);
+        }
+      }
+      if (blocked.size > 0) {
+        throw new ExportPreflightError(
+          `disclosure: ${[...blocked.entries()].map(([field, count]) => `${field} (${String(count)})`).join(', ')} would leave inside the original bytes — include them for this export or export Baked`,
+        );
+      }
+    }
+    const projected = (photo: PhotoRecord): PhotoRecord => projectForDisclosure(photo, plans.get(photo.id) ?? permissivePlan('export'));
     const transforms = new Map(
       photos.flatMap((photo) => {
         if (photo === undefined) return [];
@@ -256,7 +325,7 @@ export class ExportEngine {
               (photo === undefined
                 ? 0
                 : (authoredMetadataXmp(
-                    metadata === 'overlook' ? photo : null,
+                    metadata === 'overlook' ? projected(photo) : null,
                     mode === 'baked' ? IDENTITY_TRANSFORM : (transforms.get(photo.id) ?? IDENTITY_TRANSFORM),
                   )?.length ?? 0)),
             0,
@@ -319,7 +388,7 @@ export class ExportEngine {
             ? []
             : [
                 ...(await this.exportAuthoredMetadata(
-                  metadata === 'overlook' ? photo : null,
+                  metadata === 'overlook' ? projected(photo) : null,
                   editsTravel ? transform : IDENTITY_TRANSFORM,
                   destination,
                   fileName,

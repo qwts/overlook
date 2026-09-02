@@ -2,6 +2,7 @@ import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { createExportRuntime, type DrainableExportFacade } from './export-runtime.js';
+import type { ExportDisclosurePlanner } from './export-engine.js';
 import { EphemeralOriginalError, type EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
@@ -17,6 +18,8 @@ export interface ExportFacadeFactoryDeps {
   readonly ephemeral: () => EphemeralOriginalService;
   readonly pickDestination: () => Promise<string | null>;
   readonly progress: (done: number, total: number) => void;
+  /** ADR-0032 §6 planner (#509). */
+  readonly disclosure?: ExportDisclosurePlanner | undefined;
 }
 
 export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExportFacade {
@@ -41,5 +44,6 @@ export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExpo
       error instanceof EphemeralOriginalError ? deps.ephemeral().custodyStatus(photoId) : Promise.resolve(undefined),
     pickDestination: deps.pickDestination,
     progress: deps.progress,
+    ...(deps.disclosure === undefined ? {} : { disclosure: deps.disclosure }),
   });
 }

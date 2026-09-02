@@ -640,6 +640,7 @@ const egressRuntime = new EgressRuntime({
   harnessEnv,
   unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
   library: () => registryRuntime.resolveActive(),
+  activity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
 });
 
 async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
@@ -838,7 +839,7 @@ void externalOpen.whenReady().then(async () => {
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
     getExport: () => egressRuntime.exports(),
-    getNativeDrag: () => egressRuntime.nativeDrag(),
+    ...{ getNativeDrag: () => egressRuntime.nativeDrag(), getDisclosure: () => egressRuntime.disclosure() },
     ...{ getPhotoKit: () => egressRuntime.photoKit(), getFileProvider: () => egressRuntime.fileProvider() },
     getKeyStore: () => requireParts('key store').keyStore,
     getRestore: getRestoreRuntime,

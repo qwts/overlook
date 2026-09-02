@@ -4,6 +4,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ExportDialog } from './ExportDialog';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
+import { DEFAULT_DISCLOSURE_FIELDS } from '../../../shared/disclosure/policy.js';
 
 // #99 exit criteria: copy/pixel match to the mock, switch-off disables the
 // button + shows the warning, and phases transition on engine events (the
@@ -65,7 +66,57 @@ function installStub(custodyFailure?: PhotoCustodyStatus, preflight: PreflightSt
     },
   };
   let listener: ((payload: { done: number; total: number }) => void) | null = null;
-  (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { export: exportApi };
+  const disclosureApi: OverlookApi['disclosure'] = {
+    policy: () => Promise.resolve({ policy: { version: 1, fields: DEFAULT_DISCLOSURE_FIELDS }, pinned: [] }),
+    setField: () => Promise.reject(new Error('unused')),
+    overrides: () => Promise.resolve({ overrides: [] }),
+    setOverride: () => Promise.reject(new Error('unused')),
+    preview: (request) =>
+      Promise.resolve({
+        boundary: request.boundary,
+        destination: request.destination,
+        policyVersion: 1,
+        photos: IDS.length,
+        fields: [
+          {
+            field: 'title',
+            class: 'shared',
+            disclosed: request.destination === 'public' ? 0 : 2,
+            withheld: request.destination === 'public' ? 2 : 0,
+            present: 2,
+            sample: 'Harbour at dusk',
+            widened: false,
+          },
+          {
+            field: 'captureTime',
+            class: 'shared',
+            disclosed: request.destination === 'public' ? 0 : 3,
+            withheld: request.destination === 'public' ? 3 : 0,
+            present: 3,
+            sample: '2026-07-13T10:00:00.000Z',
+            widened: false,
+          },
+          {
+            field: 'location',
+            class: 'private',
+            disclosed: request.operation?.widen.includes('location') === true ? 1 : 0,
+            withheld: request.operation?.widen.includes('location') === true ? 0 : 1,
+            present: 1,
+            sample: '52.37, 4.9',
+            widened: request.operation?.widen.includes('location') === true,
+          },
+        ],
+        embedded: request.payload === 'original' ? ['captureTime', 'location'] : [],
+        blocked:
+          request.payload === 'original' && request.operation?.widen.includes('location') !== true
+            ? ['location']
+            : request.payload === 'original' && request.destination === 'public'
+              ? ['captureTime']
+              : [],
+        retainedSidecars: request.metadata === 'original' ? 1 : 0,
+      }),
+  };
+  (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { export: exportApi, disclosure: disclosureApi };
 }
 
 const meta: Meta<typeof ExportDialog> = {

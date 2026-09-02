@@ -72,9 +72,9 @@ function open() {
 }
 
 describe('keyring registry (#517, migration 36)', () => {
-  test('migration 36 heads the chain, mints a reference for legacy rows, and enforces the registry constraints', () => {
+  test('migration 36 sits in the chain (37 is disclosure-policy, #509), mints a reference for legacy rows, and enforces the registry constraints', () => {
     assert.deepEqual(
-      MIGRATIONS.slice(-1).map((migration) => ({ version: migration.version, name: migration.name })),
+      MIGRATIONS.slice(-2, -1).map((migration) => ({ version: migration.version, name: migration.name })),
       [{ version: 36, name: 'library-keyring' }],
     );
     const { db } = open();

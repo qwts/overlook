@@ -16,6 +16,9 @@ import { pickExportDestination } from './export/export-destination.js';
 import { applicationEvents } from './application-events.js';
 import type { FileProviderService } from './file-provider/file-provider-service.js';
 import { createFileProviderService } from './file-provider/file-provider-runtime-factory.js';
+import type { ActivityFacade } from './activity/activity-publication.js';
+import { createDisclosureService } from './disclosure/disclosure-factory.js';
+import type { DisclosureService } from './disclosure/disclosure-service.js';
 
 export interface EgressRuntimeOptions {
   readonly parts: () => LibraryParts;
@@ -25,6 +28,8 @@ export interface EgressRuntimeOptions {
   readonly harnessEnv: (name: string) => string | undefined;
   readonly unlocked: () => boolean;
   readonly library: () => { readonly id: string; readonly name: string };
+  /** Activity history for disclosure-policy changes (#509), by field name only. */
+  readonly activity: () => ActivityFacade | undefined;
 }
 
 export class EgressRuntime {
@@ -33,6 +38,7 @@ export class EgressRuntime {
   private photoKitService: PhotoKitService | undefined;
   private fileProviderService: FileProviderService | undefined;
   private fileProviderClose: Promise<void> = Promise.resolve();
+  private disclosureService: DisclosureService | undefined;
 
   constructor(private readonly options: EgressRuntimeOptions) {}
 
@@ -50,6 +56,7 @@ export class EgressRuntime {
       ephemeral: this.options.ephemeral,
       pickDestination: () => pickExportDestination(this.options.harnessEnv),
       progress: (done, total) => applicationEvents.exportProgress({ done, total }),
+      disclosure: (photoId, intent) => this.disclosure().plan(photoId, 'export', intent.destination, intent.operation),
     });
     return this.exportFacade;
   }
@@ -83,6 +90,9 @@ export class EgressRuntime {
     const fixtureImport = this.options.harnessEnv('OVERLOOK_PHOTOKIT_IMPORT_SOURCE');
     const fixtureExport = this.options.harnessEnv('OVERLOOK_PHOTOKIT_EXPORT_DESTINATION');
     this.photoKitService = new PhotoKitService({
+      disclosure: {
+        plan: (photoId, boundary, destination, operation) => this.disclosure().plan(photoId, boundary, destination, operation),
+      },
       bridge:
         fixtureImport !== undefined || fixtureExport !== undefined
           ? new TestPhotoKitBridge(fixtureImport, fixtureExport)
@@ -119,10 +129,21 @@ export class EgressRuntime {
       platform: process.platform,
       packaged: app.isPackaged,
       onLibraryChanged: applicationEvents.onLibraryChanged,
+      disclosure: {
+        plan: (photoId, boundary, destination, operation) => this.disclosure().plan(photoId, boundary, destination, operation),
+      },
     });
     this.fileProviderService = service;
     void service.reconcile().catch(() => undefined);
     return service;
+  }
+
+  /** ADR-0032 §6 policy every egress surface compiles its plan from (#509).
+   * Fails closed: with no open library there is no policy and no crossing. */
+  disclosure(): DisclosureService {
+    const parts = this.options.parts();
+    this.disclosureService ??= createDisclosureService({ db: parts.db, activity: this.options.activity });
+    return this.disclosureService;
   }
 
   close(): void {
@@ -147,5 +168,6 @@ export class EgressRuntime {
     this.photoKitService = undefined;
     this.fileProviderService = undefined;
     this.fileProviderClose = Promise.resolve();
+    this.disclosureService = undefined;
   }
 }

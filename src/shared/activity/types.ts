@@ -19,6 +19,8 @@ export const activityEventTypes = [
   'photo.restored',
   'photo.exported',
   'photo.purged',
+  // ADR-0032 §6: policy and consent changes by field name and class only.
+  'disclosure.policy-changed',
   'command.undone',
   'command.redone',
   'command.compensated',

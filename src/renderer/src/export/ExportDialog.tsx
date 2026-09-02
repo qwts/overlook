@@ -15,6 +15,9 @@ import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.j
 import { custodyPresentation } from '../backup/custody-presentation.js';
 import { EXPORT_JPEG_QUALITIES, ExportEditsOptions, type ExportJpegQuality } from './ExportEditsOptions';
 import { useExportPreflight } from './use-export-preflight.js';
+import { DisclosurePreview } from '../disclosure/DisclosurePreview';
+import { useDisclosurePreview } from '../disclosure/use-disclosure-preview.js';
+import type { DisclosureDestination, DisclosureField } from '../../../shared/disclosure/policy.js';
 
 import './export.css';
 
@@ -118,7 +121,25 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const [bakedEdits, setBakedEdits] = useState(0);
   const [editSidecars, setEditSidecars] = useState(0);
   const [runError, setRunError] = useState(false);
+  // ADR-0032 §6 (#509): operation-scope disclosure intent. Main compiles the
+  // plan from it; the preview below is main's answer for the same intent.
+  const [disclosureDestination, setDisclosureDestination] = useState<DisclosureDestination>('shared');
+  const [widen, setWiden] = useState<readonly DisclosureField[]>([]);
   const preflight = useExportPreflight(photoIds, allPhotos, mode, open && destinationKind === 'folder');
+  const disclosureIntent = { destination: disclosureDestination, operation: { narrow: [], widen: [...widen] } };
+  const disclosurePreview = useDisclosurePreview(
+    open && phase === 'options'
+      ? {
+          boundary: destinationKind === 'apple-photos' ? 'photo-kit' : 'export',
+          destination: disclosureDestination,
+          ...(allPhotos ? {} : { photoIds: [...photoIds] }),
+          payload: destinationKind === 'folder' && mode === 'baked' ? 'baked' : 'original',
+          metadata: destinationKind === 'apple-photos' ? 'original' : metadata,
+          operation: disclosureIntent.operation,
+        }
+      : null,
+  );
+  const disclosureBlocked = disclosurePreview === null || disclosurePreview.blocked.length > 0;
 
   useEffect(() => {
     if (phase !== 'running') {
@@ -157,8 +178,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const edits = mode === 'baked' ? { mode, quality: EXPORT_JPEG_QUALITIES[quality] } : { mode };
   const editsBlocked = destinationKind === 'folder' && (preflight?.losses.length ?? 0) > 0 && !acknowledged;
   const intent: ExportDestinationIntent = allPhotos
-    ? { operation: 'all', metadata, ...edits }
-    : { operation: 'selected', photoIds: [...photoIds], format, metadata, ...edits };
+    ? { operation: 'all', metadata, ...edits, disclosure: disclosureIntent }
+    : { operation: 'selected', photoIds: [...photoIds], format, metadata, ...edits, disclosure: disclosureIntent };
 
   const discardDestination = (): void => {
     if (destination !== null) {
@@ -175,17 +196,18 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const start = (): void => {
     const run =
       destinationKind === 'apple-photos'
-        ? window.overlook.photoKit.export({ photoIds: [...photoIds] })
+        ? window.overlook.photoKit.export({ photoIds: [...photoIds], disclosure: disclosureIntent })
         : destination === null
           ? null
           : allPhotos
-            ? window.overlook.export.runAll({ authorization: destination.authorization, metadata, ...edits })
+            ? window.overlook.export.runAll({ authorization: destination.authorization, metadata, ...edits, disclosure: disclosureIntent })
             : window.overlook.export.run({
                 photoIds: [...photoIds],
                 authorization: destination.authorization,
                 format,
                 metadata,
                 ...edits,
+                disclosure: disclosureIntent,
               });
     if (run === null) return;
     setRunError(false);
@@ -248,7 +270,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             <Button
               variant="primary"
               icon="share"
-              disabled={!decrypt || editsBlocked || (destinationKind === 'folder' && destination === null)}
+              disabled={!decrypt || editsBlocked || disclosureBlocked || (destinationKind === 'folder' && destination === null)}
               onClick={start}
             >
               {exportLabel}
@@ -339,6 +361,19 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                       : messages.metadataNoneHint,
                 )}
           </div>
+          <DisclosurePreview
+            preview={disclosurePreview}
+            destination={disclosureDestination}
+            onDestinationChange={(next) => {
+              if (next !== disclosureDestination) discardDestination();
+              setDisclosureDestination(next);
+            }}
+            widen={widen}
+            onWidenChange={(next) => {
+              discardDestination();
+              setWiden(next);
+            }}
+          />
           <div className="ovl-export__decrypt">
             <div>
               <div className="ovl-export__decryptTitle">

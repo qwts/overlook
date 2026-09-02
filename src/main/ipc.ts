@@ -4,6 +4,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 
 import { channels } from '../shared/ipc/channels.js';
+import type { ExportDisclosureIntentWire } from '../shared/ipc/export-channels.js';
 import { resolveActiveLocale } from './i18n/locale-resolver.js';
 import { wrapHandler as createValidatedHandler } from '../shared/ipc/registry.js';
 import type { HandlerErrorReport } from '../shared/ipc/registry.js';
@@ -944,8 +945,14 @@ export interface ExportFacade {
     format?: 'original' | 'jpeg',
     metadata?: 'original' | 'overlook' | 'none',
     edits?: ExportEditsIntent,
+    disclosure?: ExportDisclosureIntentWire,
   ): Promise<ExportRunResult>;
-  runAll(destination: string, metadata?: 'original' | 'overlook' | 'none', edits?: ExportEditsIntent): Promise<ExportRunResult>;
+  runAll(
+    destination: string,
+    metadata?: 'original' | 'overlook' | 'none',
+    edits?: ExportEditsIntent,
+    disclosure?: ExportDisclosureIntentWire,
+  ): Promise<ExportRunResult>;
   /** §6 loss report; null photoIds = every exportable photo. */
   preflight(
     photoIds: readonly string[] | null,
@@ -966,33 +973,56 @@ export interface ExportRunResult {
   readonly failures: { photoId: string; fileName: string; reason: string }[];
 }
 
+/** ADR-0032 §6: consent at operation scope is recorded by field NAME only. */
+export function disclosurePayload(disclosure: ExportDisclosureIntentWire | undefined): {
+  readonly disclosureDestination: string;
+  readonly disclosureWidened: string;
+  readonly disclosureNarrowed: string;
+} {
+  return {
+    disclosureDestination: disclosure?.destination ?? 'shared',
+    disclosureWidened: disclosure?.operation.widen.join(',') ?? '',
+    disclosureNarrowed: disclosure?.operation.narrow.join(',') ?? '',
+  };
+}
+
 export function registerExportHandlers(
   getFacade: () => ExportFacade,
   getActivity?: () => ActivityFacade,
   destinationAuthority = new ExportDestinationAuthority(),
 ): void {
   ipcMain.handle(channels.exportRun.name, (event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format, metadata, mode, quality }) => {
+    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format, metadata, mode, quality, disclosure }) => {
       const destination = destinationAuthority.consume(
         event.sender.id,
-        { operation: 'selected', photoIds, format, metadata, mode, quality },
+        { operation: 'selected', photoIds, format, metadata, mode, quality, disclosure },
         authorization,
       );
-      const result = await getFacade().run(photoIds, destination, format, metadata, { mode, quality });
+      const result = await getFacade().run(photoIds, destination, format, metadata, { mode, quality }, disclosure);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: format ?? 'original', metadata: metadata ?? 'original', mode: mode ?? null, ...summary },
+        payload: {
+          format: format ?? 'original',
+          metadata: metadata ?? 'original',
+          mode: mode ?? null,
+          ...disclosurePayload(disclosure),
+          ...summary,
+        },
       });
       return result;
     })(request),
   );
   ipcMain.handle(channels.exportRunAll.name, (event, request: unknown) =>
-    wrapHandler(channels.exportRunAll, async ({ authorization, metadata, mode, quality }) => {
-      const destination = destinationAuthority.consume(event.sender.id, { operation: 'all', metadata, mode, quality }, authorization);
-      const result = await getFacade().runAll(destination, metadata, { mode, quality });
+    wrapHandler(channels.exportRunAll, async ({ authorization, metadata, mode, quality, disclosure }) => {
+      const destination = destinationAuthority.consume(
+        event.sender.id,
+        { operation: 'all', metadata, mode, quality, disclosure },
+        authorization,
+      );
+      const result = await getFacade().runAll(destination, metadata, { mode, quality }, disclosure);
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
@@ -1003,6 +1033,7 @@ export function registerExportHandlers(
           metadata: metadata ?? 'original',
           mode: mode ?? null,
           scope: 'all',
+          ...disclosurePayload(disclosure),
           ...summary,
         },
       });

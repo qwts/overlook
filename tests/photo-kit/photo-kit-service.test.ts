@@ -11,6 +11,7 @@ import type { PhotoKitBridge, PhotoKitExportAsset, PhotoKitMaterializedAsset } f
 import { PhotoKitService } from '../../src/main/photo-kit/photo-kit-service.js';
 import { cleanupPhotoKitStage } from '../../src/main/photo-kit/photo-kit-staging.js';
 import type { PhotoRecord } from '../../src/shared/library/types.js';
+import { compileDisclosurePlan, DEFAULT_DISCLOSURE_POLICY } from '../../src/shared/disclosure/policy.js';
 
 const PHOTO: PhotoRecord = {
   id: 'photo',
@@ -210,5 +211,41 @@ describe('PhotoKit explicit transfer service (#798)', () => {
     assert.equal((await service.reviewImport()).status, 'cancelled');
     const result = await service.runExport(['photo']);
     assert.deepEqual({ exported: result.exported, failed: result.failed }, { exported: 0, failed: 1 });
+  });
+
+  test('withholds a private embedded field by refusing the photo, and lets an explicit widening carry it (#509)', async () => {
+    const bridge = new FakeBridge();
+    const service = new PhotoKitService({
+      bridge,
+      dataDir: mkdtempSync(join(tmpdir(), 'overlook-photokit-disclosure-')),
+      getPhoto: () => PHOTO,
+      openOriginal: () => Promise.resolve({ stream: Readable.from(['bytes']), release: undefined }),
+      importFiles: () => Promise.reject(new Error('unused')),
+      cancelImport: () => undefined,
+      admit: () => true,
+      progress: () => undefined,
+      disclosure: {
+        plan: (_photoId, boundary, destination = 'shared', operation) =>
+          compileDisclosurePlan({ boundary, destination, chain: { library: DEFAULT_DISCLOSURE_POLICY }, operation }),
+      },
+    });
+    const refused = await service.runExport(['photo']);
+    assert.deepEqual({ exported: refused.exported, failed: refused.failed }, { exported: 0, failed: 1 });
+    assert.match(refused.failures[0]?.reason ?? '', /Withheld by disclosure policy: location/u);
+    assert.equal(bridge.exported.length, 0, 'the original never reached the bridge');
+
+    const widened = await service.runExport(['photo'], { destination: 'shared', operation: { narrow: [], widen: ['location'] } });
+    assert.deepEqual({ exported: widened.exported, failed: widened.failed }, { exported: 1, failed: 0 });
+    assert.deepEqual(
+      bridge.exported.map(({ createdAt, latitude, longitude }) => ({ createdAt, latitude, longitude })),
+      [{ createdAt: PHOTO.takenAt, latitude: 40, longitude: -80 }],
+    );
+
+    const narrowed = await service.runExport(['photo'], {
+      destination: 'shared',
+      operation: { narrow: ['captureTime'], widen: ['location'] },
+    });
+    assert.equal(narrowed.exported, 0, 'a narrowed embedded field still travels in the bytes, so the photo is refused');
+    assert.match(narrowed.failures[0]?.reason ?? '', /Withheld by disclosure policy: captureTime/u);
   });
 });

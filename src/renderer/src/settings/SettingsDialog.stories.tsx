@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { DEFAULT_DISCLOSURE_POLICY, PINNED_PRIVATE } from '../../../shared/disclosure/policy.js';
 /* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
@@ -550,6 +551,14 @@ function installStub(options?: {
     backup: backupApi,
     keys: keysApi,
     keyring: keyringApi,
+    disclosure: {
+      policy: () => Promise.resolve({ policy: DEFAULT_DISCLOSURE_POLICY, pinned: [...PINNED_PRIVATE] }),
+      setField: ({ field, class: cls }) =>
+        Promise.resolve({ policy: { ...DEFAULT_DISCLOSURE_POLICY, fields: { ...DEFAULT_DISCLOSURE_POLICY.fields, [field]: cls } } }),
+      overrides: () => Promise.resolve({ overrides: [] }),
+      setOverride: () => Promise.resolve({ overrides: [] }),
+      preview: () => Promise.reject(new Error('unused')),
+    },
     restore: restoreApi,
     appLock: appLockApi,
     diagnostics: diagnosticsApi,

@@ -10,6 +10,7 @@ import { migrateVariants } from './variant-migration.js';
 import { migratePerceptualFingerprints } from './fingerprint-migration.js';
 import { migrateBackupCoverage } from './coverage-migration.js';
 import { migrateLibraryKeyring } from './keyring-migration.js';
+import { migrateDisclosurePolicy } from './disclosure-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
 // stays a ledger: gallery inclusion rules (#512), collection visibility
@@ -37,4 +38,7 @@ export const COLLECTION_MIGRATIONS: readonly {
   // #517 keyring registry: kind, reference, version, fingerprint, label,
   // origin and per-device presence for every key (ADR-0032 §2).
   { version: 36, name: 'library-keyring', up: migrateLibraryKeyring },
+  // #509 disclosure classes: the versioned per-field policy and its
+  // collection/photo overrides (ADR-0032 §6).
+  { version: 37, name: 'disclosure-policy', up: migrateDisclosurePolicy },
 ];

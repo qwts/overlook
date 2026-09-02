@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ChannelDefinition } from './channels.js';
 import { boardExportIntentSchema, boardExportResultSchema } from '../moodboard/export-contract.js';
 import { photoCustodyStatusSchema } from '../backup/custody-status.js';
+import { disclosureDestinationSchema, disclosureOperationSchema } from '../disclosure/policy.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   name: string,
@@ -18,6 +19,11 @@ const metadataMode = z.enum(['original', 'overlook', 'none']);
 const payloadMode = z.enum(['baked', 'original-sidecars', 'original']);
 const jpegQuality = z.number().int().min(1).max(100);
 const authorization = z.string().uuid();
+// ADR-0032 §6 (#509): the recipient class of the destination and the
+// operation-scope narrowing/widening. Intent only — main compiles the plan.
+export const exportDisclosureIntentSchema = z
+  .object({ destination: disclosureDestinationSchema, operation: disclosureOperationSchema })
+  .strict();
 const selectedExportIntent = z.object({
   operation: z.literal('selected'),
   photoIds: z.array(z.string().min(1)).min(1),
@@ -25,12 +31,14 @@ const selectedExportIntent = z.object({
   metadata: metadataMode.optional(),
   mode: payloadMode.optional(),
   quality: jpegQuality.optional(),
+  disclosure: exportDisclosureIntentSchema.optional(),
 });
 const allExportIntent = z.object({
   operation: z.literal('all'),
   metadata: metadataMode.optional(),
   mode: payloadMode.optional(),
   quality: jpegQuality.optional(),
+  disclosure: exportDisclosureIntentSchema.optional(),
 });
 const boardExportIntent = z.object({ operation: z.literal('board'), request: boardExportIntentSchema });
 export const exportDestinationIntentSchema = z.discriminatedUnion('operation', [selectedExportIntent, allExportIntent, boardExportIntent]);
@@ -69,5 +77,6 @@ export const exportChannels = {
 } as const;
 
 export type ExportPayloadMode = z.output<typeof payloadMode>;
+export type ExportDisclosureIntentWire = z.output<typeof exportDisclosureIntentSchema>;
 
 export type ExportDestinationIntent = z.output<typeof exportDestinationIntentSchema>;

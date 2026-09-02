@@ -21,6 +21,7 @@ import { ephemeralFailureReasonSchema, photoCustodyStatusSchema } from '../backu
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { coverageChannels } from './coverage-channels.js';
 import { keyringChannels } from './keyring-channels.js';
+import { disclosureChannels } from './disclosure-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import {
   restoreDiscoverResponseSchema,
@@ -842,6 +843,7 @@ export const channels = {
   ...diagnosticsChannels,
   ...coverageChannels,
   ...keyringChannels,
+  ...disclosureChannels,
   libraryStats: defineChannel(
     'library:stats',
     z.object({}),

@@ -307,6 +307,14 @@ export interface OverlookApi {
     readonly remove: (request: Req<typeof channels.keyringRemove>) => Promise<Res<typeof channels.keyringRemove>>;
     readonly setLabel: (request: Req<typeof channels.keyringSetLabel>) => Promise<Res<typeof channels.keyringSetLabel>>;
   };
+  /** Disclosure classes (#509, ADR-0032 §6). */
+  readonly disclosure: {
+    readonly policy: () => Promise<Res<typeof channels.disclosurePolicy>>;
+    readonly setField: (request: Req<typeof channels.disclosureSetField>) => Promise<Res<typeof channels.disclosureSetField>>;
+    readonly overrides: (request: Req<typeof channels.disclosureOverrides>) => Promise<Res<typeof channels.disclosureOverrides>>;
+    readonly setOverride: (request: Req<typeof channels.disclosureSetOverride>) => Promise<Res<typeof channels.disclosureSetOverride>>;
+    readonly preview: (request: Req<typeof channels.disclosurePreview>) => Promise<Res<typeof channels.disclosurePreview>>;
+  };
   readonly restore: {
     readonly profileStatus: () => Promise<Res<typeof channels.restoreProfileStatus>>;
     readonly pickKey: () => Promise<Res<typeof channels.restorePickKey>>;

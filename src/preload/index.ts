@@ -348,6 +348,13 @@ const overlook: OverlookApi = {
     pickFile: async () => keysPickFile({}),
     import: createInvoker(channels.keysImport, invokeTransport),
   }),
+  disclosure: Object.freeze({
+    policy: async () => createInvoker(channels.disclosurePolicy, invokeTransport)({}),
+    setField: createInvoker(channels.disclosureSetField, invokeTransport),
+    overrides: createInvoker(channels.disclosureOverrides, invokeTransport),
+    setOverride: createInvoker(channels.disclosureSetOverride, invokeTransport),
+    preview: createInvoker(channels.disclosurePreview, invokeTransport),
+  }),
   keyring: Object.freeze({
     list: async () => createInvoker(channels.keyringList, invokeTransport)({}),
     export: createInvoker(channels.keyringExport, invokeTransport),

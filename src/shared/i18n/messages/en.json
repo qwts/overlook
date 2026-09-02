@@ -635,6 +635,99 @@
   "custody.state.wrongAccount": {
     "defaultMessage": "Wrong {provider} account — reconnect as {account}; this account cannot satisfy the recorded custody."
   },
+  "disclosure.class.mixed": {
+    "defaultMessage": "Mixed"
+  },
+  "disclosure.class.private": {
+    "defaultMessage": "Private"
+  },
+  "disclosure.class.public": {
+    "defaultMessage": "Public"
+  },
+  "disclosure.class.shared": {
+    "defaultMessage": "Shared"
+  },
+  "disclosure.classFor": {
+    "defaultMessage": "Disclosure class for {field}"
+  },
+  "disclosure.field.camera": {
+    "defaultMessage": "Camera"
+  },
+  "disclosure.field.captureTime": {
+    "defaultMessage": "Capture time"
+  },
+  "disclosure.field.comments": {
+    "defaultMessage": "Comments"
+  },
+  "disclosure.field.description": {
+    "defaultMessage": "Description"
+  },
+  "disclosure.field.faces": {
+    "defaultMessage": "Face data"
+  },
+  "disclosure.field.lens": {
+    "defaultMessage": "Lens"
+  },
+  "disclosure.field.location": {
+    "defaultMessage": "Precise location"
+  },
+  "disclosure.field.provenance": {
+    "defaultMessage": "Provenance evidence"
+  },
+  "disclosure.field.ratings": {
+    "defaultMessage": "Ratings"
+  },
+  "disclosure.field.tags": {
+    "defaultMessage": "Tags"
+  },
+  "disclosure.field.title": {
+    "defaultMessage": "Title"
+  },
+  "disclosure.heading": {
+    "defaultMessage": "Disclosure"
+  },
+  "disclosure.hint": {
+    "defaultMessage": "What each field may leave the library as. Private never leaves; Shared may go to a named recipient (a folder you choose, Apple Photos, a keyed provider); Public may go to an unauthenticated destination. Local search and filtering never need a field to be shared."
+  },
+  "disclosure.pinned": {
+    "defaultMessage": "Always private"
+  },
+  "disclosure.pinned.hint": {
+    "defaultMessage": "These never cross any boundary and no setting can change that."
+  },
+  "disclosure.preview.blocked": {
+    "defaultMessage": "The originals cannot leave while a withheld field is embedded in them. Include it for this export, or export Baked, which strips embedded metadata."
+  },
+  "disclosure.preview.crosses": {
+    "defaultMessage": "{disclosed, plural, one {# photo} other {# photos}} of {present}"
+  },
+  "disclosure.preview.decline": {
+    "defaultMessage": "Cancel leaves the library unchanged; nothing has crossed yet."
+  },
+  "disclosure.preview.destination": {
+    "defaultMessage": "Publishing to a public destination"
+  },
+  "disclosure.preview.destination.hint": {
+    "defaultMessage": "Only Public fields cross. Off means a named recipient: Shared fields cross too."
+  },
+  "disclosure.preview.embedded": {
+    "defaultMessage": "Embedded in the original bytes and cannot be filtered: {fields}."
+  },
+  "disclosure.preview.heading": {
+    "defaultMessage": "What leaves"
+  },
+  "disclosure.preview.nothing": {
+    "defaultMessage": "No classified metadata is present in this selection."
+  },
+  "disclosure.preview.sidecars": {
+    "defaultMessage": "{count, plural, one {# retained source sidecar travels} other {# retained source sidecars travel}} unfiltered."
+  },
+  "disclosure.preview.widen": {
+    "defaultMessage": "Include {field} in this export (recorded in activity)"
+  },
+  "disclosure.preview.withheld": {
+    "defaultMessage": "Withheld"
+  },
   "duplicates.deferred": {
     "defaultMessage": "{deferred, plural, one {# photo has no preview to compare yet} other {# photos have no preview to compare yet}}"
   },

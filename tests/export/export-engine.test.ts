@@ -17,6 +17,7 @@ import {
   type ExportEngineDeps,
 } from '../../src/main/export/export-engine.js';
 import { parseEditsXmp } from '../../src/main/export/edit-xmp.js';
+import { compileDisclosurePlan, DEFAULT_DISCLOSURE_POLICY } from '../../src/shared/disclosure/policy.js';
 import { transcodeToJpeg } from '../../src/main/export/transcode.js';
 import type { EditRevisionView } from '../../src/main/db/edit-revision-repository.js';
 import { IDENTITY_TRANSFORM, type EditTransform } from '../../src/shared/library/edit-revision.js';
@@ -507,5 +508,71 @@ describe('edited export (#497, ADR-0031 §6)', () => {
     const sidecars = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'none', { mode: 'original-sidecars' });
     assert.equal(sidecars.exported, 1);
     assert.equal(sidecars.editSidecars, 0);
+  });
+});
+
+describe('disclosure classes at the export boundary (#509, ADR-0032 §6)', () => {
+  const planner: NonNullable<ExportEngineDeps['disclosure']> = (_photoId, intent) =>
+    compileDisclosurePlan({
+      boundary: 'export',
+      destination: intent.destination,
+      chain: { library: DEFAULT_DISCLOSURE_POLICY },
+      operation: intent.operation,
+    });
+
+  async function worldWithLocation() {
+    const world = await seededWorld(1);
+    const current = world.rows.get('PHOTO0')!;
+    world.rows.set(current.id, { ...current, title: 'Harbour at dusk', gpsLat: 52.37, gpsLon: 4.9 });
+    return { ...world, engine: new ExportEngine({ ...world.deps, disclosure: planner }) };
+  }
+
+  function onDisk(destination: string): string {
+    return readdirSync(destination)
+      .map((name) => readFileSync(join(destination, name), 'latin1'))
+      .join('\n');
+  }
+
+  test('an original whose bytes embed a private field is refused, crosses when the operation widens it, and crosses Baked untouched', async () => {
+    const refused = await worldWithLocation();
+    await assert.rejects(refused.engine.exportPhotos(['PHOTO0'], refused.destination, undefined, 'original'), (error: unknown) => {
+      assert.ok(error instanceof ExportPreflightError);
+      assert.match(error.message, /disclosure: location \(1\)/u);
+      return true;
+    });
+    assert.deepEqual(readdirSync(refused.destination), [], 'nothing crossed');
+
+    const widened = await worldWithLocation();
+    const summary = await widened.engine.exportPhotos(['PHOTO0'], widened.destination, undefined, 'original', 'none', undefined, {
+      destination: 'shared',
+      operation: { narrow: [], widen: ['location'] },
+    });
+    assert.equal(summary.files.length, 1);
+    assert.deepEqual(readdirSync(widened.destination), ['IMG_4021.JPG']);
+
+    const baked = await worldWithLocation();
+    const bakedSummary = await baked.engine.exportPhotos(['PHOTO0'], baked.destination, undefined, 'jpeg');
+    assert.equal(bakedSummary.files.length, 1, 'a baked payload carries no embedded metadata, so nothing is withheld');
+  });
+
+  test('authored XMP carries only what the plan discloses; a public destination discloses nothing by default', async () => {
+    const disclosed = await worldWithLocation();
+    await disclosed.engine.exportPhotos(['PHOTO0'], disclosed.destination, undefined, 'jpeg', 'overlook');
+    assert.ok(onDisk(disclosed.destination).includes('Harbour at dusk'), 'a shared title crosses to a named recipient');
+
+    const narrowed = await worldWithLocation();
+    const summary = await narrowed.engine.exportPhotos(['PHOTO0'], narrowed.destination, undefined, 'jpeg', 'overlook', undefined, {
+      destination: 'shared',
+      operation: { narrow: ['title'], widen: [] },
+    });
+    assert.equal(summary.files.length, 1);
+    assert.ok(!onDisk(narrowed.destination).includes('Harbour at dusk'), 'the narrowed title never reaches disk');
+
+    const published = await worldWithLocation();
+    await published.engine.exportPhotos(['PHOTO0'], published.destination, undefined, 'jpeg', 'overlook', undefined, {
+      destination: 'public',
+      operation: { narrow: [], widen: [] },
+    });
+    assert.ok(!onDisk(published.destination).includes('Harbour at dusk'), 'nothing defaults to public');
   });
 });
