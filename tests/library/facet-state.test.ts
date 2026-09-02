@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { appReducer, initialAppState, type AppAction, type AppState } from '../../src/shared/library/app-state.js';
+import { activePredicate, appReducer, initialAppState, type AppAction, type AppState } from '../../src/shared/library/app-state.js';
 import { EMPTY_PREDICATE, parseSmartPredicate, predicateEquals, type SmartPredicate } from '../../src/shared/library/smart-album.js';
 
 // #514 / ADR-0030 §3: the live facet predicate in app state is the same
@@ -66,6 +66,15 @@ describe('facet state (#514)', () => {
     assert.deepEqual(apply(edited, { type: 'source/set', source: 'recent' }).facets, EMPTY_PREDICATE);
     assert.deepEqual(apply(edited, { type: 'album/set', albumId: 'A1' }).facets, EMPTY_PREDICATE);
     assert.deepEqual(apply(edited, { type: 'protectedAlbum/set', albumId: 'P1' }).facets, EMPTY_PREDICATE);
+  });
+
+  test('an open Smart Album is an explicit query even when its document has no groups', () => {
+    assert.equal(activePredicate(initialAppState), undefined, 'no facets, no Smart Album: the inclusion-filtered view');
+    const live = apply(initialAppState, { type: 'facet/toggled', facet: 'camera', value: 'A', additive: false });
+    assert.deepEqual(activePredicate(live), live.facets);
+    const cleared = apply(initialAppState, { type: 'smartAlbum/set', albumId: 'S1', predicate: EMPTY_PREDICATE });
+    assert.deepEqual(activePredicate(cleared), EMPTY_PREDICATE, 'the page and the sidebar count evaluate the same document');
+    assert.equal(activePredicate(apply(cleared, { type: 'source/set', source: 'recent' })), undefined);
   });
 
   test('a live facet filter survives a source change, like the chips do', () => {

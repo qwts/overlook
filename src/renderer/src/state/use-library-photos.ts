@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChipFilters, PageCursor, PageRequest, SyncStatus } from '../../../shared/library/types.js';
+import { activePredicate } from '../../../shared/library/app-state.js';
 import { membershipChanged } from '../../../shared/library/library-membership-change.js';
 import { useAppState, useAppDispatch } from './app-state-context';
 
@@ -57,14 +58,14 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateComp
 // previous set is dropped instead of appended. `exhausted` tells the grid
 // the loaded count IS the filtered total (counts can't answer for filters).
 export function useLibraryPhotos(): { readonly loadMore: () => void; readonly exhausted: boolean } {
-  const { source, query, searchMode, chips, sortOrder, album, facets, photos } = useAppState();
+  const { source, query, searchMode, chips, sortOrder, album, facets, smartAlbum, photos } = useAppState();
   const dispatch = useAppDispatch();
   const cursorRef = useRef<PageCursor | null>(null);
   const requestRef = useRef(0);
   const inFlightRef = useRef(false);
   // Exhaustion is keyed to the visible set: switching sets changes the key,
   // which resets `exhausted` derivationally (no setState-in-effect).
-  const facetsActive = facets.groups.length > 0;
+  const facetsActive = activePredicate({ facets, smartAlbum }) !== undefined;
   const setKey = `${source}|${query}|${searchMode}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}|${facetsActive ? JSON.stringify(facets) : ''}`;
   const [exhaustedKey, setExhaustedKey] = useState<string | null>(null);
   const exhausted = exhaustedKey === setKey;

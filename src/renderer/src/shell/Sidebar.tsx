@@ -262,7 +262,7 @@ export function Sidebar({
           icon={icon}
           label={intl.formatMessage(label)}
           count={counts === null ? null : counts[key]}
-          active={state.album === null && state.source === key}
+          active={state.album === null && state.smartAlbum === null && state.source === key}
           collapsed={collapsed}
           buttonRef={key === 'all' ? allPhotosRef : undefined}
           onClick={() => {

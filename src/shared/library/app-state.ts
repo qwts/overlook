@@ -486,6 +486,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+// #514 review: an open Smart Album is an explicit query even when its
+// document has no groups (a cleared-then-saved album), so the page, the
+// count, Select All and range selection all carry the predicate whenever one
+// is open — never falling back to the inclusion-filtered All Photos view.
+export function activePredicate(state: Pick<AppState, 'facets' | 'smartAlbum'>): SmartPredicate | undefined {
+  return state.smartAlbum !== null || state.facets.groups.length > 0 ? state.facets : undefined;
+}
+
 function selectedPhotoId(photos: readonly PhotoRecord[], selection: ReadonlySet<string>, preferred: string | null): string | null {
   if (preferred !== null && selection.has(preferred) && photos.some((photo) => photo.id === preferred)) return preferred;
   return photos.find((photo) => selection.has(photo.id))?.id ?? null;

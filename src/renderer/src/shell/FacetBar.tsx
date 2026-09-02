@@ -16,6 +16,7 @@ import {
   type FacetId,
   type SmartPredicate,
 } from '../../../shared/library/smart-album.js';
+import { commandById } from '../../../shared/commands/registry.js';
 import type { AlbumListing } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -54,7 +55,6 @@ const messages = defineMessages({
     defaultMessage: '{count, plural, one {# facet} other {# facets · {composition, select, and {match all} other {match any}}}}',
   },
   clearAll: { id: 'facets.clearAll', defaultMessage: 'Clear' },
-  saveAs: { id: 'facets.saveAs', defaultMessage: 'Save as Smart Album…' },
   saveChanges: { id: 'facets.saveChanges', defaultMessage: 'Save changes' },
   savedChanges: { id: 'facets.savedChanges', defaultMessage: 'Saved changes to {name}' },
   saveFailed: { id: 'facets.saveFailed', defaultMessage: 'Could not save the Smart Album. Try again.' },
@@ -292,7 +292,7 @@ export function FacetBar({ smartAlbum, albums }: FacetBarProps): ReactElement {
         )}
         {smartAlbum === null ? (
           <Button variant="secondary" size="sm" icon="funnel" disabled={groups.length === 0} onClick={() => setSaveDialog(true)}>
-            {intl.formatMessage(messages.saveAs)}
+            {intl.formatMessage(commandById('album.smart.new').label)}
           </Button>
         ) : (
           <Button variant="primary" size="sm" icon="funnel" disabled={!dirty || saving} onClick={saveChanges}>
@@ -306,7 +306,13 @@ export function FacetBar({ smartAlbum, albums }: FacetBarProps): ReactElement {
           role="group"
           aria-label={intl.formatMessage(messages.panel, { facet: intl.formatMessage(facetLabels[openFacet]) })}
         >
-          {openFacet === 'megapixels' ? <MegapixelPanel facet={openFacet} /> : <ValuePanel facet={openFacet} additive={additive} />}
+          {openFacet === 'megapixels' ? (
+            // Keyed to the active range so the drafts follow a Clear or a
+            // switch to another Smart Album while the panel stays open.
+            <MegapixelPanel key={JSON.stringify(groupFor(state.facets, openFacet) ?? null)} facet={openFacet} />
+          ) : (
+            <ValuePanel facet={openFacet} additive={additive} />
+          )}
           <div className="ovl-facetbar__panel-foot">
             {openFacet === 'megapixels' ? null : (
               <label className="ovl-facetbar__additive" title={intl.formatMessage(messages.additiveHint)}>

@@ -665,9 +665,6 @@
   "facets.region": {
     "defaultMessage": "Facet filters"
   },
-  "facets.saveAs": {
-    "defaultMessage": "Save as Smart Album…"
-  },
   "facets.saveChanges": {
     "defaultMessage": "Save changes"
   },

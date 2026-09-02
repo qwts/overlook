@@ -226,7 +226,6 @@ export const en: Readonly<Record<string, string>> = {
   "facets.noValues": "No values in this library yet",
   "facets.panel": "{facet} values",
   "facets.region": "Facet filters",
-  "facets.saveAs": "Save as Smart Album…",
   "facets.saveChanges": "Save changes",
   "facets.saveFailed": "Could not save the Smart Album. Try again.",
   "facets.savedAs": "Saved Smart Album {name}",

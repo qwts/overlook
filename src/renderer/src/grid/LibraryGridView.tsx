@@ -8,6 +8,7 @@ import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { videoTileProps } from '../media/device-capabilities.js';
 import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
+import { activePredicate } from '../../../shared/library/app-state.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { ListRow } from './ListRow';
@@ -84,7 +85,7 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
-  const facetsActive = state.facets.groups.length > 0;
+  const facetsActive = activePredicate(state) !== undefined;
   const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}|${facetsActive ? JSON.stringify(state.facets) : ''}`;
   const selectionAnchorRef = useRef<string | null>(null);
   const rangeRequestRef = useRef(0);

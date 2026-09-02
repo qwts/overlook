@@ -77,6 +77,8 @@ test('smart albums: union within a facet, explicit composition, save, relaunch, 
     await expect(rowButton('Two cameras')).toContainText('7');
     await rowButton('Two cameras').click();
     await expect(cells).toHaveCount(7);
+    await expect(rowButton('Two cameras')).toHaveClass(/ovl-siderow--active/u);
+    await expect(allPhotos(12)).not.toHaveClass(/ovl-siderow--active/u);
     await expect(facetBar.getByRole('status')).toContainText('2 facets · match any · Editing Two cameras');
 
     // Editing: dropping the RAW value narrows the query; Save changes writes it back.
