@@ -30,6 +30,8 @@ export interface DisclosureServiceDeps {
   /** Retained source sidecars per photo, for the "travel unfiltered" count. */
   readonly sidecarCount?: ((photoId: string) => number) | undefined;
   readonly activity?: (() => ActivityFacade | undefined) | undefined;
+  /** Fires after any policy or override change so mounted projections (the File Provider's dates) re-enumerate. */
+  readonly changed?: (() => void) | undefined;
   readonly audit: (line: string) => void;
   readonly now?: (() => Date) | undefined;
 }
@@ -101,6 +103,7 @@ export class DisclosureService implements DisclosurePlanner {
       outcome: 'succeeded',
       payload: { scope: 'library', field, from, to: cls, policyVersion: stored.version },
     });
+    this.deps.changed?.();
     return stored;
   }
 
@@ -129,6 +132,7 @@ export class DisclosureService implements DisclosurePlanner {
         outcome: 'succeeded',
         payload: { scope, field, from: before ?? 'inherit', to: cls ?? 'inherit', widened: cls !== null && isWider(cls, inherited) },
       });
+      this.deps.changed?.();
     }
     return this.repo.overrides(scope, id);
   }
@@ -189,9 +193,12 @@ export class DisclosureService implements DisclosurePlanner {
         tally.classes.add(decision.class);
         if (value !== null) {
           tally.present += 1;
-          tally.sample ??= value;
-          if (decision.disclosed) tally.disclosed += 1;
-          else tally.withheld += 1;
+          if (decision.disclosed) {
+            tally.disclosed += 1;
+            tally.sample ??= value;
+          } else {
+            tally.withheld += 1;
+          }
         }
         if (decision.reason === 'widened') tally.widened = true;
         tallies.set(decision.field, tally);

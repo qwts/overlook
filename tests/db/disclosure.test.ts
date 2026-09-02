@@ -61,6 +61,7 @@ function open() {
   run(db, `INSERT INTO albums (id, name, created_at, position) VALUES ('A1', 'Travel', ?, 0)`, AT);
   run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('A1', 'P1', 0)`);
   const audit: string[] = [];
+  let changed = 0;
   const activity = createActivityFacade(db, () => undefined);
   const service = new DisclosureService({
     db,
@@ -69,9 +70,12 @@ function open() {
     sidecarCount: (id) => (id === 'P2' ? 1 : 0),
     activity: () => activity,
     audit: (line) => audit.push(line),
+    changed: () => {
+      changed += 1;
+    },
     now: () => new Date(AT),
   });
-  return { db, photos, repo: new DisclosureRepository(db), service, audit, activity };
+  return { db, photos, repo: new DisclosureRepository(db), service, audit, activity, changed: () => changed };
 }
 
 describe('disclosure policy storage (#509, migration 37)', () => {
@@ -141,16 +145,20 @@ describe('disclosure policy storage (#509, migration 37)', () => {
 
 describe('disclosure service (#509)', () => {
   test('a class change is audited and reaches activity by field name and class only; the same class again is a no-op', () => {
-    const { service, audit, activity } = open();
+    const { service, audit, activity, changed } = open();
     const stored = service.setField('captureTime', 'private');
+    assert.equal(changed(), 1, 'mounted projections are told to re-enumerate (PR #1140 review)');
     assert.equal(stored.fields.captureTime, 'private');
     assert.equal(service.policy().fields.captureTime, 'private');
     assert.deepEqual(audit, ['DISCLOSURE-POLICY scope=library field=captureTime from=shared to=private version=1']);
     service.setField('captureTime', 'private');
+    assert.equal(changed(), 1, 'a no-op change invalidates nothing');
     const events = activity.page(10).events.filter((event) => event.eventType === 'disclosure.policy-changed');
     assert.equal(events.length, 1);
     assert.deepEqual(events[0]?.payload, { scope: 'library', field: 'captureTime', from: 'shared', to: 'private', policyVersion: 1 });
     assert.ok(!JSON.stringify(events).includes('2026-07-13'), 'no photo value in the record');
+    service.setOverride('photo', 'P2', 'location', 'shared');
+    assert.equal(changed(), 2);
     assert.ok(service.pinned().includes('key material and key references'));
   });
 
@@ -197,10 +205,22 @@ describe('disclosure service (#509)', () => {
       disclosed: 0,
       withheld: 1,
       present: 1,
-      sample: '52.37, 4.9',
+      sample: null,
       widened: false,
     });
     assert.equal(row('title')?.present, 0);
+    const mixed = service.preview({
+      boundary: 'export',
+      destination: 'shared',
+      payload: 'baked',
+      photoIds: ['P2', 'P1'],
+      operation: { narrow: [], widen: [] },
+    });
+    assert.equal(
+      mixed.fields.find((entry) => entry.field === 'location')?.sample,
+      null,
+      'a withheld value is never offered as the sample (PR #1140 review)',
+    );
     assert.deepEqual(preview.embedded, ['captureTime', 'camera', 'location']);
     assert.deepEqual(preview.blocked, ['location']);
     assert.equal(preview.retainedSidecars, 1, 'P2 keeps a source sidecar that travels unfiltered with an Original export');

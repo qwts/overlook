@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import type { ActivityFacade } from '../activity/activity-publication.js';
+import { applicationEvents } from '../application-events.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { DisclosureService } from './disclosure-service.js';
@@ -20,6 +21,7 @@ export function createDisclosureService(options: {
     exportableIds: () => photos.exportableIds(),
     sidecarCount: (photoId) => sidecars.listForPhoto(photoId).length,
     activity: options.activity,
+    changed: () => applicationEvents.libraryChanged({ photoIds: [], membership: 'none' }),
     audit: (line) => console.info(`[overlook] ${line}`),
   });
 }
