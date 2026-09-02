@@ -1124,7 +1124,7 @@ export const GeneralRightToLeft: Story = {
     if (general === undefined) throw new Error('general settings navigation item missing');
     await userEvent.click(general);
     const pane = body.getByTestId('settings-pane');
-    await waitFor(() => expect(within(pane).getByRole('combobox')).toBeVisible());
+    await waitFor(() => expect(within(pane).getAllByRole('combobox')[0]).toBeVisible());
     await expect(nav.getBoundingClientRect().left).toBeGreaterThan(pane.getBoundingClientRect().left);
     await expect(nav.getBoundingClientRect().right).toBeLessThanOrEqual(dialog.getBoundingClientRect().right);
   },

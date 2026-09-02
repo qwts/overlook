@@ -62,4 +62,3 @@ export const histogramChannels = {
 export type HistogramPayload = z.output<typeof histogramPayloadSchema>;
 export type HistogramReady = z.output<typeof histogramReadySchema>;
 export type HistogramUnavailable = z.output<typeof histogramUnavailableSchema>;
-export type HistogramUnavailableReason = z.output<typeof histogramUnavailableReasonSchema>;
