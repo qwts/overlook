@@ -3,6 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { Inspector } from './Inspector';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
+import type { VariantFamilyView } from './use-photo-variants';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 import type { ProvenancePayload } from '../../../shared/ipc/provenance-channels.js';
@@ -20,6 +21,9 @@ const PHOTO: PhotoRecord = {
   height: 4160,
   bytes: 8_400_000,
   contentHash: 'a'.repeat(64),
+  derivativeKey: 'a'.repeat(64),
+  variantSourceId: null,
+  assetOwnerId: null,
   camera: 'FUJIFILM X-T5',
   lens: 'XF 35MM F/1.4',
   iso: 200,
@@ -111,7 +115,17 @@ const meta: Meta<typeof Inspector> = {
         get: () => Promise.resolve(provenancePayload),
         refresh: () => Promise.resolve(provenancePayload),
       } as unknown as OverlookApi['provenance'];
-      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance };
+      const family = (context.parameters['variants'] as VariantFamilyView | undefined) ?? {
+        contentHash: PHOTO.contentHash,
+        representativeId: null,
+        variants: [PHOTO],
+      };
+      const variants = {
+        family: () => Promise.resolve(family),
+        promote: ({ photoId }: { photoId: string }) => Promise.resolve({ ...family, representativeId: photoId }),
+        duplicate: () => Promise.resolve({ created: [], skipped: 0, pendingCount: 0 }),
+      } as unknown as OverlookApi['variants'];
+      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance, variants };
       return (
         <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
           <Story />
@@ -442,5 +456,38 @@ export const ProvenanceUnsupported: Story = {
     await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Newer format');
     // Re-check would replace forward-compatible evidence; it stays off.
     await expect(canvas.getByRole('button', { name: 'Re-check' })).toBeDisabled();
+  },
+};
+
+// Variants (#496): the family over one original, the Promoted representative,
+// and the shown variant's inert row. Promote moves the badge.
+const DUPLICATE: PhotoRecord = {
+  ...PHOTO,
+  id: '01J8VARIANT0000000000000002',
+  derivativeKey: 'b'.repeat(64),
+  variantSourceId: PHOTO.id,
+  importedAt: '2026-09-02T09:00:00.000Z',
+  favorite: false,
+  isOriginal: false,
+};
+
+export const VariantsFamily: Story = {
+  args: { photo: PHOTO, onShowPhoto: fn() },
+  parameters: { variants: { contentHash: PHOTO.contentHash, representativeId: DUPLICATE.id, variants: [PHOTO, DUPLICATE] } },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByTestId('inspector-variants');
+    await expect(section).toHaveAttribute('data-count', '2');
+    await expect(canvas.getByTestId('inspector-variants-count')).toHaveTextContent('2 variants');
+    const rows = canvas.getAllByTestId('inspector-variant');
+    await expect(rows[0]).toHaveAttribute('data-representative', 'false');
+    await expect(rows[1]).toHaveAttribute('data-representative', 'true');
+    await expect(canvas.getByText('Representative')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^Show .*Shown/u })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: /^Show .*Duplicate/u }));
+    await expect(args.onShowPhoto).toHaveBeenCalledWith(DUPLICATE.id);
+    await userEvent.click(canvas.getByRole('button', { name: /^Promote .* to representative$/u }));
+    await expect(canvas.getAllByTestId('inspector-variant')[0]).toHaveAttribute('data-representative', 'true');
+    await expect(canvas.getByRole('button', { name: 'Duplicate' })).toBeEnabled();
   },
 };

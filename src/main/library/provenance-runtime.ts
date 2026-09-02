@@ -7,6 +7,7 @@ import { SidecarRepository } from '../db/sidecar-repository.js';
 import { extractProvenanceSources, PROVENANCE_SCAN_LIMIT } from '../import/provenance-extractor.js';
 import type { LibraryParts } from './library-parts.js';
 import { ProvenanceService } from './provenance-service.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 // Wires the provenance service (#495) to the library parts the way the edit
 // service is wired: originals and XMP sidecars stream out of the encrypted
@@ -46,7 +47,10 @@ export function createProvenanceRuntime(ctx: ProvenanceRuntimeContext): Provenan
     loadOriginal: async (photo) => {
       await parts.blobStoreReady;
       try {
-        return await readPrefix(parts.blobStore.getStream(photo.contentHash, parts.keyStore.resolver(), photo.id), PROVENANCE_SCAN_LIMIT);
+        return await readPrefix(
+          parts.blobStore.getStream(photo.contentHash, parts.keyStore.resolver(), assetOwnerOf(photo)),
+          PROVENANCE_SCAN_LIMIT,
+        );
       } catch (error) {
         if (error instanceof BlobStoreError) return null;
         throw error;

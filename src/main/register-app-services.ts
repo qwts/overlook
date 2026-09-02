@@ -68,6 +68,8 @@ import { registerPhotoEditHandlers } from './library/photo-edit-ipc.js';
 import type { PhotoEditService } from './library/photo-edit-service.js';
 import { registerProvenanceHandlers } from './library/provenance-ipc.js';
 import type { ProvenanceService } from './library/provenance-service.js';
+import { registerVariantHandlers } from './library/variant-ipc.js';
+import type { VariantService } from './library/variant-service.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -83,6 +85,7 @@ export interface AppServicesOptions {
   readonly getThumbs: () => ThumbService;
   readonly getEdits: () => PhotoEditService;
   readonly getProvenance: () => ProvenanceService;
+  readonly getVariants: () => VariantService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -216,6 +219,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerBoardHandlers(options.getLibrary, options.getActivity, options.onManifestChanged);
   registerPhotoEditHandlers(options.getEdits, options.requireContentAccess, options.getActivity, options.onManifestChanged);
   registerProvenanceHandlers(options.getProvenance, options.requireContentAccess, options.onManifestChanged);
+  registerVariantHandlers(options.getVariants, options.requireContentAccess, options.onManifestChanged);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);
   registerHistoryHandlers(options.getHistory, options.requireContentAccess);
   registerProtectedAlbumHandlers(

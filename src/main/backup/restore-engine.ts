@@ -18,11 +18,11 @@ import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-po
 import { albumVisibilityMatches, restoreAlbumVisibility } from './restore-album-visibility.js';
 import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms } from './restore-edit-revisions.js';
 import { provenanceMatches, restoreProvenance } from './restore-provenance.js';
+import { bakeRestoredDerivatives, manifestDerivativeKey, restoreVariantFamilies, variantFamiliesMatch } from './restore-variants.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
-import type { BackupManifestPhotoV2 } from './backup-manifest.js';
 import { createManifestDebtStore } from './manifest-debt.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import {
@@ -39,7 +39,6 @@ import {
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
-import type { EditTransform } from '../../shared/library/edit-revision.js';
 import { projectVerifiedManifest } from './restore-projection.js';
 import {
   addPresenceFingerprint,
@@ -49,6 +48,7 @@ import {
   verifyObjectCount,
   type ScanTicker,
 } from './restore-verify-scan.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 const SCRATCH_BYTES = 16 * 1024 * 1024;
 
@@ -611,7 +611,7 @@ export class RestoreEngine {
     const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
     const completed = new Set(checkpoint.completedBlobIds.filter((id) => manifestIds.has(id)));
     for (const photo of candidate.manifest.photos) {
-      if (completed.has(photo.id) && !(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, photo.id))) {
+      if (completed.has(photo.id) && !(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)))) {
         completed.delete(photo.id);
         await store.deleteOriginal(photo.contentHash);
       }
@@ -636,13 +636,20 @@ export class RestoreEngine {
     for (const photo of pending) {
       assertNotAborted(signal);
       try {
-        const remoteStream = await this.deps.provider.getStream(photo.blobPath);
-        await store.restoreOriginal(
-          photo.contentHash,
-          signal === undefined ? remoteStream : addAbortSignal(signal, remoteStream),
-          discovery.resolveKey,
-          photo.id,
-        );
+        // Variants share one original (#496): a sibling already restored and
+        // verified this blob, so it is not downloaded twice.
+        const shared =
+          store.hasOriginal(photo.contentHash) &&
+          (await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)));
+        if (!shared) {
+          const remoteStream = await this.deps.provider.getStream(photo.blobPath);
+          await store.restoreOriginal(
+            photo.contentHash,
+            signal === undefined ? remoteStream : addAbortSignal(signal, remoteStream),
+            discovery.resolveKey,
+            assetOwnerOf(photo),
+          );
+        }
       } catch (error) {
         if (missing !== null && (error instanceof BlobStoreError || (error instanceof ProviderError && error.kind === 'not-found'))) {
           missing.push({
@@ -682,9 +689,9 @@ export class RestoreEngine {
     const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
     const completed = new Set(checkpoint.completedThumbnailIds.filter((id) => manifestIds.has(id)));
     for (const photo of candidate.manifest.photos) {
-      if (completed.has(photo.id) && !(await store.verifyThumbs(photo.contentHash, discovery.resolveKey, photo.id))) {
+      if (completed.has(photo.id) && !(await store.verifyThumbs(manifestDerivativeKey(photo), discovery.resolveKey, photo.id))) {
         completed.delete(photo.id);
-        await store.deleteThumbs(photo.contentHash);
+        await store.deleteThumbs(manifestDerivativeKey(photo));
       }
     }
     let done = completed.size;
@@ -695,7 +702,7 @@ export class RestoreEngine {
     this.emit('rebuilding', done, candidate.manifest.photos.length, null);
     for (const photo of candidate.manifest.photos.filter((item) => !completed.has(item.id) && !skip.has(item.id))) {
       assertNotAborted(signal);
-      await this.generateThumbnails(thumbnails, store, recoveredKeys, discovery, photo, transforms.get(photo.id), signal);
+      await bakeRestoredDerivatives(thumbnails, store, recoveredKeys, discovery, photo, transforms.get(photo.id), signal);
       completed.add(photo.id);
       done += 1;
       checkpoint = { ...checkpoint, completedThumbnailIds: [...completed] };
@@ -703,35 +710,6 @@ export class RestoreEngine {
       this.emit('rebuilding', done, candidate.manifest.photos.length, photo.id);
     }
     return checkpoint;
-  }
-
-  private async generateThumbnails(
-    thumbnails: Pick<ThumbnailService, 'generateFor'>,
-    store: BlobStore,
-    recoveredKeys: KeyStore,
-    discovery: RestoreDiscovery,
-    photo: BackupManifestPhotoV2,
-    transform: EditTransform | undefined,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    const plaintext = await buffer(
-      signal === undefined
-        ? store.getStream(photo.contentHash, discovery.resolveKey, photo.id)
-        : addAbortSignal(signal, store.getStream(photo.contentHash, discovery.resolveKey, photo.id)),
-    );
-    try {
-      await thumbnails.generateFor({
-        photoId: photo.id,
-        bytes: plaintext,
-        contentHash: photo.contentHash,
-        key: recoveredKeys.currentKey(),
-        fileKind: photo.fileKind,
-        transform,
-        signal,
-      });
-    } finally {
-      plaintext.fill(0);
-    }
   }
 
   private async prepareRecoveredCustody(
@@ -806,6 +784,7 @@ export class RestoreEngine {
       restoreAlbumVisibility(db, candidate.manifest);
       restoreEditRevisions(db, candidate.manifest);
       restoreProvenance(db, candidate.manifest);
+      restoreVariantFamilies(db, candidate.manifest);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
       if ('sidecars' in candidate.manifest) {
         const sidecarRepo = new SidecarRepository(db);
@@ -849,7 +828,7 @@ export class RestoreEngine {
       if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the verified projection');
       for (const photo of candidate.manifest.photos) {
         if (skip.has(photo.id)) continue;
-        if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, photo.id))) {
+        if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)))) {
           throw new RestoreError('corrupt', `final verification failed for ${photo.id}`);
         }
       }
@@ -882,6 +861,7 @@ export class RestoreEngine {
       if (!albumVisibilityMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored album visibility mismatch');
       if (!editRevisionsMatch(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored edit revisions mismatch');
       if (!provenanceMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored provenance mismatch');
+      if (!variantFamiliesMatch(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored variant families mismatch');
     } finally {
       db.close();
     }

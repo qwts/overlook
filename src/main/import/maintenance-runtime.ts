@@ -10,6 +10,8 @@ import { createPhotoEditRuntime } from '../library/photo-edit-runtime.js';
 import type { PhotoEditService } from '../library/photo-edit-service.js';
 import { createProvenanceRuntime } from '../library/provenance-runtime.js';
 import type { ProvenanceService } from '../library/provenance-service.js';
+import { createVariantRuntime } from '../library/variant-runtime.js';
+import type { VariantService } from '../library/variant-service.js';
 
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
 // post-import background passes over the same library parts, and persisted
@@ -23,6 +25,8 @@ export interface MaintenanceContext {
   readonly invalidateThumb: (id: string) => void;
   readonly invalidateFull: (id: string) => void;
   readonly emitChanged: (photoIds: readonly string[]) => void;
+  /** New rows (a Duplicate, #496): the grid refetches its page. */
+  readonly emitCreated: (photoIds: readonly string[]) => void;
   /** Derivative-only refresh (a captured poster): refresh just those tiles'
    * images without a page refetch, so a background poster completing never
    * resets scroll or drops the lightbox/selection (#744 review). */
@@ -37,6 +41,7 @@ export interface MaintenanceServices {
   readonly posterCapture: PosterCaptureService;
   readonly photoEdits: PhotoEditService;
   readonly provenance: ProvenanceService;
+  readonly variants: VariantService;
 }
 
 export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceServices {
@@ -85,5 +90,15 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });
   const provenance = createProvenanceRuntime({ parts, scheduleAutoBackup: ctx.scheduleAutoBackup });
-  return { rawRepair, posterCapture, photoEdits, provenance };
+  const variants = createVariantRuntime({
+    parts,
+    runtime,
+    appVersion: ctx.appVersion,
+    invalidateThumb: ctx.invalidateThumb,
+    emitChanged: ctx.emitChanged,
+    emitCreated: ctx.emitCreated,
+    emitPending: ctx.emitPending,
+    scheduleAutoBackup: ctx.scheduleAutoBackup,
+  });
+  return { rawRepair, posterCapture, photoEdits, provenance, variants };
 }

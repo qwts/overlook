@@ -34,6 +34,15 @@ export interface PhotoRecord extends PhotoMetadataFields {
   readonly height: number;
   readonly bytes: number;
   readonly contentHash: string;
+  /** Where this variant's thumb/mid derivatives live (#496, ADR-0031 §1): the
+   * content hash for a root variant, a per-variant key for a duplicate. */
+  readonly derivativeKey: string;
+  /** The variant this one was duplicated from, or null for an import (§3 lineage). */
+  readonly variantSourceId: string | null;
+  /** The photo whose import sealed the original's envelope (its AAD binds
+   * that id); null when this row is it. Copied to every duplicate so the
+   * shared original stays readable after the root is purged (#496). */
+  readonly assetOwnerId: string | null;
   readonly camera: string | null;
   readonly lens: string | null;
   readonly iso: number | null;
@@ -63,9 +72,23 @@ export interface PhotoRecord extends PhotoMetadataFields {
 
 export type PhotoInsert = Omit<
   PhotoRecord,
-  'favorite' | 'isOriginal' | 'deletedAt' | 'previewFailure' | 'dimensionStatus' | 'syncState' | 'mediaInfo' | keyof PhotoMetadataFields
+  | 'favorite'
+  | 'isOriginal'
+  | 'deletedAt'
+  | 'previewFailure'
+  | 'dimensionStatus'
+  | 'syncState'
+  | 'mediaInfo'
+  | 'derivativeKey'
+  | 'variantSourceId'
+  | 'assetOwnerId'
+  | keyof PhotoMetadataFields
 > & {
   readonly favorite?: boolean;
+  /** Defaults to the content hash: an import is the root variant of its asset. */
+  readonly derivativeKey?: string | undefined;
+  readonly variantSourceId?: string | null | undefined;
+  readonly assetOwnerId?: string | null | undefined;
   /** Optional like favorite: most kinds have no probed facts to record. */
   readonly mediaInfo?: MediaInfo | null | undefined;
   readonly title?: string | null | undefined;

@@ -261,6 +261,7 @@ function ensureMaintenanceServices(): MaintenanceServices {
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
     emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitCreated: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
     emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPending({ count }),
     scheduleAutoBackup,
@@ -279,12 +280,10 @@ function getThumbService(): ThumbService {
       admit: (photoId) => repo.get(photoId) !== undefined,
       loadThumb: async (photoId, size) => {
         const photo = repo.get(photoId);
-        if (photo === undefined) {
-          return null;
-        }
+        if (photo === undefined) return null;
         try {
-          const stream = parts.blobStore.getThumbStream(photo.contentHash, size, parts.keyStore.resolver(), photoId);
-          return { bytes: await buffer(stream), contentHash: photo.contentHash };
+          const stream = parts.blobStore.getThumbStream(photo.derivativeKey, size, parts.keyStore.resolver(), photoId);
+          return { bytes: await buffer(stream), contentHash: photo.derivativeKey };
         } catch (error) {
           if (error instanceof BlobStoreError) {
             return null; // No thumb in the store yet — M05 backfills.
@@ -838,6 +837,7 @@ void externalOpen.whenReady().then(async () => {
     getThumbs: getThumbService,
     getEdits: () => ensureMaintenanceServices().photoEdits,
     getProvenance: () => ensureMaintenanceServices().provenance,
+    getVariants: () => ensureMaintenanceServices().variants,
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,

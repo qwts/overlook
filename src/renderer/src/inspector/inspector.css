@@ -200,3 +200,71 @@
   color: var(--text-muted);
   font: var(--type-meta);
 }
+
+/* Variants (#496): one row per live variant over the shared original. The
+ * row is a button that opens that variant; the shown one is inert. */
+.ovl-inspector__variants {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-inspector__variant {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ovl-inspector__variantOpen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-tile);
+}
+
+.ovl-inspector__variantOpen:disabled {
+  cursor: default;
+}
+
+.ovl-inspector__variantOpen:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ovl-inspector__variantThumb {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-tile);
+}
+
+.ovl-inspector__variantText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ovl-inspector__variantName {
+  font: var(--type-meta);
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-inspector__variantMeta {
+  font: var(--type-meta);
+  color: var(--text-faint);
+}

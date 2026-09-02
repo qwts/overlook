@@ -89,6 +89,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
         ((context.surface === 'lightbox' && context.hasTarget && context.targetTrashable) ||
           (context.surface !== 'lightbox' && context.source !== 'deleted' && context.selectionCount > 0))
       );
+    case 'photo.duplicate':
     case 'photo.export':
       return context.dialog === 'none' && hasPhotoTarget(context);
     case 'album.membership.add':

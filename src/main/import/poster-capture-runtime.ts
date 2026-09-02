@@ -24,7 +24,7 @@ export interface PosterCaptureRuntimeOptions {
 export function createPosterCaptureRuntime(options: PosterCaptureRuntimeOptions): PosterCaptureService {
   return new PosterCaptureService({
     candidates: () => posterCaptureCandidates(options.db),
-    hasPoster: async (photo) => options.blobs.verifyThumbs(photo.contentHash, options.resolveKey, photo.id),
+    hasPoster: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
     captureFrame: async (photo, signal) => {
       await options.blobsReady;
       return options.captureFrame(photo, signal);

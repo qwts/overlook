@@ -818,6 +818,7 @@ export function Shell({
               selectionPosition={inspectorSelectionPosition}
               onPrevious={() => dispatch({ type: 'inspector/stepped', delta: -1 })}
               onNext={() => dispatch({ type: 'inspector/stepped', delta: 1 })}
+              onShowPhoto={(photoId) => dispatch({ type: 'lightbox/opened', photoId })}
             />
           </aside>
         ) : null}

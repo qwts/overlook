@@ -6,6 +6,7 @@ import type { ImportRuntime } from '../import/import-runtime.js';
 import { ulid } from '../import/ulid.js';
 import type { LibraryParts } from './library-parts.js';
 import { PhotoEditService } from './photo-edit-service.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 // Wires the edit service (#493) to the library parts the way the maintenance
 // passes are wired: originals stream out of the encrypted blob store, the
@@ -31,7 +32,7 @@ export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditS
     loadOriginal: async (photo) => {
       await ctx.parts.blobStoreReady;
       try {
-        return await buffer(ctx.parts.blobStore.getStream(photo.contentHash, ctx.parts.keyStore.resolver(), photo.id));
+        return await buffer(ctx.parts.blobStore.getStream(photo.contentHash, ctx.parts.keyStore.resolver(), assetOwnerOf(photo)));
       } catch (error) {
         if (error instanceof BlobStoreError) return null;
         throw error;
@@ -42,6 +43,7 @@ export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditS
         photoId: photo.id,
         bytes,
         contentHash: photo.contentHash,
+        derivativeKey: photo.derivativeKey,
         key: ctx.parts.keyStore.currentKey(),
         fileKind: photo.fileKind,
         transform,

@@ -7,6 +7,7 @@ import type { KeyResolver } from '../crypto/envelope.js';
 import type { TranscodeResult } from './transcode.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 import type { PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 // Export engine (#97): the decrypt counterpart to import — selected photos
 // become real files in a chosen folder. Streaming decrypt straight to the
@@ -201,7 +202,7 @@ export class ExportEngine {
           throw new Error(`photo ${id} is not in the library`);
         }
         const opened = this.deps.openOriginal === undefined ? null : await this.deps.openOriginal(photo);
-        const stream = opened?.stream ?? this.deps.blobs.getStream(photo.contentHash, this.deps.resolveKey, photo.id);
+        const stream = opened?.stream ?? this.deps.blobs.getStream(photo.contentHash, this.deps.resolveKey, assetOwnerOf(photo));
         releaseOriginal = opened?.release;
         let plaintext: Readable = stream;
         let targetName = photo.fileName;

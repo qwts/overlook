@@ -6,6 +6,7 @@ import { boardsSnapshot } from '../db/board-repository.js';
 import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import { ProvenanceRepository } from '../db/provenance-repository.js';
+import { VariantRepository } from '../db/variant-repository.js';
 import type { BackupEngineDeps } from './backup-engine.js';
 
 /** Library data beyond photos that every manifest generation must carry:
@@ -26,6 +27,7 @@ export function libraryDataBackupDeps(
   | 'albumTreeSnapshot'
   | 'editRevisionsSnapshot'
   | 'provenanceSnapshot'
+  | 'variantFamiliesSnapshot'
 > {
   return {
     activitySnapshot: () => activityBackupSnapshot(db),
@@ -35,5 +37,6 @@ export function libraryDataBackupDeps(
     albumTreeSnapshot: () => albumTreeSnapshot(db),
     editRevisionsSnapshot: (photoIds) => new EditRevisionRepository(db).snapshot(photoIds),
     provenanceSnapshot: (photoIds) => new ProvenanceRepository(db).snapshot(photoIds),
+    variantFamiliesSnapshot: () => new VariantRepository(db).familiesSnapshot(),
   };
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch } from 'react';
+import { duplicatePhotos } from '../grid/duplicate-photos.js';
 
 import type { CommandId, CommandSurface } from '../../../shared/commands/registry.js';
 import { VIEW_MODE_BY_COMMAND } from '../../../shared/commands/view-modes.js';
@@ -214,6 +215,9 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           setExportAllPhotos(false);
           setExportPhotoIds(targetIds);
           dispatch({ type: 'dialog/set', dialog: 'export', open: true });
+          return;
+        case 'photo.duplicate':
+          duplicatePhotos(dispatch, targetIds);
           return;
         case 'photo.restore':
           if (targetIds.length === 0) return;

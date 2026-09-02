@@ -383,6 +383,9 @@
   "commands.library.switch": {
     "defaultMessage": "Switch Library…"
   },
+  "commands.photo.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
   "commands.photo.edit.crop": {
     "defaultMessage": "Crop"
   },
@@ -1054,6 +1057,42 @@
   },
   "inspector.title": {
     "defaultMessage": "Inspector"
+  },
+  "inspector.variants.count": {
+    "defaultMessage": "{count, plural, one {# variant} other {# variants}}"
+  },
+  "inspector.variants.derived": {
+    "defaultMessage": "Duplicate"
+  },
+  "inspector.variants.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
+  "inspector.variants.duplicating": {
+    "defaultMessage": "Duplicating…"
+  },
+  "inspector.variants.promote": {
+    "defaultMessage": "Promote"
+  },
+  "inspector.variants.promoteLabel": {
+    "defaultMessage": "Promote {name} to representative"
+  },
+  "inspector.variants.representative": {
+    "defaultMessage": "Representative"
+  },
+  "inspector.variants.root": {
+    "defaultMessage": "Imported"
+  },
+  "inspector.variants.sharedOriginal": {
+    "defaultMessage": "One encrypted original · each variant keeps its own previews"
+  },
+  "inspector.variants.show": {
+    "defaultMessage": "Show {name}, {kind}, {date}"
+  },
+  "inspector.variants.shown": {
+    "defaultMessage": "Shown"
+  },
+  "inspector.variants.title": {
+    "defaultMessage": "Variants"
   },
   "inspector.window.label": {
     "defaultMessage": "Inspector window"

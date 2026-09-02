@@ -178,6 +178,12 @@ export interface OverlookApi {
     readonly get: (request: Req<typeof channels.photoProvenance>) => Promise<Res<typeof channels.photoProvenance>>;
     readonly refresh: (request: Req<typeof channels.photoProvenanceRefresh>) => Promise<Res<typeof channels.photoProvenanceRefresh>>;
   };
+  /** Variants over one original asset (#496, ADR-0031 §1 + §3). */
+  readonly variants: {
+    readonly duplicate: (request: Req<typeof channels.photoDuplicate>) => Promise<Res<typeof channels.photoDuplicate>>;
+    readonly family: (request: Req<typeof channels.photoVariants>) => Promise<Res<typeof channels.photoVariants>>;
+    readonly promote: (request: Req<typeof channels.photoPromoteVariant>) => Promise<Res<typeof channels.photoPromoteVariant>>;
+  };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;
     readonly get: (request: Req<typeof channels.boardGet>) => Promise<Res<typeof channels.boardGet>>;

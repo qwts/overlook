@@ -14,6 +14,7 @@ import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
+import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
 import { PurgeConfirm } from './PurgeConfirm';
 import { SelectionPill } from './SelectionPill';
@@ -691,6 +692,7 @@ export function LibraryGridView({
               });
             });
           }}
+          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds)}
           onTransfer={
             onTransfer === undefined
               ? undefined

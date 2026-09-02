@@ -400,6 +400,30 @@
       ]
     },
     {
+      "id": "496-variants",
+      "wiki": "Acceptance-Test-Variants",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/variants.spec.ts" },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/grid/PhotoContextMenu.stories.tsx"]
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/db/variants.test.ts",
+            "tests/library/variant-service.test.ts",
+            "tests/library/purge-service.test.ts",
+            "tests/backup/variants-manifest.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Variants.md for the edited-source duplicate, the offloaded-original deferral, the pre-33 library upgrade, and the backup/restore fidelity check over a real library."
+        }
+      ]
+    },
+    {
       "id": "495-ai-provenance",
       "wiki": "Acceptance-Test-AI-Provenance",
       "coverage": [

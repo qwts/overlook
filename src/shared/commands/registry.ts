@@ -102,6 +102,7 @@ export type CommandId =
   | 'photo.original.unmark'
   | 'photo.open'
   | 'photo.export'
+  | 'photo.duplicate'
   | 'photo.offload'
   | 'photo.restoreOriginal'
   | 'photo.transfer'
@@ -199,6 +200,7 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'photo.original.unmark': { id: 'commands.photo.original.unmark', defaultMessage: 'Remove Original protection' },
   'photo.open': { id: 'commands.photo.open', defaultMessage: 'Open' },
   'photo.export': { id: 'commands.photo.export', defaultMessage: 'Export…' },
+  'photo.duplicate': { id: 'commands.photo.duplicate', defaultMessage: 'Duplicate' },
   'photo.offload': { id: 'commands.photo.offload', defaultMessage: 'Offload original…' },
   'photo.restoreOriginal': { id: 'commands.photo.restoreOriginal', defaultMessage: 'Restore original' },
   'photo.transfer': { id: 'commands.photo.transfer', defaultMessage: 'Transfer & Sync…' },
@@ -560,6 +562,8 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     quickAction: { icon: 'share', availability: 'anywhere', target: 'selection-if-included' },
   },
   { id: 'photo.open', label: label('photo.open', 'Open'), surfaces: [], target: 'focused-item' },
+  // Variants (#496, ADR-0031 §3): a sibling variant over the same original.
+  { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection' },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
   { id: 'photo.transfer', label: label('photo.transfer', 'Transfer & Sync…'), surfaces: [], target: 'selection' },

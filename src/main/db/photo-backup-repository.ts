@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { BackupManifestPhotoV2, BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { BackupManifestPhotoV13, BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { select } from './photo-query.js';
@@ -15,7 +15,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
   return db.transaction(() => {
     const recoverable = `(p.deleted_at IS NULL OR (p.deleted_at IS NOT NULL AND l.status IN ('synced', 'offloaded')))`;
     const photos = queryAll<PhotoRow>(db, `${select('date')} WHERE ${recoverable} ORDER BY p.imported_at, p.id`).map(
-      (row): BackupManifestPhotoV2 => {
+      (row): BackupManifestPhotoV13 => {
         const {
           previewFailure: _previewFailure,
           dimensionStatus: _dimensionStatus,
@@ -29,7 +29,9 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
           metadataVersion,
           ...photo
         } = toRecord(row);
-        const { isOriginal, ...base } = photo;
+        // Variant fields (#496) are omitted when default so a root variant's
+        // record keeps its pre-13 byte shape and legacy equality checks hold.
+        const { isOriginal, derivativeKey, variantSourceId, assetOwnerId, ...base } = photo;
         const hasMetadata =
           title !== null ||
           description !== null ||
@@ -40,6 +42,9 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
         return {
           ...base,
           ...(isOriginal ? { isOriginal: true } : {}),
+          ...(derivativeKey === photo.contentHash ? {} : { derivativeKey }),
+          ...(variantSourceId === null ? {} : { variantSourceId }),
+          ...(assetOwnerId === null ? {} : { assetOwnerId }),
           ...(hasMetadata ? { title, description, userTags, importedKeywords, suppressedKeywords, metadataVersion } : {}),
           blobPath: `blobs/${photo.contentHash.slice(0, 2)}/${photo.contentHash}`,
         };
@@ -117,16 +122,21 @@ export function restoreManifest(
            camera, lens, iso, aperture, shutter, focal_length, taken_at,
            gps_lat, gps_lon, place, imported_at, import_source, favorite,
            is_original, key_id, deleted_at, media_info, user_title, user_description,
-           imported_keywords, user_tags, suppressed_keywords, metadata_tags_search, metadata_version
+           imported_keywords, user_tags, suppressed_keywords, metadata_tags_search, metadata_version,
+           derivative_key, variant_source_id, asset_owner_id
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite,
            @isOriginal, @keyId, @deletedAt, @mediaInfoJson, @title, @description,
-           @importedKeywordsJson, @userTagsJson, @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion
+           @importedKeywordsJson, @userTagsJson, @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion,
+           @derivativeKey, @variantSourceId, @assetOwnerId
          )`,
         {
           ...photo,
+          derivativeKey: ('derivativeKey' in photo ? photo.derivativeKey : undefined) ?? photo.contentHash,
+          variantSourceId: ('variantSourceId' in photo ? photo.variantSourceId : undefined) ?? null,
+          assetOwnerId: ('assetOwnerId' in photo ? photo.assetOwnerId : undefined) ?? null,
           favorite: photo.favorite ? 1 : 0,
           isOriginal: photo.isOriginal === true ? 1 : 0,
           mediaInfo: null,

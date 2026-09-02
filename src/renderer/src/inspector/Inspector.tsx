@@ -14,6 +14,7 @@ import { useAnnouncer } from '../components/LiveAnnouncer';
 import { PhotoMetadataEditor } from './PhotoMetadataEditor.js';
 import { EditsSection } from './EditsSection.js';
 import { ProvenanceSection } from './ProvenanceSection.js';
+import { VariantsSection } from './VariantsSection.js';
 import { custodyPresentation } from '../backup/custody-presentation.js';
 import { usePhotoCustodyStatus } from '../backup/use-photo-custody-status.js';
 
@@ -64,6 +65,8 @@ export interface InspectorProps {
   readonly selectionPosition?: { readonly index: number; readonly count: number } | undefined;
   readonly onPrevious?: (() => void) | undefined;
   readonly onNext?: (() => void) | undefined;
+  /** Opens a sibling variant (#496) where the focused photo is shown. */
+  readonly onShowPhoto?: ((photoId: string) => void) | undefined;
 }
 
 export function Inspector({
@@ -73,6 +76,7 @@ export function Inspector({
   selectionPosition,
   onPrevious,
   onNext,
+  onShowPhoto,
 }: InspectorProps): ReactElement {
   const intl = useIntl();
   const { announce } = useAnnouncer();
@@ -197,6 +201,7 @@ export function Inspector({
         <MetadataRow label="Imported" value={`${formatCalendarDate(photo.importedAt)} · ${photo.importSource}`} />
       </Section>
       <EditsSection photoId={photo.id} />
+      <VariantsSection photo={photo} onShowPhoto={onShowPhoto} />
       <ProvenanceSection photoId={photo.id} />
       <Section title="Backup">
         <MetadataRow

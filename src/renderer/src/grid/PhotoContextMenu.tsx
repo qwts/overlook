@@ -17,6 +17,7 @@ export interface PhotoContextMenuProps {
   readonly onToggleFavorite: () => void;
   readonly onSetOriginal: (isOriginal: boolean) => void;
   readonly onExport: () => void;
+  readonly onDuplicate: () => void;
   readonly onAddToAlbum: () => void;
   readonly onRemoveFromAlbum: () => void;
   readonly onOffload: () => void;
@@ -40,6 +41,7 @@ export function PhotoContextMenu({
   onToggleFavorite,
   onSetOriginal,
   onExport,
+  onDuplicate,
   onAddToAlbum,
   onRemoveFromAlbum,
   onOffload,
@@ -87,6 +89,7 @@ export function PhotoContextMenu({
           ? item('photo.original.unmark', 'shield-check', () => onSetOriginal(false))
           : item('photo.original.mark', 'shield-check', () => onSetOriginal(true)),
         ...(quickActionIds.has('photo.export') ? [] : [item('photo.export', 'share', onExport)]),
+        item('photo.duplicate', 'copy', onDuplicate),
         ...(quickActionIds.has('album.membership.add') ? [] : [item('album.membership.add', 'album', onAddToAlbum)]),
         ...(inAlbum ? [item('album.membership.remove', 'x', onRemoveFromAlbum)] : []),
         photo.syncState === 'offloaded'

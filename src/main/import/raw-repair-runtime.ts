@@ -6,6 +6,7 @@ import type { PhotosRepository } from '../db/photos-repository.js';
 import { extractMetadata } from './exif.js';
 import { RawRepairService } from './raw-repair-service.js';
 import type { ThumbnailService } from './thumbnail-service.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 export interface RawRepairRuntimeOptions {
   readonly repo: PhotosRepository;
@@ -20,11 +21,11 @@ export interface RawRepairRuntimeOptions {
 export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRepairService {
   return new RawRepairService({
     candidates: () => options.repo.previewRepairCandidates(),
-    validThumbs: async (photo) => options.blobs.verifyThumbs(photo.contentHash, options.resolveKey, photo.id),
+    validThumbs: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
     loadOriginal: async (photo) => {
       await options.blobsReady;
       try {
-        return await buffer(options.blobs.getStream(photo.contentHash, options.resolveKey, photo.id));
+        return await buffer(options.blobs.getStream(photo.contentHash, options.resolveKey, assetOwnerOf(photo)));
       } catch (error) {
         if (error instanceof BlobStoreError) return null;
         throw error;

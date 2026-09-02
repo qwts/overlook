@@ -261,6 +261,11 @@ const overlook: OverlookApi = {
     get: createInvoker(channels.photoProvenance, invokeTransport),
     refresh: createInvoker(channels.photoProvenanceRefresh, invokeTransport),
   }),
+  variants: Object.freeze({
+    duplicate: createInvoker(channels.photoDuplicate, invokeTransport),
+    family: createInvoker(channels.photoVariants, invokeTransport),
+    promote: createInvoker(channels.photoPromoteVariant, invokeTransport),
+  }),
   boards: Object.freeze({
     list: async () => boardList({}),
     get: createInvoker(channels.boardGet, invokeTransport),

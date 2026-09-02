@@ -39,7 +39,7 @@ const snapshot: BackupManifestSnapshotV8 = {
 
 describe('album visibility in backup manifests (#494)', () => {
   test('schema 8 carries the hidden albums and round-trips through the parser', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 12);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 13);
     const manifest = buildBackupManifestV8({ libraryId: '01JZZZZZZZZZZZZZZZZZZZZZZZ', generatedAt: '2026-09-01T00:00:00.000Z', snapshot });
     assert.equal(manifest.schema, 8);
     assert.deepEqual(manifest.hiddenAlbumIds, ['hikes']);

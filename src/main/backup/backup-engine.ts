@@ -5,17 +5,18 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV12,
+  buildBackupManifestV13,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
-  type BackupManifestSnapshotV12,
+  type BackupManifestSnapshotV13,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
 import type { BackupManifestEditRevisionV11 } from './backup-manifest-edit-revisions.js';
 import type { BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
+import type { BackupManifestVariantFamilyV13 } from './backup-manifest-variants.js';
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
@@ -138,6 +139,8 @@ export interface BackupEngineDeps {
   readonly editRevisionsSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestEditRevisionV11[]) | undefined;
   /** Provenance evidence of the carried photos (schema 12, #495). */
   readonly provenanceSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestProvenanceV12[]) | undefined;
+  /** Promoted variant representatives (schema 13, #496). */
+  readonly variantFamiliesSnapshot?: (() => readonly BackupManifestVariantFamilyV13[]) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -812,7 +815,7 @@ export class BackupEngine {
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
-    const manifest = buildBackupManifestV12({
+    const manifest = buildBackupManifestV13({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -831,7 +834,8 @@ export class BackupEngine {
         }),
         editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
         provenance: this.deps.provenanceSnapshot?.(carriedPhotoIds) ?? [],
-      } satisfies BackupManifestSnapshotV12,
+        variantFamilies: this.deps.variantFamiliesSnapshot?.() ?? [],
+      } satisfies BackupManifestSnapshotV13,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

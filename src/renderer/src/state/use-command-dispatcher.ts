@@ -77,6 +77,7 @@ export function useCommandDispatcher(
         case 'album.reorder.bottom':
         case 'photo.open':
         case 'photo.export':
+        case 'photo.duplicate':
         case 'photo.offload':
         case 'photo.restoreOriginal':
         case 'photo.original.mark':

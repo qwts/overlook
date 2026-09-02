@@ -17,6 +17,7 @@ import { buildBackupManifestV2, type BackupManifestPhotoV2 } from './backup-mani
 import type { StorageProvider } from './provider.js';
 import { sealRecoveryBootstrap } from './recovery-bootstrap.js';
 import { RestoreEngine } from './restore-engine.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 const GENERATED_AT = '2026-07-15T02:00:00.000Z';
 const CURRENT_DATABASE_SCHEMA = Math.max(...MIGRATIONS.map((migration) => migration.version));
@@ -169,7 +170,7 @@ export async function exerciseDisasterRecoveryContract(
     await restoredStore.init();
     for (const photo of photos) {
       assert.deepEqual(
-        await buffer(restoredStore.getStream(photo.contentHash, restoredKeys.resolver(), photo.id)),
+        await buffer(restoredStore.getStream(photo.contentHash, restoredKeys.resolver(), assetOwnerOf(photo))),
         plaintextById.get(photo.id),
       );
       assert.equal(await restoredStore.verifyThumbs(photo.contentHash, restoredKeys.resolver(), photo.id), true);

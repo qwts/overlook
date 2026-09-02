@@ -6,86 +6,36 @@ import {
   type BackupManifestEditRevisionV11,
 } from './backup-manifest-edit-revisions.js';
 import { backupManifestProvenanceV12Schema, checkProvenanceLinks, type BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
+import {
+  backupManifestVariantFamilyV13Schema,
+  checkVariantLinks,
+  type BackupManifestVariantFamilyV13,
+} from './backup-manifest-variants.js';
 import { activityEventTypes } from '../../shared/activity/types.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
 
-import { mediaInfoSchema } from '../../shared/library/media-info.js';
 import { boardSchema } from '../../shared/moodboard/board.js';
-import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../../shared/library/photo-metadata.js';
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 12 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 13 as const;
 
-const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
-const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
-const isoTimestampSchema = z.iso.datetime({ offset: true });
-const photoTakenAtSchema = z.iso.datetime({ offset: true, local: true });
-const keyIdSchema = z.number().int().positive();
-
-const legacyPhotoSchema = z.strictObject({
-  id: z.string().min(1),
-  contentHash: sha256Schema,
-  bytes: z.number().int().nonnegative(),
-  fileName: z.string().min(1),
-  keyId: keyIdSchema,
-});
-
-export const backupManifestV1Schema = z.strictObject({
-  schema: z.literal(1),
-  rows: z.array(legacyPhotoSchema).readonly(),
-});
-
-export const backupManifestPhotoV2Schema = z.strictObject({
-  id: z.string().min(1),
-  fileName: z.string().min(1),
-  fileKind: z.enum(['jpeg', 'raw', 'png', 'heic', 'gif', 'webp', 'video', 'audio', 'other']),
-  width: z.number().int().nonnegative(),
-  height: z.number().int().nonnegative(),
-  bytes: z.number().int().nonnegative(),
-  contentHash: sha256Schema,
-  blobPath: z.string().min(1),
-  // ADR-0026 §1 probed facts. OPTIONAL, not defaulted: sealed protected
-  // metadata is verified by exact re-stringification, so parsing must not
-  // insert keys into pre-0026 plaintext (a default would make every legacy
-  // protected photo read as corrupt). Absent means "not probed";
-  // upgradeLegacyManifest normalizes it to null for restore consumers.
-  // Device-derived playability is deliberately NOT here (ADR-0026 §3).
-  mediaInfo: mediaInfoSchema.nullable().optional(),
-  camera: z.string().nullable(),
-  lens: z.string().nullable(),
-  iso: z.number().int().positive().nullable(),
-  aperture: z.string().nullable(),
-  shutter: z.string().nullable(),
-  focalLength: z.number().nonnegative().nullable(),
-  takenAt: photoTakenAtSchema.nullable(),
-  gpsLat: z.number().min(-90).max(90).nullable(),
-  gpsLon: z.number().min(-180).max(180).nullable(),
-  place: z.string().nullable(),
-  title: photoTitleSchema.nullable().optional(),
-  description: photoDescriptionSchema.nullable().optional(),
-  userTags: photoTagsSchema.readonly().optional(),
-  importedKeywords: photoTagsSchema.readonly().optional(),
-  suppressedKeywords: photoTagsSchema.readonly().optional(),
-  metadataVersion: z.number().int().positive().optional(),
-  importedAt: isoTimestampSchema,
-  importSource: z.string().min(1),
-  favorite: z.boolean(),
-  // #482 adds preservation metadata compatibly to schemas 2–4. Absence in
-  // older manifests means false; false remains omitted when rebuilding so
-  // legacy restore equality checks stay byte-shape compatible.
-  isOriginal: z.boolean().optional(),
-  keyId: keyIdSchema,
-  deletedAt: isoTimestampSchema.nullable(),
-});
-
-export const backupManifestAlbumV2Schema = z.strictObject({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  createdAt: isoTimestampSchema,
-  position: z.number().int().nonnegative(),
-  photoIds: z.array(z.string().min(1)).readonly(),
-});
+import {
+  backupManifestAlbumV2Schema,
+  backupManifestPhotoV2Schema,
+  backupManifestPhotoV13Schema,
+  backupManifestV1Schema,
+  isoTimestampSchema,
+  keyIdSchema,
+  sha256Schema,
+  ulidSchema,
+} from './backup-manifest-photo.js';
+export {
+  backupManifestAlbumV2Schema,
+  backupManifestPhotoV2Schema,
+  backupManifestPhotoV13Schema,
+  backupManifestV1Schema,
+} from './backup-manifest-photo.js';
 
 export const backupManifestV2Schema = z
   .strictObject({
@@ -600,7 +550,7 @@ export const backupManifestV11Schema = z
 export const backupManifestV12Schema = z
   .strictObject({
     ...backupManifestV11Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(12),
     provenance: z.array(backupManifestProvenanceV12Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -610,6 +560,29 @@ export const backupManifestV12Schema = z
       context.addIssue({ code: 'custom', message: `schema-11 records are inconsistent: ${z.prettifyError(previous.error)}` });
     }
     checkProvenanceLinks(manifest, context);
+  });
+
+// Schema 13 (#496): the schema-12 records with each photo's derivative key and
+// lineage, plus the Promoted representative per original asset; the family
+// record and link checks live in backup-manifest-variants.ts.
+export const backupManifestV13Schema = z
+  .strictObject({
+    ...backupManifestV12Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    photos: z.array(backupManifestPhotoV13Schema).readonly(),
+    variantFamilies: z.array(backupManifestVariantFamilyV13Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { variantFamilies: _families, ...withoutFamilies } = manifest;
+    const previous = backupManifestV12Schema.safeParse({
+      ...withoutFamilies,
+      schema: 12,
+      photos: manifest.photos.map(({ derivativeKey: _key, variantSourceId: _source, assetOwnerId: _owner, ...photo }) => photo),
+    });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-12 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    checkVariantLinks(manifest, context);
   });
 
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
@@ -634,6 +607,8 @@ export type BackupManifestSmartAlbumV10 = z.infer<typeof backupManifestSmartAlbu
 export type BackupManifestV10 = z.infer<typeof backupManifestV10Schema>;
 export type BackupManifestV11 = z.infer<typeof backupManifestV11Schema>;
 export type BackupManifestV12 = z.infer<typeof backupManifestV12Schema>;
+export type BackupManifestPhotoV13 = z.infer<typeof backupManifestPhotoV13Schema>;
+export type BackupManifestV13 = z.infer<typeof backupManifestV13Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -645,13 +620,14 @@ export type RestorableBackupManifest =
   | BackupManifestV9
   | BackupManifestV10
   | BackupManifestV11
-  | BackupManifestV12;
+  | BackupManifestV12
+  | BackupManifestV13;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
   readonly keyIds: readonly number[];
   readonly totals: BackupManifestV2['totals'];
-  readonly photos: readonly BackupManifestPhotoV2[];
+  readonly photos: readonly BackupManifestPhotoV13[];
   readonly albums: readonly BackupManifestAlbumV2[];
 }
 
@@ -695,6 +671,11 @@ export interface BackupManifestSnapshotV11 extends BackupManifestSnapshotV10 {
 
 export interface BackupManifestSnapshotV12 extends BackupManifestSnapshotV11 {
   readonly provenance: readonly BackupManifestProvenanceV12[];
+}
+
+export interface BackupManifestSnapshotV13 extends BackupManifestSnapshotV12 {
+  readonly photos: readonly BackupManifestPhotoV13[];
+  readonly variantFamilies: readonly BackupManifestVariantFamilyV13[];
 }
 
 export type ParsedBackupManifest =
@@ -802,7 +783,15 @@ export function buildBackupManifestV12(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV12;
 }): BackupManifestV12 {
-  return backupManifestV12Schema.parse({
+  return backupManifestV12Schema.parse({ schema: 12, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV13(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV13;
+}): BackupManifestV13 {
+  return backupManifestV13Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -842,7 +831,8 @@ const RESTORABLE_SCHEMAS: ReadonlyMap<number, z.ZodType<RestorableBackupManifest
   [9, backupManifestV9Schema],
   [10, backupManifestV10Schema],
   [11, backupManifestV11Schema],
-  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV12Schema],
+  [12, backupManifestV12Schema],
+  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV13Schema],
 ]);
 
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {

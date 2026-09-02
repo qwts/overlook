@@ -42,6 +42,7 @@ import { galleryPolicySchema } from '../library/gallery-policy.js';
 import { albumChannels, albumListingSchema } from './album-channels.js';
 import { photoEditChannels } from './photo-edit-channels.js';
 import { provenanceChannels } from './provenance-channels.js';
+import { variantChannels } from './variant-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
@@ -219,6 +220,9 @@ const photoRecordSchema = z.object({
   height: z.number(),
   bytes: z.number(),
   contentHash: z.string(),
+  derivativeKey: z.string(),
+  variantSourceId: z.string().nullable(),
+  assetOwnerId: z.string().nullable(),
   camera: z.string().nullable(),
   lens: z.string().nullable(),
   iso: z.number().nullable(),
@@ -250,6 +254,9 @@ const photoRecordSchema = z.object({
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
   contentHash: true,
+  derivativeKey: true,
+  variantSourceId: true,
+  assetOwnerId: true,
   isOriginal: true,
   keyId: true,
   previewFailure: true,
@@ -583,6 +590,7 @@ export const channels = {
   // Persisted edits (#493, ADR-0031 §2): immutable revision documents per photo.
   ...photoEditChannels,
   ...provenanceChannels,
+  ...variantChannels(photoRecordSchema),
   ...boardChannels,
   ...embeddingChannels,
   // Import sources (#84): discovery + the source-card scan. Copying is #87.
