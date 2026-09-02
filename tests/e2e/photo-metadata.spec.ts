@@ -27,12 +27,21 @@ test('photo metadata edits, bulk tags, live search, and restart persistence (#50
   await expect(first.page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
 
   // An explicit selection only survives a search while its photo stays on
-  // the loaded page (app-state photos/loaded); a slow index can land a page
-  // without it first, so re-establish the first photo if the search dropped it.
+  // the loaded page (app-state photos/loaded), and a slow index can land a
+  // page without it first — so start the pair from an empty selection.
   const pill = first.page.getByTestId('selection-pill');
-  if (!(await pill.isVisible())) await first.page.getByRole('button', { name: 'Select IMG_4021.RAF' }).click();
+  if (await pill.isVisible()) await pill.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(pill).toBeHidden();
+  const selectLabels = (): Promise<string[]> =>
+    first.page.evaluate(
+      // Labels carry the date and place after the name; the verb + name prefix is what matters here.
+      "Array.from(document.querySelectorAll('[aria-label^=\"Select \"], [aria-label^=\"Deselect \"]')).map((el) => (el.getAttribute('aria-label') ?? '').split(',')[0]).sort()",
+    );
+  await first.page.getByRole('button', { name: 'Select IMG_4021.RAF' }).click();
+  await expect.poll(selectLabels).toEqual(expect.arrayContaining(['Deselect IMG_4021.RAF', 'Select IMG_4028.JPG']));
   await expect(pill).toContainText('1 selected');
   await first.page.getByRole('button', { name: 'Select IMG_4028.JPG' }).click();
+  await expect.poll(selectLabels).toEqual(expect.arrayContaining(['Deselect IMG_4021.RAF', 'Deselect IMG_4028.JPG']));
   await expect(pill).toContainText('2 selected');
   await expect(inspector.getByRole('button', { name: 'Apply to 2 photos' })).toBeVisible();
   await inspector.getByLabel('Add tag').fill('Shared set');
