@@ -9,6 +9,7 @@ import { SHIPPED_LOCALES } from '../../../shared/i18n/locales.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
 import { SemanticIndexSettings, semanticIndexHint } from './SemanticIndexSettings';
 import { ThemeManager } from './ThemeManager';
+import { GalleryInclusionSettings, galleryInclusionMessages } from './GalleryInclusionSettings';
 
 // General section (#113): sort order and appearance apply live;
 // thumbnails-on-import is locked on with its rationale, matching the schema.
@@ -113,6 +114,9 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
             onPatch({ trashRetention });
           }}
         />
+      </Field>
+      <Field wide label={intl.formatMessage(galleryInclusionMessages.heading)} hint={intl.formatMessage(galleryInclusionMessages.hint)}>
+        <GalleryInclusionSettings />
       </Field>
       <Field label={intl.formatMessage(messages.appearance)} hint={intl.formatMessage(messages.appearanceHint)}>
         <Segmented

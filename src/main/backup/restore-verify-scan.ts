@@ -7,7 +7,7 @@ export interface ScanTicker {
 }
 
 export function verifyObjectCount(candidate: RestoreCandidate): number {
-  const sidecars = candidate.manifest.schema === 6 ? candidate.manifest.sidecars.length : 0;
+  const sidecars = candidate.manifest.schema === 6 || candidate.manifest.schema === 7 ? candidate.manifest.sidecars.length : 0;
   const protectedObjects =
     candidate.manifest.schema === 2
       ? 0

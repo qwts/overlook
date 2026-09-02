@@ -353,6 +353,18 @@ describe('library IPC contract', () => {
     assert.equal(service.albums().find((album) => album.id === 'AL2')?.count, 2);
   });
 
+  test('gallery policy writes are library data and announce a library-wide membership change (#512)', () => {
+    const { service, events } = seededService();
+    assert.deepEqual(service.galleryPolicy(), { showUnavailable: true, minimumMegapixels: null });
+    const before = events.changed.length;
+    const stored = service.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: 2 });
+    assert.deepEqual(stored, { showUnavailable: false, minimumMegapixels: 2 });
+    assert.deepEqual(service.galleryPolicy(), stored);
+    assert.equal(events.changed.length, before + 1, 'one library:changed so open galleries and counts re-evaluate');
+    assert.deepEqual(events.changed[before], []);
+    assert.throws(() => service.setGalleryPolicy({ showUnavailable: true, minimumMegapixels: 0 }), 'hostile values never reach SQL');
+  });
+
   test('stats reports live photo count, bytes, and pending for the chrome', async () => {
     const { service } = seededService();
     const client = rendererClient(service);

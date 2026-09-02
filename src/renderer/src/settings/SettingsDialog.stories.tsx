@@ -512,6 +512,9 @@ function installStub(options?: {
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
       stats: () => Promise.resolve({ photos: 1542, bytes: 48_000_000_000, pending: 0, lastBackupAt: null, offloadedBytes: 12_600_000_000 }),
+      galleryPolicy: () => Promise.resolve({ policy: { showUnavailable: true, minimumMegapixels: null } }),
+      setGalleryPolicy: ({ policy }: { policy: { showUnavailable: boolean; minimumMegapixels: number | null } }) =>
+        Promise.resolve({ policy }),
       onChanged: () => () => undefined,
       onPendingCountChanged: () => () => undefined,
       onStorageChanged: () => () => undefined,
