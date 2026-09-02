@@ -3,7 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { AppAction } from '../../../shared/library/app-state.js';
-import { closestPairFor, type DuplicateGroup } from '../../../shared/library/duplicate-groups.js';
+import { closestPairFor, rotationOf, type DuplicateGroup } from '../../../shared/library/duplicate-groups.js';
 import { FINGERPRINT_BITS } from '../../../shared/library/perceptual-hash.js';
 import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
@@ -74,7 +74,7 @@ type ReviewGroup = DuplicateReviewView['groups'][number];
 function evidenceFor(group: ReviewGroup, photoId: string): { readonly distance: number; readonly rotation: number } | null {
   const shape: DuplicateGroup = { id: group.id, photoIds: group.photos.map((photo) => photo.id), pairs: group.pairs };
   const pair = closestPairFor(shape, photoId);
-  return pair === null ? null : { distance: pair.distance, rotation: pair.rotation };
+  return pair === null ? null : { distance: pair.distance, rotation: rotationOf(pair, photoId) };
 }
 
 function GroupCard({

@@ -88,6 +88,12 @@ class MemoryStore implements FingerprintStore {
     return removed;
   }
 
+  invalidateAll(): number {
+    const removed = this.rows.size;
+    this.rows.clear();
+    return removed;
+  }
+
   deleteOtherVersions(version: string): number {
     let removed = 0;
     for (const [id, row] of this.rows) {
@@ -262,15 +268,17 @@ describe('duplicate index service (#650)', () => {
     await resumed.close();
   });
 
-  test('rescan drops every hash and starts over; a stale candidate is skipped without a row', async () => {
-    const { store, service, loads } = harness();
+  test('rescan drops every row, deferred ones included, and starts over; a stale candidate is skipped without a row', async () => {
+    const { store, service, loads } = harness({ bytes: (id) => (id === 'P0' ? null : Buffer.from([1])) });
     store.add('P1');
+    store.add('P0');
     service.schedule();
     await settle();
+    assert.equal(store.rows.get('P0')?.reason, 'derivative-unavailable');
     const status = service.rescan();
-    assert.equal(status.pending, 1);
+    assert.equal(status.pending, 2, 'a deferred row is dropped and retried like a hashed one');
     await settle();
-    assert.deepEqual(loads, ['P1', 'P1']);
+    assert.deepEqual(loads, ['P1', 'P0', 'P1', 'P0']);
     // The photo moved under the indexer: the first put refuses the stale
     // candidate, the cursor re-reads the row, the second put stores it.
     let moved = false;

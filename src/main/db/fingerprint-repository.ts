@@ -133,6 +133,11 @@ export class FingerprintRepository {
   }
 
   /** Rows of another algorithm version are incomparable: drop them. */
+  /** Drops every row, hashed or deferred — the explicit rescan. */
+  invalidateAll(): number {
+    return changes(this.db, `DELETE FROM photo_fingerprints`, {});
+  }
+
   deleteOtherVersions(version: string): number {
     return changes(this.db, `DELETE FROM photo_fingerprints WHERE algo_version <> @version`, { version });
   }

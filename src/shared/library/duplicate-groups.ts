@@ -73,20 +73,100 @@ class DisjointSet {
   }
 }
 
+/** The 64-bit fingerprint split into eight 8-bit bands (one hex pair each). */
+const BANDS = 8;
+const BAND_VALUES = 256;
+
+function band(hash: Fingerprint, index: number): number {
+  return Number.parseInt(hash.slice(index * 2, index * 2 + 2), 16);
+}
+
+/** Every byte within `radius` flipped bits of `value`, `value` first. */
+function bandNeighbours(value: number, radius: number): number[] {
+  const out = [value];
+  const walk = (from: number, remaining: number, current: number): void => {
+    if (remaining === 0) return;
+    for (let bit = from; bit < 8; bit += 1) {
+      const flipped = current ^ (1 << bit);
+      out.push(flipped);
+      walk(bit + 1, remaining - 1, flipped);
+    }
+  };
+  walk(0, Math.min(radius, 8), value);
+  return out;
+}
+
+/**
+ * Multi-index hashing over the rotation sets: each stored hash is filed under
+ * its eight bands, and a query hash within `threshold` bits of it must agree
+ * with at least one band to within ⌊threshold / 8⌋ bits (pigeonhole), so the
+ * candidates read back from those band buckets are a superset of every pair
+ * the exhaustive scan would find — the exact check still decides.
+ */
+class BandIndex {
+  private readonly buckets = new Map<number, number[]>();
+  private readonly radius: number;
+
+  constructor(threshold: number) {
+    this.radius = Math.floor(threshold / BANDS);
+  }
+
+  /** Files entry `position`'s rotation `turn` hash. */
+  add(hash: Fingerprint, position: number, turn: number): void {
+    for (let index = 0; index < BANDS; index += 1) {
+      const key = index * BAND_VALUES + band(hash, index);
+      const bucket = this.buckets.get(key);
+      const packed = position * 4 + turn;
+      if (bucket === undefined) this.buckets.set(key, [packed]);
+      else bucket.push(packed);
+    }
+  }
+
+  /** Entry positions after `position` whose rotation set may be within the threshold of `hash`. */
+  candidates(hash: Fingerprint, position: number, seen: Int32Array, stamp: number): number[] {
+    const found: number[] = [];
+    for (let index = 0; index < BANDS; index += 1) {
+      for (const value of bandNeighbours(band(hash, index), this.radius)) {
+        const bucket = this.buckets.get(index * BAND_VALUES + value);
+        if (bucket === undefined) continue;
+        for (const packed of bucket) {
+          const other = Math.floor(packed / 4);
+          if (other <= position || seen[other] === stamp) continue;
+          seen[other] = stamp;
+          found.push(other);
+        }
+      }
+    }
+    return found.sort((left, right) => left - right);
+  }
+}
+
 /**
  * Every candidate pair at or under `threshold`, merged into connected groups.
- * O(n²) over the fresh entries — a library of ten thousand photos is fifty
- * million 64-bit comparisons, well under a second, and the answer is cached
- * by the service until the index or the classification changes.
+ * Candidates come from the band index, so the work grows with the number of
+ * near matches rather than with n² — a library of ten thousand photos is a
+ * few hundred thousand bucket reads on the main thread, not fifty million
+ * comparisons — and the answer is the same as an exhaustive scan. The service
+ * caches it until the index or the classification changes.
  */
 export function findDuplicateGroups(entries: readonly FingerprintEntry[], threshold = DUPLICATE_DISTANCE_THRESHOLD): DuplicateGroup[] {
   const sorted = [...entries].sort((left, right) => (left.photoId < right.photoId ? -1 : left.photoId > right.photoId ? 1 : 0));
   const pairs: DuplicatePair[] = [];
   const sets = new DisjointSet();
-  for (let index = 0; index < sorted.length; index += 1) {
-    const left = sorted[index];
-    if (left === undefined) continue;
-    for (let other = index + 1; other < sorted.length; other += 1) {
+  const index = new BandIndex(threshold);
+  for (let position = 0; position < sorted.length; position += 1) {
+    const entry = sorted[position];
+    if (entry === undefined || entry.rotations[0] === undefined) continue;
+    entry.rotations.forEach((hash, turn) => {
+      index.add(hash, position, turn);
+    });
+  }
+  const seen = new Int32Array(sorted.length);
+  for (let position = 0; position < sorted.length; position += 1) {
+    const left = sorted[position];
+    const upright = left?.rotations[0];
+    if (left === undefined || upright === undefined) continue;
+    for (const other of index.candidates(upright, position, seen, position + 1)) {
       const right = sorted[other];
       if (right === undefined) continue;
       const pair = candidatePair(left, right, threshold);
@@ -113,6 +193,17 @@ export function findDuplicateGroups(entries: readonly FingerprintEntry[], thresh
       pairs: [...group.pairs].sort((left, right) => left.distance - right.distance || (left.left < right.left ? -1 : 1)),
     }))
     .sort((left, right) => right.photoIds.length - left.photoIds.length || (left.id < right.id ? -1 : 1));
+}
+
+/**
+ * How far `photoId` is turned relative to the other member of `pair`. The
+ * pair's rotation describes `right` relative to `left`, so the left member
+ * reads the inverse turn.
+ */
+export function rotationOf(pair: DuplicatePair, photoId: string): FingerprintRotation {
+  if (photoId === pair.right) return pair.rotation;
+  const inverse = (360 - pair.rotation) % 360;
+  return inverse === 90 || inverse === 180 || inverse === 270 ? inverse : 0;
 }
 
 /** The strongest evidence tying one photo to the rest of its group. */

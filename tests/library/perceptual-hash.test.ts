@@ -11,6 +11,8 @@ import {
   closestPairFor,
   findDuplicateGroups,
   intentionalVariants,
+  rotationOf,
+  type DuplicatePair,
   type FingerprintEntry,
 } from '../../src/shared/library/duplicate-groups.js';
 import {
@@ -107,6 +109,74 @@ describe('duplicate grouping (#650)', () => {
     // A third, unrelated import of the same picture still surfaces against both.
     const copy = entry('copy', same);
     assert.deepEqual(findDuplicateGroups([root, sibling, copy])[0]?.photoIds, ['copy', 'root', 'sib']);
+  });
+
+  test('a member reads the turn relative to its closest match, so the left member reads the inverse', () => {
+    const pair: DuplicatePair = { left: 'a', right: 'b', distance: 3, rotation: 90 };
+    assert.equal(rotationOf(pair, 'b'), 90);
+    assert.equal(rotationOf(pair, 'a'), 270);
+    assert.equal(rotationOf({ ...pair, rotation: 180 }, 'a'), 180);
+    assert.equal(rotationOf({ ...pair, rotation: 0 }, 'a'), 0);
+  });
+
+  test('the band index finds exactly the pairs an exhaustive scan finds, at every threshold', () => {
+    // Deterministic pseudo-random hashes with planted near-duplicates at,
+    // just under and just over the threshold, some only through a rotation.
+    let seed = 0x650;
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+    const randomHash = (): string => Array.from({ length: 16 }, () => Math.floor(random() * 16).toString(16)).join('');
+    const flip = (hash: string, bits: number): string => {
+      const digits = hash.split('');
+      const chosen = new Set<number>();
+      while (chosen.size < bits) chosen.add(Math.floor(random() * 64));
+      for (const bit of chosen) {
+        const digit = Math.floor(bit / 4);
+        const value = Number.parseInt(digits[digit] ?? '0', 16) ^ (1 << (bit % 4));
+        digits[digit] = value.toString(16);
+      }
+      return digits.join('');
+    };
+    const entries: FingerprintEntry[] = [];
+    for (let index = 0; index < 240; index += 1) {
+      const rotations = [randomHash(), randomHash(), randomHash(), randomHash()];
+      entries.push(entry(`p${String(index).padStart(3, '0')}`, rotations));
+      const planted = index % 6;
+      if (planted === 0 || planted === 1 || planted === 2) {
+        const turn = planted === 2 ? 3 : 0;
+        const bits = planted === 1 ? DUPLICATE_DISTANCE_THRESHOLD + 1 : Math.floor(random() * (DUPLICATE_DISTANCE_THRESHOLD + 1));
+        const twin = [randomHash(), randomHash(), randomHash(), randomHash()];
+        twin[turn] = flip(rotations[0] ?? ZERO, bits);
+        entries.push(entry(`q${String(index).padStart(3, '0')}`, twin));
+      }
+    }
+    const exhaustive = (threshold: number): string[] => {
+      const sorted = [...entries].sort((left, right) => (left.photoId < right.photoId ? -1 : 1));
+      const pairs: string[] = [];
+      for (let index = 0; index < sorted.length; index += 1) {
+        for (let other = index + 1; other < sorted.length; other += 1) {
+          const left = sorted[index];
+          const right = sorted[other];
+          if (left?.rotations[0] === undefined || right === undefined) continue;
+          const match = closestRotation(left.rotations[0], right.rotations);
+          if (match.distance <= threshold)
+            pairs.push(`${left.photoId}>${right.photoId}@${String(match.distance)}/${String(match.rotation)}`);
+        }
+      }
+      return pairs.sort();
+    };
+    for (const threshold of [0, 3, DUPLICATE_DISTANCE_THRESHOLD, 17, 40]) {
+      const indexed = findDuplicateGroups(entries, threshold)
+        .flatMap((group) => group.pairs)
+        .map((pair) => `${pair.left}>${pair.right}@${String(pair.distance)}/${String(pair.rotation)}`)
+        .sort();
+      assert.deepEqual(indexed, exhaustive(threshold), `threshold ${String(threshold)}`);
+      if (threshold === DUPLICATE_DISTANCE_THRESHOLD) assert.ok(indexed.length >= 60, 'the planted pairs were found');
+    }
   });
 
   test('a photo without an upright hash is skipped rather than matched against nothing', () => {

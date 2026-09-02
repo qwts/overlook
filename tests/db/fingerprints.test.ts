@@ -95,6 +95,23 @@ describe('perceptual fingerprint repository (#650)', () => {
     assert.equal(fingerprints.pending(VERSION, 10).length, 1);
   });
 
+  test('a rescan drops hashed and deferred rows alike, so a preview that became readable is retried', () => {
+    const { repo, fingerprints } = open();
+    repo.insert(photo('P1'));
+    repo.insert(photo('P2'));
+    const [first, second] = fingerprints.pending(VERSION, 2);
+    assert.ok(first !== undefined && second !== undefined);
+    assert.ok(fingerprints.put(first, VERSION, HASHES));
+    assert.ok(fingerprints.defer(second, VERSION, 'undecodable'));
+    assert.deepEqual(fingerprints.status(VERSION), { total: 2, indexed: 1, deferred: 1, pending: 0 });
+    assert.equal(fingerprints.invalidateAll(), 2);
+    assert.deepEqual(fingerprints.status(VERSION), { total: 2, indexed: 0, deferred: 0, pending: 2 });
+    assert.deepEqual(
+      fingerprints.pending(VERSION, 10).map((candidate) => candidate.photoId),
+      ['P1', 'P2'],
+    );
+  });
+
   test('freshness follows the version, and rows of another version are dropped', () => {
     const { repo, fingerprints } = open();
     repo.insert(photo('P1'));

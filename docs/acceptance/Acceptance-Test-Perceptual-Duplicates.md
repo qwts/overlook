@@ -46,8 +46,9 @@ Over the same picture (fixture `summer-landscape.jpg`), with the unrelated
    "4 of 4 photos compared · 0 pending", one group of three (the original,
    the web copy, the rotated copy), each with its thumbnail, size, byte
    count and date, and an evidence line ("Near-identical · 1 of 64 bits
-   differ"; the rotated copy adds "rotated 90°"). The unrelated photo is
-   not listed.
+   differ"; each member of the turned pair adds the turn relative to its
+   closest match, "rotated 90°" on one side and "rotated 270°" on the
+   other). The unrelated photo is not listed.
 3. Click _Move to Trash_ on the web copy. **Expected:** the toast reads
    "Moved landscape-web.jpg to Trash", the group shrinks to two, and the
    photo is in Trash like any other trashed photo (restorable).

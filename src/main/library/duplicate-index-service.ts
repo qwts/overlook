@@ -25,7 +25,7 @@ export interface DuplicateReviewWithPhotos extends Omit<DuplicateReview, 'groups
 
 export type FingerprintStore = Pick<
   FingerprintRepository,
-  'pending' | 'status' | 'entries' | 'put' | 'defer' | 'invalidate' | 'deleteOtherVersions'
+  'pending' | 'status' | 'entries' | 'put' | 'defer' | 'invalidate' | 'invalidateAll' | 'deleteOtherVersions'
 >;
 
 export interface DuplicateIndexServiceOptions {
@@ -96,10 +96,13 @@ export class DuplicateIndexService {
     this.bump();
   }
 
-  /** Drops every fingerprint and starts over — the user's explicit rescan. */
+  /**
+   * Drops every fingerprint — hashed and deferred alike, so a preview that
+   * has since become readable is retried — and starts over: the user's
+   * explicit rescan.
+   */
   rescan(): FingerprintIndexStatus {
-    const entries = this.options.repository.entries(FINGERPRINT_VERSION);
-    this.options.repository.invalidate(entries.map((entry) => entry.photoId));
+    this.options.repository.invalidateAll();
     this.bump();
     this.schedule();
     return this.status();
