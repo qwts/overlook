@@ -22,8 +22,12 @@ test('photo metadata edits, bulk tags, live search, and restart persistence (#50
   await search.fill('portfolio');
   await expect(first.page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(1);
   await search.fill('');
+  // The cleared query lands after the debounce; wait for the whole seed back
+  // before picking a second photo so the click cannot land mid-reflow.
+  await expect(first.page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
 
   await first.page.getByRole('button', { name: 'Select IMG_4028.JPG' }).click();
+  await expect(first.page.getByTestId('selection-pill')).toContainText('2 selected');
   await expect(inspector.getByRole('button', { name: 'Apply to 2 photos' })).toBeVisible();
   await inspector.getByLabel('Add tag').fill('Shared set');
   await inspector.getByLabel('Add tag').press('Enter');

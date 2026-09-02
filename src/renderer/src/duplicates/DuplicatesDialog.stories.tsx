@@ -99,7 +99,10 @@ export const Group: Story = {
     await expect(body).toHaveAttribute('data-groups', '1');
     const group = canvas.getByTestId('duplicate-group');
     await expect(group).toHaveAttribute('data-count', '3');
-    await expect(canvas.getByText('Near-identical · 1 of 64 bits differ')).toBeVisible();
+    // Each row names its closest pair, so the original and its web copy share this evidence.
+    const nearIdentical = canvas.getAllByText('Near-identical · 1 of 64 bits differ');
+    await expect(nearIdentical).toHaveLength(2);
+    for (const evidence of nearIdentical) await expect(evidence).toBeVisible();
     await expect(canvas.getByText('Very similar · rotated 90° · 4 of 64 bits differ')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Move IMG_0001.jpg to Trash' })).toBeDisabled();
     await expect(canvas.getByText('Original')).toBeVisible();

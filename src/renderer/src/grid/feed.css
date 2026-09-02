@@ -137,7 +137,9 @@
   position: relative;
   width: var(--interactive-target-min);
   height: var(--interactive-target-min);
-  margin-inline: -5.5px;
+  /* Pull the glyph to the text edge, but only close the row gap toward the
+     more button: two 24px targets must touch, never overlap (target-size). */
+  margin-inline: -5.5px calc(var(--space-3) * -0.5);
   flex: none;
   display: grid;
   place-items: center;
@@ -166,7 +168,7 @@
   flex: none;
   width: var(--interactive-target-min);
   height: var(--interactive-target-min);
-  margin-inline: -5.5px;
+  margin-inline: calc(var(--space-3) * -0.5) -5.5px;
   padding: 0;
   border: 0;
   background: transparent;

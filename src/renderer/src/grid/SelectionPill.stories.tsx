@@ -8,15 +8,17 @@ import type { AlbumSummary } from '../../../shared/library/types.js';
 // working inline create. Only the two calls the picker makes are stubbed,
 // so the global slot is typed unknown rather than faking a full OverlookApi.
 function installStub(): void {
-  const albums: AlbumSummary[] = [
-    { id: 'A1', name: 'Big Sur', count: 10 },
-    { id: 'A2', name: 'Kyoto', count: 4 },
+  // The picker lists albums only — folders never hold photos (#505) — so the
+  // stub names each row's kind the way the bridge does.
+  const albums: (AlbumSummary & { readonly kind: 'album' })[] = [
+    { id: 'A1', name: 'Big Sur', count: 10, kind: 'album' },
+    { id: 'A2', name: 'Kyoto', count: 4, kind: 'album' },
   ];
   (globalThis as { overlook?: unknown }).overlook = {
     library: { albums: () => Promise.resolve({ albums }) },
     albums: {
       create: ({ name }: { name: string }) => {
-        const album = { id: `A${String(albums.length + 1)}`, name, count: 0 };
+        const album = { id: `A${String(albums.length + 1)}`, name, count: 0, kind: 'album' as const };
         albums.push(album);
         return Promise.resolve({ album });
       },

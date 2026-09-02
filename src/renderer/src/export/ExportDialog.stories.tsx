@@ -19,7 +19,8 @@ interface PreflightStub {
 
 function installStub(custodyFailure?: PhotoCustodyStatus, preflight: PreflightStub = { edited: 0, losses: [] }): void {
   const exportApi: OverlookApi['export'] = {
-    preflight: () => Promise.resolve({ edited: preflight.edited, losses: [...preflight.losses] }),
+    // Original only omits every edit by design, so main reports nothing lost for it.
+    preflight: ({ mode }) => Promise.resolve({ edited: preflight.edited, losses: mode === 'original' ? [] : [...preflight.losses] }),
     pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
     revokeDestination: () => Promise.resolve({ revoked: true }),
     runAll: async () => {
