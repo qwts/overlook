@@ -1,5 +1,12 @@
 import { parseCssColor } from './css-color.js';
-import { THEME_TOKENS, THEME_TOKENS_VERSION, type ThemeToken, type ThemeValidationError } from './theme-file.js';
+import {
+  THEME_CONTRAST_PAIRS,
+  THEME_TOKENS,
+  THEME_TOKENS_VERSION,
+  type ThemeContrastPair,
+  type ThemeToken,
+  type ThemeValidationError,
+} from './theme-file.js';
 
 /**
  * ADR-0019 §6: the annotated template is the authoritative, documented token
@@ -78,6 +85,8 @@ export interface ThemeTemplateFile {
   };
   readonly tokens: Readonly<Record<ThemeToken, string>>;
   readonly docs: Readonly<Record<ThemeToken, string>>;
+  /** ADR-0019 §4: the exact pairs the importer checks, with their thresholds. */
+  readonly contrastPairs: readonly ThemeContrastPair[];
 }
 
 export type ThemeTemplateResult =
@@ -118,6 +127,7 @@ export function buildThemeTemplate(input: ThemeTemplateInput): ThemeTemplateResu
       },
       tokens: tokens as Record<ThemeToken, string>,
       docs: THEME_TOKEN_DOCS,
+      contrastPairs: THEME_CONTRAST_PAIRS,
     },
   };
 }

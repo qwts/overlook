@@ -43,7 +43,8 @@ the current rendering exactly, so it is a safe starting point.
   },
   "docs": {
     "--surface-window": "Semantic window canvas. Defaults to --gray-0."
-  }
+  },
+  "contrastPairs": [{ "foreground": "--text-body", "background": "--surface-window", "warnAt": 4.5, "blockAt": 1.5 }]
 }
 ```
 
@@ -58,6 +59,12 @@ the current rendering exactly, so it is a safe starting point.
   `Canvas` are rejected. Unknown token names are ignored with a warning.
 - `docs` is optional, reserved, and ignored by the importer. The exporter fills
   it so the file explains itself; keep or drop it as you like.
+- `contrastPairs` is optional, reserved, and ignored by the importer. The
+  exporter fills it with the exact foreground/background pairs and thresholds
+  the validator checks ([validation rules](#validation-rules)), generated from
+  the same list the validator uses, so an author or a language model can see
+  what will be measured.
+  Editing it changes nothing: the importer always checks its own list.
 - Files must use the `.overlook-theme.json` suffix and stay under 256 KiB.
 
 ## Validation rules
@@ -70,6 +77,11 @@ Overlook validates before anything is written to the profile:
 | `--text-body` vs any surface below 1.5:1         | Rejected (invisible text)      |
 | Any text/surface or accent pair below 4.5:1      | Imported with a named warning  |
 | Unknown token                                    | Imported with a warning        |
+
+The checked pairs are every `--text-*` semantic token against every
+`--surface-*` token, `--text-on-accent` against each accent, and
+`--accent-cyan` against `--surface-window`; the exported template lists them
+verbatim under `contrastPairs`.
 
 Warnings are shown in the manager list and in the preview dialog before you can
 keep the theme. The exporter applies the same validator to the file it writes,

@@ -80,6 +80,11 @@ export const themeFileSchema = z
     tokens: z.record(z.string(), z.string()),
     /** Reserved for the annotated template shipped by #397. Never applied. */
     docs: z.record(z.string(), z.string()).optional(),
+    /** Reserved: the §4 pair list the exporter embeds. Never applied — the
+     * importer always checks `THEME_CONTRAST_PAIRS`, whatever the file says. */
+    contrastPairs: z
+      .array(z.object({ foreground: z.string(), background: z.string(), warnAt: z.number(), blockAt: z.number().optional() }).strict())
+      .optional(),
   })
   .strict();
 
@@ -171,6 +176,32 @@ const accentTokens = [
   '--accent-red',
 ] as const;
 
+export interface ThemeContrastPair {
+  readonly foreground: ThemeToken;
+  readonly background: ThemeToken;
+  /** Ratio below which the importer warns (WCAG AA guidance). */
+  readonly warnAt: number;
+  /** Ratio below which the importer rejects the file (unusable text). */
+  readonly blockAt?: number;
+}
+
+/**
+ * ADR-0019 §4: the pairs checked at import time, enumerated next to the
+ * token list. The exporter embeds this list in the annotated template so the
+ * documented contract and the enforced one are the same array.
+ */
+export const THEME_CONTRAST_PAIRS: readonly ThemeContrastPair[] = [
+  ...textTokens.flatMap((text) =>
+    surfaceTokens.map((surface): ThemeContrastPair =>
+      text === '--text-body'
+        ? { foreground: text, background: surface, warnAt: 4.5, blockAt: 1.5 }
+        : { foreground: text, background: surface, warnAt: 4.5 },
+    ),
+  ),
+  ...accentTokens.map((accent): ThemeContrastPair => ({ foreground: '--text-on-accent', background: accent, warnAt: 4.5 })),
+  { foreground: '--accent-cyan', background: '--surface-window', warnAt: 4.5 },
+];
+
 function zodErrors(error: z.ZodError): ThemeValidationError[] {
   return error.issues.map((issue) => ({ path: issue.path.length === 0 ? '$' : issue.path.join('.'), message: issue.message }));
 }
@@ -224,9 +255,7 @@ function contrastVerdicts(
       });
     }
   };
-  for (const text of textTokens) for (const surface of surfaceTokens) inspect(text, surface, 4.5, text === '--text-body' ? 1.5 : undefined);
-  for (const accent of accentTokens) inspect('--text-on-accent', accent, 4.5);
-  inspect('--accent-cyan', '--surface-window', 4.5);
+  for (const pair of THEME_CONTRAST_PAIRS) inspect(pair.foreground, pair.background, pair.warnAt, pair.blockAt);
   return { warnings, errors };
 }
 

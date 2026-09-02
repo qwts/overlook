@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { parseCssColor } from '../../src/shared/theme/css-color.js';
-import { THEME_TOKENS, validateThemeFile, type ThemeToken } from '../../src/shared/theme/theme-file.js';
+import { THEME_CONTRAST_PAIRS, THEME_TOKENS, validateThemeFile, type ThemeToken } from '../../src/shared/theme/theme-file.js';
 import { THEME_TOKEN_DOCS, buildThemeTemplate } from '../../src/shared/theme/theme-template.js';
 
 const textTokens = new Set<ThemeToken>([
@@ -44,6 +44,24 @@ describe('theme template export (#397, ADR-0019 §6)', () => {
     for (const [token, doc] of Object.entries(THEME_TOKEN_DOCS)) assert.ok(doc.trim().length > 20, `${token} needs a real description`);
   });
 
+  test('embeds the §4 contrast-pair list the importer enforces', () => {
+    // 4 text × 4 surface, --text-on-accent × 6 accents, --accent-cyan / window.
+    assert.equal(THEME_CONTRAST_PAIRS.length, 4 * 4 + 6 + 1);
+    for (const pair of THEME_CONTRAST_PAIRS) {
+      assert.ok(THEME_TOKENS.includes(pair.foreground), pair.foreground);
+      assert.ok(THEME_TOKENS.includes(pair.background), pair.background);
+      assert.equal(pair.warnAt, 4.5);
+      assert.equal(pair.blockAt, pair.foreground === '--text-body' ? 1.5 : undefined);
+    }
+    const built = buildThemeTemplate({ base: 'light', tokens: effectiveDark() });
+    assert.equal(built.ok, true);
+    if (!built.ok) return;
+    assert.deepEqual(built.template.contrastPairs, THEME_CONTRAST_PAIRS);
+    // A hand-edited pair list is reserved data: it neither breaks import nor changes what is checked.
+    const edited = validateThemeFile({ ...JSON.parse(JSON.stringify(built.template)), contrastPairs: [] } as unknown);
+    assert.equal(edited.ok, true);
+  });
+
   test('builds a template that round-trips through the importer as a no-op', () => {
     const input = effectiveDark();
     const built = buildThemeTemplate({ base: 'dark', tokens: input });
@@ -51,6 +69,7 @@ describe('theme template export (#397, ADR-0019 §6)', () => {
     if (!built.ok) return;
     assert.deepEqual(Object.keys(built.template.tokens), [...THEME_TOKENS]);
     assert.deepEqual(Object.keys(built.template.docs), [...THEME_TOKENS]);
+    assert.deepEqual(built.template.contrastPairs, THEME_CONTRAST_PAIRS);
     assert.equal(built.template.meta.base, 'dark');
     assert.equal(built.template.meta.tokensVersion, 1);
 
