@@ -15,6 +15,14 @@ async function launchSeeded(): Promise<{ app: ElectronApplication; page: Page }>
   return { app, page };
 }
 
+/** The actions button is revealed by hovering its row (pointer-events: none
+ * until then), so the pointer moves there before the click's hit test runs. */
+async function openActions(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name: `Actions for ${name}` });
+  await button.hover({ force: true });
+  await button.click();
+}
+
 // #505 / ADR-0030 §1, §2, §5 acceptance over the real IPC boundary: folders
 // nest albums (created inside, or moved in), a folder's All Photos policy is
 // the default for children that have not set their own and the child can
@@ -42,33 +50,33 @@ test('album folders: nest, inherit visibility, collapse across relaunch, delete 
     await page.getByRole('textbox', { name: 'Folder name' }).press('Enter');
     await expect(row('Trips')).toHaveAttribute('data-kind', 'folder');
     await expect(rowButton('Trips')).toHaveAttribute('aria-expanded', 'true');
-    await page.getByRole('button', { name: 'Actions for Trips' }).click();
+    await openActions(page, 'Trips');
     await page.getByRole('menuitem', { name: 'New album inside…' }).click();
     await page.getByRole('textbox', { name: 'Album name' }).fill('Hokkaido');
     await page.getByRole('textbox', { name: 'Album name' }).press('Enter');
     await expect(row('Hokkaido')).toHaveAttribute('data-depth', '1');
 
     // Move an existing album into the folder: it lands last among the children.
-    await page.getByRole('button', { name: 'Actions for Family' }).click();
+    await openActions(page, 'Family');
     await page.getByRole('menuitem', { name: 'Move to folder…' }).click();
     await page.getByRole('combobox', { name: 'Folder' }).selectOption({ label: 'Trips' });
     await page.getByRole('button', { name: 'Move', exact: true }).click();
     await expect(row('Family')).toHaveAttribute('data-depth', '1');
-    await expect.poll(names).toEqual(['Trips', 'Hokkaido', 'Family', ...existing.filter((name) => name !== 'Family')]);
+    await expect.poll(names).toEqual([...existing.filter((name) => name !== 'Family'), 'Trips', 'Hokkaido', 'Family']);
     await expect(rowButton('Trips')).toContainText('3');
     await expect(page.locator('.ovl-toast-host')).toContainText('Moved Family to Trips');
 
     // Folder policy is the default for its children: hiding the folder hides Family's 3 photos.
-    await page.getByRole('button', { name: 'Actions for Trips' }).click();
+    await openActions(page, 'Trips');
     await page.getByRole('menuitem', { name: /Hide from All Photos/u }).click();
     await expect(allPhotos(9)).toBeVisible();
     await expect(rowButton('Family').getByRole('img', { name: 'Hidden from All Photos' })).toBeVisible();
-    await page.getByRole('button', { name: 'Actions for Family' }).click();
+    await openActions(page, 'Family');
     await expect(page.getByRole('menuitem', { name: /Show in All Photos.*Follows the folder setting/u })).toBeVisible();
     // An explicit setting on the child wins, and the child can follow the folder again.
     await page.getByRole('menuitem', { name: /Show in All Photos/u }).click();
     await expect(allPhotos(12)).toBeVisible();
-    await page.getByRole('button', { name: 'Actions for Family' }).click();
+    await openActions(page, 'Family');
     await page.getByRole('menuitem', { name: 'Use folder setting' }).click();
     await expect(allPhotos(9)).toBeVisible();
 
@@ -85,12 +93,12 @@ test('album folders: nest, inherit visibility, collapse across relaunch, delete 
     await expect(row('Hokkaido')).toHaveAttribute('data-depth', '1');
 
     // Tags are a separate vocabulary shown on the menu, never on photos.
-    await page.getByRole('button', { name: 'Actions for Trips' }).click();
+    await openActions(page, 'Trips');
     await page.getByRole('menuitem', { name: 'Tags…' }).click();
     await page.getByRole('textbox', { name: 'Tags, separated by commas' }).fill('travel, Travel, 2026');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.locator('.ovl-toast-host')).toContainText('Saved tags for Trips');
-    await page.getByRole('button', { name: 'Actions for Trips' }).click();
+    await openActions(page, 'Trips');
     await expect(page.getByRole('menuitem', { name: /Tags….*2026, travel/u })).toBeVisible();
 
     // Deleting the folder recursively names the structure it removes; photos return to All Photos.

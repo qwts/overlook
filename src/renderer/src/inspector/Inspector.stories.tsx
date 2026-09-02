@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { Inspector } from './Inspector';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
@@ -343,7 +343,7 @@ export const ProvenanceVerified: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const section = await canvas.findByTestId('inspector-provenance');
-    await expect(section).toHaveAttribute('data-tier', 'verified');
+    await waitFor(() => expect(section).toHaveAttribute('data-tier', 'verified'));
     await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Verified provenance');
     await expect(canvas.getByText('Content Credentials valid for these bytes')).toBeVisible();
     await expect(canvas.getByText('Validated locally against c2pa validator 1.0 · default trust list.')).toBeVisible();
@@ -434,7 +434,7 @@ export const ProvenanceDetected: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const section = await canvas.findByTestId('inspector-provenance');
-    await expect(section).toHaveAttribute('data-tier', 'detected');
+    await waitFor(() => expect(section).toHaveAttribute('data-tier', 'detected'));
     await expect(canvas.getByText('Detector report — not verified')).toBeVisible();
     await expect(canvas.getByText('watermark-detector 2.1 · positive · 83%')).toBeVisible();
     await expect(canvas.getByText(/Detectors have false positives and false negatives\. Trained on one generator family/u)).toBeVisible();
@@ -462,10 +462,10 @@ export const ProvenanceDeferredUnchecked: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const section = await canvas.findByTestId('inspector-provenance');
+    await waitFor(() => expect(canvas.getByText('Original not local — checked when it returns')).toBeVisible());
     await expect(section).toHaveAttribute('data-tier', 'pending');
     await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Not checked');
     await expect(canvas.getByText('Not checked yet')).toBeVisible();
-    await expect(canvas.getByText('Original not local — checked when it returns')).toBeVisible();
     await expect(canvas.queryByText('Unknown is not a claim that a person made this image.')).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Re-check' })).toBeEnabled();
   },
@@ -510,7 +510,7 @@ export const VariantsFamily: Story = {
     await expect(rows[0]).toHaveAttribute('data-representative', 'false');
     await expect(rows[1]).toHaveAttribute('data-representative', 'true');
     await expect(canvas.getByText('Representative')).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /^Show .*Shown/u })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: /^Show IMG_4021\.RAF, Imported/u })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: /^Show .*Duplicate/u }));
     await expect(args.onShowPhoto).toHaveBeenCalledWith(DUPLICATE.id);
     await userEvent.click(canvas.getByRole('button', { name: /^Promote .* to representative$/u }));
@@ -527,7 +527,7 @@ export const Histogram: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 3, name: 'Histogram' })).toBeVisible();
     const section = canvasElement.querySelector('[data-testid="inspector-histogram"]');
-    await expect(section).toHaveAttribute('data-state', 'ready');
+    await waitFor(() => expect(section).toHaveAttribute('data-state', 'ready'));
     await expect(section).toHaveAttribute('data-digest', 'story001');
     await expect(canvas.getByRole('img', { name: 'Histogram of IMG_4021.RAF: red, green, blue and luminance' })).toBeVisible();
     await expect(canvas.getByText('Shadows 0.2% · Highlights 1.4%')).toBeVisible();
@@ -541,7 +541,7 @@ export const HistogramUnavailable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const section = canvasElement.querySelector('[data-testid="inspector-histogram"]');
-    await expect(section).toHaveAttribute('data-state', 'unavailable');
+    await waitFor(() => expect(section).toHaveAttribute('data-state', 'unavailable'));
     await expect(canvas.getByText('No preview in custody yet — repair pending')).toBeVisible();
     await expect(canvas.queryByRole('img', { name: /^Histogram of/u })).toBeNull();
   },

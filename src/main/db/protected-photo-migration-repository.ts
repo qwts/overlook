@@ -439,13 +439,15 @@ export class ProtectedPhotoMigrationRepository {
       `INSERT INTO photos (
          id, file_name, file_kind, width, height, bytes, content_hash,
          camera, lens, iso, aperture, shutter, focal_length, taken_at,
-         gps_lat, gps_lon, place, imported_at, import_source, favorite, key_id
+         gps_lat, gps_lon, place, imported_at, import_source, favorite, key_id, derivative_key
        ) VALUES (
          @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
          @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
-         @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite, @keyId
+         @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite, @keyId, @derivativeKey
        )`,
-      { ...photo, favorite: photo.favorite === true ? 1 : 0 },
+      // The derivative key is unique per row (#496): a restored photo owns its
+      // hash's derivatives again unless the record names its own key.
+      { ...photo, favorite: photo.favorite === true ? 1 : 0, derivativeKey: photo.derivativeKey ?? photo.contentHash },
     );
     run(this.db, `INSERT INTO sync_ledger (photo_id, status, dirty) VALUES (?, 'local', 1)`, photo.id);
   }

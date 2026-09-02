@@ -16,7 +16,11 @@ import process from 'node:process';
 // Built from the code point so the control character never sits in a regex literal.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'gu');
 const MAX_MESSAGE = 1200;
-const MAX_ANNOTATIONS = 40;
+const MAX_ANNOTATIONS = 30;
+// GitHub keeps ten annotations per step and level; spreading the stories over
+// error, warning, and notice keeps thirty of them readable from the checks API.
+const PER_LEVEL = 10;
+const LEVELS = ['error', 'warning', 'notice'];
 
 /** Strips ANSI colour codes and the concurrently `[test] ` prefix. */
 export function cleanLine(line) {
@@ -67,12 +71,13 @@ function main() {
     console.log('::error title=Storybook failure::test-storybook failed without a parseable story failure; see the step log.');
     return;
   }
-  for (const failure of failures.slice(0, MAX_ANNOTATIONS)) {
+  failures.slice(0, MAX_ANNOTATIONS).forEach((failure, index) => {
+    const level = LEVELS[Math.min(Math.floor(index / PER_LEVEL), LEVELS.length - 1)];
     const message = failure.lines.join('\n').slice(0, MAX_MESSAGE) || 'play-test failed (no message captured)';
     console.log(
-      `::error file=.storybook/test-runner.ts,line=1,title=Storybook: ${escapeAnnotation(failure.title)}::${escapeAnnotation(message)}`,
+      `::${level} file=.storybook/test-runner.ts,line=1,title=Storybook: ${escapeAnnotation(failure.title)}::${escapeAnnotation(message)}`,
     );
-  }
+  });
   if (failures.length > MAX_ANNOTATIONS) {
     console.log(
       `::error title=Storybook failure::${failures.length - MAX_ANNOTATIONS} more failing stories not annotated; see the step log.`,

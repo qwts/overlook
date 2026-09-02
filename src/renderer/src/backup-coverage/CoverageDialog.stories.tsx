@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { CoverageDialog } from './CoverageDialog';
 
@@ -93,7 +93,7 @@ export const KeepsOnThisDevice: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByRole('button', { name: 'Keep on this device only' })).toBeEnabled();
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Keep on this device only' })).toBeEnabled());
     await expect(canvas.queryByTestId('coverage-remote')).toBeNull();
   },
 };

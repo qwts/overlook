@@ -25,6 +25,14 @@ const reorderAlbum = fn((request: { position: number }) => Promise.resolve({ cha
 const moveAlbum = fn();
 const deleteFolder = fn();
 
+/** A row reveals its actions button on hover/focus (pointer-events: none
+ * until then): focus first so user-event's pointer check sees a live target. */
+async function openActions(actions: HTMLElement): Promise<void> {
+  actions.focus();
+  await waitFor(() => expect(window.getComputedStyle(actions).pointerEvents).toBe('auto'));
+  await userEvent.click(actions);
+}
+
 /** A listing fixture: a top-level, visible, untagged album unless overridden (#505). */
 function listing(overrides: Partial<AlbumListing> & Pick<AlbumListing, 'id' | 'name' | 'count'>): AlbumListing {
   return {
@@ -333,7 +341,7 @@ export const HiddenAlbumDisclosesInclusion: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('img', { name: 'Hidden from All Photos' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
     const body = within(document.body);
     await expect(body.getByRole('menuitem', { name: /Show in All Photos/u })).toBeVisible();
     await expect(body.getByRole('menuitem', { name: /12 photos stay in All Photos via other albums/u })).toBeVisible();
@@ -373,9 +381,7 @@ export const AlbumManagement: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const actions = canvas.getByRole('button', { name: 'Actions for Iceland' });
-    actions.focus();
-    await waitFor(() => expect(window.getComputedStyle(actions).pointerEvents).toBe('auto'));
-    await userEvent.click(actions);
+    await openActions(actions);
     await userEvent.click(canvas.getByRole('menuitem', { name: 'Rename album…' }));
     const renameDialog = within(canvas.getByRole('dialog', { name: 'Rename album' }));
     await userEvent.clear(renameDialog.getByRole('textbox', { name: 'Album name' }));
@@ -511,7 +517,7 @@ export const AlbumFolders: Story = {
     await expect(iceland).toHaveAttribute('data-depth', '1');
     await expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toBeDisabled();
 
-    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
     await expect(body.getByRole('menuitem', { name: /Show in All Photos.*Follows the folder setting/u })).toBeVisible();
     await expect(body.queryByRole('menuitem', { name: 'Use folder setting' })).not.toBeInTheDocument();
     await userEvent.click(body.getByRole('menuitem', { name: 'Move to folder…' }));
@@ -526,7 +532,7 @@ export const AlbumFolders: Story = {
     await userEvent.click(trips);
     await expect(canvas.getByText('Iceland')).toBeVisible();
 
-    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Trips' }));
+    await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
     await expect(body.getByRole('menuitem', { name: /Tags….*travel/u })).toBeVisible();
     await userEvent.click(body.getByRole('menuitem', { name: 'Delete folder…' }));
     const remove = within(canvas.getByRole('dialog', { name: 'Delete folder' }));
@@ -620,7 +626,7 @@ export const SmartAlbums: Story = {
     const rows = canvas.getAllByRole('listitem');
     await expect(rows.find((row) => row.textContent?.includes('Fuji RAW'))).toHaveAttribute('data-kind', 'smart');
     await expect(canvas.getByRole('img', { name: 'Saved query cannot be evaluated by this version' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Fuji RAW' }));
+    await openActions(canvas.getByRole('button', { name: 'Actions for Fuji RAW' }));
     const menu = canvas.getByRole('menu', { name: 'Actions for Fuji RAW' });
     await expect(within(menu).getByRole('menuitem', { name: 'Edit Smart Album' })).toBeInTheDocument();
     await expect(within(menu).getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument();

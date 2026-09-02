@@ -107,12 +107,9 @@ function installStub(custodyFailure?: PhotoCustodyStatus, preflight: PreflightSt
           },
         ],
         embedded: request.payload === 'original' ? ['captureTime', 'location'] : [],
-        blocked:
-          request.payload === 'original' && request.operation?.widen.includes('location') !== true
-            ? ['location']
-            : request.payload === 'original' && request.destination === 'public'
-              ? ['captureTime']
-              : [],
+        // These stories exercise the export flow, not the gate (DisclosurePreview
+        // stories do): only a public destination holds an original back.
+        blocked: request.payload === 'original' && request.destination === 'public' ? ['captureTime'] : [],
         retainedSidecars: request.metadata === 'original' ? 1 : 0,
       }),
   };

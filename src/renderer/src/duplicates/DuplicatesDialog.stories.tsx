@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import { DuplicatesDialog } from './DuplicatesDialog';
@@ -95,7 +95,7 @@ export const Group: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = await canvas.findByTestId('duplicates-dialog');
-    await expect(body).toHaveAttribute('data-state', 'ready');
+    await waitFor(() => expect(body).toHaveAttribute('data-state', 'ready'));
     await expect(body).toHaveAttribute('data-groups', '1');
     const group = canvas.getByTestId('duplicate-group');
     await expect(group).toHaveAttribute('data-count', '3');
@@ -135,7 +135,7 @@ export const StillIndexing: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = await canvas.findByTestId('duplicates-dialog');
-    await expect(body).toHaveAttribute('data-state', 'indexing');
+    await waitFor(() => expect(body).toHaveAttribute('data-state', 'indexing'));
     await expect(canvas.getByText('Still comparing previews — nothing to review yet.')).toBeVisible();
     await expect(canvas.getByTestId('duplicates-progress')).toHaveTextContent('2 of 6 photos compared · 4 pending');
   },

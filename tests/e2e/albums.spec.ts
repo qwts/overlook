@@ -211,9 +211,10 @@ test('album management: rename, delete, remove membership, and collapsed keyboar
   const keyboardMenu = page.getByRole('menu', { name: 'Actions for Keyboard album' });
   await expect(keyboardMenu.getByRole('menuitem', { name: 'Move up' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
+  // The middle of the menu grows with folders, tags, and visibility (#505,
+  // #494); End and ArrowUp reach Rename without counting those rows.
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowUp');
   await expect(keyboardMenu.getByRole('menuitem', { name: 'Rename album…' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(keyboardMenu.getByRole('menuitem', { name: 'Delete album…' })).toBeFocused();

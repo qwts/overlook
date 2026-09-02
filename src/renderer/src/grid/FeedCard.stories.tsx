@@ -127,7 +127,7 @@ export const Offloaded: Story = {
   render: () => <Card record={photo(2, 'offloaded', { title: 'Offloaded to the archive' })} />,
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('.ovl-feedcard')).toHaveClass('ovl-feedcard--offloaded');
-    await expect(within(canvasElement).getByRole('img', { name: 'Offloaded' })).toBeVisible();
+    await expect(within(canvasElement).getByRole('img', { name: 'Offloaded to cloud' })).toBeVisible();
   },
 };
 
