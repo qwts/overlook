@@ -15,6 +15,7 @@ import {
   backupManifestV6Schema,
   buildBackupManifestV2,
   buildBackupManifestV4,
+  buildBackupManifestV7,
   type BackupManifestPhotoV2,
   type BackupManifestV2,
 } from '../../src/main/backup/backup-manifest.js';
@@ -30,6 +31,7 @@ import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.j
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { ProtectedRecoveryRepository } from '../../src/main/db/protected-recovery-repository.js';
+import { SidecarRepository } from '../../src/main/db/sidecar-repository.js';
 import { ActivityRepository } from '../../src/main/activity/activity-repository.js';
 import { queryGet } from '../../src/main/db/sql.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
@@ -834,4 +836,58 @@ test('restore engine: re-running after the missing object is recovered fills the
   assert.equal(await restoredStore.verifyOriginal(lost.contentHash, restoredKeys.resolver(), lost.id), true);
   assert.deepEqual(ledgerStatus(world.targetDir, lost.id), { status: 'synced', lastBackupAt: GENERATED_AT });
   assert.equal(existsSync(join(world.targetDir, 'restore-report.json')), false, 'a complete re-run leaves no stale NOT FOUND report');
+});
+
+test('restore engine: a schema-7 manifest scans, downloads, and catalogs its sidecars (#512 review)', async () => {
+  // The sidecar guards used to accept schema 6 only, so a newer era inserted
+  // catalog rows that pointed at companions restore never fetched.
+  const world = await restoreWorld();
+  const [photo] = world.photos;
+  assert.ok(photo !== undefined);
+  const sidecarSource = new BlobStore({ dataDir: mkdtempSync(join(tmpdir(), 'overlook-restore-sidecar-source-')) });
+  await sidecarSource.init();
+  const sidecarPlaintext = Buffer.from('<x:xmpmeta>schema seven</x:xmpmeta>');
+  const ref = await sidecarSource.putSidecar(Readable.from([sidecarPlaintext]), world.keyStore.currentKey(), photo.id);
+  const ciphertext = await buffer(sidecarSource.getEncryptedSidecarStream(photo.id, ref.contentHash));
+  const blobPath = `sidecars/${photo.id}/${ref.contentHash}`;
+  await put(world.provider, blobPath, ciphertext);
+  const { schema: _schema, libraryId: _libraryId, generatedAt: _generatedAt, ...base } = makeManifest(world.photos);
+  const sidecar = {
+    photoId: photo.id,
+    role: 'xmp' as const,
+    fileName: 'IMG_1.xmp',
+    hash: ref.contentHash,
+    bytes: ref.bytes,
+    keyId: ref.keyId,
+    blobPath,
+    ciphertext: { sha256: createHash('sha256').update(ciphertext).digest('hex'), bytes: ciphertext.length },
+  };
+  const snapshot = { ...base, protectedAlbums: [], protectedPhotos: [], activity: [], boards: [], sidecars: [sidecar] };
+  const manifest = buildBackupManifestV7({
+    libraryId: LIBRARY_ID,
+    generatedAt: GENERATED_AT,
+    snapshot: { ...snapshot, galleryPolicy: { showUnavailable: true, minimumMegapixels: null } },
+  });
+  await put(world.provider, 'manifest/gen-2.ovlk', await sealManifest(manifest, world.keyStore));
+
+  const result = await new RestoreEngine(world.deps).run({ masterKey: world.masterKey, allowReplace: false });
+  assert.equal(result.generation, 2);
+  assert.deepEqual(result.missing, []);
+  const restoredKeys = KeyStore.open({ safeStorage: fakeSafeStorage, dataDir: world.targetDir });
+  const dbKey = restoredKeys.resolver()(1);
+  assert.ok(dbKey !== undefined);
+  const db = openLibraryDatabase({ path: join(world.targetDir, 'library.db'), dbKey });
+  assert.deepEqual(
+    new SidecarRepository(db).listForPhoto(photo.id).map((row) => [row.role, row.fileName, row.contentHash]),
+    [['xmp', 'IMG_1.xmp', ref.contentHash]],
+  );
+  db.close();
+  const restoredStore = new BlobStore({ dataDir: world.targetDir });
+  await restoredStore.init();
+  assert.equal(
+    await restoredStore.verifySidecar(photo.id, ref.contentHash, restoredKeys.resolver()),
+    true,
+    'the companion bytes were fetched',
+  );
+  assert.deepEqual(await buffer(restoredStore.getSidecarStream(photo.id, ref.contentHash, restoredKeys.resolver())), sidecarPlaintext);
 });
