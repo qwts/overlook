@@ -57,13 +57,19 @@ with the validator follow-up.
    made this image."
 5. Press **Re-check** on any photo. **Expected:** the button reads
    "Checking…" briefly, the same tier and rows return, **Checked** updates,
-   and no stale flag appears.
+   and no stale flag appears. Page to another photo while it says
+   "Checking…": the new photo's own record shows, never the previous one's.
+   Only the first 32 MiB of an original is read for the check (the same
+   window the extractor scans), so inspecting a large RAW or video does not
+   load the whole file into memory.
 6. Offload the original of an evaluated photo (or open a library whose
    originals are cloud-only) and view it. **Expected:** the existing record
    stays visible; if its bytes hash differs from the current original the
    amber "Re-check needed" note shows; with the original offloaded the amber
    "Original not local — checked when it returns" note shows instead of a
-   new evaluation.
+   new evaluation. A photo with **no** stored record whose original is
+   offloaded reads **Not checked** (neutral badge, "Not checked yet"), never
+   **Unknown** — no evaluation happened, so no tier is claimed.
 7. Relaunch and open the same photos. **Expected:** the records are served
    from the library without re-evaluating (the **Checked** date is
    unchanged).
@@ -77,8 +83,11 @@ with the validator follow-up.
     with "Validated locally against …"; `ProvenanceDetected` renders the
     amber badge, the detector's name, version, result, confidence, and its
     stated limits under "Detectors have false positives and false
-    negatives"; `ProvenanceUnsupported` renders "Newer evidence format —
-    view only".
+    negatives"; `ProvenanceDeferredUnchecked` renders the **Not checked**
+    badge with no Unknown copy; `ProvenanceUnsupported` renders the **Newer
+    format** badge, "Newer evidence format — view only", and a disabled
+    **Re-check** (a downgraded build must not replace forward-compatible
+    evidence).
 
 ## Coverage
 

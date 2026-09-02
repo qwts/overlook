@@ -333,6 +333,8 @@ export const en: Readonly<Record<string, string>> = {
   "inspector.provenance.origin.xmp": "XMP",
   "inspector.provenance.refresh": "Re-check",
   "inspector.provenance.stale": "Re-check needed — the bytes or the checker changed",
+  "inspector.provenance.state.pending": "Not checked",
+  "inspector.provenance.state.unsupported": "Newer format",
   "inspector.provenance.summary.declared": "{claim} — declared by metadata, not verified",
   "inspector.provenance.summary.detected": "Detector report — not verified",
   "inspector.provenance.summary.invalid": "Content Credentials invalid for these bytes",

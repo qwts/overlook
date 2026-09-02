@@ -176,6 +176,12 @@ describe('provenance service (#495)', () => {
     assert.equal(payload.evidence, null);
     assert.match(payload.unsupported ?? '', /newer/u);
     assert.equal(h.calls.extracts, 0);
+    // Re-check must not let a downgraded build replace forward-compatible evidence.
+    const refreshed = await h.service.refresh('P1');
+    assert.equal(refreshed.evidence, null);
+    assert.match(refreshed.unsupported ?? '', /newer/u);
+    assert.equal(h.calls.extracts, 0);
+    assert.equal(h.provenance.get('P1')?.evaluator, 'future');
   });
 
   test('an unknown photo is an error', async () => {

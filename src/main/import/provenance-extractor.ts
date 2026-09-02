@@ -16,7 +16,12 @@ import { plainXmlText } from './xmp-metadata.js';
 
 /** Bytes inspected for an XMP packet; credentials and text chunks walk their
  * own bounded structures. */
-const SCAN_LIMIT = 32 * 1024 * 1024;
+/**
+ * Only this many leading bytes of an original (or a sidecar) are inspected.
+ * Readers hand the extractor at most this much, so inspecting a large RAW or
+ * a video never materializes the whole file (#1113 review).
+ */
+export const PROVENANCE_SCAN_LIMIT = 32 * 1024 * 1024;
 const MAX_SOURCES = 64;
 const MAX_VALUE = 2000;
 const MAX_CHUNKS = 4096;
@@ -118,7 +123,7 @@ function credential(
 
 /** The first XMP packet in the scanned prefix, or null. */
 export function findXmpPacket(bytes: Buffer): string | null {
-  const window = bytes.subarray(0, SCAN_LIMIT);
+  const window = bytes.subarray(0, PROVENANCE_SCAN_LIMIT);
   const start = window.indexOf('<x:xmpmeta');
   if (start === -1) {
     const rdf = window.indexOf('<rdf:RDF');
@@ -342,7 +347,7 @@ export async function extractProvenanceSources(bytes: Buffer, sidecarXmp: readon
   if (packet !== null) sources.push(...xmpSources(packet, 'xmp'));
   sources.push(...(await exifSources(bytes)));
   for (const sidecar of sidecarXmp) {
-    const sidecarPacket = findXmpPacket(sidecar) ?? (sidecar.length <= SCAN_LIMIT ? sidecar.toString('utf8') : null);
+    const sidecarPacket = findXmpPacket(sidecar) ?? (sidecar.length <= PROVENANCE_SCAN_LIMIT ? sidecar.toString('utf8') : null);
     if (sidecarPacket !== null) sources.push(...xmpSources(sidecarPacket, 'xmp-sidecar'));
   }
   return dedupe(sources).slice(0, MAX_SOURCES);

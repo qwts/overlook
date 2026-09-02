@@ -986,6 +986,12 @@
   "inspector.provenance.stale": {
     "defaultMessage": "Re-check needed — the bytes or the checker changed"
   },
+  "inspector.provenance.state.pending": {
+    "defaultMessage": "Not checked"
+  },
+  "inspector.provenance.state.unsupported": {
+    "defaultMessage": "Newer format"
+  },
   "inspector.provenance.summary.declared": {
     "defaultMessage": "{claim} — declared by metadata, not verified"
   },

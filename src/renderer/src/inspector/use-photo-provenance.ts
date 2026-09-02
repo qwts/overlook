@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { ProvenancePayload } from '../../../shared/ipc/provenance-channels.js';
@@ -39,7 +39,12 @@ export function usePhotoProvenance(photoId: string, api?: PhotoProvenanceApi): P
     setLoaded(false);
   }
 
+  // The photo currently shown; a Re-check that resolves after paging away
+  // must not write the old photo's record over the new one.
+  const shownPhotoId = useRef(photoId);
+
   useEffect(() => {
+    shownPhotoId.current = photoId;
     if (resolvedApi === undefined) return;
     let active = true;
     void resolvedApi
@@ -62,7 +67,8 @@ export function usePhotoProvenance(photoId: string, api?: PhotoProvenanceApi): P
     if (resolvedApi === undefined) return;
     setRefreshing(true);
     try {
-      setPayload(await resolvedApi.refresh({ photoId }));
+      const next = await resolvedApi.refresh({ photoId });
+      if (shownPhotoId.current === photoId) setPayload(next);
     } catch {
       // The stored record stays; the section keeps showing it.
     } finally {

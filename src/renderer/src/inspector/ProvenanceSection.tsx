@@ -27,6 +27,8 @@ const messages = defineMessages({
   tierDeclared: { id: 'inspector.provenance.tier.declared', defaultMessage: 'Declared' },
   tierDetected: { id: 'inspector.provenance.tier.detected', defaultMessage: 'Detected' },
   tierUnknown: { id: 'inspector.provenance.tier.unknown', defaultMessage: 'Unknown' },
+  statePending: { id: 'inspector.provenance.state.pending', defaultMessage: 'Not checked' },
+  stateUnsupported: { id: 'inspector.provenance.state.unsupported', defaultMessage: 'Newer format' },
   claimGenerated: { id: 'inspector.provenance.claim.generated', defaultMessage: 'AI-generated' },
   claimEdited: { id: 'inspector.provenance.claim.edited', defaultMessage: 'AI-edited' },
   claimTool: { id: 'inspector.provenance.claim.tool', defaultMessage: 'Tool named' },
@@ -80,13 +82,27 @@ const TEST_ID = 'inspector-provenance';
 const TIER_TEST_ID = 'inspector-provenance-tier';
 const STALE_TONE = 'var(--accent-amber)';
 
-const TIER_PRESENTATION: Readonly<
-  Record<ProvenanceTier, { readonly tone: BadgeTone; readonly icon: IconName; readonly label: keyof typeof messages }>
-> = {
+interface BadgePresentation {
+  readonly tone: BadgeTone;
+  readonly icon: IconName;
+  readonly label: keyof typeof messages;
+}
+
+const TIER_PRESENTATION: Readonly<Record<ProvenanceTier, BadgePresentation>> = {
   verified: { tone: 'green', icon: 'shield-check', label: 'tierVerified' },
   declared: { tone: 'cyan', icon: 'info', label: 'tierDeclared' },
   detected: { tone: 'amber', icon: 'eye', label: 'tierDetected' },
   unknown: { tone: 'neutral', icon: 'info', label: 'tierUnknown' },
+};
+
+// No evaluation happened (nothing stored yet, or the original is not local)
+// or the stored record is in a format this build cannot read: neither is a
+// tier, and neither may be worded as Unknown.
+type ProvenanceState = ProvenanceTier | 'pending' | 'unsupported';
+
+const STATE_PRESENTATION: Readonly<Record<'pending' | 'unsupported', BadgePresentation>> = {
+  pending: { tone: 'neutral', icon: 'circle-help', label: 'statePending' },
+  unsupported: { tone: 'neutral', icon: 'file-key', label: 'stateUnsupported' },
 };
 
 const CLAIM_LABEL: Readonly<Record<ProvenanceClaim, keyof typeof messages>> = {
@@ -175,20 +191,26 @@ export function ProvenanceSection({ photoId, api }: ProvenanceSectionProps): Rea
   if (!provenance.available) return null;
   const payload = provenance.payload;
   const evidence = payload?.evidence ?? null;
-  const tier: ProvenanceTier = evidence?.tier ?? 'unknown';
   const sources = evidence?.sources ?? [];
-  const presentation = TIER_PRESENTATION[tier];
   const unsupported = payload?.unsupported ?? null;
+  const state: ProvenanceState = unsupported !== null ? 'unsupported' : evidence === null ? 'pending' : evidence.tier;
+  const presentation = state === 'pending' || state === 'unsupported' ? STATE_PRESENTATION[state] : TIER_PRESENTATION[state];
   const summary =
-    unsupported !== null
+    state === 'unsupported'
       ? intl.formatMessage(messages.summaryUnsupported)
-      : evidence === null
+      : state === 'pending' || evidence === null
         ? intl.formatMessage(messages.summaryPending)
-        : summaryOf(intl, tier, sources);
+        : summaryOf(intl, state, sources);
   const stale = payload?.stale === true;
   const deferred = payload?.status === 'deferred';
   return (
-    <section className={SECTION_CLASS} data-testid={TEST_ID} data-tier={tier} data-stale={stale} data-status={payload?.status ?? 'loading'}>
+    <section
+      className={SECTION_CLASS}
+      data-testid={TEST_ID}
+      data-tier={state}
+      data-stale={stale}
+      data-status={payload?.status ?? 'loading'}
+    >
       <h3 className={TITLE_CLASS}>{intl.formatMessage(messages.title)}</h3>
       <div className={BADGES_CLASS}>
         <Badge tone={presentation.tone} icon={presentation.icon} data-testid={TIER_TEST_ID}>
@@ -213,10 +235,10 @@ export function ProvenanceSection({ photoId, api }: ProvenanceSectionProps): Rea
           {intl.formatMessage(messages.deferred)}
         </p>
       ) : null}
-      {evidence === null || unsupported !== null ? null : <p className={NOTE_CLASS}>{noteOf(intl, tier, sources)}</p>}
+      {evidence === null || state === 'unsupported' ? null : <p className={NOTE_CLASS}>{noteOf(intl, evidence.tier, sources)}</p>}
       <p className={NOTE_CLASS}>{intl.formatMessage(messages.local)}</p>
       <div className={ACTIONS_CLASS}>
-        <Button size="sm" icon="refresh-cw" disabled={provenance.busy} onClick={() => void provenance.refresh()}>
+        <Button size="sm" icon="refresh-cw" disabled={provenance.busy || state === 'unsupported'} onClick={() => void provenance.refresh()}>
           {intl.formatMessage(provenance.busy ? messages.checking : messages.refresh)}
         </Button>
       </div>

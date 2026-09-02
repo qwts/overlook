@@ -43,9 +43,16 @@ export class ProvenanceService {
     return this.evaluate(photo);
   }
 
-  /** Re-evaluates unconditionally (the Inspector's Re-check). */
+  /**
+   * Re-evaluates (the Inspector's Re-check) — except over a stored record in a
+   * newer format than this build understands, which stays untouched: a
+   * downgraded app must not replace forward-compatible evidence (§7).
+   */
   async refresh(photoId: string): Promise<ProvenancePayload> {
-    return this.evaluate(this.photo(photoId));
+    const photo = this.photo(photoId);
+    const stored = this.deps.provenance.get(photoId);
+    if (stored !== null && stored.unsupported !== null) return this.payload(photo, 'evaluated');
+    return this.evaluate(photo);
   }
 
   private async evaluate(photo: PhotoRecord): Promise<ProvenancePayload> {

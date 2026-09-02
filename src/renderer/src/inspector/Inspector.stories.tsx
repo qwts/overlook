@@ -413,12 +413,34 @@ export const ProvenanceUnknownStale: Story = {
   },
 };
 
+// Nothing was evaluated (the original is not local and nothing is stored):
+// that is "Not checked", never an Unknown tier.
+export const ProvenanceDeferredUnchecked: Story = {
+  args: { photo: PHOTO },
+  parameters: { provenance: { ...provenanceOf('unknown', [], { status: 'deferred' }), evidence: null } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByTestId('inspector-provenance');
+    await expect(section).toHaveAttribute('data-tier', 'pending');
+    await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Not checked');
+    await expect(canvas.getByText('Not checked yet')).toBeVisible();
+    await expect(canvas.getByText('Original not local — checked when it returns')).toBeVisible();
+    await expect(canvas.queryByText('Unknown is not a claim that a person made this image.')).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Re-check' })).toBeEnabled();
+  },
+};
+
 export const ProvenanceUnsupported: Story = {
   args: { photo: PHOTO },
   parameters: {
     provenance: { ...provenanceOf('unknown', []), evidence: null, unsupported: 'evidence format 2 is newer than this app' },
   },
   play: async ({ canvasElement }) => {
-    await expect(await within(canvasElement).findByText('Newer evidence format — view only')).toBeVisible();
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Newer evidence format — view only')).toBeVisible();
+    await expect(canvas.getByTestId('inspector-provenance')).toHaveAttribute('data-tier', 'unsupported');
+    await expect(canvas.getByTestId('inspector-provenance-tier')).toHaveTextContent('Newer format');
+    // Re-check would replace forward-compatible evidence; it stays off.
+    await expect(canvas.getByRole('button', { name: 'Re-check' })).toBeDisabled();
   },
 };
