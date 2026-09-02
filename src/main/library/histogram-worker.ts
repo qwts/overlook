@@ -6,7 +6,9 @@ import { binHistogram, type HistogramData } from '../../shared/library/histogram
 
 // Histogram worker (#498): decode a mid derivative to raw samples and bin
 // them, off the main thread. The bytes arrive already decrypted (BlobStore
-// decrypts in main) and are wiped here once binned; nothing touches disk.
+// decrypts in main) as this thread's own structured-clone copy, so both the
+// encoded copy and the decoded samples are wiped here once binned, on
+// success and on failure alike; nothing touches disk.
 
 export interface HistogramJobRequest {
   readonly jobId: number;
@@ -43,5 +45,8 @@ parentPort?.on('message', (request: HistogramJobRequest) => {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       } satisfies HistogramJobResponse);
+    })
+    .finally(() => {
+      request.bytes.fill(0);
     });
 });

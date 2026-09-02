@@ -8,8 +8,12 @@ import { HistogramDecodeError } from './histogram-runner.js';
 // offload, so the answer follows the focused photo, the active variant (its
 // own derivative key) and the head revision. Answers are cached per photo
 // and keyed on the head revision and derivative key; a repair or re-bake
-// that changes neither is invalidated explicitly by the caller. Unavailable
-// answers are never cached — a repair may fix them — and never fabricated.
+// that changes neither is invalidated explicitly by the caller. In-flight
+// work is keyed the same way plus a per-photo generation that invalidation
+// bumps, so a job started before the derivative or the head changed is
+// neither reused nor cached once it lands: only the newest job for a photo
+// may remember. Unavailable answers are never cached — a repair may fix
+// them — and never fabricated.
 
 export interface HistogramServiceDeps {
   readonly repo: { get(photoId: string): PhotoRecord | undefined };
@@ -28,11 +32,20 @@ interface CacheEntry {
   readonly payload: HistogramPayload;
 }
 
+interface InFlightEntry {
+  readonly generation: number;
+  readonly revisionId: string | null;
+  readonly derivativeKey: string;
+  readonly task: Promise<HistogramPayload>;
+}
+
 const DEFAULT_CACHE_SIZE = 16;
 
 export class HistogramService {
   private readonly cache = new Map<string, CacheEntry>();
-  private readonly inFlight = new Map<string, Promise<HistogramPayload>>();
+  private readonly inFlight = new Map<string, InFlightEntry>();
+  /** Bumped by invalidate(): a job from an older generation never caches. */
+  private readonly generations = new Map<string, number>();
 
   constructor(private readonly deps: HistogramServiceDeps) {}
 
@@ -47,19 +60,41 @@ export class HistogramService {
       this.cache.set(photoId, cached);
       return cached.payload;
     }
+    const generation = this.generations.get(photoId) ?? 0;
     const pending = this.inFlight.get(photoId);
-    if (pending !== undefined) return pending;
-    const task = this.build(photo, revisionId).finally(() => this.inFlight.delete(photoId));
-    this.inFlight.set(photoId, task);
-    return task;
+    if (
+      pending !== undefined &&
+      pending.generation === generation &&
+      pending.revisionId === revisionId &&
+      pending.derivativeKey === photo.derivativeKey
+    ) {
+      return pending.task;
+    }
+    const entry: InFlightEntry = {
+      generation,
+      revisionId,
+      derivativeKey: photo.derivativeKey,
+      task: this.build(
+        photo,
+        revisionId,
+        () => this.inFlight.get(photoId) === entry && (this.generations.get(photoId) ?? 0) === generation,
+      ).finally(() => {
+        if (this.inFlight.get(photoId) === entry) this.inFlight.delete(photoId);
+      }),
+    };
+    this.inFlight.set(photoId, entry);
+    return entry.task;
   }
 
   /** Derivatives changed without a head change (repair, poster, restore). */
   invalidate(photoIds: readonly string[]): void {
-    for (const photoId of photoIds) this.cache.delete(photoId);
+    for (const photoId of photoIds) {
+      this.cache.delete(photoId);
+      this.generations.set(photoId, (this.generations.get(photoId) ?? 0) + 1);
+    }
   }
 
-  private async build(photo: PhotoRecord, revisionId: string | null): Promise<HistogramPayload> {
+  private async build(photo: PhotoRecord, revisionId: string | null, current: () => boolean): Promise<HistogramPayload> {
     const bytes = await this.deps.loadMid(photo);
     if (bytes === null) return { state: 'unavailable', photoId: photo.id, reason: 'missing' };
     let data: HistogramData;
@@ -83,7 +118,9 @@ export class HistogramService {
       clipping: data.clipping,
       digest: histogramDigest(data.channels),
     };
-    this.remember(photo.id, { revisionId, derivativeKey: photo.derivativeKey, payload });
+    // Superseded under this job (a repair, a re-bake, a newer head): the
+    // answer is handed to the caller that asked for it, never cached.
+    if (current()) this.remember(photo.id, { revisionId, derivativeKey: photo.derivativeKey, payload });
     return payload;
   }
 
