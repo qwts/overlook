@@ -12,7 +12,7 @@ import {
   ProtectedPhotoMigrationRepository,
   ProtectedPhotoMigrationRepositoryError,
 } from '../../src/main/db/protected-photo-migration-repository.js';
-import { run, runNamed } from '../../src/main/db/sql.js';
+import { queryAll, run, runNamed } from '../../src/main/db/sql.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 function photo(id: string, contentHash = 'a'.repeat(64)): PhotoInsert {
@@ -231,6 +231,48 @@ describe('ProtectedPhotoMigrationRepository', () => {
     assert.equal(photos.get('photo-a')?.favorite, true);
     assert.deepEqual(photos.albumMembers('ordinary-a'), ['photo-a']);
     assert.equal(migrations.getProtected('photo-a'), undefined);
+    db.close();
+  });
+
+  test('unprotect recomputes the All Photos flag for photos restored into hidden albums (#494)', () => {
+    const { db, photos, migrations } = world();
+    photos.createAlbum('ordinary-hidden', 'Hidden');
+    photos.setAlbumVisibility('ordinary-hidden', false);
+    runNamed(
+      db,
+      `INSERT INTO protected_photo_records (
+         photo_id, album_id, record_version, blob_ref, sealed_metadata,
+         has_thumb, has_mid, created_at, updated_at
+       ) VALUES (@photoId, 'protected-a', 1, @blobRef, x'01', 1, 1, @now, @now)`,
+      { photoId: 'photo-h', blobRef: 'b'.repeat(64), now: '2026-07-16T12:00:00.000Z' },
+    );
+    migrations.prepare({
+      migrationId: 'unprotect-h',
+      operation: 'unprotect',
+      sourceAlbumId: 'protected-a',
+      targetAlbumId: null,
+      items: [item('photo-h', 'b'.repeat(64), 'e'.repeat(64))],
+    });
+    migrations.transition('unprotect-h', 'prepare', 'copy');
+    migrations.transition('unprotect-h', 'copy', 'verify');
+    migrations.commitUnprotect(
+      'unprotect-h',
+      new Map([['photo-h', { photo: photo('photo-h', 'e'.repeat(64)), memberships: [{ albumId: 'ordinary-hidden', position: 0 }] }]]),
+      { id: 'ordinary-restored', name: 'Restored', createdAt: '2026-07-16T12:00:00.000Z', position: 0, showInAllPhotos: false },
+    );
+    assert.deepEqual(
+      queryAll<{ id: string; flag: number }>(db, `SELECT id, in_all_photos AS flag FROM photos WHERE id = 'photo-h'`),
+      [{ id: 'photo-h', flag: 0 }],
+      'the flag is written in the unprotect transaction',
+    );
+    assert.deepEqual(
+      queryAll<{ id: string; show: number }>(db, `SELECT id, show_in_all_photos AS show FROM albums ORDER BY position`),
+      [
+        { id: 'ordinary-restored', show: 0 },
+        { id: 'ordinary-hidden', show: 0 },
+      ],
+      'the restored album carries the policy it was protected with',
+    );
     db.close();
   });
 });

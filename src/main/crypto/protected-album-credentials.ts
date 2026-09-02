@@ -80,6 +80,8 @@ const ordinaryAlbumSchema = z
     id: idSchema,
     createdAt: z.iso.datetime({ offset: true }),
     position: z.number().int().nonnegative(),
+    /** #494 collection visibility; absent in metadata sealed before it existed (= visible). */
+    showInAllPhotos: z.boolean().optional(),
   })
   .strict();
 

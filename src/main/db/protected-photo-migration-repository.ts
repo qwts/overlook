@@ -2,6 +2,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import type { ProtectedPhotoMetadata } from '../crypto/protected-photo-metadata.js';
 import type { PhotoInsert } from '../../shared/library/types.js';
+import { refreshInAllPhotos } from './album-visibility-repository.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 
 export type ProtectedMigrationOperation = 'protect' | 'unprotect' | 'move';
@@ -40,6 +41,8 @@ export interface OrdinaryAlbumRestoration {
   readonly name: string;
   readonly createdAt: string;
   readonly position: number;
+  /** #494: carried through protection so unprotect restores the policy; absent = visible. */
+  readonly showInAllPhotos?: boolean | undefined;
 }
 
 interface JournalRow {
@@ -319,9 +322,9 @@ export class ProtectedPhotoMigrationRepository {
         run(this.db, 'UPDATE albums SET position = position + 1 WHERE position >= ?', ordinaryAlbum.position);
         runNamed(
           this.db,
-          `INSERT INTO albums (id, name, created_at, position)
-           VALUES (@id, @name, @createdAt, @position)`,
-          { ...ordinaryAlbum },
+          `INSERT INTO albums (id, name, created_at, position, show_in_all_photos)
+           VALUES (@id, @name, @createdAt, @position, @showInAllPhotos)`,
+          { ...ordinaryAlbum, showInAllPhotos: ordinaryAlbum.showInAllPhotos === false ? 0 : 1 },
         );
       }
       for (const item of journal.items) {
@@ -338,6 +341,9 @@ export class ProtectedPhotoMigrationRepository {
             { ...membership, photoId: item.photoId },
           );
         }
+        // #494 / ADR-0030 §6: the All Photos flag is written with the
+        // memberships, never left for the startup verify to repair.
+        refreshInAllPhotos(this.db, [item.photoId]);
         run(this.db, 'DELETE FROM protected_photo_records WHERE photo_id = ?', item.photoId);
       }
       this.transition(migrationId, 'verify', 'commit', now);

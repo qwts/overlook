@@ -126,7 +126,7 @@ export class ProtectedWorkflowService {
           name: source.name,
           createdAt: source.createdAt,
           position: source.position,
-          ordinaryAlbum: { id: source.id, createdAt: source.createdAt, position: source.position },
+          ordinaryAlbum: { id: source.id, createdAt: source.createdAt, position: source.position, showInAllPhotos: source.showInAllPhotos },
           members: source.photoIds.map((photoId, position) => ({ photoId, position, ordinaryMemberships: [] })),
         },
       });

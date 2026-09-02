@@ -152,6 +152,23 @@ describe('ProtectedWorkflowService (#329)', () => {
     value.db.close();
   });
 
+  test('a hidden album keeps its All Photos policy through protect and unprotect (#494)', async () => {
+    const value = await world();
+    value.photos.setAlbumVisibility('ordinary-private', false);
+    assert.equal(value.photos.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);
+    assert.deepEqual(await value.workflow.protect('ordinary-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+    assert.deepEqual(await value.workflow.unlock('protected-private', PASSWORD), { ok: true, outcome: 'opened' });
+    assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+    assert.deepEqual(value.photos.albums(), [
+      { id: 'ordinary-private', name: 'Private album', count: 1, showInAllPhotos: false, visibleElsewhere: 0, visibleVia: [] },
+    ]);
+    // The flag was recomputed inside the unprotect transaction, not left for startup.
+    assert.equal(value.photos.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);
+    assert.equal(value.photos.page({ source: 'all', limit: 10 }).photos.length, 0);
+    assert.equal(value.photos.page({ source: 'all', limit: 10, albumId: 'ordinary-private' }).photos.length, 1);
+    value.db.close();
+  });
+
   test('rejects missing and empty albums without creating protected custody', async () => {
     const value = await world();
     value.photos.createAlbum('empty', 'Empty');

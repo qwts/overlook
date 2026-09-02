@@ -578,15 +578,18 @@ export class PhotosRepository {
         readonly name: string;
         readonly createdAt: string;
         readonly position: number;
+        readonly showInAllPhotos: boolean;
         readonly photoIds: readonly string[];
       }
     | undefined {
-    const album = queryGet<{ id: string; name: string; createdAt: string; position: number }>(
+    const album = queryGet<{ id: string; name: string; createdAt: string; position: number; showInAllPhotos: number }>(
       this.db,
-      `SELECT id, name, created_at AS createdAt, position FROM albums WHERE id = ?`,
+      `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ?`,
       albumId,
     );
-    return album === undefined ? undefined : { ...album, photoIds: this.albumMembers(albumId) };
+    return album === undefined
+      ? undefined
+      : { ...album, showInAllPhotos: album.showInAllPhotos === 1, photoIds: this.albumMembers(albumId) };
   }
 
   /** Albums CRUD (#117). Deleting an album NEVER deletes photos — the
