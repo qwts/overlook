@@ -112,6 +112,47 @@ describe('histogram service (#498)', () => {
     assert.deepEqual(h.loads, ['P1']);
   });
 
+  test('a job outlived by a derivative or head change is neither reused nor cached', async () => {
+    // The next load blocks until released; later loads answer at once.
+    let release: (() => void) | undefined;
+    let gate: Promise<void> | null = null;
+    const hold = (): void => {
+      gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    };
+    const h = harness({
+      loadMid: async () => {
+        const pending = gate;
+        gate = null;
+        if (pending !== null) await pending;
+        return Buffer.from([1]);
+      },
+    });
+    hold();
+    const stale = h.service.get('P1');
+    // A repair replaced the derivative while the first job was still loading.
+    h.service.invalidate(['P1']);
+    const fresh = await h.service.get('P1');
+    assert.deepEqual(h.loads, ['P1', 'P1'], 'the ask after invalidation starts its own job');
+    release?.();
+    const staleAnswer = await stale;
+    assert.notEqual(staleAnswer, fresh, 'the old caller still gets an answer');
+    assert.equal(await h.service.get('P1'), fresh, 'the stale job never displaced the fresh answer');
+    assert.equal(h.computes, 2);
+    // A head change mid-flight is a new job too, and the old one never
+    // displaces the newer head's answer even when it lands last.
+    hold();
+    const oldHead = h.service.get('P2');
+    h.head = '01J8EDT000000000000000000B';
+    const newHead = await h.service.get('P2');
+    release?.();
+    await oldHead;
+    if (newHead.state === 'ready') assert.equal(newHead.revisionId, '01J8EDT000000000000000000B');
+    assert.equal(await h.service.get('P2'), newHead);
+    assert.equal(h.computes, 4);
+  });
+
   test('unknown photos, recorded preview failures, absent derivatives and undecodable bytes are named, not cached', async () => {
     const h = harness({
       loadMid: (record) => Promise.resolve(record.id === 'P2' ? null : Buffer.from([1])),
