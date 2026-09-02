@@ -18,6 +18,10 @@ const messages = defineMessages({
     id: 'statusbar.inclusion.hiddenByAlbums',
     defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by album settings',
   },
+  removalPending: {
+    id: 'statusbar.coverage.removalPending',
+    defaultMessage: '{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal',
+  },
 });
 
 // The 26px mono strip (#81) per the design's StatusBar.jsx — always tells
@@ -84,6 +88,12 @@ export function StatusBar({
         <span className="ovl-statusbar__item ovl-statusbar__item--amber" data-testid="album-visibility-status">
           <Icon name="eye-off" size={11} strokeWidth={2} />
           {intl.formatMessage(messages.hiddenByAlbums, { count: hiddenByAlbums })}
+        </span>
+      ) : null}
+      {stats !== null && stats.pendingRemovals > 0 ? (
+        <span className="ovl-statusbar__item ovl-statusbar__item--amber" data-testid="coverage-status">
+          <Icon name="cloud-off" size={11} strokeWidth={2} />
+          {intl.formatMessage(messages.removalPending, { count: stats.pendingRemovals })}
         </span>
       ) : null}
       <span className="ovl-statusbar__spacer" />

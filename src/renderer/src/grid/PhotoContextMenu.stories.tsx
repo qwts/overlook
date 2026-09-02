@@ -35,6 +35,7 @@ const PHOTO: PhotoRecord = {
   dimensionStatus: 'verified',
   mediaInfo: null,
   syncState: 'synced',
+  coverage: 'included',
   title: null,
   description: null,
   tags: [],

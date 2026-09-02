@@ -46,6 +46,7 @@ const PHOTO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'verified',
   syncState: 'local',
+  coverage: 'included',
   title: null,
   description: null,
   tags: [],

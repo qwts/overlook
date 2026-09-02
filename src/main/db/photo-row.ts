@@ -39,6 +39,7 @@ export interface PhotoRow {
   dimension_status: string;
   media_info: string | null;
   sync_state: string | null;
+  coverage: string | null;
   user_title: string | null;
   user_description: string | null;
   imported_keywords: string;
@@ -101,5 +102,6 @@ export function toRecord(row: PhotoRow): PhotoRecord {
     mediaInfo: parseMediaInfo(row.media_info),
     // New rows always get a ledger row; LEFT JOIN keeps reads total anyway.
     syncState: (row.sync_state ?? 'local') as PhotoRecord['syncState'],
+    coverage: (row.coverage ?? 'included') as PhotoRecord['coverage'],
   };
 }

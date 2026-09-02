@@ -10,7 +10,7 @@ export const ORDERINGS = {
 } as const;
 export function select(order: keyof typeof ORDERINGS): string {
   return `
-  SELECT p.*, l.status AS sync_state, ${ORDERINGS[order].expr} AS sort_key
+  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, ${ORDERINGS[order].expr} AS sort_key
   FROM ordinary_visible_photos p
   LEFT JOIN sync_ledger l ON l.photo_id = p.id
 `;
@@ -18,7 +18,7 @@ export function select(order: keyof typeof ORDERINGS): string {
 
 export function selectRanked(): string {
   return `
-  SELECT p.*, l.status AS sync_state, photos_fts.rank AS sort_key
+  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, photos_fts.rank AS sort_key
   FROM photos_fts
   JOIN photos ph ON ph.rowid = photos_fts.rowid
   JOIN ordinary_visible_photos p ON p.id = ph.id

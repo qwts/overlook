@@ -37,6 +37,7 @@ function photo(id: string, isOriginal = true): PhotoRecord {
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState: 'local',
+    coverage: 'included',
     title: null,
     description: null,
     tags: [],

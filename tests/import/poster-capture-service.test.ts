@@ -36,6 +36,7 @@ function videoPhoto(id: string): PhotoRecord {
     dimensionStatus: 'unavailable',
     mediaInfo: null,
     syncState: 'local',
+    coverage: 'included',
     title: null,
     description: null,
     tags: [],

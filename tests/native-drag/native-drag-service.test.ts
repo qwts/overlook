@@ -49,6 +49,7 @@ function photo(id: string, fileName = `${id}.JPG`): PhotoRecord {
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState: 'local',
+    coverage: 'included',
   };
 }
 

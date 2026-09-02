@@ -304,6 +304,11 @@ const overlook: OverlookApi = {
     onChanged: createSubscriber(events.protectedAlbumsChanged, subscribeTransport),
     onProgress: createSubscriber(events.protectedWorkflowProgress, subscribeTransport),
   }),
+  coverage: Object.freeze({
+    preflight: createInvoker(channels.coveragePreflight, invokeTransport),
+    exclude: createInvoker(channels.coverageExclude, invokeTransport),
+    include: createInvoker(channels.coverageInclude, invokeTransport),
+  }),
   backup: Object.freeze({
     run: createInvoker(channels.backupRun, invokeTransport),
     onProgress: createSubscriber(events.backupProgress, subscribeTransport),

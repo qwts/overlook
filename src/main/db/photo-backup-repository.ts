@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { BackupManifestPhotoV13, BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import { isExcludedManifestPhoto, manifestBlobPath, type BackupManifestPhotoV14 } from '../backup/backup-manifest-coverage.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { select } from './photo-query.js';
@@ -15,11 +16,12 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
   return db.transaction(() => {
     const recoverable = `(p.deleted_at IS NULL OR (p.deleted_at IS NOT NULL AND l.status IN ('synced', 'offloaded')))`;
     const photos = queryAll<PhotoRow>(db, `${select('date')} WHERE ${recoverable} ORDER BY p.imported_at, p.id`).map(
-      (row): BackupManifestPhotoV13 => {
+      (row): BackupManifestPhotoV14 => {
         const {
           previewFailure: _previewFailure,
           dimensionStatus: _dimensionStatus,
           syncState: _syncState,
+          coverage,
           tags: _tags,
           title,
           description,
@@ -39,15 +41,18 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
           importedKeywords.length > 0 ||
           suppressedKeywords.length > 0 ||
           metadataVersion !== 1;
-        return {
+        const record = {
           ...base,
           ...(isOriginal ? { isOriginal: true } : {}),
           ...(derivativeKey === photo.contentHash ? {} : { derivativeKey }),
           ...(variantSourceId === null ? {} : { variantSourceId }),
           ...(assetOwnerId === null ? {} : { assetOwnerId }),
           ...(hasMetadata ? { title, description, userTags, importedKeywords, suppressedKeywords, metadataVersion } : {}),
-          blobPath: `blobs/${photo.contentHash.slice(0, 2)}/${photo.contentHash}`,
         };
+        // ADR-0033 §4: a row that is excluding or excluded promises no blob.
+        // `excluding` already reads as excluded here so the generation that
+        // precedes the provider delete never claims the object (§2).
+        return coverage === 'included' ? { ...record, blobPath: manifestBlobPath(photo.contentHash) } : { ...record, coverage: 'excluded' };
       },
     );
     const photoIds = new Set(photos.map((photo) => photo.id));
@@ -115,6 +120,7 @@ export function restoreManifest(
       );
     }
     for (const photo of manifest.photos) {
+      const excluded = isExcludedManifestPhoto(photo);
       runNamed(
         db,
         `INSERT INTO photos (
@@ -134,6 +140,8 @@ export function restoreManifest(
          )`,
         {
           ...photo,
+          coverage: null,
+          blobPath: null,
           derivativeKey: ('derivativeKey' in photo ? photo.derivativeKey : undefined) ?? photo.contentHash,
           variantSourceId: ('variantSourceId' in photo ? photo.variantSourceId : undefined) ?? null,
           assetOwnerId: ('assetOwnerId' in photo ? photo.assetOwnerId : undefined) ?? null,
@@ -154,13 +162,21 @@ export function restoreManifest(
       );
       // A NOT FOUND original from a partial restore (#915) keeps its row but
       // enters the ledger as 'error' — the scrubber's confirmed-remote-loss
-      // vocabulary — with no backup claim to lie about.
+      // vocabulary — with no backup claim to lie about. An excluded record
+      // (ADR-0033 §4) restores the same way as a "not in this backup"
+      // placeholder: the row and its metadata return, the original does not,
+      // and the placeholder stays excluded so nothing pretends to upload it.
+      const absent = excluded || missingPhotoIds.has(photo.id);
       run(
         db,
-        `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty) VALUES (?, ?, ?, 0)`,
+        `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty, coverage, coverage_origin, coverage_since)
+         VALUES (?, ?, ?, 0, ?, ?, ?)`,
         photo.id,
-        missingPhotoIds.has(photo.id) ? 'error' : 'synced',
-        missingPhotoIds.has(photo.id) ? null : manifest.generatedAt,
+        absent ? 'error' : 'synced',
+        absent ? null : manifest.generatedAt,
+        excluded ? 'excluded' : 'included',
+        excluded ? 'user' : null,
+        excluded ? manifest.generatedAt : null,
       );
     }
     for (const album of manifest.albums) {

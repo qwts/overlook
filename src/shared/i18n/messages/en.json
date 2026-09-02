@@ -386,6 +386,12 @@
   "commands.library.switch": {
     "defaultMessage": "Switch Library…"
   },
+  "commands.photo.coverage.exclude": {
+    "defaultMessage": "Keep on this device only…"
+  },
+  "commands.photo.coverage.include": {
+    "defaultMessage": "Back up again"
+  },
   "commands.photo.duplicate": {
     "defaultMessage": "Duplicate"
   },
@@ -511,6 +517,96 @@
   },
   "copyableValue.failed": {
     "defaultMessage": "Could not copy {label}."
+  },
+  "coverage.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "coverage.dialog.confirm.keep": {
+    "defaultMessage": "Keep on this device only"
+  },
+  "coverage.dialog.confirm.remove": {
+    "defaultMessage": "Remove cloud copy permanently"
+  },
+  "coverage.dialog.downloads": {
+    "defaultMessage": "{count, plural, one {# cloud-only original is} other {# cloud-only originals are}} downloaded and verified on this device first."
+  },
+  "coverage.dialog.error.action": {
+    "defaultMessage": "Nothing changed. Your photos are still backed up as before."
+  },
+  "coverage.dialog.error.preflight": {
+    "defaultMessage": "Could not check the cloud copies. Try again."
+  },
+  "coverage.dialog.loading": {
+    "defaultMessage": "Checking cloud copies…"
+  },
+  "coverage.dialog.remote": {
+    "defaultMessage": "{count, plural, one {# encrypted copy} other {# encrypted copies}} ({bytes}) will be removed from {provider}."
+  },
+  "coverage.dialog.remote.account": {
+    "defaultMessage": "{count, plural, one {# encrypted copy} other {# encrypted copies}} ({bytes}) will be removed from {provider} ({account})."
+  },
+  "coverage.dialog.running": {
+    "defaultMessage": "Working…"
+  },
+  "coverage.dialog.shared": {
+    "defaultMessage": "{count, plural, one {# copy stays} other {# copies stay}} in the cloud because another backed-up photo uses the same original."
+  },
+  "coverage.dialog.skips": {
+    "defaultMessage": "{count, plural, one {# will be skipped} other {# will be skipped}}"
+  },
+  "coverage.dialog.summary": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} ({bytes}) will stay in the library on this device and stop being backed up automatically."
+  },
+  "coverage.dialog.title.keep": {
+    "defaultMessage": "Keep on this device only"
+  },
+  "coverage.dialog.title.remove": {
+    "defaultMessage": "Remove the cloud copy?"
+  },
+  "coverage.reason.alreadyExcluded": {
+    "defaultMessage": "already on this device only"
+  },
+  "coverage.reason.alreadyIncluded": {
+    "defaultMessage": "already backed up automatically"
+  },
+  "coverage.reason.deleted": {
+    "defaultMessage": "in Trash"
+  },
+  "coverage.reason.disconnected": {
+    "defaultMessage": "cloud copy exists but the provider is not connected"
+  },
+  "coverage.reason.inFlight": {
+    "defaultMessage": "uploading right now"
+  },
+  "coverage.reason.localMissing": {
+    "defaultMessage": "no original on this device"
+  },
+  "coverage.reason.notFound": {
+    "defaultMessage": "no longer in the library"
+  },
+  "coverage.reason.restoreFailed": {
+    "defaultMessage": "the cloud-only original could not be downloaded"
+  },
+  "coverage.toast.excludeFailed": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} could not be kept on this device only"
+  },
+  "coverage.toast.excluded": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} kept on this device only"
+  },
+  "coverage.toast.includeError": {
+    "defaultMessage": "Could not re-enable backup. Nothing changed."
+  },
+  "coverage.toast.includeFailed": {
+    "defaultMessage": "{count, plural, one {# photo has} other {# photos have}} no original on this device — not backed up"
+  },
+  "coverage.toast.included": {
+    "defaultMessage": "Backing up {count, plural, one {# photo} other {# photos}} again"
+  },
+  "coverage.toast.nothing": {
+    "defaultMessage": "No photos changed"
+  },
+  "coverage.toast.removalPending": {
+    "defaultMessage": "{count, plural, one {# cloud copy} other {# cloud copies}} still awaiting removal — will retry"
   },
   "custody.account.fallback": {
     "defaultMessage": "the recorded account"
@@ -2879,6 +2975,9 @@
   "sidebar.source.unavailable": {
     "defaultMessage": "Unavailable"
   },
+  "sidebar.storage.excluded": {
+    "defaultMessage": "{bytes} on this device only"
+  },
   "sidebar.storage.offload": {
     "defaultMessage": "{bytes} offload ({provider})"
   },
@@ -2920,6 +3019,9 @@
   },
   "smartAlbum.unsupported.title": {
     "defaultMessage": "{name} cannot be shown"
+  },
+  "statusbar.coverage.removalPending": {
+    "defaultMessage": "{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal"
   },
   "statusbar.inclusion.excluded": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules"

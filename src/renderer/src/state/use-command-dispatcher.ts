@@ -82,6 +82,8 @@ export function useCommandDispatcher(
         case 'photo.duplicate':
         case 'photo.offload':
         case 'photo.restoreOriginal':
+        case 'photo.coverage.exclude':
+        case 'photo.coverage.include':
         case 'photo.original.mark':
         case 'photo.original.unmark':
         case 'photo.transfer':

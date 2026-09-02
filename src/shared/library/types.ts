@@ -22,6 +22,11 @@ export type ImageFileKind = Extract<FileKind, 'jpeg' | 'png' | 'heic' | 'gif' | 
 
 /** sync_ledger.status vocabulary (ADR-0005; 'error' added by #104). */
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'offloaded' | 'error';
+/** Backup coverage of a ledger row (ADR-0033 §1). `excluding` is the durable
+ * intermediate between the user's decision and the provider copy being gone. */
+export type BackupCoverage = 'included' | 'excluding' | 'excluded';
+/** Who decided a row's coverage (ADR-0033 §1). */
+export type BackupCoverageOrigin = 'user' | 'protected-domain' | 'provider-unsupported';
 
 /** Local comparison between embedded metadata and a successful pixel decode. */
 export type DimensionStatus = 'legacy' | 'verified' | 'metadata-mismatch' | 'unavailable';
@@ -68,6 +73,8 @@ export interface PhotoRecord extends PhotoMetadataFields {
   readonly mediaInfo: MediaInfo | null;
   /** From the sync_ledger join; new rows start 'local'. */
   readonly syncState: SyncStatus;
+  /** From the sync_ledger join; new rows start 'included' (ADR-0033). */
+  readonly coverage: BackupCoverage;
 }
 
 export type PhotoInsert = Omit<
@@ -78,6 +85,7 @@ export type PhotoInsert = Omit<
   | 'previewFailure'
   | 'dimensionStatus'
   | 'syncState'
+  | 'coverage'
   | 'mediaInfo'
   | 'derivativeKey'
   | 'variantSourceId'
@@ -238,4 +246,9 @@ export interface LibraryStats {
   readonly lastBackupAt: string | null;
   /** Bytes whose originals live only in the cloud (#107). */
   readonly offloadedBytes: number;
+  /** Rows kept on this device only (ADR-0033 §1), `excluding` included. */
+  readonly excludedCount: number;
+  readonly excludedBytes: number;
+  /** Excluded rows whose provider copy still awaits removal (ADR-0033 §6). */
+  readonly pendingRemovals: number;
 }

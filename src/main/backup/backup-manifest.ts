@@ -11,6 +11,14 @@ import {
   checkVariantLinks,
   type BackupManifestVariantFamilyV13,
 } from './backup-manifest-variants.js';
+import {
+  asCarriedRecords,
+  backupManifestCoverageV14Schema,
+  backupManifestPhotoV14Schema,
+  checkCoverageTotals,
+  coverageTotals,
+  type BackupManifestPhotoV14,
+} from './backup-manifest-coverage.js';
 import { activityEventTypes } from '../../shared/activity/types.js';
 import type { ActivityEvent } from '../../shared/activity/types.js';
 
@@ -18,7 +26,7 @@ import { boardSchema } from '../../shared/moodboard/board.js';
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 13 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 14 as const;
 
 import {
   backupManifestAlbumV2Schema,
@@ -568,7 +576,7 @@ export const backupManifestV12Schema = z
 export const backupManifestV13Schema = z
   .strictObject({
     ...backupManifestV12Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(13),
     photos: z.array(backupManifestPhotoV13Schema).readonly(),
     variantFamilies: z.array(backupManifestVariantFamilyV13Schema).readonly(),
   })
@@ -583,6 +591,26 @@ export const backupManifestV13Schema = z
       context.addIssue({ code: 'custom', message: `schema-12 records are inconsistent: ${z.prettifyError(previous.error)}` });
     }
     checkVariantLinks(manifest, context);
+  });
+
+// Schema 14 (#506, ADR-0033 §4): the schema-13 records where a photo kept on
+// this device only says so and names no blob, plus the library-level count
+// and bytes of that population; the record shapes and totals check live in
+// backup-manifest-coverage.ts.
+export const backupManifestV14Schema = z
+  .strictObject({
+    ...backupManifestV13Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    photos: z.array(backupManifestPhotoV14Schema).readonly(),
+    coverage: backupManifestCoverageV14Schema,
+  })
+  .superRefine((manifest, context) => {
+    const { coverage: _coverage, ...withoutCoverage } = manifest;
+    const previous = backupManifestV13Schema.safeParse({ ...withoutCoverage, schema: 13, photos: asCarriedRecords(manifest.photos) });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-13 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    checkCoverageTotals(manifest, context);
   });
 
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
@@ -609,6 +637,7 @@ export type BackupManifestV11 = z.infer<typeof backupManifestV11Schema>;
 export type BackupManifestV12 = z.infer<typeof backupManifestV12Schema>;
 export type BackupManifestPhotoV13 = z.infer<typeof backupManifestPhotoV13Schema>;
 export type BackupManifestV13 = z.infer<typeof backupManifestV13Schema>;
+export type BackupManifestV14 = z.infer<typeof backupManifestV14Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -621,13 +650,15 @@ export type RestorableBackupManifest =
   | BackupManifestV10
   | BackupManifestV11
   | BackupManifestV12
-  | BackupManifestV13;
+  | BackupManifestV13
+  | BackupManifestV14;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
   readonly keyIds: readonly number[];
   readonly totals: BackupManifestV2['totals'];
-  readonly photos: readonly BackupManifestPhotoV13[];
+  /** Schema-14 records: an excluded row (ADR-0033) carries no blobPath. */
+  readonly photos: readonly BackupManifestPhotoV14[];
   readonly albums: readonly BackupManifestAlbumV2[];
 }
 
@@ -678,6 +709,11 @@ export interface BackupManifestSnapshotV13 extends BackupManifestSnapshotV12 {
   readonly variantFamilies: readonly BackupManifestVariantFamilyV13[];
 }
 
+/** The coverage totals are derived from the records by the builder. */
+export interface BackupManifestSnapshotV14 extends Omit<BackupManifestSnapshotV13, 'photos'> {
+  readonly photos: readonly BackupManifestPhotoV14[];
+}
+
 export type ParsedBackupManifest =
   | { readonly restorable: false; readonly manifest: BackupManifestV1 }
   | { readonly restorable: true; readonly manifest: RestorableBackupManifest };
@@ -691,12 +727,7 @@ export function buildBackupManifestV2(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshot;
 }): BackupManifestV2 {
-  return backupManifestV2Schema.parse({
-    schema: 2,
-    libraryId: input.libraryId,
-    generatedAt: input.generatedAt,
-    ...input.snapshot,
-  });
+  return backupManifestV2Schema.parse({ schema: 2, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
 }
 
 export function buildBackupManifestV4(input: {
@@ -704,12 +735,7 @@ export function buildBackupManifestV4(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV4;
 }): BackupManifestV4 {
-  return backupManifestV4Schema.parse({
-    schema: 4,
-    libraryId: input.libraryId,
-    generatedAt: input.generatedAt,
-    ...input.snapshot,
-  });
+  return backupManifestV4Schema.parse({ schema: 4, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
 }
 
 export function buildBackupManifestV5(input: {
@@ -717,12 +743,7 @@ export function buildBackupManifestV5(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV5;
 }): BackupManifestV5 {
-  return backupManifestV5Schema.parse({
-    schema: 5,
-    libraryId: input.libraryId,
-    generatedAt: input.generatedAt,
-    ...input.snapshot,
-  });
+  return backupManifestV5Schema.parse({ schema: 5, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
 }
 
 export function buildBackupManifestV6(input: {
@@ -730,12 +751,7 @@ export function buildBackupManifestV6(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV6;
 }): BackupManifestV6 {
-  return backupManifestV6Schema.parse({
-    schema: 6,
-    libraryId: input.libraryId,
-    generatedAt: input.generatedAt,
-    ...input.snapshot,
-  });
+  return backupManifestV6Schema.parse({ schema: 6, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
 }
 
 export function buildBackupManifestV7(input: {
@@ -791,11 +807,20 @@ export function buildBackupManifestV13(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV13;
 }): BackupManifestV13 {
-  return backupManifestV13Schema.parse({
+  return backupManifestV13Schema.parse({ schema: 13, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV14(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV14;
+}): BackupManifestV14 {
+  return backupManifestV14Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
     ...input.snapshot,
+    coverage: coverageTotals(input.snapshot.photos),
   });
 }
 
@@ -812,7 +837,7 @@ export function buildBackupManifestV13(input: {
  * the zod schemas stay default-free for the same reason (see the mediaInfo
  * comment on backupManifestPhotoV2Schema). */
 function upgradeLegacyManifest(manifest: RestorableBackupManifest): RestorableBackupManifest {
-  if (manifest.photos.every((photo) => photo.mediaInfo !== undefined)) return manifest;
+  if ('coverage' in manifest || manifest.photos.every((photo) => photo.mediaInfo !== undefined)) return manifest;
   return {
     ...manifest,
     photos: manifest.photos.map((photo) => (photo.mediaInfo === undefined ? { ...photo, mediaInfo: null } : photo)),
@@ -832,7 +857,8 @@ const RESTORABLE_SCHEMAS: ReadonlyMap<number, z.ZodType<RestorableBackupManifest
   [10, backupManifestV10Schema],
   [11, backupManifestV11Schema],
   [12, backupManifestV12Schema],
-  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV13Schema],
+  [13, backupManifestV13Schema],
+  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV14Schema],
 ]);
 
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {

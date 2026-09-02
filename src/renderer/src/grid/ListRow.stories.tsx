@@ -46,6 +46,7 @@ function photo(index: number, syncState: SyncStatus, favorite = false): PhotoRec
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState,
+    coverage: 'included',
     title: null,
     description: null,
     tags: [],

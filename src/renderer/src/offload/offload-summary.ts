@@ -2,6 +2,11 @@ import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { AppFormatters } from '../i18n/use-formats.js';
 
 type OffloadResult = Awaited<ReturnType<OverlookApi['backup']['offload']>>;
+
+/** Lightbox rehydrate failure (#100): the original is still with the provider. */
+export function rehydrateFailedToast(providerLabel: string): { title: string; tone: 'red'; action: 'retry-backup' } {
+  return { title: `Restore failed — still in ${providerLabel}`, tone: 'red', action: 'retry-backup' };
+}
 type OffloadReason = NonNullable<OffloadResult['results'][number]['reason']>;
 
 const REASON_COPY: Record<OffloadReason, string> = {

@@ -31,7 +31,9 @@ import { MoveResumeBanner } from './MoveResumeBanner';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { ToastAction } from './ToastAction';
+import { rehydrateFailedToast } from '../offload/offload-summary';
 import { useOffloadWorkflow } from '../offload/use-offload-workflow';
+import { useCoverageWorkflow } from '../backup-coverage/use-coverage-workflow';
 import { Toolbar } from './Toolbar';
 import { InteropEntryDialog } from '../interop/InboundMoveDialog';
 import type { InteropEntryContext } from '../interop/visible-workflow.js';
@@ -88,6 +90,7 @@ export function Shell({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const offload = useOffloadWorkflow();
+  const coverage = useCoverageWorkflow();
   const emptyTrash = useEmptyTrash();
   const restore = useRestoreChrome();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
@@ -588,6 +591,7 @@ export function Shell({
       ) : null}
       {exportDialog.dialog}
       {offload.dialog}
+      {coverage.dialog}
       {state.librariesOpen ? (
         <LibrarySwitcher
           startInCreate={librariesCreating}
@@ -730,12 +734,7 @@ export function Shell({
               offload.open([current.id], false, () => dispatch({ type: 'lightbox/closed' }));
             }}
             suppressRehydrate={offload.activePhotoIds?.includes(current.id) === true}
-            onRehydrateError={() => {
-              dispatch({
-                type: 'toast/shown',
-                toast: { title: `Restore failed — still in ${state.providerLabel}`, tone: 'red', action: 'retry-backup' },
-              });
-            }}
+            onRehydrateError={() => dispatch({ type: 'toast/shown', toast: rehydrateFailedToast(state.providerLabel) })}
             onEditResult={(result) => {
               dispatch({ type: 'pendingCount/set', count: result.pendingCount });
               if (result.derivatives === 'deferred') {
@@ -805,6 +804,8 @@ export function Shell({
               onExport={exportDialog.openPhotos}
               onBoardExport={exportDialog.openBoard}
               onOffload={offload.open}
+              onKeepOnDevice={coverage.open}
+              onBackUpAgain={coverage.include}
               onTransfer={pcloudEnabled ? openInterop : undefined}
             />
           ) : (

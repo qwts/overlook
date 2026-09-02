@@ -91,6 +91,23 @@ export const destructiveActions = {
     label: 'Clear diagnostics',
     survival: 'Photos, libraries, settings, and recovery data are unchanged.',
   },
+  // ADR-0033 §7: leaving automatic backup. Tier M when the provider holds
+  // no copy; the surface escalates to removeCloudCopy when one exists.
+  keepOnThisDeviceOnly: {
+    id: 'photos.keep-on-this-device-only',
+    tier: 'structural',
+    label: 'Keep on this device only',
+    survival: 'The photos stay in the library on this device and stop being backed up automatically. Back up again re-enables them.',
+  },
+  removeCloudCopy: {
+    id: 'photos.remove-cloud-copy',
+    tier: 'irreversible',
+    label: 'Remove cloud copy permanently',
+    title: 'Remove the cloud copy?',
+    authorization: 'photos.remove-cloud-copy.v1',
+    sideEffects:
+      'Removes the encrypted copies from your cloud backup after the originals are verified on this device, and stops backing the photos up automatically. The provider keeps its deleted objects in its own trash for a limited time (still encrypted, recoverable only through the provider). Cloud deletion failures are recorded and retried; a copy that also backs another photo is kept.',
+  },
   removeAppPassword: {
     id: 'app-password.remove',
     tier: 'structural',
@@ -101,3 +118,4 @@ export const destructiveActions = {
 
 export const ORIGINAL_DELETE_AUTHORIZATION = destructiveActions.deleteProtectedOriginals.authorization;
 export const PROVIDER_AUTHORIZATION_REMOVAL = destructiveActions.removeProviderAuthorizationAnyway.authorization;
+export const REMOVE_CLOUD_COPY_AUTHORIZATION = destructiveActions.removeCloudCopy.authorization;

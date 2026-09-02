@@ -86,6 +86,9 @@ const stats: LibraryStats = {
   pending: 0,
   lastBackupAt: null,
   offloadedBytes: 380_000_000_000,
+  excludedCount: 0,
+  excludedBytes: 0,
+  pendingRemovals: 0,
 };
 const albums: readonly AlbumListing[] = [
   listing({ id: 'a1', name: 'Iceland', count: 214 }),

@@ -54,6 +54,8 @@ export const en: Readonly<Record<string, string>> = {
   "commands.library.source.recent": "Recent Imports",
   "commands.library.source.trash": "Trash",
   "commands.library.switch": "Switch Library…",
+  "commands.photo.coverage.exclude": "Keep on this device only…",
+  "commands.photo.coverage.include": "Back up again",
   "commands.photo.duplicate": "Duplicate",
   "commands.photo.edit.crop": "Crop",
   "commands.photo.edit.reset": "Reset edits",

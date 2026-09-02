@@ -14,6 +14,7 @@ import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
+import { glyphStateOf } from '../components/StatusGlyph';
 import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
 import { PurgeConfirm } from './PurgeConfirm';
@@ -72,6 +73,8 @@ export function LibraryGridView({
   platform,
   onExport,
   onOffload,
+  onKeepOnDevice,
+  onBackUpAgain,
   onTransfer,
 }: {
   readonly knownTotal: number | null;
@@ -79,6 +82,8 @@ export function LibraryGridView({
   readonly platform: CommandPlatform;
   readonly onExport: (photoIds: readonly string[]) => void;
   readonly onOffload: (photoIds: readonly string[], clearSelection?: boolean) => void;
+  readonly onKeepOnDevice: (photoIds: readonly string[]) => void;
+  readonly onBackUpAgain: (photoIds: readonly string[]) => void;
   readonly onTransfer?: ((entry: 'selection' | 'lightbox', photoIds: readonly string[]) => void) | undefined;
 }): ReactElement {
   const intl = useIntl();
@@ -486,7 +491,7 @@ export function LibraryGridView({
         accessibleName={accessibleName}
         favorite={photo.favorite}
         isOriginal={photo.isOriginal}
-        status={photo.syncState}
+        status={glyphStateOf(photo)}
         previewFailure={photo.previewFailure}
         unknownDimensions={photo.dimensionStatus === 'unavailable'}
         duration={tileMedia?.duration}
@@ -667,6 +672,8 @@ export function LibraryGridView({
             });
           }}
           onOffload={() => onOffload(contextPhoto.targetIds)}
+          onKeepOnDevice={() => onKeepOnDevice(contextPhoto.targetIds)}
+          onBackUpAgain={() => onBackUpAgain(contextPhoto.targetIds)}
           onRestoreOriginal={() => {
             void window.overlook.backup.restoreOriginals({ photoIds: [...contextPhoto.targetIds] }).then(({ restored, failed }) => {
               dispatch({
@@ -773,6 +780,7 @@ export function LibraryGridView({
       {purgeIds !== null && purgeIds.length > 0 ? (
         <PurgeConfirm
           count={purgeIds.length}
+          excludedCount={purgeIds.filter((id) => state.photos.find((photo) => photo.id === id)?.coverage !== 'included').length}
           onCancel={() => {
             setPurgeIds(null);
           }}

@@ -1,6 +1,6 @@
 import { queryAll, run } from '../db/sql.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
-import type { SyncStatus } from '../../shared/library/types.js';
+import type { BackupCoverage, BackupCoverageOrigin, SyncStatus } from '../../shared/library/types.js';
 
 // Sync-ledger bookkeeping (#104): the dirtiness the whole backup UX rides
 // on. ONE choke-point dirties (every library edit routes here), the status
@@ -17,6 +17,12 @@ const TRANSITIONS: Record<SyncStatus, readonly SyncStatus[]> = {
 
 export class LedgerTransitionError extends Error {
   override readonly name = 'LedgerTransitionError';
+}
+
+export interface LedgerCoverage {
+  readonly coverage: BackupCoverage;
+  readonly origin: BackupCoverageOrigin | null;
+  readonly since: string | null;
 }
 
 export function assertTransition(from: SyncStatus, to: SyncStatus): void {
@@ -136,7 +142,69 @@ export class SyncLedger {
   }
 
   pendingCount(): number {
-    return queryAll<{ n: number }>(this.db, 'SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1')[0]?.n ?? 0;
+    return queryAll<{ n: number }>(this.db, "SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1 AND coverage = 'included'")[0]?.n ?? 0;
+  }
+
+  // ---- Backup coverage (ADR-0033). Coverage is orthogonal to the upload
+  // machine: it says whether automatic backup may touch the row at all.
+
+  coverage(photoId: string): LedgerCoverage | undefined {
+    const row = queryAll<{ coverage: BackupCoverage; origin: BackupCoverageOrigin | null; since: string | null }>(
+      this.db,
+      'SELECT coverage, coverage_origin AS origin, coverage_since AS since FROM sync_ledger WHERE photo_id = @id',
+      { id: photoId },
+    )[0];
+    return row === undefined ? undefined : { coverage: row.coverage, origin: row.origin, since: row.since };
+  }
+
+  /** ADR-0033 §2's durable intermediate: the decision is recorded before
+   * any provider write, so a crash leaves "removal pending", never a row
+   * that silently re-enters automatic backup. Only an included row can
+   * begin excluding. */
+  markExcluding(photoId: string, origin: BackupCoverageOrigin, at: string): void {
+    const current = this.coverage(photoId);
+    if (current === undefined) throw new LedgerTransitionError(`no ledger row for ${photoId}`);
+    if (current.coverage !== 'included') throw new LedgerTransitionError(`illegal coverage transition ${current.coverage} → excluding`);
+    run(
+      this.db,
+      'UPDATE sync_ledger SET coverage = ?, coverage_origin = ?, coverage_since = ? WHERE photo_id = ?',
+      'excluding',
+      origin,
+      at,
+      photoId,
+    );
+  }
+
+  /** The provider copy is gone (or was never there, or is retained for a
+   * sibling per §3): the row is local-only by choice. Custody follows —
+   * the row claims no remote copy, so its status and any sole-remote
+   * authority binding clear in the same transaction. Outside the upload
+   * machine on purpose, like repairStatus: exclusion is a custody event,
+   * not an upload outcome. */
+  markExcluded(photoId: string): void {
+    const current = this.coverage(photoId);
+    if (current === undefined) throw new LedgerTransitionError(`no ledger row for ${photoId}`);
+    if (current.coverage !== 'excluding') throw new LedgerTransitionError(`illegal coverage transition ${current.coverage} → excluded`);
+    run(
+      this.db,
+      "UPDATE sync_ledger SET coverage = 'excluded', status = 'local', custody_authority_id = NULL, dirty = 0, last_backup_at = NULL WHERE photo_id = ?",
+      photoId,
+    );
+  }
+
+  /** ADR-0033 §5: re-enabling is an ordinary dirty row — the engine's
+   * verified upload does the rest. The status write is the machine's own
+   * `local` (an excluded row never keeps a remote claim). */
+  markIncluded(photoId: string, at: string): void {
+    const current = this.coverage(photoId);
+    if (current === undefined) throw new LedgerTransitionError(`no ledger row for ${photoId}`);
+    if (current.coverage === 'included') return;
+    run(
+      this.db,
+      "UPDATE sync_ledger SET coverage = 'included', coverage_origin = NULL, coverage_since = ?, status = 'local', dirty = 1 WHERE photo_id = ?",
+      at,
+      photoId,
+    );
   }
 
   /** Latest stamp across the library — null before the first backup. */

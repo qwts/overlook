@@ -71,6 +71,8 @@ import type { ProvenanceService } from './library/provenance-service.js';
 import { registerVariantHandlers } from './library/variant-ipc.js';
 import { registerHistogramHandlers } from './library/histogram-ipc.js';
 import { registerDuplicateHandlers } from './library/duplicate-ipc.js';
+import { registerCoverageHandlers } from './backup/coverage-ipc.js';
+import type { CoverageService } from './backup/coverage-service.js';
 import type { DuplicateIndexService } from './library/duplicate-index-service.js';
 import type { HistogramService } from './library/histogram-service.js';
 import type { VariantService } from './library/variant-service.js';
@@ -92,6 +94,7 @@ export interface AppServicesOptions {
   readonly getVariants: () => VariantService;
   readonly getHistogram: () => HistogramService;
   readonly getDuplicates: () => DuplicateIndexService;
+  readonly getCoverage: () => CoverageService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -288,6 +291,14 @@ export function registerAppServices(options: AppServicesOptions): void {
   const emitSettingsChanged = createEmitter(events.settingsChanged, options.broadcast);
   getSettingsStore().subscribe((settings) => emitSettingsChanged({ settings }));
   registerBackupHandlers(() => createBackupFacade(options.backup));
+  registerCoverageHandlers(options.getCoverage, options.requireContentAccess, async (operation) => {
+    options.backup.workChanged(1);
+    try {
+      return await operation();
+    } finally {
+      options.backup.workChanged(-1);
+    }
+  });
   if (options.pcloudEnabled || options.liveLocalEnabled) {
     registerInboundMoveHandlers(getProductionInboundMoveController, options.requireContentAccess);
   }

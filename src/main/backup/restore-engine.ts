@@ -24,6 +24,7 @@ import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
 import { createManifestDebtStore } from './manifest-debt.js';
+import { blobPhotos } from './backup-manifest-coverage.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import {
   activateStagedLibrary,
@@ -218,12 +219,14 @@ export class RestoreEngine {
   ): Promise<void> {
     // Presence only — do not download original bodies. Restore authenticates
     // each envelope once, when the user chooses to restore.
+    // Excluded records (ADR-0033 §4) promise no blob and are not scanned.
+    const carried = blobPhotos(candidate.manifest.photos);
     const listed = await listObjectBytes(
       this.deps.provider,
-      candidate.manifest.photos.map((photo) => photo.blobPath),
+      carried.map((photo) => photo.blobPath),
       signal,
     );
-    for (const photo of candidate.manifest.photos) {
+    for (const photo of carried) {
       assertNotAborted(signal);
       try {
         const bytes = await presentBytes(this.deps.provider, listed, photo.blobPath, signal);
@@ -608,9 +611,12 @@ export class RestoreEngine {
     missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
-    const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
+    // Excluded records (ADR-0033 §4) have nothing to download; their rows
+    // are placeholders the catalog restore writes on its own.
+    const carried = blobPhotos(candidate.manifest.photos);
+    const manifestIds = new Set(carried.map((photo) => photo.id));
     const completed = new Set(checkpoint.completedBlobIds.filter((id) => manifestIds.has(id)));
-    for (const photo of candidate.manifest.photos) {
+    for (const photo of carried) {
       if (completed.has(photo.id) && !(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)))) {
         completed.delete(photo.id);
         await store.deleteOriginal(photo.contentHash);
@@ -620,7 +626,7 @@ export class RestoreEngine {
     await saveCheckpoint(paths, checkpoint);
     const remote = new Map((await this.deps.provider.list('blobs', signal)).map((entry) => [entry.path, entry]));
     const skipped = new Set((missing ?? []).map((item) => item.path));
-    const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id) && !skipped.has(photo.blobPath));
+    const pending = carried.filter((photo) => !completed.has(photo.id) && !skipped.has(photo.blobPath));
     // #969: list() is a size hint only. A listing miss is not NOT FOUND —
     // getStream decides presence. Manifest bytes cover omitted paths.
     // Variants share one original (#496): its bytes count once.
@@ -636,7 +642,7 @@ export class RestoreEngine {
       throw new RestoreError('disk-space', `restore needs ${String(requiredBytes)} bytes but only ${String(available)} are available`);
     }
     let done = completed.size;
-    this.emit('downloading', done, candidate.manifest.photos.length, null);
+    this.emit('downloading', done, carried.length, null);
     for (const photo of pending) {
       assertNotAborted(signal);
       try {
@@ -673,7 +679,7 @@ export class RestoreEngine {
       done += 1;
       checkpoint = { ...checkpoint, completedBlobIds: [...completed] };
       await saveCheckpoint(paths, checkpoint);
-      this.emit('downloading', done, candidate.manifest.photos.length, photo.id);
+      this.emit('downloading', done, carried.length, photo.id);
     }
     return checkpoint;
   }

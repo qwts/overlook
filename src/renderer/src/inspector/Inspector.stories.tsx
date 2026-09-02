@@ -44,6 +44,7 @@ const PHOTO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'verified',
   syncState: 'synced',
+  coverage: 'included',
   title: 'Lisbon morning',
   description: 'Street scene near the waterfront.',
   tags: ['Lisbon', 'Travel'],
@@ -200,6 +201,7 @@ export const MetadataLite: Story = {
       place: null,
       favorite: false,
       syncState: 'local',
+      coverage: 'included',
     },
   },
   play: async ({ canvasElement }) => {

@@ -456,6 +456,28 @@
       ]
     },
     {
+      "id": "506-backup-coverage",
+      "wiki": "Acceptance-Test-Backup-Coverage",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/backup-coverage.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/backup-coverage/CoverageDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/backup/coverage-service.test.ts", "tests/backup/coverage-manifest.test.ts", "tests/db/backup-coverage.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Backup-Coverage.md for the shared-original retention, the disconnected and offloaded-original paths, the refused delete and its retry, the purge and disaster-recovery checks, and the pre-35 library upgrade over a real library."
+        }
+      ]
+    },
+    {
       "id": "498-histogram",
       "wiki": "Acceptance-Test-Histogram",
       "coverage": [

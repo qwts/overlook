@@ -101,7 +101,7 @@ function snapshotOf(photos: PhotosRepository, editRevisions: readonly BackupMani
 
 describe('edit revisions in backup manifests (#493)', () => {
   test('schema 11 carries every revision as written, head flagged, and round-trips through the parser', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 13);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 14);
     const { db, photos, revisions } = open();
     const first = revisions.append('P1', document(null, [ROTATE]));
     revisions.append('P1', document(first.id, []));

@@ -511,7 +511,17 @@ function installStub(options?: {
     } as unknown as OverlookApi['import'],
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
-      stats: () => Promise.resolve({ photos: 1542, bytes: 48_000_000_000, pending: 0, lastBackupAt: null, offloadedBytes: 12_600_000_000 }),
+      stats: () =>
+        Promise.resolve({
+          photos: 1542,
+          bytes: 48_000_000_000,
+          pending: 0,
+          lastBackupAt: null,
+          offloadedBytes: 12_600_000_000,
+          excludedCount: 0,
+          excludedBytes: 0,
+          pendingRemovals: 0,
+        }),
       galleryPolicy: () => Promise.resolve({ policy: { showUnavailable: true, minimumMegapixels: null } }),
       setGalleryPolicy: ({ policy }: { policy: { showUnavailable: boolean; minimumMegapixels: number | null } }) =>
         Promise.resolve({ policy }),

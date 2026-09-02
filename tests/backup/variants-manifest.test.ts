@@ -11,6 +11,7 @@ import {
   parseBackupManifest,
   type BackupManifestSnapshotV13,
 } from '../../src/main/backup/backup-manifest.js';
+import { asCarriedRecords, manifestBlobPath } from '../../src/main/backup/backup-manifest-coverage.js';
 import type { BackupManifestVariantFamilyV13 } from '../../src/main/backup/backup-manifest-variants.js';
 import { projectVerifiedManifest } from '../../src/main/backup/restore-projection.js';
 import { manifestDerivativeKey, restoreVariantFamilies, variantFamiliesMatch } from '../../src/main/backup/restore-variants.js';
@@ -80,8 +81,10 @@ function open(mode: 'empty' | 'keyed' | 'seeded'): {
 }
 
 function snapshotOf(photos: PhotosRepository, variantFamilies: readonly BackupManifestVariantFamilyV13[]): BackupManifestSnapshotV13 {
+  const { photos: rows, ...rest } = photos.manifestSnapshot();
   return {
-    ...photos.manifestSnapshot(),
+    ...rest,
+    photos: asCarriedRecords(rows),
     protectedAlbums: [],
     protectedPhotos: [],
     activity: [],
@@ -99,8 +102,8 @@ function snapshotOf(photos: PhotosRepository, variantFamilies: readonly BackupMa
 }
 
 describe('variants in the backup manifest (#496, schema 13)', () => {
-  test('the current schema is 13; roots keep their schema-12 shape, duplicates carry key and lineage, families ride along', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 13);
+  test('schema 13 is restorable; roots keep their schema-12 shape, duplicates carry key and lineage, families ride along', () => {
+    assert.ok(BACKUP_MANIFEST_SCHEMA_VERSION >= 13, 'schema 14 (#506) builds on this shape');
     const { photos, variants } = open('seeded');
     const families = variants.familiesSnapshot();
     const manifest = buildBackupManifestV13({ libraryId: LIBRARY, generatedAt: AT, snapshot: snapshotOf(photos, families) });
@@ -177,8 +180,8 @@ describe('variants in the backup manifest (#496, schema 13)', () => {
     const [root, duplicate] = parsed.manifest.photos;
     assert.ok(root && duplicate);
     const projected = projectVerifiedManifest(parsed.manifest, [
-      { path: root.blobPath, kind: 'original', photoId: root.id, reason: 'not-found' },
-      { path: duplicate.blobPath, kind: 'original', photoId: duplicate.id, reason: 'not-found' },
+      { path: manifestBlobPath(root.contentHash), kind: 'original', photoId: root.id, reason: 'not-found' },
+      { path: manifestBlobPath(duplicate.contentHash), kind: 'original', photoId: duplicate.id, reason: 'not-found' },
     ]);
     assert.deepEqual(projected.photos, []);
     assert.ok('variantFamilies' in projected);

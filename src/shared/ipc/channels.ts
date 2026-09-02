@@ -19,6 +19,7 @@ import {
 } from '../backup/provider-descriptor.js';
 import { ephemeralFailureReasonSchema, photoCustodyStatusSchema } from '../backup/custody-status.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
+import { coverageChannels } from './coverage-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import {
   restoreDiscoverResponseSchema,
@@ -252,6 +253,7 @@ const photoRecordSchema = z.object({
   dimensionStatus: z.enum(['legacy', 'verified', 'metadata-mismatch', 'unavailable']),
   mediaInfo: mediaInfoSchema.nullable(),
   syncState: syncStatusSchema,
+  coverage: z.enum(['included', 'excluding', 'excluded']),
 });
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
@@ -264,6 +266,7 @@ const protectedPhotoRecordSchema = photoRecordSchema.omit({
   previewFailure: true,
   dimensionStatus: true,
   syncState: true,
+  coverage: true,
 });
 const protectedPageCursorSchema = z.object({ position: z.number().int().nonnegative(), id: z.string().min(1) });
 
@@ -834,6 +837,7 @@ export const channels = {
   settingsSet: defineChannel('settings:set', z.object({ patch: settingsPatchSchema }), z.object({ settings: settingsSchema })),
   ...themeChannels,
   ...diagnosticsChannels,
+  ...coverageChannels,
   libraryStats: defineChannel(
     'library:stats',
     z.object({}),
@@ -843,6 +847,9 @@ export const channels = {
       pending: z.number().int().nonnegative(),
       lastBackupAt: z.string().nullable(),
       offloadedBytes: z.number().nonnegative(),
+      excludedCount: z.number().int().nonnegative(),
+      excludedBytes: z.number().nonnegative(),
+      pendingRemovals: z.number().int().nonnegative(),
     }),
   ),
   // Multi-library registry (#384, ADR-0017 §1/§2): list/create/select/remove

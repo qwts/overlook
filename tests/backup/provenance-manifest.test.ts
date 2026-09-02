@@ -95,7 +95,7 @@ const record = (photoId: string, subjectHash: string): BackupManifestProvenanceV
 
 describe('provenance in the backup manifest (#495, schema 12)', () => {
   test('the current schema is 12 and carries provenance records as written', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 13);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 14);
     const { photos } = open();
     const carried = [record('P1', 'a'.repeat(64))];
     const manifest = buildBackupManifestV12({ libraryId: LIBRARY, generatedAt: AT, snapshot: snapshotOf(photos, carried) });

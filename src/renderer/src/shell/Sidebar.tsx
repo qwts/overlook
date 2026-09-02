@@ -43,6 +43,7 @@ const messages = defineMessages({
   encryptedOpenSettings: { id: 'sidebar.encrypted.openSettings', defaultMessage: 'Library encrypted — open Settings' },
   storageOnDisk: { id: 'sidebar.storage.onDisk', defaultMessage: '{bytes} on disk' },
   storageOffload: { id: 'sidebar.storage.offload', defaultMessage: '{bytes} offload ({provider})' },
+  storageExcluded: { id: 'sidebar.storage.excluded', defaultMessage: '{bytes} on this device only' },
   connect: { id: 'sidebar.connect', defaultMessage: 'Connect' },
   sourceAll: { id: 'sidebar.source.all', defaultMessage: 'All Photos' },
   sourceFavorites: { id: 'sidebar.source.favorites', defaultMessage: 'Favorites' },
@@ -659,6 +660,11 @@ export function Sidebar({
                       bytes: formatBytes(stats.offloadedBytes),
                       provider: state.providerLabel,
                     })}
+                  </div>
+                ) : null}
+                {stats.excludedCount > 0 ? (
+                  <div data-testid="storage-excluded">
+                    {intl.formatMessage(messages.storageExcluded, { bytes: formatBytes(stats.excludedBytes) })}
                   </div>
                 ) : null}
               </>

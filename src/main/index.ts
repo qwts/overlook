@@ -46,6 +46,8 @@ import type { ConsistencyChecker } from './library/consistency.js';
 import { createConsistencyChecker } from './library/consistency-factory.js';
 import type { PurgeService } from './library/purge-service.js';
 import { createPurgeService } from './library/purge-factory.js';
+import type { CoverageService } from './backup/coverage-service.js';
+import { createCoverageService, requireCoverageService } from './backup/coverage-factory.js';
 import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-runtime.js';
 import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
@@ -54,7 +56,7 @@ import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { registerIpcHandlers, registerRelocationHandlers } from './ipc.js';
 import { activateSettingsLibrary, configureSettingsLibrary, getSettingsStore } from './settings/settings-runtime.js';
-import { throttlePercentOf } from '../shared/settings/settings.js';
+import { backupSettingsOf } from '../shared/settings/settings.js';
 import { LibraryService } from './library/library-service.js';
 import { LibraryRegistryRuntime } from './library/library-registry-runtime.js';
 import { acquireLibraryLock, readLockHolder } from './library/library-lock.js';
@@ -325,9 +327,8 @@ const changeProviderWork = (delta: 1 | -1): void => {
   embeddingRuntime?.service.notifyWorkAvailable();
 };
 
-const emitPendingCount = createEmitter(events.pendingCountChanged, (name, payload) =>
-  broadcast((win) => win.webContents.send(name, payload)),
-);
+const send = (name: string, payload: unknown): void => broadcast((win) => win.webContents.send(name, payload));
+const emitPendingCount = createEmitter(events.pendingCountChanged, send);
 const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
 function getEmbeddingService() {
@@ -384,6 +385,7 @@ function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
+let coverageService: CoverageService | undefined;
 let purgeService: PurgeService | undefined,
   purgeRuntime: DrainablePurgeFacade | undefined,
   consistencyChecker: ConsistencyChecker | undefined;
@@ -429,12 +431,8 @@ function getBackupEngine(): BackupEngine {
     const parts = requireParts('backup');
     const repo = new PhotosRepository(parts.db);
     const ledger = new SyncLedger(parts.db);
-    const emitProgress = createEmitter(events.backupProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitCompleted = createEmitter(events.backupCompleted, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitProgress = createEmitter(events.backupProgress, send);
+    const emitCompleted = createEmitter(events.backupCompleted, send);
     // libraryChanged reuses the module-level emitter — one truth, no shadow.
     const audit = createBackupAuditLogger(path.join(libraryDataDir(), 'backup-audit.log'));
     const provider = getProviderRuntime().buildProvider({
@@ -457,9 +455,7 @@ function getBackupEngine(): BackupEngine {
       audit,
     });
     custodyRoutingLifecycle = custodyRouting;
-    const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, send);
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
@@ -488,16 +484,7 @@ function getBackupEngine(): BackupEngine {
       ...sidecarBackupDeps(parts.db, parts.blobStore),
       // Live reads (#111): every run and every maybeAutoRun sees the
       // store's current values — no restart needed after a settings change.
-      settings: () => {
-        const current = getSettingsStore().get();
-        return {
-          throttlePercent: throttlePercentOf(current),
-          wifiOnly: current.wifiOnly,
-          // Disconnected (#114) means no automatic uploads — the switch is
-          // disabled in the dialog for the same reason.
-          autoBackupOnImport: current.autoBackupOnImport && getProviderRuntime().activeId() !== null,
-        };
-      },
+      settings: () => backupSettingsOf(getSettingsStore().get(), getProviderRuntime().activeId() !== null),
       network: () => 'unknown',
       events: { progress: (done, total, photoId) => emitProgress({ done, total, photoId }) },
       now: () => Date.now(),
@@ -510,10 +497,9 @@ function getBackupEngine(): BackupEngine {
       recoveryGenerationHealthy: createRecoveryHealthCheck(provider, () => getProviderRuntime().libraryId(), parts.keyStore),
       ...createBackupClaimDeps(parts.db, parts.blobStore),
       protectedBackup: parts.protected.backupBinding(provider, audit),
+      settleExclusions: () => coverageService?.settlePending() ?? Promise.resolve(undefined),
     });
-    const emitEphemeralState = createEmitter(events.ephemeralOriginalState, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitEphemeralState = createEmitter(events.ephemeralOriginalState, send);
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
@@ -535,6 +521,20 @@ function getBackupEngine(): BackupEngine {
     });
     offloadService = custody.offload;
     ephemeralOriginalService = custody.ephemeral;
+    // Backup coverage (#506, ADR-0033): the provider delete rides the
+    // engine's post-manifest settle hook above; everything else is local.
+    coverageService = createCoverageService(parts.db, getProviderRuntime, {
+      ledger,
+      restoreOriginals: (photoIds) => custody.offload.restoreOriginals(photoIds),
+      hasLocalOriginal: (hash) => parts.blobStore.hasOriginal(hash),
+      remoteProvider: custodyRouting.remoteProvider,
+      oweManifest: () => backupEngine?.oweManifest(),
+      runBackup: () => getBackupEngine().run(),
+      syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+      storageChanged: () => send(events.storageChanged.name, {}),
+      audit,
+    });
     purgeService = createPurgeService({
       db: parts.db,
       repo,
@@ -559,9 +559,7 @@ function getBackupEngine(): BackupEngine {
       setStatus: (photoId, status) => {
         ledger.repairStatus(photoId, status);
       },
-      libraryChanged: (photoIds) => {
-        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' });
-      },
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
       audit,
     });
     // Completion events drive the toasts (#106) and the card's bar clear
@@ -838,6 +836,7 @@ void externalOpen.whenReady().then(async () => {
     getVariants: () => ensureMaintenanceServices().variants,
     getHistogram: () => ensureMaintenanceServices().histogram.service,
     getDuplicates: () => ensureMaintenanceServices().duplicates.service,
+    getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,

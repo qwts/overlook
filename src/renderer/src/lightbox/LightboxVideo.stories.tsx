@@ -64,6 +64,7 @@ const VIDEO: PhotoRecord = {
   previewFailure: null,
   dimensionStatus: 'unavailable',
   syncState: 'local',
+  coverage: 'included',
   title: null,
   description: null,
   tags: [],

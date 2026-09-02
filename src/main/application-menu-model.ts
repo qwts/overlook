@@ -130,6 +130,8 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'photo.open':
     case 'photo.offload':
     case 'photo.restoreOriginal':
+    case 'photo.coverage.exclude':
+    case 'photo.coverage.include':
     case 'photo.transfer':
     case 'photo.purge':
     case 'trash.empty':

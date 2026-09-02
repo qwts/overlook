@@ -54,6 +54,7 @@ function photo(index: number, syncState: SyncStatus, patch: Partial<PhotoRecord>
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState,
+    coverage: 'included',
     title: null,
     description: null,
     tags: [],

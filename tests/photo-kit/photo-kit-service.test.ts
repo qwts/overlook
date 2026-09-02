@@ -50,6 +50,7 @@ const PHOTO: PhotoRecord = {
   dimensionStatus: 'verified',
   mediaInfo: null,
   syncState: 'local',
+  coverage: 'included',
 };
 
 const SUMMARY: ImportSummary = {

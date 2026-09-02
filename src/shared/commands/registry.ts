@@ -106,6 +106,8 @@ export type CommandId =
   | 'photo.duplicate'
   | 'photo.offload'
   | 'photo.restoreOriginal'
+  | 'photo.coverage.exclude'
+  | 'photo.coverage.include'
   | 'photo.transfer'
   | 'photo.trash'
   | 'photo.restore'
@@ -205,6 +207,8 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'photo.duplicate': { id: 'commands.photo.duplicate', defaultMessage: 'Duplicate' },
   'photo.offload': { id: 'commands.photo.offload', defaultMessage: 'Offload original…' },
   'photo.restoreOriginal': { id: 'commands.photo.restoreOriginal', defaultMessage: 'Restore original' },
+  'photo.coverage.exclude': { id: 'commands.photo.coverage.exclude', defaultMessage: 'Keep on this device only…' },
+  'photo.coverage.include': { id: 'commands.photo.coverage.include', defaultMessage: 'Back up again' },
   'photo.transfer': { id: 'commands.photo.transfer', defaultMessage: 'Transfer & Sync…' },
   'photo.trash': { id: 'commands.photo.trash', defaultMessage: 'Move photo to Trash' },
   'photo.restore': { id: 'commands.photo.restore', defaultMessage: 'Restore photo' },
@@ -590,6 +594,10 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection' },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
+  // Backup coverage (#506, ADR-0033 §7): contextual like offload — the
+  // preflight ceremony belongs to the workflow, not the native menu.
+  { id: 'photo.coverage.exclude', label: label('photo.coverage.exclude', 'Keep on this device only…'), surfaces: [], target: 'selection' },
+  { id: 'photo.coverage.include', label: label('photo.coverage.include', 'Back up again'), surfaces: [], target: 'selection' },
   { id: 'photo.transfer', label: label('photo.transfer', 'Transfer & Sync…'), surfaces: [], target: 'selection' },
   {
     id: 'photo.trash',

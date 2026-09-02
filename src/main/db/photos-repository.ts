@@ -447,7 +447,26 @@ export class PhotosRepository {
         `SELECT sum(p.bytes) AS b FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
           WHERE l.status = 'offloaded' AND p.deleted_at IS NULL`,
       )[0]?.b ?? 0;
-    return { photos: row?.n ?? 0, bytes: row?.b ?? 0, pending: this.pendingCount(), lastBackupAt, offloadedBytes };
+    // ADR-0033 §1 populations: local-only by choice (settled), and rows whose provider
+    // copy is still awaiting removal after a failed delete (§6).
+    const coverage = queryAll<{ excludedCount: number; excludedBytes: number | null; pendingRemovals: number }>(
+      this.db,
+      `SELECT sum(CASE WHEN l.coverage = 'excluded' THEN 1 ELSE 0 END) AS excludedCount,
+              sum(CASE WHEN l.coverage = 'excluded' THEN p.bytes ELSE 0 END) AS excludedBytes,
+              sum(CASE WHEN l.coverage = 'excluding' THEN 1 ELSE 0 END) AS pendingRemovals
+         FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
+        WHERE p.deleted_at IS NULL`,
+    )[0];
+    return {
+      photos: row?.n ?? 0,
+      bytes: row?.b ?? 0,
+      pending: this.pendingCount(),
+      lastBackupAt,
+      offloadedBytes,
+      excludedCount: coverage?.excludedCount ?? 0,
+      excludedBytes: coverage?.excludedBytes ?? 0,
+      pendingRemovals: coverage?.pendingRemovals ?? 0,
+    };
   }
 
   /** Dedupe primitive (#84): does this content already live in the library?
@@ -773,7 +792,8 @@ export class PhotosRepository {
     restoreManifestFromBackup(this.db, manifest, keys, missingPhotoIds);
   }
 
-  /** The backup queue's input (#105): dirty, not-deleted photos. */
+  /** The backup queue's input (#105): dirty, not-deleted, included photos.
+   * Excluded rows (ADR-0033 §1) never enter the queue, dirty or not. */
   dirtyPhotos(): readonly { id: string; contentHash: string; bytes: number; fileName: string; keyId: number; status: SyncStatus }[] {
     // status rides along so the engine never re-queries the ledger per item
     // (two status lookups × 94K dirty rows stalled the 113K-import sweep).
@@ -781,7 +801,7 @@ export class PhotosRepository {
       this.db,
       `SELECT p.id, p.content_hash AS contentHash, p.bytes, p.file_name AS fileName, p.key_id AS keyId, l.status AS status
          FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
-        WHERE l.dirty = 1 AND p.deleted_at IS NULL
+        WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
         ORDER BY p.imported_at, p.id`,
     );
   }
@@ -806,6 +826,7 @@ export class PhotosRepository {
           AND (@syncState IS NULL OR l.status = @syncState)
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
+          AND l.coverage = 'included'
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
@@ -826,7 +847,8 @@ export class PhotosRepository {
     return (
       queryAll<{ n: number }>(
         this.db,
-        'SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id WHERE l.dirty = 1 AND p.deleted_at IS NULL',
+        `SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id
+          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL`,
       )[0]?.n ?? 0
     );
   }

@@ -232,6 +232,12 @@ export interface OverlookApi {
     readonly onChanged: (listener: () => void) => () => void;
     readonly onProgress: (listener: (payload: z.output<typeof events.protectedWorkflowProgress.payload>) => void) => () => void;
   };
+  /** Backup coverage (#506, ADR-0033): keep on this device only / back up again. */
+  readonly coverage: {
+    readonly preflight: (request: Req<typeof channels.coveragePreflight>) => Promise<Res<typeof channels.coveragePreflight>>;
+    readonly exclude: (request: Req<typeof channels.coverageExclude>) => Promise<Res<typeof channels.coverageExclude>>;
+    readonly include: (request: Req<typeof channels.coverageInclude>) => Promise<Res<typeof channels.coverageInclude>>;
+  };
   readonly backup: {
     readonly run: (request: Req<typeof channels.backupRun>) => Promise<Res<typeof channels.backupRun>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.backupProgress.payload>) => void) => () => void;

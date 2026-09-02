@@ -49,6 +49,7 @@ function photo(id: string, fileName = `${id}.jpg`, syncState: PhotoRecord['syncS
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState,
+    coverage: 'included',
   };
 }
 

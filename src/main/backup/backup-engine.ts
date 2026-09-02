@@ -5,15 +5,16 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV13,
+  buildBackupManifestV14,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
-  type BackupManifestSnapshotV13,
+  type BackupManifestSnapshotV14,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
+import { blobPhotos } from './backup-manifest-coverage.js';
 import type { BackupManifestEditRevisionV11 } from './backup-manifest-edit-revisions.js';
 import type { BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
 import type { BackupManifestVariantFamilyV13 } from './backup-manifest-variants.js';
@@ -170,6 +171,9 @@ export interface BackupEngineDeps {
    * them (#741) so locally available originals re-queue and upload. */
   readonly claimsForContentHashes?: ((hashes: readonly string[]) => readonly OrdinaryRemoteClaim[]) | undefined;
   readonly hasLocalOriginal?: ((contentHash: string) => boolean) | undefined;
+  /** ADR-0033 §2: removes the provider copies of rows excluded from backup,
+   * called only once the remote's latest generation records the exclusion. */
+  readonly settleExclusions?: (() => Promise<unknown>) | undefined;
   /** Durable manifest debt (#741): survives restart so an owed generation is
    * never forgotten between runs. */
   readonly manifestDebt?: { readonly load: () => boolean; readonly save: (owed: boolean) => void } | undefined;
@@ -476,6 +480,13 @@ export class BackupEngine {
           if (reconciled.blocked > 0 || nothingRecovered || requeueFailed > 0 || aborted()) break;
         }
       }
+    }
+    // ADR-0033 §2/§6: provider copies of excluded rows go only after the
+    // generation that records the exclusion has landed — i.e. with no
+    // manifest debt outstanding. A removal that fails stays pending and is
+    // retried by later runs, dirty or not.
+    if (signal?.aborted !== true && !this.manifestOwed && this.deps.settleExclusions !== undefined) {
+      await this.deps.settleExclusions();
     }
     let integrity = EMPTY_INTEGRITY;
     // publishBlocked is an integrity condition, not a transport failure —
@@ -815,7 +826,7 @@ export class BackupEngine {
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
-    const manifest = buildBackupManifestV13({
+    const manifest = buildBackupManifestV14({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -835,7 +846,7 @@ export class BackupEngine {
         editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
         provenance: this.deps.provenanceSnapshot?.(carriedPhotoIds) ?? [],
         variantFamilies: this.deps.variantFamiliesSnapshot?.() ?? [],
-      } satisfies BackupManifestSnapshotV13,
+      } satisfies BackupManifestSnapshotV14,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.
@@ -847,10 +858,13 @@ export class BackupEngine {
     // blob the provider provably corrupted. Recovery or deleting the row
     // releases the claim; local-backed 'error' rows heal through the
     // reconcile pass below like any other missing claim.
-    const unprovable = manifest.photos.filter((photo) => this.deps.ledger.status(photo.id) === 'error').map((photo) => photo.blobPath);
+    // Excluded records (ADR-0033) claim no blob, so their placeholder
+    // 'error' rows never block a publication.
+    const carried = blobPhotos(manifest.photos);
+    const unprovable = carried.filter((photo) => this.deps.ledger.status(photo.id) === 'error').map((photo) => photo.blobPath);
     if (unprovable.length > 0) throw new ManifestIncompleteError(unprovable);
     await this.assertManifestComplete(
-      manifest.photos,
+      carried,
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
     );

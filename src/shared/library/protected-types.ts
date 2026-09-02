@@ -10,6 +10,7 @@ export type ProtectedPhotoRecord = Omit<
   | 'previewFailure'
   | 'dimensionStatus'
   | 'syncState'
+  | 'coverage'
   | 'derivativeKey'
   | 'variantSourceId'
   | 'assetOwnerId'

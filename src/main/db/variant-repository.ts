@@ -58,7 +58,7 @@ export class VariantRepository {
   family(contentHash: string): VariantFamily {
     const rows = queryAll<PhotoRow>(
       this.db,
-      `SELECT p.*, l.status AS sync_state, p.imported_at AS sort_key
+      `SELECT p.*, l.status AS sync_state, l.coverage AS coverage, p.imported_at AS sort_key
          FROM ordinary_visible_photos p LEFT JOIN sync_ledger l ON l.photo_id = p.id
         WHERE p.content_hash = @contentHash AND p.deleted_at IS NULL
         ORDER BY p.imported_at, p.id`,

@@ -8,6 +8,7 @@ import { migrateEditRevisions } from './edit-revision-migration.js';
 import { migratePhotoProvenance } from './provenance-migration.js';
 import { migrateVariants } from './variant-migration.js';
 import { migratePerceptualFingerprints } from './fingerprint-migration.js';
+import { migrateBackupCoverage } from './coverage-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
 // stays a ledger: gallery inclusion rules (#512), collection visibility
@@ -30,4 +31,6 @@ export const COLLECTION_MIGRATIONS: readonly {
   { version: 33, name: 'variants', up: migrateVariants, rebuild: true },
   // #650 perceptual fingerprints: recomputable index rows beside the photo.
   { version: 34, name: 'perceptual-fingerprints', up: migratePerceptualFingerprints },
+  // #506 backup coverage: per-row inclusion in automatic backup (ADR-0033).
+  { version: 35, name: 'backup-coverage', up: migrateBackupCoverage },
 ];

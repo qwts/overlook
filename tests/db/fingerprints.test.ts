@@ -54,8 +54,8 @@ function photo(id: string, contentHash = `hash-${id}`): PhotoInsert {
 }
 
 describe('perceptual fingerprint repository (#650)', () => {
-  test('migration 34 is the ledger head and creates the table beside the photo', () => {
-    assert.equal(MIGRATIONS.at(-1)?.version, 34);
+  test('migration 34 creates the table beside the photo', () => {
+    assert.equal(MIGRATIONS.find((m) => m.version === 34)?.name, 'perceptual-fingerprints');
     const { db } = open();
     const row = queryGet<{ name: string }>(db, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'photo_fingerprints'`);
     assert.equal(row?.name, 'photo_fingerprints');

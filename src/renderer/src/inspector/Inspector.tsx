@@ -6,7 +6,7 @@ import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { mediaInfoRows } from '../../../shared/library/media-info-format.js';
 import { Badge } from '../components/Badge';
 import { MetadataRow } from '../components/MetadataRow';
-import { StatusGlyph } from '../components/StatusGlyph';
+import { StatusGlyph, glyphStateOf } from '../components/StatusGlyph';
 import { IconButton } from '../components/IconButton';
 import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
@@ -123,6 +123,10 @@ export function Inspector({
     offloaded: `Offloaded — original in ${provider}`,
     error: 'Sync failed — will retry',
   };
+  // Backup coverage (#506, ADR-0033 §6): an excluded row reads as a choice,
+  // and an owed provider removal reads as pending, never as backed up.
+  const coverageText =
+    photo.coverage === 'excluding' ? 'On this device only — cloud copy removal pending' : 'On this device only — not backed up by choice';
   return (
     <div className="ovl-inspector" data-testid="inspector">
       <h2 className="ovl-sr-only">{intl.formatMessage(messages.title)}</h2>
@@ -155,7 +159,7 @@ export function Inspector({
           />
           <div className="ovl-inspector__date mono-data">{dateLine}</div>
         </div>
-        <StatusGlyph state={photo.syncState} {...(custody === null ? {} : { title: custody.text })} />
+        <StatusGlyph state={glyphStateOf(photo)} {...(custody === null ? {} : { title: custody.text })} />
       </div>
       <PhotoMetadataEditor photo={photo} photoIds={photoIds ?? [photo.id]} />
       <Section title="Badges">
@@ -208,8 +212,8 @@ export function Inspector({
       <Section title="Backup">
         <MetadataRow
           label="State"
-          value={custody?.text ?? statusText[photo.syncState]}
-          tone={custody?.tone ?? STATUS_TONE[photo.syncState]}
+          value={photo.coverage === 'included' ? (custody?.text ?? statusText[photo.syncState]) : coverageText}
+          tone={photo.coverage === 'included' ? (custody?.tone ?? STATUS_TONE[photo.syncState]) : STATUS_TONE.offloaded}
         />
         <MetadataRow
           label="Cipher"
