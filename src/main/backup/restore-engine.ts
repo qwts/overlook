@@ -623,8 +623,12 @@ export class RestoreEngine {
     const pending = candidate.manifest.photos.filter((photo) => !completed.has(photo.id) && !skipped.has(photo.blobPath));
     // #969: list() is a size hint only. A listing miss is not NOT FOUND —
     // getStream decides presence. Manifest bytes cover omitted paths.
+    // Variants share one original (#496): its bytes count once.
     let requiredBytes = SCRATCH_BYTES;
+    const counted = new Set<string>();
     for (const photo of pending) {
+      if (counted.has(photo.blobPath)) continue;
+      counted.add(photo.blobPath);
       requiredBytes += remote.get(photo.blobPath)?.bytes ?? photo.bytes;
     }
     const available = await (this.deps.availableBytes ?? defaultAvailableBytes)(dirname(paths.targetDir));

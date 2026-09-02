@@ -37,6 +37,9 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
         photoId: photo.id,
         bytes,
         contentHash: photo.contentHash,
+        // A duplicate's repaired derivatives land under its own key (#496);
+        // omitting it would overwrite the root's tiles.
+        derivativeKey: photo.derivativeKey,
         key: options.currentKey(),
         fileKind: photo.fileKind,
         signal,
