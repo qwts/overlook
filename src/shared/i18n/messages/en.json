@@ -815,6 +815,9 @@
   "library.photo.moreActions": {
     "defaultMessage": "More actions for {photo}"
   },
+  "library.photo.unknownDimensions": {
+    "defaultMessage": "Dimensions unknown"
+  },
   "library.photo.video.durationTitle": {
     "defaultMessage": "Video · {duration}"
   },
@@ -1622,6 +1625,27 @@
   "settings.fileProvider.wholeLibrary": {
     "defaultMessage": "Whole library"
   },
+  "settings.general.allPhotos": {
+    "defaultMessage": "All Photos"
+  },
+  "settings.general.allPhotos.hint": {
+    "defaultMessage": "These rules change only what All Photos shows. Albums, search, backup, export, and the RAW and Unavailable sources are never affected."
+  },
+  "settings.general.allPhotos.minimumSize": {
+    "defaultMessage": "Minimum size"
+  },
+  "settings.general.allPhotos.minimumSize.hint": {
+    "defaultMessage": "Items whose dimensions are unknown are always shown, whatever the minimum."
+  },
+  "settings.general.allPhotos.minimumSize.megapixels": {
+    "defaultMessage": "{count} MP and larger"
+  },
+  "settings.general.allPhotos.minimumSize.none": {
+    "defaultMessage": "None — show every size"
+  },
+  "settings.general.allPhotos.showUnavailable": {
+    "defaultMessage": "Show unavailable items in All Photos"
+  },
   "settings.general.appearance": {
     "defaultMessage": "Appearance"
   },
@@ -2069,8 +2093,14 @@
   "shell.view.protected": {
     "defaultMessage": "Protected album"
   },
+  "shell.view.raw": {
+    "defaultMessage": "RAW"
+  },
   "shell.view.recent": {
     "defaultMessage": "Recent imports"
+  },
+  "shell.view.unavailable": {
+    "defaultMessage": "Unavailable"
   },
   "sidebar.album.actions": {
     "defaultMessage": "Actions for {name}"
@@ -2132,8 +2162,14 @@
   "sidebar.source.offloaded": {
     "defaultMessage": "Offloaded"
   },
+  "sidebar.source.raw": {
+    "defaultMessage": "RAW"
+  },
   "sidebar.source.recent": {
     "defaultMessage": "Recent imports"
+  },
+  "sidebar.source.unavailable": {
+    "defaultMessage": "Unavailable"
   },
   "sidebar.storage.offload": {
     "defaultMessage": "{bytes} offload ({provider})"
@@ -2143,6 +2179,9 @@
   },
   "sidebar.trash.actions": {
     "defaultMessage": "Trash actions"
+  },
+  "statusbar.inclusion.excluded": {
+    "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules"
   },
   "titlebar.help": {
     "defaultMessage": "Help"

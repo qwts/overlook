@@ -14,6 +14,7 @@ import { createDecryptStream } from '../crypto/envelope.js';
 import { openLibraryDatabase } from '../db/database.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
+import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-policy.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
@@ -244,7 +245,9 @@ export class RestoreEngine {
     signal: AbortSignal | undefined,
     ticker: ScanTicker,
   ): Promise<void> {
-    if (candidate.manifest.schema !== 6) return;
+    // Every schema from 6 on carries the sidecar section; gate on the section,
+    // not the version, so a newer manifest era never silently skips it.
+    if (!('sidecars' in candidate.manifest)) return;
     for (const sidecar of candidate.manifest.sidecars) {
       assertNotAborted(signal);
       try {
@@ -475,7 +478,7 @@ export class RestoreEngine {
     missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
-    if (candidate.manifest.schema !== 6) return checkpoint;
+    if (!('sidecars' in candidate.manifest)) return checkpoint;
     const entries = candidate.manifest.sidecars.map((sidecar) => ({ sidecar, id: `${sidecar.photoId}:${sidecar.hash}` }));
     const ids = new Set(entries.map((entry) => entry.id));
     const completed = new Set((checkpoint.completedSidecarIds ?? []).filter((id) => ids.has(id)));
@@ -791,8 +794,9 @@ export class RestoreEngine {
       // stale claims until the next library edit.
       createManifestDebtStore(db, () => new Date()).save(true);
       if ('boards' in candidate.manifest) restoreBoards(db, candidate.manifest.boards);
+      restoreGalleryPolicy(db, candidate.manifest);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
-      if (candidate.manifest.schema === 6) {
+      if ('sidecars' in candidate.manifest) {
         const sidecarRepo = new SidecarRepository(db);
         // A NOT FOUND sidecar row is omitted rather than kept: unlike a
         // photo row it carries no album membership, and a row pointing at
@@ -809,11 +813,11 @@ export class RestoreEngine {
           });
         }
       }
-      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
+      if (candidate.manifest.schema !== 2 && candidate.manifest.schema !== 3) {
         new ActivityRepository(db).restoreSnapshot(candidate.manifest.activity);
       }
       const rebuilt = repo.manifestSnapshot();
-      const expectedBoards = candidate.manifest.schema === 5 || candidate.manifest.schema === 6 ? candidate.manifest.boards : [];
+      const expectedBoards = 'boards' in candidate.manifest ? candidate.manifest.boards : [];
       const expected = {
         keyIds: candidate.manifest.keyIds,
         totals: candidate.manifest.totals,
@@ -857,12 +861,13 @@ export class RestoreEngine {
           }
         }
       }
-      if (candidate.manifest.schema === 4 || candidate.manifest.schema === 5 || candidate.manifest.schema === 6) {
+      if (candidate.manifest.schema !== 2 && candidate.manifest.schema !== 3) {
         const activity = new ActivityRepository(db).backupSnapshot();
         if (!isDeepStrictEqual(activity, candidate.manifest.activity)) {
           throw new RestoreError('corrupt', 'rebuilt activity history does not match the verified projection');
         }
       }
+      if (!galleryPolicyMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored gallery policy mismatch');
     } finally {
       db.close();
     }

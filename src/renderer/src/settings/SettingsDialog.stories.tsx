@@ -512,6 +512,9 @@ function installStub(options?: {
     library: {
       albums: () => Promise.resolve({ albums: [{ id: 'family', name: 'Family', count: 4 }] }),
       stats: () => Promise.resolve({ photos: 1542, bytes: 48_000_000_000, pending: 0, lastBackupAt: null, offloadedBytes: 12_600_000_000 }),
+      galleryPolicy: () => Promise.resolve({ policy: { showUnavailable: true, minimumMegapixels: null } }),
+      setGalleryPolicy: ({ policy }: { policy: { showUnavailable: boolean; minimumMegapixels: number | null } }) =>
+        Promise.resolve({ policy }),
       onChanged: () => () => undefined,
       onPendingCountChanged: () => () => undefined,
       onStorageChanged: () => () => undefined,
@@ -1111,7 +1114,7 @@ export const GeneralRightToLeft: Story = {
     if (general === undefined) throw new Error('general settings navigation item missing');
     await userEvent.click(general);
     const pane = body.getByTestId('settings-pane');
-    await waitFor(() => expect(within(pane).getByRole('combobox')).toBeVisible());
+    await waitFor(() => expect(within(pane).getAllByRole('combobox')[0]).toBeVisible());
     await expect(nav.getBoundingClientRect().left).toBeGreaterThan(pane.getBoundingClientRect().left);
     await expect(nav.getBoundingClientRect().right).toBeLessThanOrEqual(dialog.getBoundingClientRect().right);
   },

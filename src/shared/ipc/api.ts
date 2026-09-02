@@ -101,6 +101,10 @@ export interface OverlookApi {
     ) => Promise<Res<typeof channels.libraryToggleFavorites>>;
     readonly setOriginal: (request: Req<typeof channels.librarySetOriginal>) => Promise<Res<typeof channels.librarySetOriginal>>;
     readonly counts: (request: Req<typeof channels.libraryCounts>) => Promise<Res<typeof channels.libraryCounts>>;
+    readonly galleryPolicy: () => Promise<Res<typeof channels.libraryGalleryPolicy>>;
+    readonly setGalleryPolicy: (
+      request: Req<typeof channels.librarySetGalleryPolicy>,
+    ) => Promise<Res<typeof channels.librarySetGalleryPolicy>>;
     readonly stats: () => Promise<Res<typeof channels.libraryStats>>;
     readonly albums: () => Promise<Res<typeof channels.libraryAlbums>>;
     readonly delete: (request: Req<typeof channels.libraryDelete>) => Promise<Res<typeof channels.libraryDelete>>;

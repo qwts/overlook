@@ -47,7 +47,7 @@ function installStub(): void {
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, albums: albumActions };
 }
 
-const counts: SourceCounts = { all: 204318, favorites: 11, recent: 96, offloaded: 12, deleted: 3 };
+const counts: SourceCounts = { all: 204318, favorites: 11, recent: 96, raw: 0, offloaded: 12, unavailable: 0, deleted: 3, excluded: 0 };
 const stats: LibraryStats = {
   photos: 204318,
   bytes: 1_580_000_000_000,
@@ -258,6 +258,23 @@ export const OffloadedHiddenWhenEmpty: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('All Photos')).toBeVisible();
     await expect(canvas.queryByText('Offloaded')).not.toBeInTheDocument();
+  },
+};
+
+// Derived sources (#512): RAW and Unavailable appear only with members and
+// then carry exact counts, in a fixed order between Recent and Trash.
+export const DerivedSourcesWithCounts: Story = {
+  args: { counts: { ...counts, raw: 418, unavailable: 7 } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'RAW 418' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Unavailable 7' })).toBeVisible();
+    const order = canvas
+      .getAllByRole('button')
+      .map((button) => button.textContent ?? '')
+      .filter((text) => /^(All Photos|Favorites|Recent imports|RAW|Offloaded|Unavailable|Trash)/u.test(text))
+      .map((text) => text.replace(/[\d,]+$/u, '').trim());
+    await expect(order).toEqual(['All Photos', 'Favorites', 'Recent imports', 'RAW', 'Offloaded', 'Unavailable', 'Trash']);
   },
 };
 

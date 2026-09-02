@@ -75,8 +75,10 @@ export type PhotoInsert = Omit<
   readonly metadataVersion?: number | undefined;
 };
 
-/** The sidebar's library sources (design §Sidebar). */
-export type SourceFilter = 'all' | 'favorites' | 'recent' | 'offloaded' | 'deleted';
+/** The sidebar's library sources (design §Sidebar). `raw` and `unavailable`
+ * are derived sources (#512, ADR-0030 §4): membership is a query over
+ * `file_kind` and the row's typed renderability reason, never stored. */
+export type SourceFilter = 'all' | 'favorites' | 'recent' | 'raw' | 'offloaded' | 'unavailable' | 'deleted';
 export type LibraryMembershipChange = 'none' | 'favorite' | 'album' | 'library';
 
 /** The grid's sort orders (#113): date newest-first, name A→Z, size
@@ -162,7 +164,9 @@ export interface SelectionRangeResult {
   readonly photoIds: readonly string[];
 }
 
-export type SourceCounts = Readonly<Record<SourceFilter, number>>;
+/** Per-source counts plus `excluded`: rows the active All Photos inclusion
+ * rules hide (ADR-0030 §4 disclosure). Zero when no rule is active. */
+export type SourceCounts = Readonly<Record<SourceFilter, number>> & { readonly excluded: number };
 
 /** Sidebar albums list (#80); CRUD arrives with M10. */
 export interface AlbumSummary {

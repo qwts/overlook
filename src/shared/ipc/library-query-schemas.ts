@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'offloaded', 'deleted']);
+export const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'raw', 'offloaded', 'unavailable', 'deleted']);
 
 export const chipFiltersSchema = z.object({
   favorites: z.boolean().optional(),
