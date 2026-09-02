@@ -58,6 +58,8 @@ test('Keep on this device only removes the cloud copy; Back up again restores co
   await expect.poll(() => remoteBlobFiles(userData).length).toBe(3);
   await expect(page.locator('.ovl-toast-host')).toContainText('kept on this device only');
   await expect(page.getByTestId('storage-excluded')).toBeVisible();
+  // ADR-0033 §6: the sync chip never claims "All backed up" over a local-only photo.
+  await expect(page.getByTestId('sync-state')).toContainText('Backed up except 1 local-only photo');
   await expect(firstCell.getByLabel('On this device only')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Back up' })).toBeHidden();
 

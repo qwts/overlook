@@ -1014,6 +1014,7 @@ export const en: Readonly<Record<string, string>> = {
   "statusbar.coverage.removalPending": "{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal",
   "statusbar.inclusion.excluded": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules",
   "statusbar.inclusion.hiddenByAlbums": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings",
+  "statusbar.sync.backedUpExceptLocalOnly": "Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}",
   "titlebar.help": "Help",
   "toast.announcement": "{title} — {detail}",
   "toast.dismiss": "Dismiss notification",

@@ -22,6 +22,10 @@ const messages = defineMessages({
     id: 'statusbar.coverage.removalPending',
     defaultMessage: '{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal',
   },
+  backedUpExceptLocalOnly: {
+    id: 'statusbar.sync.backedUpExceptLocalOnly',
+    defaultMessage: 'Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}',
+  },
 });
 
 // The 26px mono strip (#81) per the design's StatusBar.jsx — always tells
@@ -124,9 +128,15 @@ export function StatusBar({
           Encrypting {formatCount(state.pendingCount)} → {provider}
         </span>
       ) : (
+        // ADR-0033 §6: a library holding local-only photos never claims
+        // "all backed up" — the sync chip names what the cloud lacks.
         <span className="ovl-statusbar__item ovl-statusbar__item--green" data-testid="sync-state">
           <Icon name="cloud-check" size={12} strokeWidth={2} />
-          All backed up · {state.lastBackupLabel}
+          {stats !== null && stats.excludedCount > 0
+            ? intl.formatMessage(messages.backedUpExceptLocalOnly, { count: stats.excludedCount })
+            : 'All backed up'}
+          {' · '}
+          {state.lastBackupLabel}
         </span>
       )}
       <span className="ovl-statusbar__item ovl-statusbar__item--green">

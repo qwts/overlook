@@ -37,7 +37,9 @@ RemovesCloudCopy / KeepsOnThisDevice`.
    tile's status glyph reads **On this device only**; the Inspector's Backup
    line says the same with the date; the sidebar storage card shows the
    excluded bytes; the mock remote holds three originals; the Back up button
-   stays hidden (an excluded photo is not pending work).
+   stays hidden (an excluded photo is not pending work); the status bar's sync
+   chip reads "Backed up except 1 local-only photo · now" — never "All backed
+   up" while a local-only photo exists.
 4. Right-click the same photo → **Keep on this device only…** is gone and
    **Free Up Local Space…** / **Restore original** are gone too; only **Back
    up again** remains. **Expected:** as stated — an excluded photo has no

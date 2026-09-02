@@ -826,6 +826,11 @@ export class BackupEngine {
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
+    // ADR-0033 §4: an excluded record is carried for its metadata only —
+    // its companions leave the provider with the original once this
+    // generation lands, so the generation must not point at them
+    // (PR #1124 review).
+    const blobPhotoIds = new Set(blobPhotos(snapshot.photos).map((photo) => photo.id));
     const manifest = buildBackupManifestV14({
       libraryId: this.deps.libraryId(),
       generatedAt,
@@ -835,7 +840,7 @@ export class BackupEngine {
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-        sidecars: await this.sidecarManifestObjects(carriedPhotoIds),
+        sidecars: await this.sidecarManifestObjects(blobPhotoIds),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
         ...(this.deps.albumTreeSnapshot?.() ?? {
