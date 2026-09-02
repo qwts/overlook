@@ -1,0 +1,5 @@
+---
+'overlook': minor
+---
+
+**Smart Albums and facet filters.** The toolbar's **Filters** button now opens a facet bar (File type, Megapixels, Camera, Lens, Location, Tag, Favorite, Custody, Availability). Values inside a facet are an inclusive union — Shift-click or **Add to selection** widens it — and facets compose by an explicit **Match all** / **Match any**. **Save as Smart Album…** stores the current predicate as a collection that re-evaluates every time it opens; it shows the same photos as the live filter that made it, can be edited and saved back, duplicated beside the original, moved into folders, tagged, and deleted without ever touching a photo. Photos with unknown dimensions never match a size range. A Smart Album written by a newer version whose query this build cannot evaluate is kept unchanged and shown with an explanatory empty state instead of an unfiltered grid. Smart Album predicates are library data carried by backup and restore (manifest schema 10, database schema 30).

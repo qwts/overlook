@@ -35,6 +35,99 @@
   "album.context.actions": {
     "defaultMessage": "Actions for {album}"
   },
+  "album.folder.create": {
+    "defaultMessage": "Create"
+  },
+  "album.folder.createFailed": {
+    "defaultMessage": "Could not create it. Try again."
+  },
+  "album.folder.creating": {
+    "defaultMessage": "Creating…"
+  },
+  "album.folder.delete": {
+    "defaultMessage": "Delete folder…"
+  },
+  "album.folder.delete.albums": {
+    "defaultMessage": "{count, plural, one {# album} other {# albums}}"
+  },
+  "album.folder.delete.choices": {
+    "defaultMessage": "What happens to its contents"
+  },
+  "album.folder.delete.empty": {
+    "defaultMessage": "The folder is empty. Nothing else is removed."
+  },
+  "album.folder.delete.folders": {
+    "defaultMessage": "{count, plural, one {# folder} other {# folders}}"
+  },
+  "album.folder.delete.move": {
+    "defaultMessage": "Move its contents to"
+  },
+  "album.folder.delete.photos": {
+    "defaultMessage": "Photos are never deleted here."
+  },
+  "album.folder.delete.question": {
+    "defaultMessage": "Delete “{name}”?"
+  },
+  "album.folder.delete.recursive": {
+    "defaultMessage": "Also delete {contents} inside it"
+  },
+  "album.folder.delete.smart": {
+    "defaultMessage": "{count, plural, one {# Smart Album} other {# Smart Albums}}"
+  },
+  "album.folder.deleteFailed": {
+    "defaultMessage": "Could not delete this folder. Try again."
+  },
+  "album.folder.deleting": {
+    "defaultMessage": "Deleting…"
+  },
+  "album.folder.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "album.folder.name": {
+    "defaultMessage": "Folder name"
+  },
+  "album.folder.new.title": {
+    "defaultMessage": "New folder"
+  },
+  "album.folder.new.titleIn": {
+    "defaultMessage": "New folder in {folder}"
+  },
+  "album.folder.newAlbum": {
+    "defaultMessage": "New album inside…"
+  },
+  "album.folder.newAlbum.titleIn": {
+    "defaultMessage": "New album in {folder}"
+  },
+  "album.folder.newInside": {
+    "defaultMessage": "New folder inside…"
+  },
+  "album.folder.positionSuffix": {
+    "defaultMessage": "folder {position} of {total}"
+  },
+  "album.folder.rename": {
+    "defaultMessage": "Rename folder…"
+  },
+  "album.move.confirm": {
+    "defaultMessage": "Move"
+  },
+  "album.move.destination": {
+    "defaultMessage": "Folder"
+  },
+  "album.move.failed": {
+    "defaultMessage": "Could not move it. Try again."
+  },
+  "album.move.moving": {
+    "defaultMessage": "Moving…"
+  },
+  "album.move.note": {
+    "defaultMessage": "A visible album adopts the folder’s All Photos setting; a hidden one keeps its own."
+  },
+  "album.move.title": {
+    "defaultMessage": "Move {name}"
+  },
+  "album.move.topLevel": {
+    "defaultMessage": "Top level (no folder)"
+  },
   "album.reorder.alreadyFirst": {
     "defaultMessage": "{name} is already first."
   },
@@ -83,8 +176,44 @@
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
   },
+  "album.smart.delete": {
+    "defaultMessage": "Delete Smart Album…"
+  },
+  "album.smart.delete.failed": {
+    "defaultMessage": "Could not delete this Smart Album. Try again."
+  },
+  "album.smart.delete.matches": {
+    "defaultMessage": "{count, plural, one {# photo matches} other {# photos match}} it today."
+  },
+  "album.smart.delete.question": {
+    "defaultMessage": "Delete the Smart Album “{name}”?"
+  },
+  "album.smart.rename": {
+    "defaultMessage": "Rename Smart Album…"
+  },
+  "album.tags.label": {
+    "defaultMessage": "Tags, separated by commas"
+  },
+  "album.tags.note": {
+    "defaultMessage": "Tags organize albums and folders in the sidebar. They are separate from photo keywords."
+  },
+  "album.tags.save": {
+    "defaultMessage": "Save"
+  },
+  "album.tags.saveFailed": {
+    "defaultMessage": "Could not save tags. Try again."
+  },
+  "album.tags.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "album.tags.title": {
+    "defaultMessage": "Tags for {name}"
+  },
   "album.visibility.elsewhere": {
     "defaultMessage": "{count, plural, one {# photo stays} other {# photos stay}} in All Photos via other albums"
+  },
+  "album.visibility.inherited": {
+    "defaultMessage": "Follows the folder setting"
   },
   "album.visibility.open": {
     "defaultMessage": "Open {album}"
@@ -110,6 +239,12 @@
   "commands.album.delete": {
     "defaultMessage": "Delete album…"
   },
+  "commands.album.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
+  "commands.album.folder.new": {
+    "defaultMessage": "New folder…"
+  },
   "commands.album.hide": {
     "defaultMessage": "Hide from All Photos"
   },
@@ -118,6 +253,9 @@
   },
   "commands.album.membership.remove": {
     "defaultMessage": "Remove from album"
+  },
+  "commands.album.move": {
+    "defaultMessage": "Move to folder…"
   },
   "commands.album.rename": {
     "defaultMessage": "Rename album…"
@@ -137,8 +275,20 @@
   "commands.album.show": {
     "defaultMessage": "Show in All Photos"
   },
+  "commands.album.smart.edit": {
+    "defaultMessage": "Edit Smart Album"
+  },
+  "commands.album.smart.new": {
+    "defaultMessage": "Save as Smart Album…"
+  },
+  "commands.album.tags": {
+    "defaultMessage": "Tags…"
+  },
   "commands.album.transfer": {
     "defaultMessage": "Transfer & Sync…"
+  },
+  "commands.album.visibility.inherit": {
+    "defaultMessage": "Use folder setting"
   },
   "commands.app.lock.now": {
     "defaultMessage": "Lock Now"
@@ -206,6 +356,9 @@
   "commands.history.undo": {
     "defaultMessage": "Undo"
   },
+  "commands.library.duplicates": {
+    "defaultMessage": "Review Duplicates…"
+  },
   "commands.library.exportAll": {
     "defaultMessage": "Export All Unencrypted…"
   },
@@ -232,6 +385,27 @@
   },
   "commands.library.switch": {
     "defaultMessage": "Switch Library…"
+  },
+  "commands.photo.coverage.exclude": {
+    "defaultMessage": "Keep on this device only…"
+  },
+  "commands.photo.coverage.include": {
+    "defaultMessage": "Back up again"
+  },
+  "commands.photo.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
+  "commands.photo.edit.crop": {
+    "defaultMessage": "Crop"
+  },
+  "commands.photo.edit.reset": {
+    "defaultMessage": "Reset edits"
+  },
+  "commands.photo.edit.revert": {
+    "defaultMessage": "Revert to previous edit"
+  },
+  "commands.photo.edit.save": {
+    "defaultMessage": "Save edits"
   },
   "commands.photo.export": {
     "defaultMessage": "Export…"
@@ -344,6 +518,99 @@
   "copyableValue.failed": {
     "defaultMessage": "Could not copy {label}."
   },
+  "coverage.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "coverage.dialog.confirm.keep": {
+    "defaultMessage": "Keep on this device only"
+  },
+  "coverage.dialog.confirm.remove": {
+    "defaultMessage": "Remove cloud copy permanently"
+  },
+  "coverage.dialog.downloads": {
+    "defaultMessage": "{count, plural, one {# cloud-only original is} other {# cloud-only originals are}} downloaded and verified on this device first."
+  },
+  "coverage.dialog.error.action": {
+    "defaultMessage": "Nothing changed. Your photos are still backed up as before."
+  },
+  "coverage.dialog.error.preflight": {
+    "defaultMessage": "Could not check the cloud copies. Try again."
+  },
+  "coverage.dialog.loading": {
+    "defaultMessage": "Checking cloud copies…"
+  },
+  "coverage.dialog.reasonRow": {
+    "defaultMessage": "{count} · {reason}"
+  },
+  "coverage.dialog.remote": {
+    "defaultMessage": "{count, plural, one {# encrypted copy} other {# encrypted copies}} ({bytes}) will be removed from {provider}."
+  },
+  "coverage.dialog.remote.account": {
+    "defaultMessage": "{count, plural, one {# encrypted copy} other {# encrypted copies}} ({bytes}) will be removed from {provider} ({account})."
+  },
+  "coverage.dialog.running": {
+    "defaultMessage": "Working…"
+  },
+  "coverage.dialog.shared": {
+    "defaultMessage": "{count, plural, one {# copy stays} other {# copies stay}} in the cloud because another backed-up photo uses the same original."
+  },
+  "coverage.dialog.skips": {
+    "defaultMessage": "{count, plural, one {# will be skipped} other {# will be skipped}}"
+  },
+  "coverage.dialog.summary": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} ({bytes}) will stay in the library on this device and stop being backed up automatically."
+  },
+  "coverage.dialog.title.keep": {
+    "defaultMessage": "Keep on this device only"
+  },
+  "coverage.dialog.title.remove": {
+    "defaultMessage": "Remove the cloud copy?"
+  },
+  "coverage.reason.alreadyExcluded": {
+    "defaultMessage": "already on this device only"
+  },
+  "coverage.reason.alreadyIncluded": {
+    "defaultMessage": "already backed up automatically"
+  },
+  "coverage.reason.deleted": {
+    "defaultMessage": "in Trash"
+  },
+  "coverage.reason.disconnected": {
+    "defaultMessage": "cloud copy exists but the provider is not connected"
+  },
+  "coverage.reason.inFlight": {
+    "defaultMessage": "uploading right now"
+  },
+  "coverage.reason.localMissing": {
+    "defaultMessage": "no original on this device"
+  },
+  "coverage.reason.notFound": {
+    "defaultMessage": "no longer in the library"
+  },
+  "coverage.reason.restoreFailed": {
+    "defaultMessage": "the cloud-only original could not be downloaded"
+  },
+  "coverage.toast.excludeFailed": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} could not be kept on this device only"
+  },
+  "coverage.toast.excluded": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} kept on this device only"
+  },
+  "coverage.toast.includeError": {
+    "defaultMessage": "Could not re-enable backup. Nothing changed."
+  },
+  "coverage.toast.includeFailed": {
+    "defaultMessage": "{count, plural, one {# photo has} other {# photos have}} no original on this device — not backed up"
+  },
+  "coverage.toast.included": {
+    "defaultMessage": "Backing up {count, plural, one {# photo} other {# photos}} again"
+  },
+  "coverage.toast.nothing": {
+    "defaultMessage": "No photos changed"
+  },
+  "coverage.toast.removalPending": {
+    "defaultMessage": "{count, plural, one {# cloud copy} other {# cloud copies}} still awaiting removal — will retry"
+  },
   "custody.account.fallback": {
     "defaultMessage": "the recorded account"
   },
@@ -371,6 +638,174 @@
   "custody.state.wrongAccount": {
     "defaultMessage": "Wrong {provider} account — reconnect as {account}; this account cannot satisfy the recorded custody."
   },
+  "disclosure.class.mixed": {
+    "defaultMessage": "Mixed"
+  },
+  "disclosure.class.private": {
+    "defaultMessage": "Private"
+  },
+  "disclosure.class.public": {
+    "defaultMessage": "Public"
+  },
+  "disclosure.class.shared": {
+    "defaultMessage": "Shared"
+  },
+  "disclosure.classFor": {
+    "defaultMessage": "Disclosure class for {field}"
+  },
+  "disclosure.field.camera": {
+    "defaultMessage": "Camera"
+  },
+  "disclosure.field.captureTime": {
+    "defaultMessage": "Capture time"
+  },
+  "disclosure.field.comments": {
+    "defaultMessage": "Comments"
+  },
+  "disclosure.field.description": {
+    "defaultMessage": "Description"
+  },
+  "disclosure.field.faces": {
+    "defaultMessage": "Face data"
+  },
+  "disclosure.field.lens": {
+    "defaultMessage": "Lens"
+  },
+  "disclosure.field.location": {
+    "defaultMessage": "Precise location"
+  },
+  "disclosure.field.provenance": {
+    "defaultMessage": "Provenance evidence"
+  },
+  "disclosure.field.ratings": {
+    "defaultMessage": "Ratings"
+  },
+  "disclosure.field.tags": {
+    "defaultMessage": "Tags"
+  },
+  "disclosure.field.title": {
+    "defaultMessage": "Title"
+  },
+  "disclosure.heading": {
+    "defaultMessage": "Disclosure"
+  },
+  "disclosure.hint": {
+    "defaultMessage": "What each field may leave the library as. Private never leaves; Shared may go to a named recipient (a folder you choose, Apple Photos, a keyed provider); Public may go to an unauthenticated destination. Local search and filtering never need a field to be shared."
+  },
+  "disclosure.pinned": {
+    "defaultMessage": "Always private"
+  },
+  "disclosure.pinned.hint": {
+    "defaultMessage": "These never cross any boundary and no setting can change that."
+  },
+  "disclosure.preview.blocked": {
+    "defaultMessage": "The originals cannot leave while a withheld field is embedded in them. Include it for this export, or export Baked, which strips embedded metadata."
+  },
+  "disclosure.preview.crosses": {
+    "defaultMessage": "{disclosed, plural, one {# photo} other {# photos}} of {present}"
+  },
+  "disclosure.preview.decline": {
+    "defaultMessage": "Cancel leaves the library unchanged; nothing has crossed yet."
+  },
+  "disclosure.preview.destination": {
+    "defaultMessage": "Publishing to a public destination"
+  },
+  "disclosure.preview.destination.hint": {
+    "defaultMessage": "Only Public fields cross. Off means a named recipient: Shared fields cross too."
+  },
+  "disclosure.preview.embedded": {
+    "defaultMessage": "Embedded in the original bytes and cannot be filtered: {fields}."
+  },
+  "disclosure.preview.heading": {
+    "defaultMessage": "What leaves"
+  },
+  "disclosure.preview.loading": {
+    "defaultMessage": "Checking what would leave…"
+  },
+  "disclosure.preview.nothing": {
+    "defaultMessage": "No classified metadata is present in this selection."
+  },
+  "disclosure.preview.sidecars": {
+    "defaultMessage": "{count, plural, one {# retained source sidecar travels} other {# retained source sidecars travel}} unfiltered."
+  },
+  "disclosure.preview.widen": {
+    "defaultMessage": "Include {field} in this export (recorded in activity)"
+  },
+  "disclosure.preview.withheld": {
+    "defaultMessage": "Withheld"
+  },
+  "duplicates.deferred": {
+    "defaultMessage": "{deferred, plural, one {# photo has no preview to compare yet} other {# photos have no preview to compare yet}}"
+  },
+  "duplicates.empty.clean": {
+    "defaultMessage": "No possible duplicates found."
+  },
+  "duplicates.empty.indexing": {
+    "defaultMessage": "Still comparing previews — nothing to review yet."
+  },
+  "duplicates.evidence.distance": {
+    "defaultMessage": "{distance} of {bits} bits differ"
+  },
+  "duplicates.evidence.nearIdentical": {
+    "defaultMessage": "Near-identical"
+  },
+  "duplicates.evidence.rotated": {
+    "defaultMessage": "rotated {degrees}°"
+  },
+  "duplicates.evidence.similar": {
+    "defaultMessage": "Similar"
+  },
+  "duplicates.evidence.verySimilar": {
+    "defaultMessage": "Very similar"
+  },
+  "duplicates.failed": {
+    "defaultMessage": "Possible duplicates could not be loaded."
+  },
+  "duplicates.group.label": {
+    "defaultMessage": "Possible duplicates, {count} photos"
+  },
+  "duplicates.groups": {
+    "defaultMessage": "{count, plural, one {# group} other {# groups}}"
+  },
+  "duplicates.loading": {
+    "defaultMessage": "Loading…"
+  },
+  "duplicates.photo.original": {
+    "defaultMessage": "Original"
+  },
+  "duplicates.photo.protected": {
+    "defaultMessage": "Protected Original — Shift+Delete in the library overrides"
+  },
+  "duplicates.photo.size": {
+    "defaultMessage": "{width}×{height}"
+  },
+  "duplicates.photo.trash": {
+    "defaultMessage": "Move to Trash"
+  },
+  "duplicates.photo.trashLabel": {
+    "defaultMessage": "Move {name} to Trash"
+  },
+  "duplicates.privacy": {
+    "defaultMessage": "Compared on this device from each photo’s own preview. Suggestions only: nothing is merged or deleted for you."
+  },
+  "duplicates.progress": {
+    "defaultMessage": "{indexed} of {total} {total, plural, one {photo} other {photos}} compared · {pending} pending"
+  },
+  "duplicates.rescan": {
+    "defaultMessage": "Rescan"
+  },
+  "duplicates.title": {
+    "defaultMessage": "Review Duplicates"
+  },
+  "duplicates.toast.missing": {
+    "defaultMessage": "{name} is no longer in the library"
+  },
+  "duplicates.toast.preserved": {
+    "defaultMessage": "Preserved {name}: protected Original"
+  },
+  "duplicates.toast.trashed": {
+    "defaultMessage": "Moved {name} to Trash"
+  },
   "export.allPhotos": {
     "defaultMessage": "Export all photos"
   },
@@ -394,6 +829,51 @@
   },
   "export.destination.label": {
     "defaultMessage": "Export destination"
+  },
+  "export.edits.acknowledge": {
+    "defaultMessage": "Continue with these losses"
+  },
+  "export.edits.bake": {
+    "defaultMessage": "Bake"
+  },
+  "export.edits.bakeHint": {
+    "defaultMessage": "Render the saved rotation, flip, and crop into a new JPEG. Embedded metadata is not carried over."
+  },
+  "export.edits.label": {
+    "defaultMessage": "Edits"
+  },
+  "export.edits.lossItem": {
+    "defaultMessage": "{fileName}: {reason}"
+  },
+  "export.edits.losses": {
+    "defaultMessage": "{count, plural, one {# edit} other {# edits}} cannot travel in this mode:"
+  },
+  "export.edits.omitted": {
+    "defaultMessage": "{count, plural, one {# photo has} other {# photos have}} presentation edits that will not be exported."
+  },
+  "export.edits.originalOnly": {
+    "defaultMessage": "Original only"
+  },
+  "export.edits.originalOnlyHint": {
+    "defaultMessage": "Write the byte-identical original and nothing beside it. Presentation edits and companion sidecars are omitted."
+  },
+  "export.edits.originalXmp": {
+    "defaultMessage": "Original + XMP"
+  },
+  "export.edits.originalXmpHint": {
+    "defaultMessage": "Write the byte-identical original beside an XMP sidecar that names the saved rotation, flip, and crop."
+  },
+  "export.edits.quality": {
+    "defaultMessage": "JPEG quality"
+  },
+  "export.edits.quality.best": {
+    "defaultMessage": "Best · 95"
+  },
+  "export.edits.quality.high": {
+    "defaultMessage": "High · 90"
+  },
+  "export.edits.quality.small": {
+    "defaultMessage": "Small · 80"
   },
   "export.everyPhoto": {
     "defaultMessage": "Every photo in this library"
@@ -437,11 +917,149 @@
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
   },
+  "facets.additive": {
+    "defaultMessage": "Add to selection"
+  },
+  "facets.additive.hint": {
+    "defaultMessage": "Shift-click also adds a value"
+  },
+  "facets.chip": {
+    "defaultMessage": "{facet}{count, plural, =0 {} other { · #}}"
+  },
+  "facets.clearAll": {
+    "defaultMessage": "Clear"
+  },
+  "facets.clearFacet": {
+    "defaultMessage": "Clear {facet}"
+  },
+  "facets.composition": {
+    "defaultMessage": "Combine facets"
+  },
+  "facets.composition.all": {
+    "defaultMessage": "Match all"
+  },
+  "facets.composition.any": {
+    "defaultMessage": "Match any"
+  },
+  "facets.editing": {
+    "defaultMessage": "· Editing {name}"
+  },
+  "facets.facet.availability": {
+    "defaultMessage": "Availability"
+  },
+  "facets.facet.camera": {
+    "defaultMessage": "Camera"
+  },
+  "facets.facet.custody": {
+    "defaultMessage": "Custody"
+  },
+  "facets.facet.favorite": {
+    "defaultMessage": "Favorite"
+  },
+  "facets.facet.fileType": {
+    "defaultMessage": "File type"
+  },
+  "facets.facet.lens": {
+    "defaultMessage": "Lens"
+  },
+  "facets.facet.location": {
+    "defaultMessage": "Location"
+  },
+  "facets.facet.megapixels": {
+    "defaultMessage": "Megapixels"
+  },
+  "facets.facet.tag": {
+    "defaultMessage": "Tag"
+  },
+  "facets.loading": {
+    "defaultMessage": "Loading…"
+  },
+  "facets.megapixels.apply": {
+    "defaultMessage": "Apply"
+  },
+  "facets.megapixels.max": {
+    "defaultMessage": "Maximum megapixels"
+  },
+  "facets.megapixels.min": {
+    "defaultMessage": "Minimum megapixels"
+  },
+  "facets.megapixels.unknown": {
+    "defaultMessage": "Photos with unknown dimensions never match a size range."
+  },
+  "facets.noValues": {
+    "defaultMessage": "No values in this library yet"
+  },
+  "facets.panel": {
+    "defaultMessage": "{facet} values"
+  },
+  "facets.region": {
+    "defaultMessage": "Facet filters"
+  },
+  "facets.saveChanges": {
+    "defaultMessage": "Save changes"
+  },
+  "facets.saveFailed": {
+    "defaultMessage": "Could not save the Smart Album. Try again."
+  },
+  "facets.savedAs": {
+    "defaultMessage": "Saved Smart Album {name}"
+  },
+  "facets.savedChanges": {
+    "defaultMessage": "Saved changes to {name}"
+  },
+  "facets.summary": {
+    "defaultMessage": "{count, plural, one {# facet} other {# facets · {composition, select, and {match all} other {match any}}}}"
+  },
+  "facets.summary.none": {
+    "defaultMessage": "No facets"
+  },
+  "facets.value.availability.available": {
+    "defaultMessage": "Available"
+  },
+  "facets.value.availability.unavailable": {
+    "defaultMessage": "Unavailable"
+  },
+  "facets.value.custody.error": {
+    "defaultMessage": "Error"
+  },
+  "facets.value.custody.local": {
+    "defaultMessage": "Local"
+  },
+  "facets.value.custody.offloaded": {
+    "defaultMessage": "Offloaded"
+  },
+  "facets.value.custody.synced": {
+    "defaultMessage": "Synced"
+  },
+  "facets.value.custody.syncing": {
+    "defaultMessage": "Syncing"
+  },
+  "facets.value.favorite.no": {
+    "defaultMessage": "Not favorite"
+  },
+  "facets.value.favorite.yes": {
+    "defaultMessage": "Favorite"
+  },
   "favorite.add": {
     "defaultMessage": "Add to Favorites"
   },
   "favorite.remove": {
     "defaultMessage": "Remove from Favorites"
+  },
+  "feed.deselect": {
+    "defaultMessage": "Deselect {photo}"
+  },
+  "feed.noDescription": {
+    "defaultMessage": "No description"
+  },
+  "feed.open": {
+    "defaultMessage": "Open {photo}"
+  },
+  "feed.protectedOriginal": {
+    "defaultMessage": "Protected Original"
+  },
+  "feed.select": {
+    "defaultMessage": "Select {photo}"
   },
   "grid.regionLabel": {
     "defaultMessage": "Photos"
@@ -512,11 +1130,77 @@
   "inspector.copy.fileName": {
     "defaultMessage": "filename"
   },
+  "inspector.custody.locked": {
+    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+  },
+  "inspector.custody.lockedThumb": {
+    "defaultMessage": "Locked"
+  },
+  "inspector.edits.applied": {
+    "defaultMessage": "Applied"
+  },
+  "inspector.edits.cropped": {
+    "defaultMessage": "Cropped to {width}% × {height}%"
+  },
+  "inspector.edits.flipped": {
+    "defaultMessage": "Flipped"
+  },
+  "inspector.edits.none": {
+    "defaultMessage": "Original — no edits"
+  },
+  "inspector.edits.revisions": {
+    "defaultMessage": "Revisions"
+  },
+  "inspector.edits.rotated": {
+    "defaultMessage": "Rotated {degrees}°"
+  },
+  "inspector.edits.separator": {
+    "defaultMessage": "·"
+  },
+  "inspector.edits.title": {
+    "defaultMessage": "Edits"
+  },
+  "inspector.edits.unsupported": {
+    "defaultMessage": "Newer format — view only"
+  },
   "inspector.file.dimensionMismatch": {
     "defaultMessage": "DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA"
   },
   "inspector.file.metadata": {
     "defaultMessage": "Metadata"
+  },
+  "inspector.histogram.chart": {
+    "defaultMessage": "Histogram of {name}: red, green, blue and luminance"
+  },
+  "inspector.histogram.clipping": {
+    "defaultMessage": "Clipping"
+  },
+  "inspector.histogram.clippingValue": {
+    "defaultMessage": "Shadows {shadows} · Highlights {highlights}"
+  },
+  "inspector.histogram.computing": {
+    "defaultMessage": "Computing…"
+  },
+  "inspector.histogram.corrupt": {
+    "defaultMessage": "Preview did not decode — repair pending"
+  },
+  "inspector.histogram.failed": {
+    "defaultMessage": "Histogram unavailable"
+  },
+  "inspector.histogram.missing": {
+    "defaultMessage": "No preview in custody yet — repair pending"
+  },
+  "inspector.histogram.source": {
+    "defaultMessage": "Source"
+  },
+  "inspector.histogram.sourceValue": {
+    "defaultMessage": "Preview · sRGB · {width}×{height}"
+  },
+  "inspector.histogram.state": {
+    "defaultMessage": "State"
+  },
+  "inspector.histogram.title": {
+    "defaultMessage": "Histogram"
   },
   "inspector.metadata.addTag": {
     "defaultMessage": "Add tag"
@@ -596,6 +1280,126 @@
   "inspector.metadata.varying": {
     "defaultMessage": "On some selected photos"
   },
+  "inspector.provenance.checked": {
+    "defaultMessage": "Checked"
+  },
+  "inspector.provenance.checking": {
+    "defaultMessage": "Checking…"
+  },
+  "inspector.provenance.claim.capture": {
+    "defaultMessage": "Capture declared"
+  },
+  "inspector.provenance.claim.edited": {
+    "defaultMessage": "AI-edited"
+  },
+  "inspector.provenance.claim.generated": {
+    "defaultMessage": "AI-generated"
+  },
+  "inspector.provenance.claim.tool": {
+    "defaultMessage": "Tool named"
+  },
+  "inspector.provenance.deferred": {
+    "defaultMessage": "Original not local — checked when it returns"
+  },
+  "inspector.provenance.evidence": {
+    "defaultMessage": "Evidence"
+  },
+  "inspector.provenance.local": {
+    "defaultMessage": "Local check only · no network"
+  },
+  "inspector.provenance.note.declared": {
+    "defaultMessage": "Declarations can be added, changed, or removed by any tool. They are not proof."
+  },
+  "inspector.provenance.note.detected": {
+    "defaultMessage": "Detectors have false positives and false negatives. {limits}"
+  },
+  "inspector.provenance.note.unknown": {
+    "defaultMessage": "Unknown is not a claim that a person made this image."
+  },
+  "inspector.provenance.note.verified": {
+    "defaultMessage": "Validated locally against {validator}."
+  },
+  "inspector.provenance.origin.credential": {
+    "defaultMessage": "Credential"
+  },
+  "inspector.provenance.origin.detector": {
+    "defaultMessage": "Detector"
+  },
+  "inspector.provenance.origin.exif": {
+    "defaultMessage": "EXIF"
+  },
+  "inspector.provenance.origin.png": {
+    "defaultMessage": "PNG text"
+  },
+  "inspector.provenance.origin.sidecar": {
+    "defaultMessage": "Sidecar"
+  },
+  "inspector.provenance.origin.xmp": {
+    "defaultMessage": "XMP"
+  },
+  "inspector.provenance.refresh": {
+    "defaultMessage": "Re-check"
+  },
+  "inspector.provenance.stale": {
+    "defaultMessage": "Re-check needed — the bytes or the checker changed"
+  },
+  "inspector.provenance.state.pending": {
+    "defaultMessage": "Not checked"
+  },
+  "inspector.provenance.state.unsupported": {
+    "defaultMessage": "Newer format"
+  },
+  "inspector.provenance.summary.declared": {
+    "defaultMessage": "{claim} — declared by metadata, not verified"
+  },
+  "inspector.provenance.summary.detected": {
+    "defaultMessage": "Detector report — not verified"
+  },
+  "inspector.provenance.summary.invalid": {
+    "defaultMessage": "Content Credentials invalid for these bytes"
+  },
+  "inspector.provenance.summary.pending": {
+    "defaultMessage": "Not checked yet"
+  },
+  "inspector.provenance.summary.unknown": {
+    "defaultMessage": "No supported evidence"
+  },
+  "inspector.provenance.summary.unsupported": {
+    "defaultMessage": "Newer evidence format — view only"
+  },
+  "inspector.provenance.summary.unverifiable": {
+    "defaultMessage": "Content Credentials present — not validated by this build"
+  },
+  "inspector.provenance.summary.verified": {
+    "defaultMessage": "Content Credentials valid for these bytes"
+  },
+  "inspector.provenance.tier.declared": {
+    "defaultMessage": "Declared"
+  },
+  "inspector.provenance.tier.detected": {
+    "defaultMessage": "Detected"
+  },
+  "inspector.provenance.tier.unknown": {
+    "defaultMessage": "Unknown"
+  },
+  "inspector.provenance.tier.verified": {
+    "defaultMessage": "Verified provenance"
+  },
+  "inspector.provenance.title": {
+    "defaultMessage": "Provenance"
+  },
+  "inspector.provenance.value.credential": {
+    "defaultMessage": "C2PA · {container} · {bytes} bytes · {outcome}"
+  },
+  "inspector.provenance.value.declaration": {
+    "defaultMessage": "{field}: {value}"
+  },
+  "inspector.provenance.value.detector": {
+    "defaultMessage": "{name} {version} · {result}"
+  },
+  "inspector.provenance.value.detectorConfidence": {
+    "defaultMessage": "{name} {version} · {result} · {confidence}"
+  },
   "inspector.selection.next": {
     "defaultMessage": "Next selected photo"
   },
@@ -608,11 +1412,155 @@
   "inspector.title": {
     "defaultMessage": "Inspector"
   },
+  "inspector.variants.count": {
+    "defaultMessage": "{count, plural, one {# variant} other {# variants}}"
+  },
+  "inspector.variants.derived": {
+    "defaultMessage": "Duplicate"
+  },
+  "inspector.variants.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
+  "inspector.variants.duplicating": {
+    "defaultMessage": "Duplicating…"
+  },
+  "inspector.variants.promote": {
+    "defaultMessage": "Promote"
+  },
+  "inspector.variants.promoteLabel": {
+    "defaultMessage": "Promote {name} to representative"
+  },
+  "inspector.variants.representative": {
+    "defaultMessage": "Representative"
+  },
+  "inspector.variants.root": {
+    "defaultMessage": "Imported"
+  },
+  "inspector.variants.sharedOriginal": {
+    "defaultMessage": "One encrypted original · each variant keeps its own previews"
+  },
+  "inspector.variants.show": {
+    "defaultMessage": "Show {name}, {kind}, {date}"
+  },
+  "inspector.variants.shown": {
+    "defaultMessage": "Shown"
+  },
+  "inspector.variants.title": {
+    "defaultMessage": "Variants"
+  },
   "inspector.window.label": {
     "defaultMessage": "Inspector window"
   },
   "interop.conflict.retained": {
     "defaultMessage": "This item will remain at the source for review."
+  },
+  "keyring.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "keyring.done": {
+    "defaultMessage": "Done"
+  },
+  "keyring.export.ack": {
+    "defaultMessage": "I understand this password cannot be reset or recovered."
+  },
+  "keyring.export.action": {
+    "defaultMessage": "Export key file"
+  },
+  "keyring.export.confirm": {
+    "defaultMessage": "Confirm password"
+  },
+  "keyring.export.done": {
+    "defaultMessage": "Key file saved to {path}."
+  },
+  "keyring.export.failed": {
+    "defaultMessage": "Export failed — nothing was written."
+  },
+  "keyring.export.mismatch": {
+    "defaultMessage": "Passwords don't match."
+  },
+  "keyring.export.note": {
+    "defaultMessage": "This key opens every photo sealed under it. Anyone with the file and the password can read those photos."
+  },
+  "keyring.export.password": {
+    "defaultMessage": "Encrypt key file with password"
+  },
+  "keyring.export.title": {
+    "defaultMessage": "Export KEY #{id}"
+  },
+  "keyring.import.action": {
+    "defaultMessage": "Verify & import"
+  },
+  "keyring.import.alreadyPresent": {
+    "defaultMessage": "KEY #{id} is already on this device — nothing changed."
+  },
+  "keyring.import.choose": {
+    "defaultMessage": "Choose key file…"
+  },
+  "keyring.import.failed": {
+    "defaultMessage": "Import failed — nothing was installed."
+  },
+  "keyring.import.imported": {
+    "defaultMessage": "KEY #{id} imported · {count, plural, =0 {nothing was locked} one {# photo unlocked} other {# photos unlocked}}"
+  },
+  "keyring.import.invalid": {
+    "defaultMessage": "Not an Overlook key file."
+  },
+  "keyring.import.matchesNothing": {
+    "defaultMessage": "This library has never sealed anything under that key — nothing to unlock."
+  },
+  "keyring.import.mismatch": {
+    "defaultMessage": "A different key already holds that reference on this device. Nothing was installed."
+  },
+  "keyring.import.noMatchingObject": {
+    "defaultMessage": "The password opened the file, but the key does not open any photo it claims to seal. Nothing was installed."
+  },
+  "keyring.import.note": {
+    "defaultMessage": "Import a key file exported from another device. Locked photos sealed under it open as soon as the key is verified."
+  },
+  "keyring.import.title": {
+    "defaultMessage": "Import encryption key"
+  },
+  "keyring.import.wrongPassword": {
+    "defaultMessage": "Wrong password (or a corrupted file). The password cannot be reset — try again."
+  },
+  "keyring.password": {
+    "defaultMessage": "Password"
+  },
+  "keyring.remove.ack": {
+    "defaultMessage": "I have an exported copy of this key, or I accept that these photos become locked."
+  },
+  "keyring.remove.checking": {
+    "defaultMessage": "Checking what this key seals…"
+  },
+  "keyring.remove.count.bytes": {
+    "defaultMessage": "Sealed"
+  },
+  "keyring.remove.count.photos": {
+    "defaultMessage": "Photos"
+  },
+  "keyring.remove.count.sidecars": {
+    "defaultMessage": "Sidecars"
+  },
+  "keyring.remove.done": {
+    "defaultMessage": "KEY #{id} removed · {count, plural, =0 {nothing became locked} one {# photo locked} other {# photos locked}}"
+  },
+  "keyring.remove.failed": {
+    "defaultMessage": "Removal failed — the key is still on this device."
+  },
+  "keyring.remove.refused.absent": {
+    "defaultMessage": "This key is not on this device."
+  },
+  "keyring.remove.refused.database": {
+    "defaultMessage": "KEY #1 also keys the database and cannot be removed."
+  },
+  "keyring.remove.refused.missing": {
+    "defaultMessage": "This key is no longer in the registry."
+  },
+  "keyring.remove.refused.write": {
+    "defaultMessage": "The write key seals new imports and cannot be removed."
+  },
+  "keyring.remove.title": {
+    "defaultMessage": "Remove KEY #{id}?"
   },
   "libmove.badge.active": {
     "defaultMessage": "Moving…"
@@ -823,6 +1771,9 @@
   },
   "libmove.title.one": {
     "defaultMessage": "Move library"
+  },
+  "library.photo.locked": {
+    "defaultMessage": "Locked — this device lacks its encryption key"
   },
   "library.photo.moreActions": {
     "defaultMessage": "More actions for {photo}"
@@ -1040,8 +1991,35 @@
   "lightbox.animation.stop": {
     "defaultMessage": "Show static poster"
   },
+  "lightbox.edit.cropApply": {
+    "defaultMessage": "Apply crop (Enter)"
+  },
+  "lightbox.edit.cropCancel": {
+    "defaultMessage": "Cancel crop (Esc)"
+  },
+  "lightbox.edit.cropClear": {
+    "defaultMessage": "Clear crop"
+  },
+  "lightbox.edit.cropSurface": {
+    "defaultMessage": "Crop area — drag to frame the photo"
+  },
+  "lightbox.edit.toolbar": {
+    "defaultMessage": "Edit controls"
+  },
+  "lightbox.edit.unsaved": {
+    "defaultMessage": "Unsaved edit"
+  },
+  "lightbox.edit.unsupported": {
+    "defaultMessage": "Edited with a newer version of Overlook — showing the original, view only"
+  },
   "lightbox.image.loading": {
     "defaultMessage": "Loading full-resolution image…"
+  },
+  "lightbox.locked": {
+    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+  },
+  "lightbox.locked.hint": {
+    "defaultMessage": "Import the key under Settings › Privacy › Encryption keys to view this photo."
   },
   "lightbox.video.ann.ended": {
     "defaultMessage": "Video ended."
@@ -1369,6 +2347,12 @@
   },
   "preview.unavailable.unsupportedCodec": {
     "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
+  },
+  "purge.keptLocal.all": {
+    "defaultMessage": "{count, plural, one {This photo is kept on this device only: there is no cloud copy to remove.} other {These photos are kept on this device only: there are no cloud copies to remove.}}"
+  },
+  "purge.keptLocal.some": {
+    "defaultMessage": "{count, plural, one {# of these is kept on this device only and has no cloud copy to remove.} other {# of these are kept on this device only and have no cloud copy to remove.}}"
   },
   "recoveryKey.drop.empty": {
     "defaultMessage": "Drop one Overlook recovery-key file."
@@ -1787,6 +2771,51 @@
   "settings.general.trashRetention.off": {
     "defaultMessage": "Off"
   },
+  "settings.keyring.badge.absent": {
+    "defaultMessage": "Not on this device"
+  },
+  "settings.keyring.badge.databaseKey": {
+    "defaultMessage": "Database"
+  },
+  "settings.keyring.badge.imported": {
+    "defaultMessage": "Imported"
+  },
+  "settings.keyring.badge.retired": {
+    "defaultMessage": "Retired"
+  },
+  "settings.keyring.badge.writeKey": {
+    "defaultMessage": "Write key"
+  },
+  "settings.keyring.empty": {
+    "defaultMessage": "The keyring is unavailable until the library opens."
+  },
+  "settings.keyring.export": {
+    "defaultMessage": "Export…"
+  },
+  "settings.keyring.hint": {
+    "defaultMessage": "Every key this library has sealed photos under. Export a key before removing it — photos under a removed key stay locked until the same key is imported again."
+  },
+  "settings.keyring.import": {
+    "defaultMessage": "Import key…"
+  },
+  "settings.keyring.keyName": {
+    "defaultMessage": "KEY #{id}"
+  },
+  "settings.keyring.meta": {
+    "defaultMessage": "{fingerprint} · {usage}"
+  },
+  "settings.keyring.noFingerprint": {
+    "defaultMessage": "—"
+  },
+  "settings.keyring.remove": {
+    "defaultMessage": "Remove…"
+  },
+  "settings.keyring.title": {
+    "defaultMessage": "Encryption keys"
+  },
+  "settings.keyring.usage": {
+    "defaultMessage": "{photos, plural, =0 {nothing sealed} one {# photo} other {# photos}}{sidecars, plural, =0 {} one { · # sidecar} other { · # sidecars}} · {bytes}"
+  },
   "settings.keys.copyFileName": {
     "defaultMessage": "recovery key filename"
   },
@@ -2117,14 +3146,29 @@
   "sidebar.album.actions": {
     "defaultMessage": "Actions for {name}"
   },
+  "sidebar.album.created": {
+    "defaultMessage": "Created album {name}"
+  },
   "sidebar.album.hiddenFromAllPhotos": {
     "defaultMessage": "Hidden from All Photos"
+  },
+  "sidebar.album.movedToFolder": {
+    "defaultMessage": "Moved {name} to {folder}"
+  },
+  "sidebar.album.movedToTop": {
+    "defaultMessage": "Moved {name} to the top level"
   },
   "sidebar.album.name": {
     "defaultMessage": "Album name"
   },
   "sidebar.album.new": {
     "defaultMessage": "New album"
+  },
+  "sidebar.album.tagsSaved": {
+    "defaultMessage": "Saved tags for {name}"
+  },
+  "sidebar.album.unsupported": {
+    "defaultMessage": "Saved query cannot be evaluated by this version"
   },
   "sidebar.backingUp": {
     "defaultMessage": "Backing up"
@@ -2147,6 +3191,15 @@
   "sidebar.expand": {
     "defaultMessage": "Expand sidebar"
   },
+  "sidebar.folder.created": {
+    "defaultMessage": "Created folder {name}"
+  },
+  "sidebar.folder.deleted": {
+    "defaultMessage": "Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}}{smart, plural, =0 {} one {, # Smart Album} other {, # Smart Albums}} removed · photos kept"
+  },
+  "sidebar.folder.new": {
+    "defaultMessage": "New folder"
+  },
   "sidebar.heading.albums": {
     "defaultMessage": "Albums"
   },
@@ -2164,6 +3217,15 @@
   },
   "sidebar.settings": {
     "defaultMessage": "Settings"
+  },
+  "sidebar.smart.deleted": {
+    "defaultMessage": "Deleted Smart Album {name} · photos kept"
+  },
+  "sidebar.smart.duplicateFailed": {
+    "defaultMessage": "Could not duplicate {name}"
+  },
+  "sidebar.smart.duplicated": {
+    "defaultMessage": "Duplicated {name} as {copy}"
   },
   "sidebar.source.all": {
     "defaultMessage": "All Photos"
@@ -2186,6 +3248,9 @@
   "sidebar.source.unavailable": {
     "defaultMessage": "Unavailable"
   },
+  "sidebar.storage.excluded": {
+    "defaultMessage": "{bytes} on this device only"
+  },
   "sidebar.storage.offload": {
     "defaultMessage": "{bytes} offload ({provider})"
   },
@@ -2195,11 +3260,53 @@
   "sidebar.trash.actions": {
     "defaultMessage": "Trash actions"
   },
+  "smartAlbum.save.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "smartAlbum.save.confirm": {
+    "defaultMessage": "Save"
+  },
+  "smartAlbum.save.failed": {
+    "defaultMessage": "Could not save the Smart Album. Try again."
+  },
+  "smartAlbum.save.folder": {
+    "defaultMessage": "Folder"
+  },
+  "smartAlbum.save.name": {
+    "defaultMessage": "Smart Album name"
+  },
+  "smartAlbum.save.note": {
+    "defaultMessage": "A Smart Album keeps the query, not the photos: it re-evaluates every time it opens and never copies anything."
+  },
+  "smartAlbum.save.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "smartAlbum.save.title": {
+    "defaultMessage": "Save as Smart Album"
+  },
+  "smartAlbum.save.topLevel": {
+    "defaultMessage": "Top level (no folder)"
+  },
+  "smartAlbum.unsupported.hint": {
+    "defaultMessage": "Its saved query is kept exactly as it was. Choose facets and save to replace it, or open it in a newer version."
+  },
+  "smartAlbum.unsupported.title": {
+    "defaultMessage": "{name} cannot be shown"
+  },
+  "statusbar.coverage.removalPending": {
+    "defaultMessage": "{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal"
+  },
   "statusbar.inclusion.excluded": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules"
   },
   "statusbar.inclusion.hiddenByAlbums": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings"
+  },
+  "statusbar.sync.allBackedUp": {
+    "defaultMessage": "All backed up"
+  },
+  "statusbar.sync.backedUpExceptLocalOnly": {
+    "defaultMessage": "Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}"
   },
   "titlebar.help": {
     "defaultMessage": "Help"
@@ -2296,15 +3403,6 @@
   },
   "toolbar.view": {
     "defaultMessage": "View"
-  },
-  "toolbar.view.grid": {
-    "defaultMessage": "Grid"
-  },
-  "toolbar.view.list": {
-    "defaultMessage": "List"
-  },
-  "toolbar.view.moodboard": {
-    "defaultMessage": "Moodboard"
   },
   "toolbar.zoom": {
     "defaultMessage": "Zoom"

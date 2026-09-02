@@ -2,18 +2,19 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
 import type { BackupIntegrityItem } from '../backup/integrity-scrubber.js';
-import type { BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { RestorableBackupManifest } from '../backup/backup-manifest.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import type { ExtractedMetadata } from '../import/exif.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
-import { parseMediaInfo, type MediaInfo } from '../../shared/library/media-info.js';
 import type { DimensionStatus } from '../../shared/library/types.js';
 import { effectivePhotoTags, normalizePhotoTags } from '../../shared/library/photo-metadata.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
+import { mediaInfoJson, toRecord, type PhotoRow } from './photo-row.js';
 import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
+import { createCollection } from './album-tree-repository.js';
 import { readAlbumListings, readHiddenAlbumIds, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
 export { verifyInAllPhotosAsync } from './album-visibility-repository.js';
 import {
@@ -50,95 +51,7 @@ import type {
 // Typed repository over the photos + sync_ledger tables (#69). No raw SQL
 // leaves this module; the IPC service (#71) speaks records only.
 
-export interface PhotoRow {
-  id: string;
-  file_name: string;
-  file_kind: string;
-  width: number;
-  height: number;
-  bytes: number;
-  content_hash: string;
-  camera: string | null;
-  lens: string | null;
-  iso: number | null;
-  aperture: string | null;
-  shutter: string | null;
-  focal_length: number | null;
-  taken_at: string | null;
-  gps_lat: number | null;
-  gps_lon: number | null;
-  place: string | null;
-  imported_at: string;
-  import_source: string;
-  favorite: number;
-  is_original: number;
-  key_id: number;
-  deleted_at: string | null;
-  preview_failure: string | null;
-  dimension_status: string;
-  media_info: string | null;
-  sync_state: string | null;
-  user_title: string | null;
-  user_description: string | null;
-  imported_keywords: string;
-  user_tags: string;
-  suppressed_keywords: string;
-  metadata_version: number;
-  sort_key: string | number;
-}
-
-function tagsFromJson(value: string): string[] {
-  const parsed: unknown = JSON.parse(value);
-  return normalizePhotoTags(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
-}
-
-/** Serializes probed facts for the media_info JSON column. */
-function mediaInfoJson(mediaInfo: MediaInfo | null | undefined): string | null {
-  return mediaInfo === null || mediaInfo === undefined ? null : JSON.stringify(mediaInfo);
-}
-
-export function toRecord(row: PhotoRow): PhotoRecord {
-  const importedKeywords = tagsFromJson(row.imported_keywords);
-  const userTags = tagsFromJson(row.user_tags);
-  const suppressedKeywords = tagsFromJson(row.suppressed_keywords);
-  return {
-    id: row.id,
-    fileName: row.file_name,
-    fileKind: row.file_kind as PhotoRecord['fileKind'],
-    width: row.width,
-    height: row.height,
-    bytes: row.bytes,
-    contentHash: row.content_hash,
-    camera: row.camera,
-    lens: row.lens,
-    iso: row.iso,
-    aperture: row.aperture,
-    shutter: row.shutter,
-    focalLength: row.focal_length,
-    takenAt: row.taken_at,
-    gpsLat: row.gps_lat,
-    gpsLon: row.gps_lon,
-    place: row.place,
-    title: row.user_title,
-    description: row.user_description,
-    tags: effectivePhotoTags(importedKeywords, userTags, suppressedKeywords),
-    userTags,
-    importedKeywords,
-    suppressedKeywords,
-    metadataVersion: row.metadata_version,
-    importedAt: row.imported_at,
-    importSource: row.import_source,
-    favorite: row.favorite === 1,
-    isOriginal: row.is_original === 1,
-    keyId: row.key_id,
-    deletedAt: row.deleted_at,
-    previewFailure: row.preview_failure as PreviewFailureReason | null,
-    dimensionStatus: row.dimension_status as DimensionStatus,
-    mediaInfo: parseMediaInfo(row.media_info),
-    // New rows always get a ledger row; LEFT JOIN keeps reads total anyway.
-    syncState: (row.sync_state ?? 'local') as PhotoRecord['syncState'],
-  };
-}
+export { toRecord, type PhotoRow } from './photo-row.js';
 
 export const SELECT = select('date');
 export class PhotosRepository {
@@ -158,16 +71,19 @@ export class PhotosRepository {
            camera, lens, iso, aperture, shutter, focal_length, taken_at,
            gps_lat, gps_lon, place, imported_at, import_source, favorite, key_id,
            media_info, user_title, user_description, imported_keywords, user_tags,
-           suppressed_keywords, metadata_tags_search, metadata_version
+           suppressed_keywords, metadata_tags_search, metadata_version, derivative_key, variant_source_id, asset_owner_id
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite, @keyId,
            @mediaInfoJson, @title, @description, @importedKeywordsJson, @userTagsJson,
-           @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion
+           @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion, @derivativeKey, @variantSourceId, @assetOwnerId
          )`,
         {
           ...photo,
+          derivativeKey: photo.derivativeKey ?? photo.contentHash,
+          variantSourceId: photo.variantSourceId ?? null,
+          assetOwnerId: photo.assetOwnerId ?? null,
           favorite: photo.favorite === true ? 1 : 0,
           mediaInfo: null,
           mediaInfoJson: mediaInfoJson(photo.mediaInfo),
@@ -514,7 +430,10 @@ export class PhotosRepository {
   stats(): LibraryStats {
     const row = queryAll<{ n: number; b: number | null }>(
       this.db,
-      'SELECT count(*) AS n, sum(bytes) AS b FROM ordinary_visible_photos p WHERE p.deleted_at IS NULL',
+      // Variants share one original (#496): bytes count each asset once.
+      `SELECT count(*) AS n,
+              (SELECT sum(d.bytes) FROM (SELECT DISTINCT content_hash, bytes FROM ordinary_visible_photos WHERE deleted_at IS NULL) d) AS b
+         FROM ordinary_visible_photos p WHERE p.deleted_at IS NULL`,
     )[0];
     const lastBackupAt =
       queryAll<{ at: string | null }>(
@@ -528,7 +447,26 @@ export class PhotosRepository {
         `SELECT sum(p.bytes) AS b FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
           WHERE l.status = 'offloaded' AND p.deleted_at IS NULL`,
       )[0]?.b ?? 0;
-    return { photos: row?.n ?? 0, bytes: row?.b ?? 0, pending: this.pendingCount(), lastBackupAt, offloadedBytes };
+    // ADR-0033 §1 populations: local-only by choice (settled), and rows whose provider
+    // copy is still awaiting removal after a failed delete (§6).
+    const coverage = queryAll<{ excludedCount: number; excludedBytes: number | null; pendingRemovals: number }>(
+      this.db,
+      `SELECT sum(CASE WHEN l.coverage = 'excluded' THEN 1 ELSE 0 END) AS excludedCount,
+              sum(CASE WHEN l.coverage = 'excluded' THEN p.bytes ELSE 0 END) AS excludedBytes,
+              sum(CASE WHEN l.coverage = 'excluding' THEN 1 ELSE 0 END) AS pendingRemovals
+         FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
+        WHERE p.deleted_at IS NULL`,
+    )[0];
+    return {
+      photos: row?.n ?? 0,
+      bytes: row?.b ?? 0,
+      pending: this.pendingCount(),
+      lastBackupAt,
+      offloadedBytes,
+      excludedCount: coverage?.excludedCount ?? 0,
+      excludedBytes: coverage?.excludedBytes ?? 0,
+      pendingRemovals: coverage?.pendingRemovals ?? 0,
+    };
   }
 
   /** Dedupe primitive (#84): does this content already live in the library?
@@ -556,7 +494,7 @@ export class PhotosRepository {
     return replaceAlbumOrder(this.db, order);
   }
 
-  reorderAlbum(albumId: string, position: number): AlbumOrderResult {
+  reorderAlbum(albumId: string, position: number): ReturnType<typeof moveAlbum> {
     return moveAlbum(this.db, albumId, position);
   }
 
@@ -584,7 +522,7 @@ export class PhotosRepository {
     | undefined {
     const album = queryGet<{ id: string; name: string; createdAt: string; position: number; showInAllPhotos: number }>(
       this.db,
-      `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ?`,
+      `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ? AND kind = 'album'`,
       albumId,
     );
     return album === undefined
@@ -594,14 +532,15 @@ export class PhotosRepository {
 
   /** Albums CRUD (#117). Deleting an album NEVER deletes photos — the
    * CASCADE clears membership only (Clear-vs-Delete language rules). */
-  createAlbum(id: string, name: string): AlbumListing {
-    runNamed(
-      this.db,
-      `INSERT INTO albums (id, name, created_at, position)
-       VALUES (@id, @name, @createdAt, (SELECT COALESCE(max(position) + 1, 0) FROM albums))`,
-      { id, name, createdAt: new Date().toISOString() },
-    );
-    return { id, name, count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] };
+  createAlbum(
+    id: string,
+    name: string,
+    placement?: { readonly kind?: 'album' | 'folder'; readonly parentId?: string | null },
+  ): AlbumListing {
+    createCollection(this.db, { id, name, kind: placement?.kind ?? 'album', parentId: placement?.parentId ?? null });
+    const album = this.albums().find((listing) => listing.id === id);
+    if (album === undefined) throw new Error(`album ${id} was not created`);
+    return album;
   }
 
   /** Renames; returns the members to re-manifest. */
@@ -640,7 +579,7 @@ export class PhotosRepository {
    * actually joined, each dirtied for the next manifest. */
   addToAlbum(albumId: string, photoIds: readonly string[]): string[] {
     return this.db.transaction(() => {
-      if (queryGet<{ one: number }>(this.db, 'SELECT 1 AS one FROM albums WHERE id = ?', albumId) === undefined) {
+      if (queryGet<{ one: number }>(this.db, `SELECT 1 AS one FROM albums WHERE id = ? AND kind = 'album'`, albumId) === undefined) {
         throw new Error(`album ${albumId} does not exist`);
       }
       const added: string[] = [];
@@ -696,7 +635,7 @@ export class PhotosRepository {
     return this.db.transaction(() => {
       if (sourceAlbumId === targetAlbumId) throw new Error('source and target albums must differ');
       for (const albumId of [sourceAlbumId, targetAlbumId]) {
-        if (queryGet<{ one: number }>(this.db, 'SELECT 1 AS one FROM albums WHERE id = ?', albumId) === undefined) {
+        if (queryGet<{ one: number }>(this.db, `SELECT 1 AS one FROM albums WHERE id = ? AND kind = 'album'`, albumId) === undefined) {
           throw new Error(`album ${albumId} does not exist`);
         }
       }
@@ -782,12 +721,12 @@ export class PhotosRepository {
 
   /** Ordinary consistency rows only. Hidden migration custody is supplied
    * separately as ownership-only hashes so it can never enter reports. */
-  allRows(): readonly { id: string; contentHash: string; syncState: string }[] {
-    return queryAll<{ id: string; content_hash: string; status: string | null }>(
+  allRows(): readonly { id: string; contentHash: string; syncState: string; derivativeKey: string }[] {
+    return queryAll<{ id: string; content_hash: string; derivative_key: string; status: string | null }>(
       this.db,
-      `SELECT p.id, p.content_hash, l.status
+      `SELECT p.id, p.content_hash, p.derivative_key, l.status
          FROM ordinary_visible_photos p LEFT JOIN sync_ledger l ON l.photo_id = p.id`,
-    ).map((row) => ({ id: row.id, contentHash: row.content_hash, syncState: row.status ?? 'local' }));
+    ).map((row) => ({ id: row.id, contentHash: row.content_hash, derivativeKey: row.derivative_key, syncState: row.status ?? 'local' }));
   }
 
   /** Ordinary blob references held by an in-flight protected migration.
@@ -839,7 +778,7 @@ export class PhotosRepository {
     ).map(({ id }) => id);
   }
 
-  manifestSnapshot(): BackupManifestSnapshot {
+  manifestSnapshot(): ReturnType<typeof readManifestSnapshot> {
     return readManifestSnapshot(this.db, toRecord);
   }
 
@@ -853,7 +792,8 @@ export class PhotosRepository {
     restoreManifestFromBackup(this.db, manifest, keys, missingPhotoIds);
   }
 
-  /** The backup queue's input (#105): dirty, not-deleted photos. */
+  /** The backup queue's input (#105): dirty, not-deleted, included photos.
+   * Excluded rows (ADR-0033 §1) never enter the queue, dirty or not. */
   dirtyPhotos(): readonly { id: string; contentHash: string; bytes: number; fileName: string; keyId: number; status: SyncStatus }[] {
     // status rides along so the engine never re-queries the ledger per item
     // (two status lookups × 94K dirty rows stalled the 113K-import sweep).
@@ -861,7 +801,7 @@ export class PhotosRepository {
       this.db,
       `SELECT p.id, p.content_hash AS contentHash, p.bytes, p.file_name AS fileName, p.key_id AS keyId, l.status AS status
          FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
-        WHERE l.dirty = 1 AND p.deleted_at IS NULL
+        WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
         ORDER BY p.imported_at, p.id`,
     );
   }
@@ -886,6 +826,7 @@ export class PhotosRepository {
           AND (@syncState IS NULL OR l.status = @syncState)
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
+          AND l.coverage = 'included'
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
@@ -906,7 +847,8 @@ export class PhotosRepository {
     return (
       queryAll<{ n: number }>(
         this.db,
-        'SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id WHERE l.dirty = 1 AND p.deleted_at IS NULL',
+        `SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id
+          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL`,
       )[0]?.n ?? 0
     );
   }

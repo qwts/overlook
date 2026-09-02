@@ -31,6 +31,12 @@ test('explicit Apple Photos review imports and add-only export writes the select
   await page.locator('.ovl-grid__cell').first().getByRole('button', { name: 'Select' }).click();
   await page.getByTestId('selection-pill').getByRole('button', { name: 'Export' }).click();
   await page.getByRole('radio', { name: 'Apple Photos' }).click();
+  // #509: the fixture carries GPS and precise location is Private by default, so the
+  // original cannot leave until the user includes it for this one export.
+  await expect(page.getByTestId('disclosure-blocked')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export 1 photo', exact: true })).toBeDisabled();
+  await page.getByTestId('disclosure-widen-location').getByRole('checkbox').click();
+  await expect(page.getByTestId('disclosure-blocked')).toHaveCount(0);
   await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
   await expect(page.getByText('1 photo exported and decrypted to Apple Photos.')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => readdirSync(exportDestination).length).toBe(1);

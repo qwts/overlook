@@ -5,6 +5,7 @@
 import type { MediaInfo } from './media-info.js';
 import type { PreviewFailureReason } from './preview.js';
 import type { PhotoMetadataFields } from './photo-metadata.js';
+import type { SmartPredicate } from './smart-album.js';
 
 // ADR-0026 §1: containers do not get kinds — an MP4, a MOV, a WebM, and an
 // MPEG-TS are all `video`; their container × codec facts live in the probed
@@ -21,6 +22,11 @@ export type ImageFileKind = Extract<FileKind, 'jpeg' | 'png' | 'heic' | 'gif' | 
 
 /** sync_ledger.status vocabulary (ADR-0005; 'error' added by #104). */
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'offloaded' | 'error';
+/** Backup coverage of a ledger row (ADR-0033 §1). `excluding` is the durable
+ * intermediate between the user's decision and the provider copy being gone. */
+export type BackupCoverage = 'included' | 'excluding' | 'excluded';
+/** Who decided a row's coverage (ADR-0033 §1). */
+export type BackupCoverageOrigin = 'user' | 'protected-domain' | 'provider-unsupported';
 
 /** Local comparison between embedded metadata and a successful pixel decode. */
 export type DimensionStatus = 'legacy' | 'verified' | 'metadata-mismatch' | 'unavailable';
@@ -33,6 +39,15 @@ export interface PhotoRecord extends PhotoMetadataFields {
   readonly height: number;
   readonly bytes: number;
   readonly contentHash: string;
+  /** Where this variant's thumb/mid derivatives live (#496, ADR-0031 §1): the
+   * content hash for a root variant, a per-variant key for a duplicate. */
+  readonly derivativeKey: string;
+  /** The variant this one was duplicated from, or null for an import (§3 lineage). */
+  readonly variantSourceId: string | null;
+  /** The photo whose import sealed the original's envelope (its AAD binds
+   * that id); null when this row is it. Copied to every duplicate so the
+   * shared original stays readable after the root is purged (#496). */
+  readonly assetOwnerId: string | null;
   readonly camera: string | null;
   readonly lens: string | null;
   readonly iso: number | null;
@@ -58,13 +73,34 @@ export interface PhotoRecord extends PhotoMetadataFields {
   readonly mediaInfo: MediaInfo | null;
   /** From the sync_ledger join; new rows start 'local'. */
   readonly syncState: SyncStatus;
+  /** From the sync_ledger join; new rows start 'included' (ADR-0033). */
+  readonly coverage: BackupCoverage;
+  /** ADR-0032 §2 first-class state: this device lacks the key the original
+   * (or a sidecar) is sealed under. Only key-independent facts are shown. */
+  readonly locked: boolean;
 }
 
 export type PhotoInsert = Omit<
   PhotoRecord,
-  'favorite' | 'isOriginal' | 'deletedAt' | 'previewFailure' | 'dimensionStatus' | 'syncState' | 'mediaInfo' | keyof PhotoMetadataFields
+  | 'favorite'
+  | 'isOriginal'
+  | 'deletedAt'
+  | 'previewFailure'
+  | 'dimensionStatus'
+  | 'syncState'
+  | 'coverage'
+  | 'locked'
+  | 'mediaInfo'
+  | 'derivativeKey'
+  | 'variantSourceId'
+  | 'assetOwnerId'
+  | keyof PhotoMetadataFields
 > & {
   readonly favorite?: boolean;
+  /** Defaults to the content hash: an import is the root variant of its asset. */
+  readonly derivativeKey?: string | undefined;
+  readonly variantSourceId?: string | null | undefined;
+  readonly assetOwnerId?: string | null | undefined;
   /** Optional like favorite: most kinds have no probed facts to record. */
   readonly mediaInfo?: MediaInfo | null | undefined;
   readonly title?: string | null | undefined;
@@ -129,6 +165,9 @@ export interface LibraryQuery {
   readonly order?: SortOrder | undefined;
   /** Restrict to one album's members (#117) — AND-combined with source. */
   readonly albumId?: string | undefined;
+  /** Facet filters or a Smart Album's saved query (#514, ADR-0030 §3) —
+   * compiled by the same builder as every other clause. */
+  readonly predicate?: SmartPredicate | undefined;
 }
 
 export interface PageRequest extends LibraryQuery {
@@ -158,6 +197,7 @@ export interface SelectionRangeRequest {
   readonly chips?: ChipFilters | undefined;
   readonly order?: SortOrder | undefined;
   readonly albumId?: string | undefined;
+  readonly predicate?: SmartPredicate | undefined;
 }
 
 export interface SelectionRangeResult {
@@ -187,6 +227,18 @@ export interface AlbumListing extends AlbumSummary {
   readonly showInAllPhotos: boolean;
   readonly visibleElsewhere: number;
   readonly visibleVia: readonly { readonly id: string; readonly name: string }[];
+  /** Folder tree placement and organizational tags (#505, ADR-0030 §1). A
+   * folder's count is the distinct photos of every album beneath it. */
+  readonly kind: 'album' | 'folder' | 'smart';
+  readonly parentId: string | null;
+  /** The policy follows the containing folder (§2) rather than being this collection's own. */
+  readonly inheritsVisibility: boolean;
+  readonly tags: readonly string[];
+  /** A Smart Album's saved query (#514, §3). Null for albums and folders,
+   * and for a Smart Album this app cannot evaluate — `unsupported` then
+   * names what it could not understand, and the count is 0. */
+  readonly predicate: SmartPredicate | null;
+  readonly unsupported: string | null;
 }
 
 export interface LibraryStats {
@@ -198,4 +250,9 @@ export interface LibraryStats {
   readonly lastBackupAt: string | null;
   /** Bytes whose originals live only in the cloud (#107). */
   readonly offloadedBytes: number;
+  /** Rows kept on this device only (ADR-0033 §1), `excluding` included. */
+  readonly excludedCount: number;
+  readonly excludedBytes: number;
+  /** Excluded rows whose provider copy still awaits removal (ADR-0033 §6). */
+  readonly pendingRemovals: number;
 }

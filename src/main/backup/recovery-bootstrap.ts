@@ -38,9 +38,17 @@ const wrappedKeysSchema = z
     z.strictObject({
       id: z.number().int().positive(),
       createdAt: isoTimestampSchema,
-      status: z.enum(['active', 'retired']),
+      status: z.enum(['active', 'retired', 'held']),
       wrappedKey: wrappedKeySchema,
       nonceHighWater: nonceHighWaterSchema.optional(),
+      // Keyring registry facts (#517); absent on pre-registry records.
+      keyRef: z
+        .string()
+        .regex(/^[0-9a-f]{32}$/u)
+        .optional(),
+      version: z.number().int().positive().optional(),
+      kind: z.enum(['library', 'item', 'space']).optional(),
+      origin: z.enum(['local', 'imported', 'received']).optional(),
     }),
   )
   .min(1)

@@ -6,6 +6,10 @@ import {
   DEFAULT_VIEW_INTENT,
   ZOOM_MAX,
   ZOOM_MIN,
+  cropCenterOffset,
+  cropClipInset,
+  cropInSourceSpace,
+  croppedSize,
   fillZoom,
   fitSize,
   orientedSize,
@@ -239,5 +243,33 @@ describe('lightbox orientation geometry (#307)', () => {
     assert.deepEqual(flipVerticalOrientation(DEFAULT_ORIENTATION), { quarterTurns: 2, flipped: true });
     assert.deepEqual(flipVerticalOrientation(flipVerticalOrientation(DEFAULT_ORIENTATION)), DEFAULT_ORIENTATION);
     assert.deepEqual(flipVerticalOrientation({ quarterTurns: 1, flipped: true }), { quarterTurns: 3, flipped: false });
+  });
+});
+
+// #493: a persisted crop is normalized to the ORIENTED image; the viewport
+// fits the framed region and clips the element in its own (source) space.
+describe('crop geometry (#493)', () => {
+  test('croppedSize and cropCenterOffset frame the crop inside the oriented image', () => {
+    const oriented = { width: 400, height: 200 };
+    assert.deepEqual(croppedSize(oriented, null), oriented);
+    assert.deepEqual(croppedSize(oriented, { left: 0.5, top: 0, width: 0.5, height: 0.5 }), { width: 200, height: 100 });
+    assert.deepEqual(cropCenterOffset(null), { x: 0, y: 0 });
+    assert.deepEqual(cropCenterOffset({ left: 0.5, top: 0, width: 0.5, height: 0.5 }), { x: 0.25, y: -0.25 });
+  });
+
+  test('cropInSourceSpace undoes the mirror and the turns, and the clip inset follows', () => {
+    const topLeft = { left: 0, top: 0, width: 0.5, height: 0.5 };
+    assert.deepEqual(cropInSourceSpace(topLeft, DEFAULT_ORIENTATION), topLeft);
+    // After a clockwise quarter turn the visual top-left quarter is the source's bottom-left quarter.
+    assert.deepEqual(cropInSourceSpace(topLeft, { quarterTurns: 1, flipped: false }), { left: 0, top: 0.5, width: 0.5, height: 0.5 });
+    // Mirrored: the visual left half is the source's right half.
+    assert.deepEqual(cropInSourceSpace({ left: 0, top: 0, width: 0.5, height: 1 }, { quarterTurns: 0, flipped: true }), {
+      left: 0.5,
+      top: 0,
+      width: 0.5,
+      height: 1,
+    });
+    assert.deepEqual(cropClipInset(topLeft, { quarterTurns: 1, flipped: false }), { top: 0.5, right: 0.5, bottom: 0, left: 0 });
+    assert.deepEqual(cropClipInset(topLeft, { quarterTurns: 2, flipped: false }), { top: 0.5, right: 0, bottom: 0, left: 0.5 });
   });
 });

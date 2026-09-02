@@ -5,6 +5,7 @@ import { useIntl } from 'react-intl';
 import './grid.css';
 import {
   anchorIndex,
+  computeFeedLayout,
   computeLayout,
   computeListLayout,
   needsMore,
@@ -20,6 +21,10 @@ const GRID_GAP = 4; // must equal --grid-gap (spacing tokens)
 const LIST_ROW_HEIGHT = 52; // mock ListRow height
 const LIST_GAP = 2; // mock list column gap
 const LIST_PADDING = 8; // --space-3, the mock's list padding
+const FEED_CARD_HEIGHT = 536; // feed.css: head + frame + two-line description
+const FEED_GAP = 16; // --space-5
+const FEED_PADDING = 16; // --space-5
+const FEED_MAX_WIDTH = 720; // reading-width column
 const OVERSCAN_ROWS = 2;
 const PREFETCH_ROWS = 6;
 /** Scroll idle window after which the frame monitor detaches. */
@@ -30,8 +35,8 @@ export interface VirtualGridProps<Photo extends { readonly id: string }> {
   /** Total photos in the active source — sizes the scroll plane. */
   readonly total: number;
   readonly zoom: number;
-  /** 'grid' (default) or the dense single-column 'list' mode (#77). */
-  readonly mode?: 'grid' | 'list' | undefined;
+  /** 'grid' (default), the dense single-column 'list' (#77), or the card 'feed' (#516). */
+  readonly mode?: 'grid' | 'list' | 'feed' | undefined;
   readonly topInset?: boolean | undefined;
   /** Ask the data layer for the next cursor page (idempotent under spam). */
   readonly onNeedMore: () => void;
@@ -68,13 +73,21 @@ export function VirtualGrid<Photo extends { readonly id: string }>({
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [scrollTop, setScrollTop] = useState(0);
 
-  const layout = useMemo(
-    () =>
-      mode === 'list'
-        ? computeListLayout({ viewportWidth: viewport.width, rowHeight: LIST_ROW_HEIGHT, gap: LIST_GAP, padding: LIST_PADDING, total })
-        : computeLayout({ viewportWidth: viewport.width, zoom, gap: GRID_GAP, total }),
-    [viewport.width, zoom, mode, total],
-  );
+  const layout = useMemo(() => {
+    if (mode === 'feed') {
+      return computeFeedLayout({
+        viewportWidth: viewport.width,
+        cardHeight: FEED_CARD_HEIGHT,
+        gap: FEED_GAP,
+        padding: FEED_PADDING,
+        maxWidth: FEED_MAX_WIDTH,
+        total,
+      });
+    }
+    return mode === 'list'
+      ? computeListLayout({ viewportWidth: viewport.width, rowHeight: LIST_ROW_HEIGHT, gap: LIST_GAP, padding: LIST_PADDING, total })
+      : computeLayout({ viewportWidth: viewport.width, zoom, gap: GRID_GAP, total });
+  }, [viewport.width, zoom, mode, total]);
 
   // Viewport tracking: ResizeObserver keeps the math honest on window and
   // inspector-panel resizes.
@@ -199,7 +212,7 @@ export function VirtualGrid<Photo extends { readonly id: string }>({
       role="list"
       aria-label={intl.formatMessage({ id: 'grid.regionLabel', defaultMessage: 'Photos' })}
       tabIndex={-1}
-      className={`ovl-grid${topInset ? ' ovl-grid--inset' : ''}`}
+      className={`ovl-grid${topInset ? ' ovl-grid--inset' : ''}${mode === 'feed' ? ' ovl-grid--feed' : ''}`}
       data-testid="virtual-grid"
       onScroll={onScroll}
     >

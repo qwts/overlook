@@ -64,9 +64,10 @@ describe('app state reducer', () => {
     assert.equal(patched.selection, loaded.selection, 'unrelated record patches preserve the memoized Inspector selection scope');
   });
 
-  test('view switches across grid, list, and moodboard (#515)', () => {
+  test('view switches across grid, list, feed, and moodboard (#515, #516)', () => {
     assert.equal(initialAppState.view, 'grid');
     assert.equal(apply(initialAppState, { type: 'view/set', view: 'moodboard' }).view, 'moodboard');
+    assert.equal(apply(initialAppState, { type: 'view/set', view: 'feed' }).view, 'feed');
     assert.equal(apply(initialAppState, { type: 'view/set', view: 'list' }).view, 'list');
   });
 

@@ -41,7 +41,8 @@ export function ProtectedAlbumSettings(): ReactElement {
           }
         }),
       );
-      setOrdinary(albums.albums);
+      // Folders are not tree nodes protection knows about (ADR-0030 §7).
+      setOrdinary(albums.albums.filter((album) => album.kind === 'album'));
       setProtectedRows(rows);
     });
   }, []);

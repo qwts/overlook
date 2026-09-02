@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import type { ExportDestinationIntent } from '../../../shared/ipc/export-channels.js';
+import type { ExportDestinationIntent, ExportPayloadMode } from '../../../shared/ipc/export-channels.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
@@ -13,6 +13,11 @@ import { useAnnouncer } from '../components/LiveAnnouncer';
 import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
 import { custodyPresentation } from '../backup/custody-presentation.js';
+import { EXPORT_JPEG_QUALITIES, ExportEditsOptions, type ExportJpegQuality } from './ExportEditsOptions';
+import { useExportPreflight } from './use-export-preflight.js';
+import { DisclosurePreview } from '../disclosure/DisclosurePreview';
+import { useDisclosurePreview } from '../disclosure/use-disclosure-preview.js';
+import type { DisclosureDestination, DisclosureField } from '../../../shared/disclosure/policy.js';
 
 import './export.css';
 
@@ -63,6 +68,8 @@ const messages = defineMessages({
 });
 
 // ExportDialog (#99): the design's 420px export flow, safety copy verbatim
+// (#497 adds the declared payload mode — Bake / Original + XMP / Original
+// only — and the ADR-0031 §6 loss report that gates Export).
 // (README §6 + Content voice). The decrypt switch is ON by default; OFF
 // disables Export and shows the amber warning — v1 ships no encrypted-export
 // format (decision recorded on #97/#98). The host mounts a fresh instance
@@ -93,11 +100,12 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const intl = useIntl();
   const { formatCount } = useFormats();
   const { announce } = useAnnouncer();
-  const formatLabelId = useId();
   const destinationLabelId = useId();
   const metadataLabelId = useId();
   const [phase, setPhase] = useState<Phase>('options');
-  const [format, setFormat] = useState<'original' | 'jpeg'>('original');
+  const [mode, setMode] = useState<ExportPayloadMode>('original-sidecars');
+  const [quality, setQuality] = useState<ExportJpegQuality>('high');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [metadata, setMetadata] = useState<'original' | 'overlook' | 'none'>('original');
   const [destinationKind, setDestinationKind] = useState<'folder' | 'apple-photos'>('folder');
   const [decrypt, setDecrypt] = useState(true);
@@ -110,7 +118,28 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   >([]);
   const [cancelled, setCancelled] = useState(0);
   const [previewTranscodes, setPreviewTranscodes] = useState(0);
+  const [bakedEdits, setBakedEdits] = useState(0);
+  const [editSidecars, setEditSidecars] = useState(0);
   const [runError, setRunError] = useState(false);
+  // ADR-0032 §6 (#509): operation-scope disclosure intent. Main compiles the
+  // plan from it; the preview below is main's answer for the same intent.
+  const [disclosureDestination, setDisclosureDestination] = useState<DisclosureDestination>('shared');
+  const [widen, setWiden] = useState<readonly DisclosureField[]>([]);
+  const preflight = useExportPreflight(photoIds, allPhotos, mode, open && destinationKind === 'folder');
+  const disclosureIntent = { destination: disclosureDestination, operation: { narrow: [], widen: [...widen] } };
+  const disclosurePreview = useDisclosurePreview(
+    open && phase === 'options'
+      ? {
+          boundary: destinationKind === 'apple-photos' ? 'photo-kit' : 'export',
+          destination: disclosureDestination,
+          ...(allPhotos ? {} : { photoIds: [...photoIds] }),
+          payload: destinationKind === 'folder' && mode === 'baked' ? 'baked' : 'original',
+          metadata: destinationKind === 'apple-photos' ? 'original' : metadata,
+          operation: disclosureIntent.operation,
+        }
+      : null,
+  );
+  const disclosureBlocked = disclosurePreview === null || disclosurePreview.blocked.length > 0;
 
   useEffect(() => {
     if (phase !== 'running') {
@@ -144,9 +173,13 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const count = photoIds.length;
   const noun = count === 1 ? 'photo' : 'photos';
   const exportLabel = allPhotos ? intl.formatMessage(messages.allPhotos) : `Export ${formatCount(count)} ${noun}`;
+  // One declared payload mode (ADR-0031 §6); `format` keeps the wire shape.
+  const format = mode === 'baked' ? 'jpeg' : 'original';
+  const edits = mode === 'baked' ? { mode, quality: EXPORT_JPEG_QUALITIES[quality] } : { mode };
+  const editsBlocked = destinationKind === 'folder' && (preflight?.losses.length ?? 0) > 0 && !acknowledged;
   const intent: ExportDestinationIntent = allPhotos
-    ? { operation: 'all', metadata }
-    : { operation: 'selected', photoIds: [...photoIds], format, metadata };
+    ? { operation: 'all', metadata, ...edits, disclosure: disclosureIntent }
+    : { operation: 'selected', photoIds: [...photoIds], format, metadata, ...edits, disclosure: disclosureIntent };
 
   const discardDestination = (): void => {
     if (destination !== null) {
@@ -163,16 +196,18 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
   const start = (): void => {
     const run =
       destinationKind === 'apple-photos'
-        ? window.overlook.photoKit.export({ photoIds: [...photoIds] })
+        ? window.overlook.photoKit.export({ photoIds: [...photoIds], disclosure: disclosureIntent })
         : destination === null
           ? null
           : allPhotos
-            ? window.overlook.export.runAll({ authorization: destination.authorization, metadata })
+            ? window.overlook.export.runAll({ authorization: destination.authorization, metadata, ...edits, disclosure: disclosureIntent })
             : window.overlook.export.run({
                 photoIds: [...photoIds],
                 authorization: destination.authorization,
                 format,
                 metadata,
+                ...edits,
+                disclosure: disclosureIntent,
               });
     if (run === null) return;
     setRunError(false);
@@ -186,6 +221,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
         setPreviewTranscodes(
           'previewTranscodes' in summary && typeof summary.previewTranscodes === 'number' ? summary.previewTranscodes : 0,
         );
+        setBakedEdits('bakedEdits' in summary && typeof summary.bakedEdits === 'number' ? summary.bakedEdits : 0);
+        setEditSidecars('editSidecars' in summary && typeof summary.editSidecars === 'number' ? summary.editSidecars : 0);
         setPhase('done');
         if (summary.failed > 0) {
           const custodyFailure = summary.failures
@@ -233,7 +270,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             <Button
               variant="primary"
               icon="share"
-              disabled={!decrypt || (destinationKind === 'folder' && destination === null)}
+              disabled={!decrypt || editsBlocked || disclosureBlocked || (destinationKind === 'folder' && destination === null)}
               onClick={start}
             >
               {exportLabel}
@@ -279,24 +316,23 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               ]}
             />
           </div>
-          {allPhotos ? null : (
-            <div className="ovl-export__row" role="group" aria-labelledby={formatLabelId}>
-              <span id={formatLabelId}>Format</span>
-              <Segmented
-                label="Format"
-                value={destinationKind === 'apple-photos' ? 'original' : format}
-                disabled={destinationKind === 'apple-photos'}
-                onChange={(next) => {
-                  if (next !== format) discardDestination();
-                  setFormat(next);
-                }}
-                options={[
-                  { value: 'original', label: 'Original' },
-                  { value: 'jpeg', label: 'JPEG' },
-                ]}
-              />
-            </div>
-          )}
+          <ExportEditsOptions
+            mode={mode}
+            onModeChange={(next) => {
+              if (next !== mode) discardDestination();
+              setMode(next);
+              setAcknowledged(false);
+            }}
+            quality={quality}
+            onQualityChange={(next) => {
+              if (next !== quality) discardDestination();
+              setQuality(next);
+            }}
+            disabled={destinationKind === 'apple-photos'}
+            preflight={preflight}
+            acknowledged={acknowledged}
+            onAcknowledge={setAcknowledged}
+          />
           <div className="ovl-export__row" role="group" aria-labelledby={metadataLabelId}>
             <span id={metadataLabelId}>{intl.formatMessage(messages.metadata)}</span>
             <Segmented
@@ -325,6 +361,19 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                       : messages.metadataNoneHint,
                 )}
           </div>
+          <DisclosurePreview
+            preview={disclosurePreview}
+            destination={disclosureDestination}
+            onDestinationChange={(next) => {
+              if (next !== disclosureDestination) discardDestination();
+              setDisclosureDestination(next);
+            }}
+            widen={widen}
+            onWidenChange={(next) => {
+              discardDestination();
+              setWiden(next);
+            }}
+          />
           <div className="ovl-export__decrypt">
             <div>
               <div className="ovl-export__decryptTitle">
@@ -432,6 +481,8 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                   ? intl.formatMessage(messages.photoKitDone, { count: exported })
                   : `${formatCount(exported)} ${exported === 1 ? 'photo' : 'photos'} exported and decrypted.`}
                 {previewTranscodes > 0 ? ` ${formatCount(previewTranscodes)} from RAW previews (preview resolution).` : ''}
+                {bakedEdits > 0 ? ` ${formatCount(bakedEdits)} with edits baked.` : ''}
+                {editSidecars > 0 ? ` ${formatCount(editSidecars)} edit ${editSidecars === 1 ? 'sidecar' : 'sidecars'} written.` : ''}
               </div>
             )
           ) : null}

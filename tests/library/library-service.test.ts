@@ -328,8 +328,34 @@ describe('library IPC contract', () => {
     run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('AL1', '01J8LIB001', 1)`);
     run(db, `INSERT INTO albums (id, name, created_at, position) VALUES ('AL2', 'Empty', '2026-07-01T00:00:00Z', 1)`);
     assert.deepEqual(service.albums(), [
-      { id: 'AL1', name: 'Travel', count: 2, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
-      { id: 'AL2', name: 'Empty', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+      {
+        id: 'AL1',
+        name: 'Travel',
+        count: 2,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
+      {
+        id: 'AL2',
+        name: 'Empty',
+        count: 0,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
     ]);
   });
 

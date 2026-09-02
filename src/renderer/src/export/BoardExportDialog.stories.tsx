@@ -46,8 +46,11 @@ function installStub(): void {
   const exportApi: OverlookApi['export'] = {
     pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
     revokeDestination: () => Promise.resolve({ revoked: true }),
-    run: () => Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] }),
-    runAll: () => Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] }),
+    preflight: () => Promise.resolve({ edited: 0, losses: [] }),
+    run: () =>
+      Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, bakedEdits: 0, editSidecars: 0, failures: [] }),
+    runAll: () =>
+      Promise.resolve({ exported: 0, failed: 0, cancelled: 0, previewTranscodes: 0, bakedEdits: 0, editSidecars: 0, failures: [] }),
     runBoard: (request) => {
       void runBoard(request);
       listener?.({ done: request.board.placements.length, total: request.board.placements.length });

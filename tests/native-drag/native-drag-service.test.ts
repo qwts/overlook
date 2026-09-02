@@ -19,6 +19,9 @@ function photo(id: string, fileName = `${id}.JPG`): PhotoRecord {
     height: 1,
     bytes: 5,
     contentHash: id.padEnd(64, '0'),
+    derivativeKey: id.padEnd(64, '0'),
+    variantSourceId: null,
+    assetOwnerId: null,
     camera: null,
     lens: null,
     iso: null,
@@ -46,6 +49,8 @@ function photo(id: string, fileName = `${id}.JPG`): PhotoRecord {
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState: 'local',
+    coverage: 'included',
+    locked: false,
   };
 }
 

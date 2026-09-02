@@ -41,9 +41,13 @@ export class RecoveryError extends Error {
   }
 }
 
-function deriveKey(password: string, salt: Buffer): Buffer {
+/** The password-derived sealing key; shared with exported keyring entries
+ * (#517) so both file formats cost an attacker the same. */
+export function derivePasswordKey(password: string, salt: Buffer): Buffer {
   return scryptSync(password, salt, KEY_LEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM });
 }
+
+const deriveKey = derivePasswordKey;
 
 /** Seals the master key into the `overlook-recovery.key` byte layout. */
 export function sealRecoveryKey(masterKey: Buffer, password: string): Buffer {

@@ -64,6 +64,22 @@ import type { FileProviderService } from './file-provider/file-provider-service.
 import { registerFileProviderHandlers } from './file-provider/file-provider-ipc.js';
 import { EMBEDDING_DIMENSIONS } from './db/embedding-repository.js';
 import type { SemanticEmbeddingFacade } from './library/semantic-search.js';
+import { registerPhotoEditHandlers } from './library/photo-edit-ipc.js';
+import type { PhotoEditService } from './library/photo-edit-service.js';
+import { registerProvenanceHandlers } from './library/provenance-ipc.js';
+import type { ProvenanceService } from './library/provenance-service.js';
+import { registerVariantHandlers } from './library/variant-ipc.js';
+import { registerHistogramHandlers } from './library/histogram-ipc.js';
+import { registerDuplicateHandlers } from './library/duplicate-ipc.js';
+import { registerCoverageHandlers } from './backup/coverage-ipc.js';
+import { registerKeyringHandlers } from './crypto/keyring-ipc.js';
+import { registerDisclosureHandlers } from './disclosure/disclosure-ipc.js';
+import type { DisclosureService } from './disclosure/disclosure-service.js';
+import type { KeyringService } from './crypto/keyring-service.js';
+import type { CoverageService } from './backup/coverage-service.js';
+import type { DuplicateIndexService } from './library/duplicate-index-service.js';
+import type { HistogramService } from './library/histogram-service.js';
+import type { VariantService } from './library/variant-service.js';
 
 export interface AppServicesOptions {
   readonly dataDir: () => string;
@@ -77,6 +93,14 @@ export interface AppServicesOptions {
   readonly libraries: LibraryRegistryFacade;
   readonly getProtected: () => ProtectedRuntime;
   readonly getThumbs: () => ThumbService;
+  readonly getEdits: () => PhotoEditService;
+  readonly getProvenance: () => ProvenanceService;
+  readonly getVariants: () => VariantService;
+  readonly getHistogram: () => HistogramService;
+  readonly getDuplicates: () => DuplicateIndexService;
+  readonly getCoverage: () => CoverageService;
+  readonly getKeyring: () => KeyringService;
+  readonly getDisclosure: () => DisclosureService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -208,6 +232,11 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerLibraryHandlers(options.getLibrary, options.onManifestChanged, options.getActivity, () => getSearchEmbeddings(options));
   registerAlbumHandlers(options.getLibrary, ulid, options.getActivity, options.onManifestChanged);
   registerBoardHandlers(options.getLibrary, options.getActivity, options.onManifestChanged);
+  registerPhotoEditHandlers(options.getEdits, options.requireContentAccess, options.getActivity, options.onManifestChanged);
+  registerProvenanceHandlers(options.getProvenance, options.requireContentAccess, options.onManifestChanged);
+  registerVariantHandlers(options.getVariants, options.requireContentAccess, options.onManifestChanged);
+  registerHistogramHandlers(options.getHistogram, options.requireContentAccess);
+  registerDuplicateHandlers(options.getDuplicates, options.requireContentAccess);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);
   registerHistoryHandlers(options.getHistory, options.requireContentAccess);
   registerProtectedAlbumHandlers(
@@ -268,6 +297,16 @@ export function registerAppServices(options: AppServicesOptions): void {
   const emitSettingsChanged = createEmitter(events.settingsChanged, options.broadcast);
   getSettingsStore().subscribe((settings) => emitSettingsChanged({ settings }));
   registerBackupHandlers(() => createBackupFacade(options.backup));
+  registerKeyringHandlers(options.getKeyring, options.requireContentAccess);
+  registerDisclosureHandlers(options.getDisclosure, options.requireContentAccess);
+  registerCoverageHandlers(options.getCoverage, options.requireContentAccess, async (operation) => {
+    options.backup.workChanged(1);
+    try {
+      return await operation();
+    } finally {
+      options.backup.workChanged(-1);
+    }
+  });
   if (options.pcloudEnabled || options.liveLocalEnabled) {
     registerInboundMoveHandlers(getProductionInboundMoveController, options.requireContentAccess);
   }

@@ -20,6 +20,8 @@ test('album order is atomic, complete, and contiguous (#225)', () => {
     changed: true,
     before: ['ALB1', 'ALB2', 'ALB3'],
     after: ['ALB3', 'ALB1', 'ALB2'],
+    position: 0,
+    total: 3,
   });
   assert.deepEqual(queryAll(db, 'SELECT id, position FROM albums ORDER BY position'), [
     { id: 'ALB3', position: 0 },

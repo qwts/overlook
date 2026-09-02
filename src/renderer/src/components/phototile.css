@@ -325,3 +325,10 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* Locked tile (#517): the key that seals this photo is absent from the
+   device, so no derivative can be shown until it is imported. */
+.ovl-tile__placeholder--locked {
+  color: var(--accent-amber);
+  background: var(--gray-2);
+}

@@ -249,6 +249,21 @@ export function throttlePercentOf(settings: AppSettings): number | null {
   return settings.bandwidthLimit >= 100 ? null : settings.bandwidthLimit;
 }
 
+/**
+ * The engine's live view of the store (#111). Disconnected (#114) means no
+ * automatic uploads — the dialog disables the switch for the same reason.
+ */
+export function backupSettingsOf(
+  settings: AppSettings,
+  connected: boolean,
+): { throttlePercent: number | null; wifiOnly: boolean; autoBackupOnImport: boolean } {
+  return {
+    throttlePercent: throttlePercentOf(settings),
+    wifiOnly: settings.wifiOnly,
+    autoBackupOnImport: settings.autoBackupOnImport && connected,
+  };
+}
+
 // Explicit per-key merge: `undefined` in a patch means "unchanged", while
 // providerId's real `null` (disconnected) must win — so no spread, no ??
 // on the nullable key. The locked key stays literal.

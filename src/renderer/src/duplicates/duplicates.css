@@ -1,0 +1,90 @@
+/* Review Duplicates dialog (#650). Every colour is a token; the group card
+ * reuses the Inspector row rhythm so a photo reads the same everywhere. */
+
+.ovl-duplicates {
+  min-height: 240px;
+}
+
+.ovl-duplicates__body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ovl-duplicates__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ovl-duplicates__progress {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ovl-duplicates__note,
+.ovl-duplicates__privacy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ovl-duplicates__state {
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ovl-duplicates__group {
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.ovl-duplicates__photos {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ovl-duplicates__photo {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ovl-duplicates__thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  background: var(--gray-2);
+  object-fit: cover;
+}
+
+.ovl-duplicates__text {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  justify-items: start;
+}
+
+.ovl-duplicates__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.ovl-duplicates__meta,
+.ovl-duplicates__evidence {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}

@@ -140,7 +140,20 @@ describe('ProtectedWorkflowService (#329)', () => {
     assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
     assert.equal(value.albumRecords.get('protected-private'), undefined);
     assert.deepEqual(value.photos.albums(), [
-      { id: 'ordinary-private', name: 'Private album', count: 1, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+      {
+        id: 'ordinary-private',
+        name: 'Private album',
+        count: 1,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
     ]);
     assert.equal(value.photos.get(PHOTO_ID)?.place, 'private place');
     assert.equal(
@@ -160,7 +173,20 @@ describe('ProtectedWorkflowService (#329)', () => {
     assert.deepEqual(await value.workflow.unlock('protected-private', PASSWORD), { ok: true, outcome: 'opened' });
     assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
     assert.deepEqual(value.photos.albums(), [
-      { id: 'ordinary-private', name: 'Private album', count: 1, showInAllPhotos: false, visibleElsewhere: 0, visibleVia: [] },
+      {
+        id: 'ordinary-private',
+        name: 'Private album',
+        count: 1,
+        showInAllPhotos: false,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
     ]);
     // The flag was recomputed inside the unprotect transaction, not left for startup.
     assert.equal(value.photos.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);

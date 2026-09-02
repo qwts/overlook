@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { siblingReorderedOrder } from './album-tree-repository.js';
 import { queryAll, runNamed } from './sql.js';
 
 export interface AlbumOrderResult {
@@ -31,15 +32,16 @@ export function replaceAlbumOrder(db: BetterSqlite3.Database, order: readonly st
   })();
 }
 
-export function moveAlbum(db: BetterSqlite3.Database, albumId: string, position: number): AlbumOrderResult {
+/** Moves an album to `position` among its siblings (#505: one ordering
+ * mechanism, scoped to the parent). The history still records the full
+ * depth-first order, so undo replays through `replaceAlbumOrder`. */
+export function moveAlbum(
+  db: BetterSqlite3.Database,
+  albumId: string,
+  position: number,
+): AlbumOrderResult & { readonly position: number; readonly total: number } {
   return db.transaction(() => {
-    const before = readAlbumOrder(db);
-    const current = before.indexOf(albumId);
-    if (current === -1) throw new Error(`album ${albumId} does not exist`);
-    if (!Number.isInteger(position) || position < 0 || position >= before.length) throw new Error('album position is out of range');
-    const after = [...before];
-    after.splice(current, 1);
-    after.splice(position, 0, albumId);
-    return replaceAlbumOrder(db, after);
+    const sibling = siblingReorderedOrder(db, albumId, position);
+    return { ...replaceAlbumOrder(db, sibling.order), position: sibling.position, total: sibling.total };
   })();
 }

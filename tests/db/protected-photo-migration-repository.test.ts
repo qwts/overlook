@@ -114,7 +114,20 @@ describe('ProtectedPhotoMigrationRepository', () => {
       hiddenByAlbums: 0,
     });
     assert.deepEqual(photos.albums(), [
-      { id: 'ordinary-a', name: 'Ordinary', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+      {
+        id: 'ordinary-a',
+        name: 'Ordinary',
+        count: 0,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
     ]);
     assert.deepEqual(photos.albumMembers('ordinary-a'), []);
     assert.equal(photos.stats().photos, 0);
@@ -231,6 +244,44 @@ describe('ProtectedPhotoMigrationRepository', () => {
     assert.equal(photos.get('photo-a')?.favorite, true);
     assert.deepEqual(photos.albumMembers('ordinary-a'), ['photo-a']);
     assert.equal(migrations.getProtected('photo-a'), undefined);
+    db.close();
+  });
+
+  test('unprotect restores several photos, each under its own derivative key (#496)', () => {
+    const { db, photos, migrations } = world();
+    photos.createAlbum('ordinary-a', 'Ordinary');
+    for (const photoId of ['photo-a', 'photo-b']) {
+      runNamed(
+        db,
+        `INSERT INTO protected_photo_records (
+           photo_id, album_id, record_version, blob_ref, sealed_metadata,
+           has_thumb, has_mid, created_at, updated_at
+         ) VALUES (@photoId, 'protected-a', 1, @blobRef, x'01', 1, 1, @now, @now)`,
+        { photoId, blobRef: photoId === 'photo-a' ? 'b'.repeat(64) : 'c'.repeat(64), now: '2026-07-16T12:00:00.000Z' },
+      );
+    }
+    migrations.prepare({
+      migrationId: 'unprotect-many',
+      operation: 'unprotect',
+      sourceAlbumId: 'protected-a',
+      targetAlbumId: null,
+      items: [item('photo-a', 'b'.repeat(64), 'd'.repeat(64)), item('photo-b', 'c'.repeat(64), 'e'.repeat(64))],
+    });
+    migrations.transition('unprotect-many', 'prepare', 'copy');
+    migrations.transition('unprotect-many', 'copy', 'verify');
+    // Two rows in one commit: the unique derivative key must come from each photo, not a shared default.
+    migrations.commitUnprotect(
+      'unprotect-many',
+      new Map([
+        ['photo-a', { photo: photo('photo-a', 'd'.repeat(64)), memberships: [{ albumId: 'ordinary-a', position: 0 }] }],
+        ['photo-b', { photo: photo('photo-b', 'e'.repeat(64)), memberships: [{ albumId: 'ordinary-a', position: 1 }] }],
+      ]),
+    );
+    migrations.markPurging('unprotect-many');
+    migrations.finish('unprotect-many');
+    assert.equal(photos.get('photo-a')?.derivativeKey, 'd'.repeat(64));
+    assert.equal(photos.get('photo-b')?.derivativeKey, 'e'.repeat(64));
+    assert.deepEqual(photos.albumMembers('ordinary-a'), ['photo-a', 'photo-b']);
     db.close();
   });
 

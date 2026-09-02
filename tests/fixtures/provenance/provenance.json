@@ -1,0 +1,46 @@
+{
+  "license": "CC0-1.0",
+  "source": "Generated in-repo by generate-fixtures.mjs (deterministic; re-run to verify byte identity). Synthetic 16×16 gradients; every declaration is written by the script and describes what the file CLAIMS, not what any generator produced.",
+  "fixtures": [
+    {
+      "file": "declared-generator.jpg",
+      "sha256": "a2bc94803099599cf6a36014df93dcf3301f507a0c41385799817a7d40d9b6dd",
+      "declares": "XMP Iptc4xmpExt:DigitalSourceType trainedAlgorithmicMedia + xmp:CreatorTool Adobe Firefly 3.0"
+    },
+    {
+      "file": "declared-edited.jpg",
+      "sha256": "57282e4dd3553fc3401ecae81001c1d11b5b7676b19955b63f8aa169c36515c8",
+      "declares": "XMP compositeWithTrainedAlgorithmicMedia + Photoshop CreatorTool + xmpMM:History softwareAgent Adobe Firefly"
+    },
+    {
+      "file": "declared-tool.jpg",
+      "sha256": "67fee30b0811455744e2105c004807a3033fb90a99a69f061e1c38fe007c3808",
+      "declares": "XMP xmp:CreatorTool Adobe Photoshop 25.0 (Macintosh) only"
+    },
+    {
+      "file": "declared-exif-software.jpg",
+      "sha256": "bed07a8b0d2f1b0001412615a2203b04187fdb19d3536dc2f383a4961781a593",
+      "declares": "EXIF IFD0 Software Midjourney v6"
+    },
+    {
+      "file": "credential-stub.jpg",
+      "sha256": "4bd91d996d5424e3dcdc69647dc840070e2bf1c921e6808e103f977af4dfbb0b",
+      "declares": "JPEG APP11 JUMBF superbox labelled c2pa — a container stub with no manifest and no signature (never valid)"
+    },
+    {
+      "file": "unknown.jpg",
+      "sha256": "f3e579af804574a5442e8348f8b990cb7789a1576a64424b99bf32fe29c16365",
+      "declares": "nothing"
+    },
+    {
+      "file": "png-parameters.png",
+      "sha256": "86dae494fb8ef7ac1bd608900e4e6e1f20fd921719d74c05e0649be91fb15db9",
+      "declares": "PNG tEXt parameters in the AUTOMATIC1111 form"
+    },
+    {
+      "file": "declared-sidecar.xmp",
+      "sha256": "05adccecbb5706d48608b5ba5b0fea6471ea5628827d002bc25db5a6a54e4b65",
+      "declares": "XMP sidecar with the declared-generator packet"
+    }
+  ]
+}
