@@ -932,14 +932,25 @@ export function registerRestoreHandlers(getFacade: () => RestoreFacade): void {
   );
 }
 
+export interface ExportEditsIntent {
+  readonly mode?: 'baked' | 'original-sidecars' | 'original' | undefined;
+  readonly quality?: number | undefined;
+}
+
 export interface ExportFacade {
   run(
     photoIds: readonly string[],
     destination: string,
     format?: 'original' | 'jpeg',
     metadata?: 'original' | 'overlook' | 'none',
+    edits?: ExportEditsIntent,
   ): Promise<ExportRunResult>;
-  runAll(destination: string, metadata?: 'original' | 'overlook' | 'none'): Promise<ExportRunResult>;
+  runAll(destination: string, metadata?: 'original' | 'overlook' | 'none', edits?: ExportEditsIntent): Promise<ExportRunResult>;
+  /** §6 loss report; null photoIds = every exportable photo. */
+  preflight(
+    photoIds: readonly string[] | null,
+    mode: 'baked' | 'original-sidecars' | 'original',
+  ): Promise<{ readonly edited: number; readonly losses: readonly { photoId: string; fileName: string; reason: string }[] }>;
   runBoard(request: BoardExportRequest): Promise<BoardExportResult>;
   cancel(): void;
   pickDestination(): Promise<string | null>;
@@ -950,6 +961,8 @@ export interface ExportRunResult {
   readonly failed: number;
   readonly cancelled: number;
   readonly previewTranscodes: number;
+  readonly bakedEdits: number;
+  readonly editSidecars: number;
   readonly failures: { photoId: string; fileName: string; reason: string }[];
 }
 
@@ -959,33 +972,39 @@ export function registerExportHandlers(
   destinationAuthority = new ExportDestinationAuthority(),
 ): void {
   ipcMain.handle(channels.exportRun.name, (event, request: unknown) =>
-    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format, metadata }) => {
+    wrapHandler(channels.exportRun, async ({ photoIds, authorization, format, metadata, mode, quality }) => {
       const destination = destinationAuthority.consume(
         event.sender.id,
-        { operation: 'selected', photoIds, format, metadata },
+        { operation: 'selected', photoIds, format, metadata, mode, quality },
         authorization,
       );
-      const result = await getFacade().run(photoIds, destination, format, metadata);
+      const result = await getFacade().run(photoIds, destination, format, metadata, { mode, quality });
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: format ?? 'original', metadata: metadata ?? 'original', ...summary },
+        payload: { format: format ?? 'original', metadata: metadata ?? 'original', mode: mode ?? null, ...summary },
       });
       return result;
     })(request),
   );
   ipcMain.handle(channels.exportRunAll.name, (event, request: unknown) =>
-    wrapHandler(channels.exportRunAll, async ({ authorization, metadata }) => {
-      const destination = destinationAuthority.consume(event.sender.id, { operation: 'all', metadata }, authorization);
-      const result = await getFacade().runAll(destination, metadata);
+    wrapHandler(channels.exportRunAll, async ({ authorization, metadata, mode, quality }) => {
+      const destination = destinationAuthority.consume(event.sender.id, { operation: 'all', metadata, mode, quality }, authorization);
+      const result = await getFacade().runAll(destination, metadata, { mode, quality });
       const { failures: _failures, ...summary } = result;
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: [],
         outcome: result.failed > 0 || result.cancelled > 0 ? 'partial' : 'succeeded',
-        payload: { format: 'original', metadata: metadata ?? 'original', scope: 'all', ...summary },
+        payload: {
+          format: mode === 'baked' ? 'jpeg' : 'original',
+          metadata: metadata ?? 'original',
+          mode: mode ?? null,
+          scope: 'all',
+          ...summary,
+        },
       });
       return result;
     })(request),
@@ -1015,6 +1034,12 @@ export function registerExportHandlers(
     wrapHandler(channels.exportCancel, () => {
       getFacade().cancel();
       return {};
+    })(request),
+  );
+  ipcMain.handle(channels.exportPreflight.name, (_event, request: unknown) =>
+    wrapHandler(channels.exportPreflight, async ({ photoIds, mode }) => {
+      const report = await getFacade().preflight(photoIds ?? null, mode);
+      return { edited: report.edited, losses: [...report.losses] };
     })(request),
   );
   ipcMain.handle(channels.exportPickDestination.name, (event, request: unknown) =>

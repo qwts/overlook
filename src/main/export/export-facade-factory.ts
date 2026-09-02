@@ -1,3 +1,4 @@
+import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { createExportRuntime, type DrainableExportFacade } from './export-runtime.js';
@@ -21,10 +22,13 @@ export interface ExportFacadeFactoryDeps {
 export function createExportFacade(deps: ExportFacadeFactoryDeps): DrainableExportFacade {
   const repo = new PhotosRepository(deps.db);
   const sidecars = new SidecarRepository(deps.db);
+  const revisions = new EditRevisionRepository(deps.db);
   return createExportRuntime({
     repo: { get: (id) => repo.get(id), exportableIds: () => repo.exportableIds() },
     blobs: deps.blobStore,
     resolveKey: deps.resolveKey,
+    // The head revision decides what Baked renders and Original + XMP carries (#497).
+    editHead: (photoId) => revisions.head(photoId).head,
     // Companions export beside their originals (#484, ADR-0031 §6).
     sidecarsFor: (photoId) => sidecars.listForPhoto(photoId),
     sidecarStream: (photoId, contentHash) => deps.blobStore.getSidecarStream(photoId, contentHash, deps.resolveKey),

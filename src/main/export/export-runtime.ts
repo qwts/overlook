@@ -5,7 +5,8 @@ import { buffer } from 'node:stream/consumers';
 
 import type { KeyResolver } from '../crypto/envelope.js';
 import type { ExportFacade } from '../ipc.js';
-import { ExportEngine, writeFileCleanly, type ExportMetadataMode } from './export-engine.js';
+import { ExportEngine, writeFileCleanly, type ExportEditOptions, type ExportMetadataMode } from './export-engine.js';
+import type { EditRevisionView } from '../db/edit-revision-repository.js';
 import { transcodeToJpeg } from './transcode.js';
 import { BoardExportCancelledError, exportBoardPng } from './board-export.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
@@ -21,6 +22,8 @@ export interface ExportRuntimeOptions {
   };
   readonly blobs: { readonly getStream: (contentHash: string, resolveKey: KeyResolver, photoId: string) => Readable };
   readonly resolveKey: KeyResolver;
+  /** The head edit revision (#497); absent = no edits anywhere. */
+  readonly editHead?: ((photoId: string) => EditRevisionView | null) | undefined;
   readonly openOriginal: (photo: PhotoRecord) => Promise<{
     readonly stream: Readable;
     readonly release?: (() => Promise<void>) | undefined;
@@ -40,6 +43,7 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     blobs: options.blobs,
     resolveKey: options.resolveKey,
     openOriginal: options.openOriginal,
+    ...(options.editHead === undefined ? {} : { editHead: options.editHead }),
     ...(options.custodyStatus === undefined ? {} : { custodyStatus: options.custodyStatus }),
     ...(options.sidecarsFor === undefined ? {} : { sidecarsFor: options.sidecarsFor }),
     ...(options.sidecarStream === undefined ? {} : { sidecarStream: options.sidecarStream }),
@@ -66,17 +70,20 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     destination: string,
     format: 'original' | 'jpeg' = 'original',
     metadata: ExportMetadataMode = 'original',
+    edits: ExportEditOptions = {},
   ) => {
     const task = async () => {
       if (closed) throw new Error('export service is closed');
       controller = new AbortController();
       try {
-        const summary = await engine.exportPhotos(photoIds(), destination, controller.signal, format, metadata);
+        const summary = await engine.exportPhotos(photoIds(), destination, controller.signal, format, metadata, edits);
         return {
           exported: summary.exported,
           failed: summary.failed,
           cancelled: summary.cancelled,
           previewTranscodes: summary.previewTranscodes,
+          bakedEdits: summary.bakedEdits,
+          editSidecars: summary.editSidecars,
           failures: [...summary.failures],
         };
       } finally {
@@ -139,8 +146,10 @@ export function createExportRuntime(options: ExportRuntimeOptions): DrainableExp
     return next;
   };
   return {
-    run: (photoIds, destination, format, metadata) => schedule(() => photoIds, destination, format, metadata),
-    runAll: (destination, metadata) => schedule(options.repo.exportableIds, destination, 'original', metadata),
+    run: (photoIds, destination, format, metadata, edits) => schedule(() => photoIds, destination, format, metadata, edits),
+    runAll: (destination, metadata, edits) =>
+      schedule(options.repo.exportableIds, destination, edits?.mode === 'baked' ? 'jpeg' : 'original', metadata, edits),
+    preflight: (photoIds, mode) => Promise.resolve(engine.preflightEdits(photoIds ?? options.repo.exportableIds(), mode)),
     runBoard: scheduleBoard,
     cancel: () => controller?.abort(),
     close: () => {

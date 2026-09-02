@@ -13,14 +13,25 @@ function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
 }
 
 const metadataMode = z.enum(['original', 'overlook', 'none']);
+// #497 (ADR-0031 §6): one declared payload mode; `format: 'jpeg'` stays
+// accepted on the wire as Baked. `quality` applies to Baked only.
+const payloadMode = z.enum(['baked', 'original-sidecars', 'original']);
+const jpegQuality = z.number().int().min(1).max(100);
 const authorization = z.string().uuid();
 const selectedExportIntent = z.object({
   operation: z.literal('selected'),
   photoIds: z.array(z.string().min(1)).min(1),
   format: z.enum(['original', 'jpeg']).optional(),
   metadata: metadataMode.optional(),
+  mode: payloadMode.optional(),
+  quality: jpegQuality.optional(),
 });
-const allExportIntent = z.object({ operation: z.literal('all'), metadata: metadataMode.optional() });
+const allExportIntent = z.object({
+  operation: z.literal('all'),
+  metadata: metadataMode.optional(),
+  mode: payloadMode.optional(),
+  quality: jpegQuality.optional(),
+});
 const boardExportIntent = z.object({ operation: z.literal('board'), request: boardExportIntentSchema });
 export const exportDestinationIntentSchema = z.discriminatedUnion('operation', [selectedExportIntent, allExportIntent, boardExportIntent]);
 const result = z.object({
@@ -28,6 +39,8 @@ const result = z.object({
   failed: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
   previewTranscodes: z.number().int().nonnegative(),
+  bakedEdits: z.number().int().nonnegative(),
+  editSidecars: z.number().int().nonnegative(),
   failures: z.array(
     z.object({ photoId: z.string(), fileName: z.string(), reason: z.string(), custody: photoCustodyStatusSchema.optional() }),
   ),
@@ -44,6 +57,17 @@ export const exportChannels = {
   exportRunAll: channel('export:run-all', allExportIntent.omit({ operation: true }).extend({ authorization }), result),
   exportRunBoard: channel('export:run-board', boardExportIntentSchema.extend({ authorization }), boardExportResultSchema),
   exportCancel: channel('export:cancel', z.object({}), z.object({})),
+  /** §6 loss report: absent photoIds = every exportable photo (Export all). */
+  exportPreflight: channel(
+    'export:preflight',
+    z.object({ photoIds: z.array(z.string().min(1)).optional(), mode: payloadMode }),
+    z.object({
+      edited: z.number().int().nonnegative(),
+      losses: z.array(z.object({ photoId: z.string(), fileName: z.string(), reason: z.string() })),
+    }),
+  ),
 } as const;
+
+export type ExportPayloadMode = z.output<typeof payloadMode>;
 
 export type ExportDestinationIntent = z.output<typeof exportDestinationIntentSchema>;

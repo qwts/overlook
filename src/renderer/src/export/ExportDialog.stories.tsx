@@ -11,8 +11,14 @@ import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.j
 
 const IDS = ['A', 'B', 'C'];
 
-function installStub(custodyFailure?: PhotoCustodyStatus): void {
+interface PreflightStub {
+  readonly edited: number;
+  readonly losses: readonly { photoId: string; fileName: string; reason: string }[];
+}
+
+function installStub(custodyFailure?: PhotoCustodyStatus, preflight: PreflightStub = { edited: 0, losses: [] }): void {
   const exportApi: OverlookApi['export'] = {
+    preflight: () => Promise.resolve({ edited: preflight.edited, losses: [...preflight.losses] }),
     pickDestination: () => Promise.resolve({ path: '/Users/demo/Exports', authorization: '00000000-0000-4000-8000-000000000001' }),
     revokeDestination: () => Promise.resolve({ revoked: true }),
     runAll: async () => {
@@ -20,7 +26,7 @@ function installStub(custodyFailure?: PhotoCustodyStatus): void {
         await new Promise((resolve) => setTimeout(resolve, 40));
         listener?.({ done, total: IDS.length });
       }
-      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] };
+      return { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 0, bakedEdits: 0, editSidecars: 0, failures: [] };
     },
     run: async () => {
       for (let done = 1; done <= IDS.length; done += 1) {
@@ -28,12 +34,14 @@ function installStub(custodyFailure?: PhotoCustodyStatus): void {
         listener?.({ done, total: IDS.length });
       }
       return custodyFailure === undefined
-        ? { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, failures: [] }
+        ? { exported: IDS.length, failed: 0, cancelled: 0, previewTranscodes: 1, bakedEdits: 0, editSidecars: 0, failures: [] }
         : {
             exported: IDS.length - 1,
             failed: 1,
             cancelled: 0,
             previewTranscodes: 0,
+            bakedEdits: 0,
+            editSidecars: 0,
             failures: [{ photoId: IDS[0] ?? 'A', fileName: 'IMG_4021.RAF', reason: 'custody failed', custody: custodyFailure }],
           };
     },
@@ -66,7 +74,10 @@ const meta: Meta<typeof ExportDialog> = {
   args: { open: true, photoIds: IDS, onClose: fn() },
   decorators: [
     (Story, context) => {
-      installStub(context.parameters['custodyFailure'] as PhotoCustodyStatus | undefined);
+      installStub(
+        context.parameters['custodyFailure'] as PhotoCustodyStatus | undefined,
+        context.parameters['preflight'] as PreflightStub | undefined,
+      );
       return <Story />;
     },
   ],
@@ -124,7 +135,8 @@ export const AllUnencrypted: Story = {
     await expect(body.getByText('Every photo in this library')).toBeVisible();
     await expect(body.getByText('Unencrypted originals')).toBeVisible();
     await expect(body.queryByRole('switch', { name: 'Decrypt originals' })).toBeNull();
-    await expect(body.queryByRole('group', { name: 'Format' })).toBeNull();
+    // #497: Export all declares its payload mode like a selection does.
+    await expect(body.getByRole('group', { name: 'Edits' })).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: 'Export all photos' })).toBeEnabled();
   },
@@ -150,5 +162,34 @@ export const ProviderRequiredFailure: Story = {
         selector: '.ovl-copyable-value__text',
       }),
     ).toBeVisible();
+  },
+};
+
+// #497 (ADR-0031 §6): the preflight names an edit the mode cannot carry; Export
+// stays disabled until the user continues with the loss or picks another mode.
+export const EditLossReport: Story = {
+  parameters: {
+    preflight: {
+      edited: 2,
+      losses: [{ photoId: 'A', fileName: 'IMG_4021.RAF', reason: 'tone-curve v2' }],
+    } satisfies PreflightStub,
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
+    const losses = await body.findByTestId('export-edits-losses');
+    await expect(losses).toHaveTextContent('IMG_4021.RAF: tone-curve v2');
+    await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeDisabled();
+    await userEvent.click(body.getByRole('switch', { name: 'Continue with these losses' }));
+    await expect(body.getByRole('button', { name: /Export 3 photos/u })).toBeEnabled();
+    // Original only omits every edit by design: a statement, not a loss to acknowledge.
+    await userEvent.click(body.getByRole('radio', { name: 'Original only' }));
+    await expect(await body.findByTestId('export-edits-omitted')).toHaveTextContent(
+      '2 photos have presentation edits that will not be exported.',
+    );
+    await expect(body.queryByTestId('export-edits-losses')).toBeNull();
+    // Bake shows its explicit quality.
+    await userEvent.click(body.getByRole('radio', { name: 'Bake' }));
+    await expect(body.getByRole('group', { name: 'JPEG quality' })).toBeVisible();
   },
 };

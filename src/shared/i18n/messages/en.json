@@ -560,6 +560,51 @@
   "export.destination.label": {
     "defaultMessage": "Export destination"
   },
+  "export.edits.acknowledge": {
+    "defaultMessage": "Continue with these losses"
+  },
+  "export.edits.bake": {
+    "defaultMessage": "Bake"
+  },
+  "export.edits.bakeHint": {
+    "defaultMessage": "Render the saved rotation, flip, and crop into a new JPEG. Embedded metadata is not carried over."
+  },
+  "export.edits.label": {
+    "defaultMessage": "Edits"
+  },
+  "export.edits.lossItem": {
+    "defaultMessage": "{fileName}: {reason}"
+  },
+  "export.edits.losses": {
+    "defaultMessage": "{count, plural, one {# edit} other {# edits}} cannot travel in this mode:"
+  },
+  "export.edits.omitted": {
+    "defaultMessage": "{count, plural, one {# photo has} other {# photos have}} presentation edits that will not be exported."
+  },
+  "export.edits.originalOnly": {
+    "defaultMessage": "Original only"
+  },
+  "export.edits.originalOnlyHint": {
+    "defaultMessage": "Write the byte-identical original and nothing beside it. Presentation edits and companion sidecars are omitted."
+  },
+  "export.edits.originalXmp": {
+    "defaultMessage": "Original + XMP"
+  },
+  "export.edits.originalXmpHint": {
+    "defaultMessage": "Write the byte-identical original beside an XMP sidecar that names the saved rotation, flip, and crop."
+  },
+  "export.edits.quality": {
+    "defaultMessage": "JPEG quality"
+  },
+  "export.edits.quality.best": {
+    "defaultMessage": "Best · 95"
+  },
+  "export.edits.quality.high": {
+    "defaultMessage": "High · 90"
+  },
+  "export.edits.quality.small": {
+    "defaultMessage": "Small · 80"
+  },
   "export.everyPhoto": {
     "defaultMessage": "Every photo in this library"
   },

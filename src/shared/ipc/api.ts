@@ -270,6 +270,7 @@ export interface OverlookApi {
     readonly runAll: (request: Req<typeof channels.exportRunAll>) => Promise<Res<typeof channels.exportRunAll>>;
     readonly runBoard: (request: Req<typeof channels.exportRunBoard>) => Promise<Res<typeof channels.exportRunBoard>>;
     readonly cancel: (request: Req<typeof channels.exportCancel>) => Promise<Res<typeof channels.exportCancel>>;
+    readonly preflight: (request: Req<typeof channels.exportPreflight>) => Promise<Res<typeof channels.exportPreflight>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.exportProgress.payload>) => void) => () => void;
   };
   readonly keys: {

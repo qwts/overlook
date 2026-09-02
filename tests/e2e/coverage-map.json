@@ -400,6 +400,19 @@
       ]
     },
     {
+      "id": "497-edited-export",
+      "wiki": "Acceptance-Test-Edited-Export",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/export-edits.spec.ts" },
+        { "type": "storybook", "path": "src/renderer/src/export/ExportDialog.stories.tsx" },
+        { "type": "unit-dom", "paths": ["tests/export/edit-xmp.test.ts", "tests/export/export-engine.test.ts"] },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check."
+        }
+      ]
+    },
+    {
       "id": "496-variants",
       "wiki": "Acceptance-Test-Variants",
       "coverage": [
