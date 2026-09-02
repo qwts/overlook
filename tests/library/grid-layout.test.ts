@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   anchorIndex,
+  computeFeedLayout,
   computeLayout,
   computeListLayout,
   needsMore,
@@ -137,6 +138,28 @@ describe('grid layout math', () => {
     const range = visibleRange(layout, 8 + 54 * 100, 700, 2);
     assert.equal(range.firstIndex, 98); // row 100 minus overscan
     assert.ok(range.lastIndex >= 100 + Math.floor(700 / 54));
+  });
+
+  test('feed mode centers one capped column of fixed-height cards (#516)', () => {
+    const spec = { viewportWidth: 1200, cardHeight: 536, gap: 16, padding: 16, maxWidth: 720, total: 12 };
+    const wide = computeFeedLayout(spec);
+    assert.equal(wide.columns, 1);
+    assert.equal(wide.cellWidth, 720);
+    assert.equal(wide.columnStart, 16 + (1168 - 720) / 2);
+    assert.equal(wide.tileSize, 536);
+    assert.equal(wide.rowHeight, 552);
+    assert.equal(wide.totalHeight, 32 + 12 * 552 - 16);
+    assert.deepEqual(tilePosition(wide, 3), { left: wide.columnStart, top: 16 + 3 * 552 });
+    // Narrower than the cap: the column fills the inner width from the padding.
+    const narrow = computeFeedLayout({ ...spec, viewportWidth: 600 });
+    assert.equal(narrow.cellWidth, 568);
+    assert.equal(narrow.columnStart, 16);
+    assert.equal(computeFeedLayout({ ...spec, total: 0 }).totalHeight, 0);
+    // A grid anchor lands inside the feed window after the mode switch.
+    const grid = computeLayout({ viewportWidth: 1200, zoom: 160, gap: GAP, total: 12 });
+    const anchor = anchorIndex(grid, grid.rowHeight) ?? 0;
+    const range = visibleRange(wide, scrollTopForAnchor(wide, anchor), 800, 0);
+    assert.ok(anchor >= range.firstIndex && anchor <= range.lastIndex);
   });
 
   test('grid → list toggle keeps the anchor photo in the window', () => {

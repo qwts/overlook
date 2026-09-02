@@ -362,6 +362,22 @@
       ]
     },
     {
+      "id": "516-feed-view",
+      "wiki": "Acceptance-Test-Feed-View",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/feed-view.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/grid/FeedCard.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/grid-layout.test.ts", "tests/library/app-state.test.ts", "tests/main/application-menu-model.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Feed-View.md for the responsive column, the progressive fade and its reduced-motion variant, the offloaded and unavailable states, Trash retention labels, and screen-reader announcements over a real library."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

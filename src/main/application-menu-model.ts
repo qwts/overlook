@@ -69,6 +69,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return (context.surface === 'grid' || context.surface === 'lightbox') && context.dialog === 'none';
     case 'view.mode.grid':
     case 'view.mode.list':
+    case 'view.mode.feed':
     case 'view.mode.moodboard':
       return context.surface === 'grid' && context.dialog === 'none';
     case 'view.lightbox.close':
@@ -105,9 +106,6 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return (context.surface === 'grid' || context.surface === 'lightbox') && context.dialog === 'none';
     case 'selection.clear':
       return context.surface === 'grid' && context.dialog === 'none' && !context.editable && context.selectionCount > 0;
-    // Feed view has not landed yet (#689) — the item stays disabled.
-    case 'view.mode.feed':
-      return false;
     case 'album.rename':
     case 'album.delete':
     case 'album.transfer':
@@ -292,7 +290,7 @@ function macApplicationMenuTemplate(
         separator,
         commandItem('view.mode.grid', context, dispatch, translate, { type: 'radio', checked: context.view === 'grid' }),
         commandItem('view.mode.list', context, dispatch, translate, { type: 'radio', checked: context.view === 'list' }),
-        commandItem('view.mode.feed', context, dispatch, translate, { type: 'radio', checked: false }),
+        commandItem('view.mode.feed', context, dispatch, translate, { type: 'radio', checked: context.view === 'feed' }),
         commandItem('view.mode.moodboard', context, dispatch, translate, { type: 'radio', checked: context.view === 'moodboard' }),
         separator,
         commandItem('view.inspector.toggle', context, dispatch, translate, { type: 'checkbox', checked: context.inspectorOpen }),

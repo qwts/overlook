@@ -24,7 +24,7 @@ export const commandMenuContextSchema = z
     providerBusy: z.boolean(),
     pcloudEnabled: z.boolean(),
     inspectorOpen: z.boolean(),
-    view: z.enum(['grid', 'list', 'moodboard']),
+    view: z.enum(['grid', 'list', 'feed', 'moodboard']),
     source: z.enum(['all', 'favorites', 'recent', 'raw', 'offloaded', 'unavailable', 'deleted']),
   })
   .strict();

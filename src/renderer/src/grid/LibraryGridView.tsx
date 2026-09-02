@@ -11,6 +11,7 @@ import { PhotoTile } from '../components/PhotoTile';
 import { activePredicate } from '../../../shared/library/app-state.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
+import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
 import { AlbumPicker } from './AlbumPicker';
@@ -459,28 +460,32 @@ export function LibraryGridView({
     // Cache-bust the thumb/poster URL once a derivative is (re)generated in
     // place, so the tile reloads without a navigation (thumbEpoch, #548 §6).
     const epoch = state.thumbEpoch[photo.id];
-    const tileSrc = epoch === undefined ? thumbUrl(photo.id) : `${thumbUrl(photo.id)}&v=${String(epoch)}`;
-    return state.view === 'list' ? (
-      <ListRow
-        photo={photo}
-        src={tileSrc}
-        accessibleName={accessibleName}
-        selected={state.selection.has(photo.id)}
-        onOpen={() => {
+    const bust = (url: string): string => (epoch === undefined ? url : `${url}&v=${String(epoch)}`);
+    const tileSrc = bust(thumbUrl(photo.id));
+    if (state.view === 'list' || state.view === 'feed') {
+      // ListRow and FeedCard (#516) share one contract; only the layout differs.
+      const rowProps = {
+        photo,
+        src: tileSrc,
+        accessibleName,
+        selected: state.selection.has(photo.id),
+        onOpen: () => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
-        }}
-        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
-        onToggleFavorite={() => toggleFavorite(photo)}
-        favoritePending={favoritePending.has(photo.id)}
-        retentionLabel={retentionLabel}
-        onContextAction={(point) => openContextMenu(photo, point)}
-        quickActions={quickActions}
-        onQuickActionTargetChange={onQuickActionTargetChange}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        {...keyboard}
-      />
-    ) : (
+        },
+        onToggleSelect: (extend: boolean) => selectPhoto(photo.id, extend),
+        onToggleFavorite: () => toggleFavorite(photo),
+        favoritePending: favoritePending.has(photo.id),
+        retentionLabel,
+        onContextAction: (point: Parameters<typeof openContextMenu>[1]) => openContextMenu(photo, point),
+        quickActions,
+        onQuickActionTargetChange,
+        onDragStart,
+        onDragEnd,
+        ...keyboard,
+      };
+      return state.view === 'feed' ? <FeedCard {...rowProps} fullSrc={bust(thumbUrl(photo.id, 'mid'))} /> : <ListRow {...rowProps} />;
+    }
+    return (
       <PhotoTile
         src={tileSrc}
         alt={photo.fileName}
@@ -519,7 +524,7 @@ export function LibraryGridView({
         photos={state.photos}
         total={total}
         zoom={state.zoom}
-        mode={state.view === 'list' ? 'list' : 'grid'}
+        mode={state.view === 'list' || state.view === 'feed' ? state.view : 'grid'}
         topInset={inTrash}
         onNeedMore={loadMore}
         renderTile={renderTile}

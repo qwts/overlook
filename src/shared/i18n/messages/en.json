@@ -716,6 +716,21 @@
   "favorite.remove": {
     "defaultMessage": "Remove from Favorites"
   },
+  "feed.deselect": {
+    "defaultMessage": "Deselect {photo}"
+  },
+  "feed.noDescription": {
+    "defaultMessage": "No description"
+  },
+  "feed.open": {
+    "defaultMessage": "Open {photo}"
+  },
+  "feed.protectedOriginal": {
+    "defaultMessage": "Protected Original"
+  },
+  "feed.select": {
+    "defaultMessage": "Select {photo}"
+  },
   "grid.regionLabel": {
     "defaultMessage": "Photos"
   },
@@ -2635,6 +2650,9 @@
   },
   "toolbar.view": {
     "defaultMessage": "View"
+  },
+  "toolbar.view.feed": {
+    "defaultMessage": "Feed"
   },
   "toolbar.view.grid": {
     "defaultMessage": "Grid"

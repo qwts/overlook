@@ -39,6 +39,7 @@ const messages = defineMessages({
   view: { id: 'toolbar.view', defaultMessage: 'View' },
   viewGrid: { id: 'toolbar.view.grid', defaultMessage: 'Grid' },
   viewList: { id: 'toolbar.view.list', defaultMessage: 'List' },
+  viewFeed: { id: 'toolbar.view.feed', defaultMessage: 'Feed' },
   viewMoodboard: { id: 'toolbar.view.moodboard', defaultMessage: 'Moodboard' },
   zoom: { id: 'toolbar.zoom', defaultMessage: 'Zoom' },
   region: { id: 'toolbar.region', defaultMessage: 'Photo tools' },
@@ -169,6 +170,7 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
           options={[
             { value: 'grid', label: intl.formatMessage(messages.viewGrid), icon: 'layout-grid', iconOnly: true },
             { value: 'list', label: intl.formatMessage(messages.viewList), icon: 'list', iconOnly: true },
+            { value: 'feed', label: intl.formatMessage(messages.viewFeed), icon: 'captions', iconOnly: true },
             { value: 'moodboard', label: intl.formatMessage(messages.viewMoodboard), icon: 'layout-dashboard', iconOnly: true },
           ]}
           value={state.view}

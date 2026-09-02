@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, type Dispatch } from 'react';
 
 import type { CommandId, CommandSurface } from '../../../shared/commands/registry.js';
-import type { AppAction, AppState } from '../../../shared/library/app-state.js';
+import type { AppAction, AppState, ViewMode } from '../../../shared/library/app-state.js';
 import type { SettingsSection } from '../settings/SettingsDialog';
 import { getApplicationThemeLayer } from '../theme/user-theme-layer';
 import { deletePhoto } from './delete-photo';
+
+const VIEW_MODE_BY_COMMAND = {
+  'view.mode.grid': 'grid',
+  'view.mode.list': 'list',
+  'view.mode.feed': 'feed',
+  'view.mode.moodboard': 'moodboard',
+} as const satisfies Partial<Record<CommandId, ViewMode>>;
 
 /**
  * Routes a native-menu / shortcut command (delivered over IPC as an
@@ -171,11 +178,9 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         case 'view.mode.grid':
         case 'view.mode.list':
+        case 'view.mode.feed':
         case 'view.mode.moodboard':
-          dispatch({
-            type: 'view/set',
-            view: commandId === 'view.mode.grid' ? 'grid' : commandId === 'view.mode.list' ? 'list' : 'moodboard',
-          });
+          dispatch({ type: 'view/set', view: VIEW_MODE_BY_COMMAND[commandId] });
           return;
         case 'view.lightbox.close':
           dispatch({ type: 'lightbox/closed' });
