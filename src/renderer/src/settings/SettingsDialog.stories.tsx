@@ -258,6 +258,54 @@ function installStub(options?: {
     pickFile: () => Promise.resolve({ path: null }),
     import: () => Promise.resolve({ installed: false, fingerprint: null, reason: 'invalid' as const }),
   } as unknown as OverlookApi['keys'];
+  const keyringApi: OverlookApi['keyring'] = {
+    list: () =>
+      Promise.resolve({
+        keys: [
+          {
+            id: 1,
+            keyRef: '0f1e2d3c4b5a69788796a5b4c3d2e1f0',
+            version: 1,
+            kind: 'library' as const,
+            origin: 'local' as const,
+            label: null,
+            fingerprint: '9F2C·4A81·D0E7·5B3A',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            present: true,
+            active: false,
+            databaseKey: true,
+            usage: { photos: 0, sidecars: 0, bytes: 0 },
+          },
+          {
+            id: 2,
+            keyRef: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
+            version: 1,
+            kind: 'library' as const,
+            origin: 'local' as const,
+            label: null,
+            fingerprint: '7C0A·11F4·9B2E·D6A3',
+            createdAt: '2026-07-02T00:00:00.000Z',
+            present: true,
+            active: true,
+            databaseKey: false,
+            usage: { photos: 48, sidecars: 2, bytes: 1_240_000 },
+          },
+        ],
+      }),
+    export: () => Promise.resolve({ path: null }),
+    pickFile: () => Promise.resolve({ path: null }),
+    import: () => Promise.resolve({ outcome: 'refused' as const, keyId: null, fingerprint: null, unlocked: 0, reason: 'invalid' as const }),
+    removePreflight: () =>
+      Promise.resolve({
+        allowed: false,
+        reason: 'write-key' as const,
+        tier: 'irreversible' as const,
+        usage: { photos: 48, sidecars: 2, bytes: 1_240_000 },
+        entry: null,
+      }),
+    remove: () => Promise.resolve({ removed: false, reason: 'write-key' as const, locked: 0 }),
+    setLabel: () => Promise.resolve({}),
+  };
   const restoreApi: OverlookApi['restore'] = {
     profileStatus: () => Promise.resolve({ fresh: false }),
     pickKey: () => Promise.resolve({ path: '/Users/ansel/Desktop/overlook-recovery.key' }),
@@ -501,6 +549,7 @@ function installStub(options?: {
     embedding: createEmbeddingStoryController().api,
     backup: backupApi,
     keys: keysApi,
+    keyring: keyringApi,
     restore: restoreApi,
     appLock: appLockApi,
     diagnostics: diagnosticsApi,

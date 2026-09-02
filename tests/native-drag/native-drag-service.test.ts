@@ -50,6 +50,7 @@ function photo(id: string, fileName = `${id}.JPG`): PhotoRecord {
     mediaInfo: null,
     syncState: 'local',
     coverage: 'included',
+    locked: false,
   };
 }
 

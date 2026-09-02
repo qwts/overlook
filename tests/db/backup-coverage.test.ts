@@ -63,8 +63,7 @@ function world() {
 describe('backup coverage column (#506, migration 35)', () => {
   test('migration 35 adds the column with its default, CHECK and partial index', () => {
     const w = world();
-    assert.equal(MIGRATIONS.at(-1)?.version, 35);
-    assert.equal(MIGRATIONS.at(-1)?.name, 'backup-coverage');
+    assert.equal(MIGRATIONS.find((migration) => migration.version === 35)?.name, 'backup-coverage');
     w.insert('P1');
     assert.deepEqual(w.ledger.coverage('P1'), { coverage: 'included', origin: null, since: null });
     assert.equal(w.repo.get('P1')?.coverage, 'included', 'the record carries the column');

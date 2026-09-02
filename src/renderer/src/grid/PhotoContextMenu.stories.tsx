@@ -36,6 +36,7 @@ const PHOTO: PhotoRecord = {
   mediaInfo: null,
   syncState: 'synced',
   coverage: 'included',
+  locked: false,
   title: null,
   description: null,
   tags: [],

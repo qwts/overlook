@@ -478,6 +478,33 @@
       ]
     },
     {
+      "id": "517-keyring",
+      "wiki": "Acceptance-Test-Keyring",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/keyring.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/keyring/KeyringSection.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/crypto/keyring-service.test.ts",
+            "tests/crypto/key-file.test.ts",
+            "tests/db/keyring.test.ts",
+            "tests/backup/keyring-manifest.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Keyring.md for the relaunch persistence of locked photos, the impostor key file, the restore from a bootstrap that lacks a key, and the pre-36 library upgrade over a real library."
+        }
+      ]
+    },
+    {
       "id": "498-histogram",
       "wiki": "Acceptance-Test-Histogram",
       "coverage": [

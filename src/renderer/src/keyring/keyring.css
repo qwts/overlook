@@ -1,0 +1,88 @@
+/* Keyring section (#517, ADR-0032 §2) — the registry of every key the
+   library has sealed objects under, inside Settings ▸ Privacy. Tokens only. */
+
+.ovl-keyring {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-1);
+}
+
+.ovl-keyring__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.ovl-keyring__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ovl-keyring__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+}
+
+.ovl-keyring__row[data-present='false'] {
+  border-color: var(--accent-amber);
+}
+
+.ovl-keyring__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-keyring__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-body);
+}
+
+.ovl-keyring__meta {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-keyring__empty {
+  font: var(--type-meta);
+  color: var(--text-faint);
+}
+
+/* Removal ceremony: counts of what turns locked, in the mock's mono voice. */
+.ovl-keyring__counts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.ovl-keyring__counts dt {
+  color: var(--text-faint);
+}
+
+.ovl-keyring__counts dd {
+  margin: 0;
+  color: var(--text-body);
+}

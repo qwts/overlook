@@ -1031,6 +1031,12 @@
   "inspector.copy.fileName": {
     "defaultMessage": "filename"
   },
+  "inspector.custody.locked": {
+    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+  },
+  "inspector.custody.lockedThumb": {
+    "defaultMessage": "Locked"
+  },
   "inspector.edits.applied": {
     "defaultMessage": "Applied"
   },
@@ -1349,6 +1355,114 @@
   "interop.conflict.retained": {
     "defaultMessage": "This item will remain at the source for review."
   },
+  "keyring.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "keyring.done": {
+    "defaultMessage": "Done"
+  },
+  "keyring.export.ack": {
+    "defaultMessage": "I understand this password cannot be reset or recovered."
+  },
+  "keyring.export.action": {
+    "defaultMessage": "Export key file"
+  },
+  "keyring.export.confirm": {
+    "defaultMessage": "Confirm password"
+  },
+  "keyring.export.done": {
+    "defaultMessage": "Key file saved to {path}."
+  },
+  "keyring.export.failed": {
+    "defaultMessage": "Export failed — nothing was written."
+  },
+  "keyring.export.mismatch": {
+    "defaultMessage": "Passwords don't match."
+  },
+  "keyring.export.note": {
+    "defaultMessage": "This key opens every photo sealed under it. Anyone with the file and the password can read those photos."
+  },
+  "keyring.export.password": {
+    "defaultMessage": "Encrypt key file with password"
+  },
+  "keyring.export.title": {
+    "defaultMessage": "Export KEY #{id}"
+  },
+  "keyring.import.action": {
+    "defaultMessage": "Verify & import"
+  },
+  "keyring.import.alreadyPresent": {
+    "defaultMessage": "KEY #{id} is already on this device — nothing changed."
+  },
+  "keyring.import.choose": {
+    "defaultMessage": "Choose key file…"
+  },
+  "keyring.import.failed": {
+    "defaultMessage": "Import failed — nothing was installed."
+  },
+  "keyring.import.imported": {
+    "defaultMessage": "KEY #{id} imported · {count, plural, =0 {nothing was locked} one {# photo unlocked} other {# photos unlocked}}"
+  },
+  "keyring.import.invalid": {
+    "defaultMessage": "Not an Overlook key file."
+  },
+  "keyring.import.matchesNothing": {
+    "defaultMessage": "This library has never sealed anything under that key — nothing to unlock."
+  },
+  "keyring.import.mismatch": {
+    "defaultMessage": "A different key already holds that reference on this device. Nothing was installed."
+  },
+  "keyring.import.noMatchingObject": {
+    "defaultMessage": "The password opened the file, but the key does not open any photo it claims to seal. Nothing was installed."
+  },
+  "keyring.import.note": {
+    "defaultMessage": "Import a key file exported from another device. Locked photos sealed under it open as soon as the key is verified."
+  },
+  "keyring.import.title": {
+    "defaultMessage": "Import encryption key"
+  },
+  "keyring.import.wrongPassword": {
+    "defaultMessage": "Wrong password (or a corrupted file). The password cannot be reset — try again."
+  },
+  "keyring.password": {
+    "defaultMessage": "Password"
+  },
+  "keyring.remove.ack": {
+    "defaultMessage": "I have an exported copy of this key, or I accept that these photos become locked."
+  },
+  "keyring.remove.checking": {
+    "defaultMessage": "Checking what this key seals…"
+  },
+  "keyring.remove.count.bytes": {
+    "defaultMessage": "Sealed"
+  },
+  "keyring.remove.count.photos": {
+    "defaultMessage": "Photos"
+  },
+  "keyring.remove.count.sidecars": {
+    "defaultMessage": "Sidecars"
+  },
+  "keyring.remove.done": {
+    "defaultMessage": "KEY #{id} removed · {count, plural, =0 {nothing became locked} one {# photo locked} other {# photos locked}}"
+  },
+  "keyring.remove.failed": {
+    "defaultMessage": "Removal failed — the key is still on this device."
+  },
+  "keyring.remove.refused.absent": {
+    "defaultMessage": "This key is not on this device."
+  },
+  "keyring.remove.refused.database": {
+    "defaultMessage": "KEY #1 also keys the database and cannot be removed."
+  },
+  "keyring.remove.refused.missing": {
+    "defaultMessage": "This key is no longer in the registry."
+  },
+  "keyring.remove.refused.write": {
+    "defaultMessage": "The write key seals new imports and cannot be removed."
+  },
+  "keyring.remove.title": {
+    "defaultMessage": "Remove KEY #{id}?"
+  },
   "libmove.badge.active": {
     "defaultMessage": "Moving…"
   },
@@ -1558,6 +1672,9 @@
   },
   "libmove.title.one": {
     "defaultMessage": "Move library"
+  },
+  "library.photo.locked": {
+    "defaultMessage": "Locked — this device lacks its encryption key"
   },
   "library.photo.moreActions": {
     "defaultMessage": "More actions for {photo}"
@@ -1798,6 +1915,12 @@
   },
   "lightbox.image.loading": {
     "defaultMessage": "Loading full-resolution image…"
+  },
+  "lightbox.locked": {
+    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+  },
+  "lightbox.locked.hint": {
+    "defaultMessage": "Import the key under Settings › Privacy › Encryption keys to view this photo."
   },
   "lightbox.video.ann.ended": {
     "defaultMessage": "Video ended."
@@ -2542,6 +2665,45 @@
   },
   "settings.general.trashRetention.off": {
     "defaultMessage": "Off"
+  },
+  "settings.keyring.badge.absent": {
+    "defaultMessage": "Not on this device"
+  },
+  "settings.keyring.badge.databaseKey": {
+    "defaultMessage": "Database"
+  },
+  "settings.keyring.badge.imported": {
+    "defaultMessage": "Imported"
+  },
+  "settings.keyring.badge.retired": {
+    "defaultMessage": "Retired"
+  },
+  "settings.keyring.badge.writeKey": {
+    "defaultMessage": "Write key"
+  },
+  "settings.keyring.empty": {
+    "defaultMessage": "The keyring is unavailable until the library opens."
+  },
+  "settings.keyring.export": {
+    "defaultMessage": "Export…"
+  },
+  "settings.keyring.hint": {
+    "defaultMessage": "Every key this library has sealed photos under. Export a key before removing it — photos under a removed key stay locked until the same key is imported again."
+  },
+  "settings.keyring.import": {
+    "defaultMessage": "Import key…"
+  },
+  "settings.keyring.keyName": {
+    "defaultMessage": "KEY #{id}"
+  },
+  "settings.keyring.remove": {
+    "defaultMessage": "Remove…"
+  },
+  "settings.keyring.title": {
+    "defaultMessage": "Encryption keys"
+  },
+  "settings.keyring.usage": {
+    "defaultMessage": "{photos, plural, =0 {nothing sealed} one {# photo} other {# photos}}{sidecars, plural, =0 {} one { · # sidecar} other { · # sidecars}} · {bytes}"
   },
   "settings.keys.copyFileName": {
     "defaultMessage": "recovery key filename"

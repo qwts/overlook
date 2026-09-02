@@ -36,6 +36,9 @@ export interface PhotoTileProps {
    * state, never a failed import): 'video' | 'audio' | 'probing'. */
   readonly placeholder?: 'video' | 'audio' | 'probing' | null | undefined;
   readonly retentionLabel?: string | undefined;
+  /** The photo's key is absent from this device (#517): a lock placeholder
+   * stands in for the thumb until the key is imported. */
+  readonly locked?: boolean;
   /** Opens the photo (tile body). */
   readonly onClick?: () => void;
   /** Toggles selection (circle only) — never opens. */
@@ -62,6 +65,7 @@ const messages = defineMessages({
   videoPreservedTitle: { id: 'library.photo.video.preservedTitle', defaultMessage: 'Video — preserved on this device' },
   videoPreservedPill: { id: 'library.photo.video.preservedPill', defaultMessage: 'PRESERVED' },
   unknownDimensions: { id: 'library.photo.unknownDimensions', defaultMessage: 'Dimensions unknown' },
+  locked: { id: 'library.photo.locked', defaultMessage: 'Locked — this device lacks its encryption key' },
 });
 
 /** Kind iconography for placeholder tiles (design §Grid tiles). */
@@ -102,6 +106,7 @@ export function PhotoTile({
   preserved = false,
   placeholder,
   retentionLabel,
+  locked = false,
   onClick,
   onToggleSelect,
   onToggleFavorite,
@@ -120,7 +125,12 @@ export function PhotoTile({
   const intl = useIntl();
   const unavailableLabel = previewFailureLabel(intl, previewFailure);
   const photoName = (accessibleName ?? (alt === '' ? 'photo' : alt)).replace(/^Open /u, '');
-  const classes = ['ovl-tile', selected ? 'ovl-tile--selected' : undefined, status === 'offloaded' ? 'ovl-tile--offloaded' : undefined]
+  const classes = [
+    'ovl-tile',
+    selected ? 'ovl-tile--selected' : undefined,
+    status === 'offloaded' ? 'ovl-tile--offloaded' : undefined,
+    locked ? 'ovl-tile--locked' : undefined,
+  ]
     .filter(Boolean)
     .join(' ');
   return (
@@ -154,7 +164,16 @@ export function PhotoTile({
         onFocus={onFocus}
         onKeyDown={onKeyDown}
       />
-      {placeholder && placeholder !== 'video' ? (
+      {locked ? (
+        <div
+          className="ovl-tile__placeholder ovl-tile__placeholder--locked"
+          role="img"
+          aria-label={intl.formatMessage(messages.locked)}
+          title={intl.formatMessage(messages.locked)}
+        >
+          <Icon name="lock" size={28} strokeWidth={1.75} />
+        </div>
+      ) : placeholder && placeholder !== 'video' ? (
         <div className={`ovl-tile__placeholder${placeholder === 'probing' ? ' ovl-tile__placeholder--probing' : ''}`}>
           <Icon name={PLACEHOLDER_ICON[placeholder]} size={28} strokeWidth={1.75} />
         </div>

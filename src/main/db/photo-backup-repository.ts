@@ -1,7 +1,8 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { BackupManifestSnapshot, BackupManifestSnapshotV15, RestorableBackupManifest } from '../backup/backup-manifest.js';
 import { isExcludedManifestPhoto, manifestBlobPath, type BackupManifestPhotoV14 } from '../backup/backup-manifest-coverage.js';
+import type { BackupManifestKeyringEntryV15 } from '../backup/backup-manifest-keyring.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { select } from './photo-query.js';
@@ -12,7 +13,31 @@ function mediaInfoJson(mediaInfo: unknown): string | null {
   return mediaInfo === null || mediaInfo === undefined ? null : JSON.stringify(mediaInfo);
 }
 
-export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: PhotoRow) => PhotoRecord): BackupManifestSnapshot {
+export type ManifestSnapshotWithKeyring = BackupManifestSnapshot & Pick<BackupManifestSnapshotV15, 'keyring'>;
+
+/** The keyring registry as the manifest carries it (#517): every key row,
+ * whether or not this device holds its material. */
+export function keyringSnapshot(db: BetterSqlite3.Database): readonly BackupManifestKeyringEntryV15[] {
+  return queryAll<{
+    id: number;
+    key_ref: string;
+    version: number;
+    kind: BackupManifestKeyringEntryV15['kind'];
+    origin: BackupManifestKeyringEntryV15['origin'];
+    label: string | null;
+    fingerprint: string | null;
+  }>(db, `SELECT id, key_ref, version, kind, origin, label, fingerprint FROM keys ORDER BY id`).map((row) => ({
+    keyId: row.id,
+    keyRef: row.key_ref,
+    version: row.version,
+    kind: row.kind,
+    origin: row.origin,
+    label: row.label,
+    fingerprint: row.fingerprint,
+  }));
+}
+
+export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: PhotoRow) => PhotoRecord): ManifestSnapshotWithKeyring {
   return db.transaction(() => {
     const recoverable = `(p.deleted_at IS NULL OR (p.deleted_at IS NOT NULL AND l.status IN ('synced', 'offloaded')))`;
     const photos = queryAll<PhotoRow>(db, `${select('date')} WHERE ${recoverable} ORDER BY p.imported_at, p.id`).map(
@@ -22,6 +47,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
           dimensionStatus: _dimensionStatus,
           syncState: _syncState,
           coverage,
+          locked: _locked,
           tags: _tags,
           title,
           description,
@@ -83,6 +109,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
     return {
       databaseSchema,
       keyIds,
+      keyring: keyringSnapshot(db),
       photos,
       albums,
       totals: {
@@ -106,16 +133,32 @@ export function restoreManifest(
       `SELECT (SELECT count(*) FROM photos) + (SELECT count(*) FROM albums) + (SELECT count(*) FROM keys) + (SELECT count(*) FROM boards) AS count`,
     );
     if ((occupied?.count ?? 0) !== 0) throw new Error('restore requires an empty staged catalog');
-    for (const key of keys) {
+    // Keyring rows (#517): registry facts from the manifest, presence from
+    // the recovered custody. A registry entry the bootstrap lacks restores
+    // as an absent key, so its objects read as locked rather than lost.
+    const registry = new Map<number, BackupManifestKeyringEntryV15>(
+      'keyring' in manifest ? manifest.keyring.map((entry) => [entry.keyId, entry]) : [],
+    );
+    const custody = new Map(keys.map((key) => [key.id, key]));
+    for (const id of [...new Set([...registry.keys(), ...custody.keys()])].sort((left, right) => left - right)) {
+      const entry = registry.get(id);
+      const key = custody.get(id);
       runNamed(
         db,
-        `INSERT INTO keys (id, wrapped_key, created_at, retired_at)
-         VALUES (@id, @wrappedKey, @createdAt, @retiredAt)`,
+        `INSERT INTO keys (id, wrapped_key, created_at, retired_at, kind, key_ref, version, fingerprint, label, origin, material_present)
+         VALUES (@id, @wrappedKey, @createdAt, @retiredAt, @kind, @keyRef, @version, @fingerprint, @label, @origin, @present)`,
         {
-          id: key.id,
-          wrappedKey: key.wrappedKey,
-          createdAt: key.createdAt,
-          retiredAt: key.status === 'retired' ? manifest.generatedAt : null,
+          id,
+          wrappedKey: key?.wrappedKey ?? 'keystore-managed',
+          createdAt: key?.createdAt ?? manifest.generatedAt,
+          retiredAt: key?.status === 'active' ? null : manifest.generatedAt,
+          kind: entry?.kind ?? key?.kind ?? 'library',
+          keyRef: entry?.keyRef ?? key?.keyRef ?? null,
+          version: entry?.version ?? key?.version ?? 1,
+          fingerprint: entry?.fingerprint ?? null,
+          label: entry?.label ?? null,
+          origin: entry?.origin ?? key?.origin ?? 'local',
+          present: key === undefined ? 0 : 1,
         },
       );
     }

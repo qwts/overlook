@@ -384,3 +384,22 @@
 .ovl-lightbox--docked {
   inset-inline-end: var(--inspector-w);
 }
+
+/* Locked photo (#517): the viewport stays dark until the key is imported. */
+.ovl-lightbox__locked {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  color: var(--accent-amber);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.ovl-lightbox__lockedHint {
+  color: var(--text-muted);
+  font: var(--type-meta);
+  max-width: 36ch;
+}

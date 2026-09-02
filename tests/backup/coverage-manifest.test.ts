@@ -94,7 +94,7 @@ function snapshotOf(photos: PhotosRepository): BackupManifestSnapshotV14 {
 
 describe('backup coverage in the manifest (#506, schema 14)', () => {
   test('the snapshot records an excluded row without a blob path, and the builder derives the totals', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 14);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 15);
     const { photos } = open(true);
     const snapshot = snapshotOf(photos);
     const [p1, p2] = snapshot.photos;

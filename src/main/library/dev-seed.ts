@@ -10,19 +10,37 @@ type SeedDb = Parameters<typeof seedLibrary>[0];
 type SeedBlobs = Parameters<typeof seedLibrary>[1];
 type SeedKey = Parameters<typeof seedLibrary>[2];
 
+export interface DevSeedParts {
+  readonly db: SeedDb;
+  readonly blobStore: SeedBlobs;
+  readonly currentKey: () => SeedKey;
+  /** Rotation (#517 e2e): photos from OVERLOOK_SEED_RETIRED_KEY_FROM on seal
+   * under a key that is retired again once seeding ends. */
+  readonly rotate: () => SeedKey;
+  /** Re-registers keys minted during seeding with the keyring (#517). */
+  readonly reconcileKeyring: () => void;
+  readonly photos: () => number;
+}
+
 export interface DevSeedOptions {
   readonly contentAvailable: boolean;
   readonly harnessEnv: (name: string) => string | undefined;
   /** Triggers the lazy library bootstrap and exposes the open parts. */
-  readonly open: () => { db: SeedDb; blobStore: SeedBlobs; currentKey: () => SeedKey; photos: () => number } | undefined;
+  readonly open: () => DevSeedParts | undefined;
 }
 
-export function devSeedAccess(service: LibraryService, parts: LibraryParts | undefined): ReturnType<DevSeedOptions['open']> {
+export function devSeedAccess(
+  service: LibraryService,
+  parts: LibraryParts | undefined,
+  reconcileKeyring: () => void,
+): ReturnType<DevSeedOptions['open']> {
   if (parts === undefined) return undefined;
   return {
     db: parts.db,
     blobStore: parts.blobStore,
     currentKey: () => parts.keyStore.currentKey(),
+    rotate: () => parts.keyStore.rotate(),
+    reconcileKeyring,
     photos: () => service.stats().photos,
   };
 }
@@ -34,7 +52,17 @@ export async function runDevSeeds(options: DevSeedOptions): Promise<void> {
     const parts = options.open();
     if (parts !== undefined) {
       await parts.blobStore.init();
-      await seedLibrary(parts.db, parts.blobStore, parts.currentKey(), seedCount);
+      const retiredFrom = Number(options.harnessEnv('OVERLOOK_SEED_RETIRED_KEY_FROM') ?? 'NaN');
+      const plan = Number.isInteger(retiredFrom) && retiredFrom >= 0 && retiredFrom < seedCount;
+      let sealing = parts.currentKey();
+      const seeded = await seedLibrary(parts.db, parts.blobStore, sealing, seedCount, (index) => {
+        if (plan && index === retiredFrom) sealing = parts.rotate();
+        return sealing;
+      });
+      if (plan && seeded.photos > 0) {
+        parts.rotate();
+        parts.reconcileKeyring();
+      }
     }
   }
   // Metadata-only rows sharing one blob — the 200K grid perf baseline (#74).

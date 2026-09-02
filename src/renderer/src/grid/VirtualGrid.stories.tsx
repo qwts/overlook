@@ -52,6 +52,7 @@ function photo(index: number): PhotoRecord {
     dimensionStatus: 'verified',
     syncState: 'synced',
     coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],

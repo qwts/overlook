@@ -17,7 +17,6 @@ import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifyInAllPhotosAsync, verifySearchIndexAsync } from './db/photos-repository.js';
-import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
@@ -53,6 +52,8 @@ import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
 import { createBackupClaimDeps } from './db/backup-claims.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
+import { createKeyringService, requireKeyringService } from './crypto/keyring-factory.js';
+import type { KeyringService } from './crypto/keyring-service.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { registerIpcHandlers, registerRelocationHandlers } from './ipc.js';
 import { activateSettingsLibrary, configureSettingsLibrary, getSettingsStore } from './settings/settings-runtime.js';
@@ -133,16 +134,11 @@ function getLibraryService(): LibraryService {
     refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
-    // photos.key_id references keys(id): the current key's row must exist
-    // before the FIRST real import on a fresh profile (#90 caught this —
-    // previously only the dev seed wrote it). The wrapped key itself lives
-    // in the keystore; this row is FK metadata.
-    run(
-      db,
-      `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (?, 'keystore-managed', ?)`,
-      keyStore.currentKey().id,
-      new Date().toISOString(),
-    );
+    // Keyring registry (#517, ADR-0032 §2): a keys row per custody record (#90) and absent keys marked for `locked`.
+    keyringService = createKeyringService({
+      ...{ db, keyStore, blobStore: store, harnessEnv, libraryChanged: applicationEvents.libraryChanged },
+      invalidate: (id) => [thumbService, fullService].forEach((service) => service?.invalidate(id)),
+    });
     const libraryId = getProviderRuntime().libraryId();
     const protectedRuntime = new ProtectedRuntime({
       dataDir,
@@ -385,7 +381,7 @@ function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
-let coverageService: CoverageService | undefined;
+let coverageService: CoverageService | undefined, keyringService: KeyringService | undefined;
 let purgeService: PurgeService | undefined,
   purgeRuntime: DrainablePurgeFacade | undefined,
   consistencyChecker: ConsistencyChecker | undefined;
@@ -692,7 +688,7 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   [maintenance, thumbService, fullService] = [undefined, undefined, undefined];
   [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
-  [purgeService, purgeRuntime] = [undefined, undefined];
+  [purgeService, purgeRuntime, keyringService] = [undefined, undefined, undefined];
   [consistencyChecker, embeddingRuntime] = [undefined, undefined];
   egressRuntime.reset();
   if (mode !== 'restore') restoreRuntime = undefined;
@@ -837,6 +833,7 @@ void externalOpen.whenReady().then(async () => {
     getHistogram: () => ensureMaintenanceServices().histogram.service,
     getDuplicates: () => ensureMaintenanceServices().duplicates.service,
     getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
+    getKeyring: () => requireKeyringService(getLibraryService, () => keyringService),
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
@@ -872,7 +869,7 @@ void externalOpen.whenReady().then(async () => {
   await runDevSeeds({
     contentAvailable: lock.snapshot().state === 'unconfigured-unlocked' || lock.snapshot().state === 'unlocked',
     harnessEnv,
-    open: () => devSeedAccess(getLibraryService(), libraryParts),
+    open: () => devSeedAccess(getLibraryService(), libraryParts, () => keyringService?.reconcile()),
   });
   externalOpen.finishBootstrap();
 });

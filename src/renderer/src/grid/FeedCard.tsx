@@ -50,6 +50,7 @@ const messages = defineMessages({
   deselect: { id: 'feed.deselect', defaultMessage: 'Deselect {photo}' },
   protectedOriginal: { id: 'feed.protectedOriginal', defaultMessage: 'Protected Original' },
   noDescription: { id: 'feed.noDescription', defaultMessage: 'No description' },
+  locked: { id: 'library.photo.locked', defaultMessage: 'Locked — this device lacks its encryption key' },
 });
 
 /** Kind iconography for placeholder frames (design §Grid tiles). */
@@ -128,39 +129,49 @@ export function FeedCard({
   const placeholder = media?.placeholder ?? null;
   const placeholderClass =
     placeholder === 'probing' ? 'ovl-feedcard__placeholder ovl-feedcard__placeholder--probing' : 'ovl-feedcard__placeholder';
-  const frame =
-    placeholder !== null && placeholder !== 'video' ? (
-      <div className="ovl-feedcard__frame" data-state="placeholder">
-        <div className={placeholderClass}>
-          <Icon name={PLACEHOLDER_ICON[placeholder]} size={40} strokeWidth={1.75} />
+  const frame = photo.locked ? (
+    <div className="ovl-feedcard__frame" data-state="placeholder">
+      <div
+        className="ovl-feedcard__placeholder ovl-feedcard__placeholder--locked"
+        role="img"
+        aria-label={intl.formatMessage(messages.locked)}
+        title={intl.formatMessage(messages.locked)}
+      >
+        <Icon name="lock" size={40} strokeWidth={1.75} />
+      </div>
+    </div>
+  ) : placeholder !== null && placeholder !== 'video' ? (
+    <div className="ovl-feedcard__frame" data-state="placeholder">
+      <div className={placeholderClass}>
+        <Icon name={PLACEHOLDER_ICON[placeholder]} size={40} strokeWidth={1.75} />
+      </div>
+    </div>
+  ) : (
+    <div key={fullSource} className="ovl-feedcard__frame" data-state="loading">
+      <img src={thumbSource} alt="" draggable={false} className="ovl-feedcard__img ovl-feedcard__img--thumb" />
+      <img
+        src={fullSource}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className="ovl-feedcard__img ovl-feedcard__img--full"
+        onLoad={(event) => {
+          markFrame(event.currentTarget, 'loaded', '');
+        }}
+        onError={(event) => {
+          if (placeholder === 'video') markFrame(event.currentTarget, 'fallback', '');
+          else markFrame(event.currentTarget, 'unavailable', unavailableLabel);
+        }}
+      />
+      {placeholder === 'video' ? (
+        <div className="ovl-feedcard__placeholder ovl-feedcard__placeholder--fallback">
+          <Icon name={PLACEHOLDER_ICON.video} size={40} strokeWidth={1.75} />
         </div>
-      </div>
-    ) : (
-      <div key={fullSource} className="ovl-feedcard__frame" data-state="loading">
-        <img src={thumbSource} alt="" draggable={false} className="ovl-feedcard__img ovl-feedcard__img--thumb" />
-        <img
-          src={fullSource}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          className="ovl-feedcard__img ovl-feedcard__img--full"
-          onLoad={(event) => {
-            markFrame(event.currentTarget, 'loaded', '');
-          }}
-          onError={(event) => {
-            if (placeholder === 'video') markFrame(event.currentTarget, 'fallback', '');
-            else markFrame(event.currentTarget, 'unavailable', unavailableLabel);
-          }}
-        />
-        {placeholder === 'video' ? (
-          <div className="ovl-feedcard__placeholder ovl-feedcard__placeholder--fallback">
-            <Icon name={PLACEHOLDER_ICON.video} size={40} strokeWidth={1.75} />
-          </div>
-        ) : null}
-        <div className="ovl-feedcard__unavailable mono-data" />
-      </div>
-    );
+      ) : null}
+      <div className="ovl-feedcard__unavailable mono-data" />
+    </div>
+  );
   return (
     <div
       role="group"

@@ -20,6 +20,7 @@ import {
 import { ephemeralFailureReasonSchema, photoCustodyStatusSchema } from '../backup/custody-status.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
 import { coverageChannels } from './coverage-channels.js';
+import { keyringChannels } from './keyring-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import {
   restoreDiscoverResponseSchema,
@@ -254,6 +255,7 @@ const photoRecordSchema = z.object({
   mediaInfo: mediaInfoSchema.nullable(),
   syncState: syncStatusSchema,
   coverage: z.enum(['included', 'excluding', 'excluded']),
+  locked: z.boolean(),
 });
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
@@ -267,6 +269,7 @@ const protectedPhotoRecordSchema = photoRecordSchema.omit({
   dimensionStatus: true,
   syncState: true,
   coverage: true,
+  locked: true,
 });
 const protectedPageCursorSchema = z.object({ position: z.number().int().nonnegative(), id: z.string().min(1) });
 
@@ -838,6 +841,7 @@ export const channels = {
   ...themeChannels,
   ...diagnosticsChannels,
   ...coverageChannels,
+  ...keyringChannels,
   libraryStats: defineChannel(
     'library:stats',
     z.object({}),

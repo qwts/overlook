@@ -81,7 +81,7 @@ const build = (patch: Partial<BackupManifestSnapshotV10>) =>
 
 describe('smart albums in backup manifests (#514)', () => {
   test('schema 10 carries every predicate document as written and round-trips through the parser', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 14);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 15);
     const manifest = build({});
     assert.equal(manifest.schema, 10);
     const parsed = parseBackupManifest(JSON.parse(JSON.stringify(manifest)));

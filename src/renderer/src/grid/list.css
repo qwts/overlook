@@ -104,6 +104,13 @@
   opacity: 0.55; /* the mock's own offloaded dimming */
 }
 
+/* Locked row (#517): the sealing key is absent from this device. */
+.ovl-listrow__img--locked {
+  display: grid;
+  place-items: center;
+  color: var(--accent-amber);
+}
+
 .ovl-listrow__main {
   position: relative;
   z-index: 2;

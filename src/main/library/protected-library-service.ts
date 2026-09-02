@@ -245,6 +245,7 @@ export class ProtectedLibraryService {
         dimensionStatus: 'verified',
         syncState: 'local',
         coverage: 'included',
+        locked: false,
       };
     });
   }
@@ -283,6 +284,7 @@ export class ProtectedLibraryService {
           dimensionStatus: 'verified',
           syncState: 'local',
           coverage: 'included',
+          locked: false,
         },
         stream,
         release,

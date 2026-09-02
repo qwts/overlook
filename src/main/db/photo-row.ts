@@ -40,6 +40,8 @@ export interface PhotoRow {
   media_info: string | null;
   sync_state: string | null;
   coverage: string | null;
+  /** keys.material_present through the keyring join (#517); null = no row. */
+  key_present: number | null;
   user_title: string | null;
   user_description: string | null;
   imported_keywords: string;
@@ -103,5 +105,7 @@ export function toRecord(row: PhotoRow): PhotoRecord {
     // New rows always get a ledger row; LEFT JOIN keeps reads total anyway.
     syncState: (row.sync_state ?? 'local') as PhotoRecord['syncState'],
     coverage: (row.coverage ?? 'included') as PhotoRecord['coverage'],
+    // ADR-0032 §2: locked is a fact about the key row, never about the photo.
+    locked: row.key_present === 0,
   };
 }

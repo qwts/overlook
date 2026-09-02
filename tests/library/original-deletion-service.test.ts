@@ -38,6 +38,7 @@ function photo(id: string, isOriginal = true): PhotoRecord {
     mediaInfo: null,
     syncState: 'local',
     coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],

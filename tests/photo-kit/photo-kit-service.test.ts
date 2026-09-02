@@ -51,6 +51,7 @@ const PHOTO: PhotoRecord = {
   mediaInfo: null,
   syncState: 'local',
   coverage: 'included',
+  locked: false,
 };
 
 const SUMMARY: ImportSummary = {

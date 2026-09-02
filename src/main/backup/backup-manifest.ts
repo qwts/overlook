@@ -26,7 +26,9 @@ import { boardSchema } from '../../shared/moodboard/board.js';
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 14 as const;
+import { backupManifestKeyringEntryV15Schema, checkKeyringLinks, type BackupManifestKeyringEntryV15 } from './backup-manifest-keyring.js';
+
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 15 as const;
 
 import {
   backupManifestAlbumV2Schema,
@@ -600,7 +602,7 @@ export const backupManifestV13Schema = z
 export const backupManifestV14Schema = z
   .strictObject({
     ...backupManifestV13Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(14),
     photos: z.array(backupManifestPhotoV14Schema).readonly(),
     coverage: backupManifestCoverageV14Schema,
   })
@@ -611,6 +613,23 @@ export const backupManifestV14Schema = z
       context.addIssue({ code: 'custom', message: `schema-13 records are inconsistent: ${z.prettifyError(previous.error)}` });
     }
     checkCoverageTotals(manifest, context);
+  });
+
+// Schema 15 (#517, ADR-0032 §2): the keyring registry rides the manifest so
+// a restored library keeps every key's (key_ref, version) identity.
+export const backupManifestV15Schema = z
+  .strictObject({
+    ...backupManifestV14Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    keyring: z.array(backupManifestKeyringEntryV15Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { keyring: _keyring, ...withoutKeyring } = manifest;
+    const previous = backupManifestV14Schema.safeParse({ ...withoutKeyring, schema: 14 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-14 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    checkKeyringLinks(manifest, context);
   });
 
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
@@ -638,6 +657,7 @@ export type BackupManifestV12 = z.infer<typeof backupManifestV12Schema>;
 export type BackupManifestPhotoV13 = z.infer<typeof backupManifestPhotoV13Schema>;
 export type BackupManifestV13 = z.infer<typeof backupManifestV13Schema>;
 export type BackupManifestV14 = z.infer<typeof backupManifestV14Schema>;
+export type BackupManifestV15 = z.infer<typeof backupManifestV15Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -651,7 +671,8 @@ export type RestorableBackupManifest =
   | BackupManifestV11
   | BackupManifestV12
   | BackupManifestV13
-  | BackupManifestV14;
+  | BackupManifestV14
+  | BackupManifestV15;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -714,6 +735,11 @@ export interface BackupManifestSnapshotV14 extends Omit<BackupManifestSnapshotV1
   readonly photos: readonly BackupManifestPhotoV14[];
 }
 
+/** The keyring registry rows (#517), read beside the photos. */
+export interface BackupManifestSnapshotV15 extends BackupManifestSnapshotV14 {
+  readonly keyring: readonly BackupManifestKeyringEntryV15[];
+}
+
 export type ParsedBackupManifest =
   | { readonly restorable: false; readonly manifest: BackupManifestV1 }
   | { readonly restorable: true; readonly manifest: RestorableBackupManifest };
@@ -722,100 +748,51 @@ export class BackupManifestError extends Error {
   override readonly name = 'BackupManifestError';
 }
 
-export function buildBackupManifestV2(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshot;
-}): BackupManifestV2 {
-  return backupManifestV2Schema.parse({ schema: 2, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+/** Older builders accept a current snapshot too (tests, projections); the
+ * keyring is schema-15 data and must not leak into a strict older shape. */
+function withoutKeyring<T extends object>(snapshot: T): Omit<T, 'keyring'> {
+  const { keyring: _keyring, ...rest } = snapshot as T & { keyring?: unknown };
+  return rest;
 }
 
-export function buildBackupManifestV4(input: {
+/** What every builder takes: the library identity, the clock, and one snapshot. */
+interface BuildInput<TSnapshot> {
   readonly libraryId: string;
   readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV4;
-}): BackupManifestV4 {
-  return backupManifestV4Schema.parse({ schema: 4, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+  readonly snapshot: TSnapshot;
 }
 
-export function buildBackupManifestV5(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV5;
-}): BackupManifestV5 {
-  return backupManifestV5Schema.parse({ schema: 5, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+/** Older builders keep working for tests and projections: the version is
+ * the schema literal and the snapshot is spread minus the schema-15 keyring. */
+function legacyBuilder<TSnapshot extends object, TManifest>(schema: z.ZodType<TManifest>, version: number) {
+  return (input: BuildInput<TSnapshot>): TManifest =>
+    schema.parse({ schema: version, libraryId: input.libraryId, generatedAt: input.generatedAt, ...withoutKeyring(input.snapshot) });
 }
 
-export function buildBackupManifestV6(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV6;
-}): BackupManifestV6 {
-  return backupManifestV6Schema.parse({ schema: 6, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
+export const buildBackupManifestV2 = legacyBuilder<BackupManifestSnapshot, BackupManifestV2>(backupManifestV2Schema, 2);
+export const buildBackupManifestV4 = legacyBuilder<BackupManifestSnapshotV4, BackupManifestV4>(backupManifestV4Schema, 4);
+export const buildBackupManifestV5 = legacyBuilder<BackupManifestSnapshotV5, BackupManifestV5>(backupManifestV5Schema, 5);
+export const buildBackupManifestV6 = legacyBuilder<BackupManifestSnapshotV6, BackupManifestV6>(backupManifestV6Schema, 6);
+export const buildBackupManifestV7 = legacyBuilder<BackupManifestSnapshotV7, BackupManifestV7>(backupManifestV7Schema, 7);
+export const buildBackupManifestV8 = legacyBuilder<BackupManifestSnapshotV8, BackupManifestV8>(backupManifestV8Schema, 8);
+export const buildBackupManifestV9 = legacyBuilder<BackupManifestSnapshotV9, BackupManifestV9>(backupManifestV9Schema, 9);
+export const buildBackupManifestV10 = legacyBuilder<BackupManifestSnapshotV10, BackupManifestV10>(backupManifestV10Schema, 10);
+export const buildBackupManifestV11 = legacyBuilder<BackupManifestSnapshotV11, BackupManifestV11>(backupManifestV11Schema, 11);
+export const buildBackupManifestV12 = legacyBuilder<BackupManifestSnapshotV12, BackupManifestV12>(backupManifestV12Schema, 12);
+export const buildBackupManifestV13 = legacyBuilder<BackupManifestSnapshotV13, BackupManifestV13>(backupManifestV13Schema, 13);
 
-export function buildBackupManifestV7(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV7;
-}): BackupManifestV7 {
-  return backupManifestV7Schema.parse({ schema: 7, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV8(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV8;
-}): BackupManifestV8 {
-  return backupManifestV8Schema.parse({ schema: 8, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV9(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV9;
-}): BackupManifestV9 {
-  return backupManifestV9Schema.parse({ schema: 9, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV10(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV10;
-}): BackupManifestV10 {
-  return backupManifestV10Schema.parse({ schema: 10, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV11(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV11;
-}): BackupManifestV11 {
-  return backupManifestV11Schema.parse({ schema: 11, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV12(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV12;
-}): BackupManifestV12 {
-  return backupManifestV12Schema.parse({ schema: 12, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV13(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV13;
-}): BackupManifestV13 {
-  return backupManifestV13Schema.parse({ schema: 13, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
-}
-
-export function buildBackupManifestV14(input: {
-  readonly libraryId: string;
-  readonly generatedAt: string;
-  readonly snapshot: BackupManifestSnapshotV14;
-}): BackupManifestV14 {
+export function buildBackupManifestV14(input: BuildInput<BackupManifestSnapshotV14>): BackupManifestV14 {
   return backupManifestV14Schema.parse({
+    schema: 14,
+    libraryId: input.libraryId,
+    generatedAt: input.generatedAt,
+    ...withoutKeyring(input.snapshot),
+    coverage: coverageTotals(input.snapshot.photos),
+  });
+}
+
+export function buildBackupManifestV15(input: BuildInput<BackupManifestSnapshotV15>): BackupManifestV15 {
+  return backupManifestV15Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -858,7 +835,8 @@ const RESTORABLE_SCHEMAS: ReadonlyMap<number, z.ZodType<RestorableBackupManifest
   [11, backupManifestV11Schema],
   [12, backupManifestV12Schema],
   [13, backupManifestV13Schema],
-  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV14Schema],
+  [14, backupManifestV14Schema],
+  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV15Schema],
 ]);
 
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {

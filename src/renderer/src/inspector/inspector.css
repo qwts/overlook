@@ -42,6 +42,14 @@
   border-radius: var(--radius-tile);
 }
 
+/* Locked photo (#517): no derivative can be shown without its key. */
+.ovl-inspector__thumb--locked {
+  display: grid;
+  place-items: center;
+  background: var(--gray-2);
+  color: var(--accent-amber);
+}
+
 .ovl-inspector__headText {
   flex: 1;
   min-width: 0;

@@ -8,6 +8,7 @@ import { Badge } from '../components/Badge';
 import { MetadataRow } from '../components/MetadataRow';
 import { StatusGlyph, glyphStateOf } from '../components/StatusGlyph';
 import { IconButton } from '../components/IconButton';
+import { Icon } from '../components/Icon';
 import { CopyableValue } from '../components/CopyableValue';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
@@ -46,6 +47,11 @@ const messages = defineMessages({
   nextSelected: { id: 'inspector.selection.next', defaultMessage: 'Next selected photo' },
   copyFileName: { id: 'inspector.copy.fileName', defaultMessage: 'filename' },
   copyCipher: { id: 'inspector.copy.cipher', defaultMessage: 'cipher identity' },
+  lockedThumb: { id: 'inspector.custody.lockedThumb', defaultMessage: 'Locked' },
+  custodyLocked: {
+    id: 'inspector.custody.locked',
+    defaultMessage: 'LOCKED — KEY #{id} IS NOT ON THIS DEVICE',
+  },
 });
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactElement | (ReactElement | null)[] }): ReactElement {
@@ -149,7 +155,17 @@ export function Inspector({
         </nav>
       )}
       <div className="ovl-inspector__header">
-        <img className="ovl-inspector__thumb" src={thumbUrl(photo.id)} alt="" />
+        {photo.locked ? (
+          <div
+            className="ovl-inspector__thumb ovl-inspector__thumb--locked"
+            role="img"
+            aria-label={intl.formatMessage(messages.lockedThumb)}
+          >
+            <Icon name="lock" size={18} strokeWidth={1.75} />
+          </div>
+        ) : (
+          <img className="ovl-inspector__thumb" src={thumbUrl(photo.id)} alt="" />
+        )}
         <div className="ovl-inspector__headText">
           <CopyableValue
             value={photo.fileName}
@@ -203,6 +219,13 @@ export function Inspector({
           />
         ) : null}
         <MetadataRow label="Size" value={formatBytes(photo.bytes)} />
+        {photo.locked ? (
+          <MetadataRow
+            label="Custody"
+            value={intl.formatMessage(messages.custodyLocked, { id: String(photo.keyId) })}
+            tone="var(--accent-amber)"
+          />
+        ) : null}
         <MetadataRow label="Imported" value={`${formatCalendarDate(photo.importedAt)} · ${photo.importSource}`} />
       </Section>
       <HistogramSection photo={photo} />

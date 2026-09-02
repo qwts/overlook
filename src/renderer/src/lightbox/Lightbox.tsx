@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '../components/Button';
 import { IconButton } from '../components/IconButton';
+import { Icon } from '../components/Icon';
 import { fullUrl } from '../../../shared/library/full-url.js';
 import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
@@ -29,6 +30,14 @@ import './lightbox.css';
 // fades in on mousemove and auto-hides after 2.2s idle (200ms ease-out
 // fades), waking on photo change. Keyboard lands with #93, Inspector with
 // #94; delete stays a disabled stub until M10's soft-delete.
+
+const lockedMessages = defineMessages({
+  locked: { id: 'lightbox.locked', defaultMessage: 'LOCKED — KEY #{id} IS NOT ON THIS DEVICE' },
+  hint: {
+    id: 'lightbox.locked.hint',
+    defaultMessage: 'Import the key under Settings › Privacy › Encryption keys to view this photo.',
+  },
+});
 
 export const animationMessages = defineMessages({
   play: {
@@ -234,7 +243,13 @@ export function Lightbox({
       onFocusCapture={wakeChrome}
       onBlurCapture={armTimer}
     >
-      {isVideo ? (
+      {photo.locked ? (
+        <div className="ovl-lightbox__locked" role="status" data-testid="lightbox-locked">
+          <Icon name="lock" size={40} strokeWidth={1.75} />
+          <span className="mono-data">{intl.formatMessage(lockedMessages.locked, { id: String(photo.keyId) })}</span>
+          <span className="ovl-lightbox__lockedHint">{intl.formatMessage(lockedMessages.hint)}</span>
+        </div>
+      ) : isVideo ? (
         <LightboxVideo
           key={photo.id}
           photo={photo}

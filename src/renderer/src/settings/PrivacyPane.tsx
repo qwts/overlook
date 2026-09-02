@@ -11,6 +11,7 @@ import type { KeyDialogMode } from './KeyDialog';
 import type { AppPasswordMode } from './AppPasswordDialog';
 import { ProtectedAlbumSettings } from '../protected/ProtectedAlbumSettings';
 import { DiagnosticsControls } from './DiagnosticsControls';
+import { KeyringSection } from '../keyring/KeyringSection';
 
 // Privacy section (#115): honest, factual, mostly locked-on. Face grouping
 // ships DISABLED — the mock shows it locked-on, but the feature is deferred
@@ -166,6 +167,7 @@ export function PrivacyPane({
           </Button>
         </div>
       </div>
+      <KeyringSection />
       <Field label="Face grouping" hint="Not yet available — will run entirely on-device when it ships.">
         <Switch checked={false} disabled accessibleLabel="Face grouping" />
       </Field>

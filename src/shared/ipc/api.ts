@@ -295,6 +295,18 @@ export interface OverlookApi {
     readonly pickFile: () => Promise<Res<typeof channels.keysPickFile>>;
     readonly import: (request: Req<typeof channels.keysImport>) => Promise<Res<typeof channels.keysImport>>;
   };
+  /** The keyring registry (#517, ADR-0032 §2). */
+  readonly keyring: {
+    readonly list: () => Promise<Res<typeof channels.keyringList>>;
+    readonly export: (request: Req<typeof channels.keyringExport>) => Promise<Res<typeof channels.keyringExport>>;
+    readonly pickFile: () => Promise<Res<typeof channels.keyringPickFile>>;
+    readonly import: (request: Req<typeof channels.keyringImport>) => Promise<Res<typeof channels.keyringImport>>;
+    readonly removePreflight: (
+      request: Req<typeof channels.keyringRemovePreflight>,
+    ) => Promise<Res<typeof channels.keyringRemovePreflight>>;
+    readonly remove: (request: Req<typeof channels.keyringRemove>) => Promise<Res<typeof channels.keyringRemove>>;
+    readonly setLabel: (request: Req<typeof channels.keyringSetLabel>) => Promise<Res<typeof channels.keyringSetLabel>>;
+  };
   readonly restore: {
     readonly profileStatus: () => Promise<Res<typeof channels.restoreProfileStatus>>;
     readonly pickKey: () => Promise<Res<typeof channels.restorePickKey>>;

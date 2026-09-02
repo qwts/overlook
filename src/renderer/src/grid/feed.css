@@ -319,3 +319,8 @@
     animation: none;
   }
 }
+
+/* Locked card (#517): the sealing key is absent from this device. */
+.ovl-feedcard__placeholder--locked {
+  color: var(--accent-amber);
+}

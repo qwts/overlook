@@ -69,6 +69,7 @@ function fullRow(
     dimensionStatus: 'verified',
     syncState: 'local',
     coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],

@@ -47,6 +47,7 @@ function photo(index: number, syncState: SyncStatus, favorite = false): PhotoRec
     dimensionStatus: 'verified',
     syncState,
     coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],

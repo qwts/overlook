@@ -72,6 +72,8 @@ import { registerVariantHandlers } from './library/variant-ipc.js';
 import { registerHistogramHandlers } from './library/histogram-ipc.js';
 import { registerDuplicateHandlers } from './library/duplicate-ipc.js';
 import { registerCoverageHandlers } from './backup/coverage-ipc.js';
+import { registerKeyringHandlers } from './crypto/keyring-ipc.js';
+import type { KeyringService } from './crypto/keyring-service.js';
 import type { CoverageService } from './backup/coverage-service.js';
 import type { DuplicateIndexService } from './library/duplicate-index-service.js';
 import type { HistogramService } from './library/histogram-service.js';
@@ -95,6 +97,7 @@ export interface AppServicesOptions {
   readonly getHistogram: () => HistogramService;
   readonly getDuplicates: () => DuplicateIndexService;
   readonly getCoverage: () => CoverageService;
+  readonly getKeyring: () => KeyringService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -291,6 +294,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   const emitSettingsChanged = createEmitter(events.settingsChanged, options.broadcast);
   getSettingsStore().subscribe((settings) => emitSettingsChanged({ settings }));
   registerBackupHandlers(() => createBackupFacade(options.backup));
+  registerKeyringHandlers(options.getKeyring, options.requireContentAccess);
   registerCoverageHandlers(options.getCoverage, options.requireContentAccess, async (operation) => {
     options.backup.workChanged(1);
     try {

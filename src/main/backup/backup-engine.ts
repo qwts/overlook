@@ -5,12 +5,12 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV14,
+  buildBackupManifestV15,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
-  type BackupManifestSnapshotV14,
+  type BackupManifestSnapshotV15,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
@@ -124,8 +124,9 @@ export interface BackupEngineDeps {
   /** Seals wrapped key records for fresh-machine recovery under the master. */
   readonly sealRecoveryBootstrap: (publication: RecoveryBootstrapPublication) => Buffer;
   readonly libraryId: () => string;
-  /** One consistent DB snapshot: photos, metadata, albums, and membership. */
-  readonly manifestSnapshot: () => BackupManifestSnapshot;
+  /** One consistent DB snapshot: photos, metadata, albums, membership and
+   * the keyring registry (#517). */
+  readonly manifestSnapshot: () => BackupManifestSnapshot & Pick<BackupManifestSnapshotV15, 'keyring'>;
   readonly activitySnapshot?: (() => readonly ActivityEvent[]) | undefined;
   readonly boardsSnapshot?: (() => readonly BackupManifestBoardV5[]) | undefined;
   /** All Photos inclusion rules (#512) — library data carried by the manifest. */
@@ -826,7 +827,7 @@ export class BackupEngine {
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
-    const manifest = buildBackupManifestV14({
+    const manifest = buildBackupManifestV15({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -846,7 +847,7 @@ export class BackupEngine {
         editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
         provenance: this.deps.provenanceSnapshot?.(carriedPhotoIds) ?? [],
         variantFamilies: this.deps.variantFamiliesSnapshot?.() ?? [],
-      } satisfies BackupManifestSnapshotV14,
+      } satisfies BackupManifestSnapshotV15,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

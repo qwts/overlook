@@ -52,6 +52,7 @@ function raw(overrides: Partial<PhotoRecord> = {}): PhotoRecord {
     dimensionStatus: 'legacy',
     syncState: 'local',
     coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],

@@ -2,7 +2,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
 import type { BackupIntegrityItem } from '../backup/integrity-scrubber.js';
-import type { BackupManifestSnapshot, RestorableBackupManifest } from '../backup/backup-manifest.js';
+import type { RestorableBackupManifest } from '../backup/backup-manifest.js';
 import type { WrappedKeyRecord } from '../crypto/keystore.js';
 import type { ExtractedMetadata } from '../import/exif.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
@@ -778,7 +778,7 @@ export class PhotosRepository {
     ).map(({ id }) => id);
   }
 
-  manifestSnapshot(): BackupManifestSnapshot {
+  manifestSnapshot(): ReturnType<typeof readManifestSnapshot> {
     return readManifestSnapshot(this.db, toRecord);
   }
 

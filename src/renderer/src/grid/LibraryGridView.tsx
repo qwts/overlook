@@ -497,6 +497,7 @@ export function LibraryGridView({
         duration={tileMedia?.duration}
         preserved={tileMedia?.preserved ?? false}
         placeholder={tileMedia?.placeholder}
+        locked={photo.locked}
         selected={state.selection.has(photo.id)}
         onClick={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
