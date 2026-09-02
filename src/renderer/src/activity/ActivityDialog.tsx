@@ -67,6 +67,7 @@ const eventMessages: Readonly<Record<ActivityEventType, { readonly id: string; r
     defaultMessage: 'Moved {count, plural, one {# photo} other {# photos}} between albums',
   },
   'photo.favorite-changed': { id: 'activity.event.favorite', defaultMessage: 'Changed a favorite' },
+  'photo.edited': { id: 'activity.event.edited', defaultMessage: 'Saved an edit' },
   'photo.trashed': {
     id: 'activity.event.trashed',
     defaultMessage: 'Moved {count, plural, one {# photo} other {# photos}} to Trash',
@@ -87,6 +88,7 @@ const eventMessages: Readonly<Record<ActivityEventType, { readonly id: string; r
   'command.redone': { id: 'activity.event.redone', defaultMessage: 'Redid an action' },
   'command.compensated': { id: 'activity.event.compensated', defaultMessage: 'Restored a moved source file' },
   'activity.pruned': { id: 'activity.event.pruned', defaultMessage: 'Expired old activity records' },
+  'disclosure.policy-changed': { id: 'activity.event.disclosurePolicyChanged', defaultMessage: 'Changed a disclosure class' },
 };
 
 function HistoryControls({

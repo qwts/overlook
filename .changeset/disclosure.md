@@ -1,0 +1,5 @@
+---
+'overlook': minor
+---
+
+Disclosure (Settings ▸ Privacy): every classifiable metadata field — title, description, tags, capture time, camera, lens, provenance, precise location, ratings, face data, comments — carries a class: Private never leaves the library, Shared may go to a named recipient (a folder you choose, Apple Photos, a keyed provider, a paired peer), Public may go to an unauthenticated destination. Nothing defaults to Public; precise location, ratings and face data default to Private. Key material, blob addresses, protected-album existence, custody state and diagnostics identifiers are always private and cannot be reclassified. Export and Send to Apple Photos show what leaves before it leaves: which fields, how many photos carry them, a sample value, and whether a withheld field is embedded in the original bytes — in which case the export is refused until you include that field for this one export (recorded in Activity) or export Baked. Policy changes and per-export widening are recorded in Activity by field name and class only. The File Provider mounts a library date only when capture time is disclosed.

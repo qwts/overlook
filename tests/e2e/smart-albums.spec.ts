@@ -3,6 +3,15 @@ import type { ElectronApplication, Page } from '@playwright/test';
 
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
+// The row's action button only accepts pointer events while its row is
+// hovered (CSS), and Playwright checks the hit target before moving the
+// mouse — so hover first, then click.
+async function openActions(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name: `Actions for ${name}` });
+  await button.hover({ force: true });
+  await button.click();
+}
+
 async function launchSeeded(): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = mkE2eTmpDir('overlook-e2e-smart-albums-');
   const app = await electron.launch({
@@ -90,11 +99,11 @@ test('smart albums: union within a facet, explicit composition, save, relaunch, 
     await expect(rowButton('Two cameras')).toContainText('6');
 
     // Duplicate sits beside the original with the same query; delete removes only the query.
-    await page.getByRole('button', { name: 'Actions for Two cameras' }).click();
+    await openActions(page, 'Two cameras');
     await expect(page.getByRole('menuitem', { name: /Hide from All Photos|Show in All Photos/u })).toHaveCount(0);
     await page.getByRole('menuitem', { name: 'Duplicate' }).click();
     await expect(rowButton('Two cameras copy')).toContainText('6');
-    await page.getByRole('button', { name: 'Actions for Two cameras copy' }).click();
+    await openActions(page, 'Two cameras copy');
     await page.getByRole('menuitem', { name: 'Delete Smart Album…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Delete Smart Album' });
     await expect(dialog).toContainText('only the saved query is removed');

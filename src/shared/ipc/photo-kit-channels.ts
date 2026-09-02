@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ChannelDefinition, EventDefinition } from './channels.js';
+import { exportDisclosureIntentSchema } from './export-channels.js';
 
 function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   name: string,
@@ -79,6 +80,8 @@ export const photoKitChannels = {
         .min(1)
         .max(100)
         .refine((ids) => new Set(ids).size === ids.length),
+      /** ADR-0032 §6 operation scope (#509); absent = shared destination, nothing widened. */
+      disclosure: exportDisclosureIntentSchema.optional(),
     }),
     exportSummary,
   ),

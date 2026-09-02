@@ -4,7 +4,17 @@ import type { PhotoRecord } from './types.js';
  * fields stay in main even after album authorization. */
 export type ProtectedPhotoRecord = Omit<
   PhotoRecord,
-  'contentHash' | 'isOriginal' | 'keyId' | 'previewFailure' | 'dimensionStatus' | 'syncState'
+  | 'contentHash'
+  | 'isOriginal'
+  | 'keyId'
+  | 'previewFailure'
+  | 'dimensionStatus'
+  | 'syncState'
+  | 'coverage'
+  | 'locked'
+  | 'derivativeKey'
+  | 'variantSourceId'
+  | 'assetOwnerId'
 >;
 
 export interface ProtectedAlbumOpaqueSummary {

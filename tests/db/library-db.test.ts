@@ -687,9 +687,9 @@ describe('PhotosRepository', () => {
   test('200K synthetic rows: one keyset page stays fast (baseline recorded)', () => {
     const { db, repo } = openSeeded();
     const insert = db.prepare(
-      `INSERT INTO photos (id, file_name, file_kind, width, height, bytes, content_hash,
+      `INSERT INTO photos (id, file_name, file_kind, width, height, bytes, content_hash, derivative_key,
         imported_at, import_source, favorite, key_id, taken_at)
-       VALUES (?, ?, 'jpeg', 6000, 4000, 8400000, ?, '2026-07-01T00:00:00.000Z', 'seed', 0, 1, ?)`,
+       VALUES (?, ?, 'jpeg', 6000, 4000, 8400000, ?, ?, '2026-07-01T00:00:00.000Z', 'seed', 0, 1, ?)`,
     );
     db.transaction(() => {
       for (let i = 0; i < 200_000; i += 1) {
@@ -697,6 +697,7 @@ describe('PhotosRepository', () => {
         insert.run(
           `01J8SEED${n}`,
           `IMG_${n}.JPG`,
+          `seed-hash-${n}`,
           `seed-hash-${n}`,
           `2026-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}T08:00:00.000Z`,
         );

@@ -31,7 +31,9 @@ import { MoveResumeBanner } from './MoveResumeBanner';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { ToastAction } from './ToastAction';
+import { rehydrateFailedToast } from '../offload/offload-summary';
 import { useOffloadWorkflow } from '../offload/use-offload-workflow';
+import { useCoverageWorkflow } from '../backup-coverage/use-coverage-workflow';
 import { Toolbar } from './Toolbar';
 import { InteropEntryDialog } from '../interop/InboundMoveDialog';
 import type { InteropEntryContext } from '../interop/visible-workflow.js';
@@ -43,6 +45,7 @@ import type { CommandSurface } from '../../../shared/commands/registry.js';
 import type { CommandId } from '../../../shared/commands/registry.js';
 import type { CommandMenuContext } from '../../../shared/commands/menu-contract.js';
 import { ActivityDialog } from '../activity/ActivityDialog';
+import { DuplicatesDialog } from '../duplicates/DuplicatesDialog';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { SelectionAnnouncer } from '../components/SelectionAnnouncer';
 import { useEmptyTrash } from '../grid/use-empty-trash';
@@ -87,6 +90,7 @@ export function Shell({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const offload = useOffloadWorkflow();
+  const coverage = useCoverageWorkflow();
   const emptyTrash = useEmptyTrash();
   const restore = useRestoreChrome();
   const [shortcutSurface, setShortcutSurface] = useState<CommandSurface | null>(null);
@@ -587,6 +591,7 @@ export function Shell({
       ) : null}
       {exportDialog.dialog}
       {offload.dialog}
+      {coverage.dialog}
       {state.librariesOpen ? (
         <LibrarySwitcher
           startInCreate={librariesCreating}
@@ -643,6 +648,15 @@ export function Shell({
           open
           onClose={() => {
             dispatch({ type: 'dialog/set', dialog: 'activity', open: false });
+          }}
+        />
+      ) : null}
+      {state.duplicatesOpen ? (
+        <DuplicatesDialog
+          open
+          dispatch={dispatch}
+          onClose={() => {
+            dispatch({ type: 'dialog/set', dialog: 'duplicates', open: false });
           }}
         />
       ) : null}
@@ -720,11 +734,20 @@ export function Shell({
               offload.open([current.id], false, () => dispatch({ type: 'lightbox/closed' }));
             }}
             suppressRehydrate={offload.activePhotoIds?.includes(current.id) === true}
-            onRehydrateError={() => {
-              dispatch({
-                type: 'toast/shown',
-                toast: { title: `Restore failed — still in ${state.providerLabel}`, tone: 'red', action: 'retry-backup' },
-              });
+            onRehydrateError={() => dispatch({ type: 'toast/shown', toast: rehydrateFailedToast(state.providerLabel) })}
+            onEditResult={(result) => {
+              dispatch({ type: 'pendingCount/set', count: result.pendingCount });
+              if (result.derivatives === 'deferred') {
+                dispatch({
+                  type: 'toast/shown',
+                  toast: { title: 'Edit saved — thumbnails update once the original is local again', tone: 'amber' },
+                });
+              } else if (result.derivatives === 'failed') {
+                dispatch({ type: 'toast/shown', toast: { title: 'Edit saved — thumbnails could not be regenerated', tone: 'red' } });
+              }
+            }}
+            onEditError={() => {
+              dispatch({ type: 'toast/shown', toast: { title: 'Edit could not be saved', tone: 'red' } });
             }}
             onRepairDimensions={(width, height) => {
               void window.overlook.library.repairDimensions({ id: current.id, width, height }).then(({ pendingCount }) => {
@@ -781,6 +804,8 @@ export function Shell({
               onExport={exportDialog.openPhotos}
               onBoardExport={exportDialog.openBoard}
               onOffload={offload.open}
+              onKeepOnDevice={coverage.open}
+              onBackUpAgain={coverage.include}
               onTransfer={pcloudEnabled ? openInterop : undefined}
             />
           ) : (
@@ -804,6 +829,7 @@ export function Shell({
               selectionPosition={inspectorSelectionPosition}
               onPrevious={() => dispatch({ type: 'inspector/stepped', delta: -1 })}
               onNext={() => dispatch({ type: 'inspector/stepped', delta: 1 })}
+              onShowPhoto={(photoId) => dispatch({ type: 'lightbox/opened', photoId })}
             />
           </aside>
         ) : null}

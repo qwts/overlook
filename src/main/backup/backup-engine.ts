@@ -5,14 +5,19 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV10,
+  buildBackupManifestV15,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
+  type BackupManifestSnapshotV15,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
+import { blobPhotos } from './backup-manifest-coverage.js';
+import type { BackupManifestEditRevisionV11 } from './backup-manifest-edit-revisions.js';
+import type { BackupManifestProvenanceV12 } from './backup-manifest-provenance.js';
+import type { BackupManifestVariantFamilyV13 } from './backup-manifest-variants.js';
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { SyncStatus } from '../../shared/library/types.js';
@@ -119,8 +124,9 @@ export interface BackupEngineDeps {
   /** Seals wrapped key records for fresh-machine recovery under the master. */
   readonly sealRecoveryBootstrap: (publication: RecoveryBootstrapPublication) => Buffer;
   readonly libraryId: () => string;
-  /** One consistent DB snapshot: photos, metadata, albums, and membership. */
-  readonly manifestSnapshot: () => BackupManifestSnapshot;
+  /** One consistent DB snapshot: photos, metadata, albums, membership and
+   * the keyring registry (#517). */
+  readonly manifestSnapshot: () => BackupManifestSnapshot & Pick<BackupManifestSnapshotV15, 'keyring'>;
   readonly activitySnapshot?: (() => readonly ActivityEvent[]) | undefined;
   readonly boardsSnapshot?: (() => readonly BackupManifestBoardV5[]) | undefined;
   /** All Photos inclusion rules (#512) — library data carried by the manifest. */
@@ -130,6 +136,13 @@ export interface BackupEngineDeps {
   /** Folder tree and organizational tags (#505) — library data carried by
    * the manifest. Absent = every album is top level with no tags. */
   readonly albumTreeSnapshot?: (() => Pick<BackupManifestSnapshotV10, 'folders' | 'albumTree' | 'smartAlbums'>) | undefined;
+  /** Edit revisions (#493, ADR-0031 §7) for the carried photos, head flagged.
+   * Absent = no revisions (tests, pre-#493 callers). */
+  readonly editRevisionsSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestEditRevisionV11[]) | undefined;
+  /** Provenance evidence of the carried photos (schema 12, #495). */
+  readonly provenanceSnapshot?: ((photoIds: ReadonlySet<string>) => readonly BackupManifestProvenanceV12[]) | undefined;
+  /** Promoted variant representatives (schema 13, #496). */
+  readonly variantFamiliesSnapshot?: (() => readonly BackupManifestVariantFamilyV13[]) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -159,6 +172,9 @@ export interface BackupEngineDeps {
    * them (#741) so locally available originals re-queue and upload. */
   readonly claimsForContentHashes?: ((hashes: readonly string[]) => readonly OrdinaryRemoteClaim[]) | undefined;
   readonly hasLocalOriginal?: ((contentHash: string) => boolean) | undefined;
+  /** ADR-0033 §2: removes the provider copies of rows excluded from backup,
+   * called only once the remote's latest generation records the exclusion. */
+  readonly settleExclusions?: (() => Promise<unknown>) | undefined;
   /** Durable manifest debt (#741): survives restart so an owed generation is
    * never forgotten between runs. */
   readonly manifestDebt?: { readonly load: () => boolean; readonly save: (owed: boolean) => void } | undefined;
@@ -465,6 +481,13 @@ export class BackupEngine {
           if (reconciled.blocked > 0 || nothingRecovered || requeueFailed > 0 || aborted()) break;
         }
       }
+    }
+    // ADR-0033 §2/§6: provider copies of excluded rows go only after the
+    // generation that records the exclusion has landed — i.e. with no
+    // manifest debt outstanding. A removal that fails stays pending and is
+    // retried by later runs, dirty or not.
+    if (signal?.aborted !== true && !this.manifestOwed && this.deps.settleExclusions !== undefined) {
+      await this.deps.settleExclusions();
     }
     let integrity = EMPTY_INTEGRITY;
     // publishBlocked is an integrity condition, not a transport failure —
@@ -803,7 +826,13 @@ export class BackupEngine {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
-    const manifest = buildBackupManifestV10({
+    const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
+    // ADR-0033 §4: an excluded record is carried for its metadata only —
+    // its companions leave the provider with the original once this
+    // generation lands, so the generation must not point at them
+    // (PR #1124 review).
+    const blobPhotoIds = new Set(blobPhotos(snapshot.photos).map((photo) => photo.id));
+    const manifest = buildBackupManifestV15({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -812,7 +841,7 @@ export class BackupEngine {
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-        sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
+        sidecars: await this.sidecarManifestObjects(blobPhotoIds),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
         ...(this.deps.albumTreeSnapshot?.() ?? {
@@ -820,7 +849,10 @@ export class BackupEngine {
           albumTree: snapshot.albums.map((album) => ({ albumId: album.id, parentId: null, inheritsVisibility: false, tags: [] })),
           smartAlbums: [],
         }),
-      } satisfies BackupManifestSnapshotV10,
+        editRevisions: this.deps.editRevisionsSnapshot?.(carriedPhotoIds) ?? [],
+        provenance: this.deps.provenanceSnapshot?.(carriedPhotoIds) ?? [],
+        variantFamilies: this.deps.variantFamiliesSnapshot?.() ?? [],
+      } satisfies BackupManifestSnapshotV15,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.
@@ -832,10 +864,13 @@ export class BackupEngine {
     // blob the provider provably corrupted. Recovery or deleting the row
     // releases the claim; local-backed 'error' rows heal through the
     // reconcile pass below like any other missing claim.
-    const unprovable = manifest.photos.filter((photo) => this.deps.ledger.status(photo.id) === 'error').map((photo) => photo.blobPath);
+    // Excluded records (ADR-0033) claim no blob, so their placeholder
+    // 'error' rows never block a publication.
+    const carried = blobPhotos(manifest.photos);
+    const unprovable = carried.filter((photo) => this.deps.ledger.status(photo.id) === 'error').map((photo) => photo.blobPath);
     if (unprovable.length > 0) throw new ManifestIncompleteError(unprovable);
     await this.assertManifestComplete(
-      manifest.photos,
+      carried,
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
     );

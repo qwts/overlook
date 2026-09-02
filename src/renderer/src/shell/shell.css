@@ -435,6 +435,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  /* The group, not each gear, carries the heading's optical edge: two 24px
+     targets pulled over each other by per-button negative margins shrink
+     each other's usable area below SC 2.5.8 (axe target-size). */
+  margin-inline-end: -6px;
+}
+
+.ovl-sidebar__headingActions .ovl-sidebar__gear {
+  margin-inline: 0;
 }
 
 .ovl-sidebar__albumrow .ovl-siderow:not(.ovl-siderow--collapsed) {

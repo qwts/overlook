@@ -16,7 +16,13 @@ import {
   writeFileCleanly,
   type ExportEngineDeps,
 } from '../../src/main/export/export-engine.js';
+import { parseEditsXmp } from '../../src/main/export/edit-xmp.js';
+import { compileDisclosurePlan, DEFAULT_DISCLOSURE_POLICY } from '../../src/shared/disclosure/policy.js';
 import { transcodeToJpeg } from '../../src/main/export/transcode.js';
+import type { EditRevisionView } from '../../src/main/db/edit-revision-repository.js';
+import { IDENTITY_TRANSFORM, type EditTransform } from '../../src/shared/library/edit-revision.js';
+import sharp from 'sharp';
+
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import type { EnvelopeKey } from '../../src/main/crypto/envelope.js';
 import type { PhotoRecord } from '../../src/shared/library/types.js';
@@ -41,6 +47,9 @@ function fullRow(
     height: 1,
     bytes,
     contentHash,
+    derivativeKey: contentHash,
+    variantSourceId: null,
+    assetOwnerId: null,
     camera: null,
     lens: null,
     iso: null,
@@ -60,6 +69,8 @@ function fullRow(
     previewFailure: null,
     dimensionStatus: 'verified',
     syncState: 'local',
+    coverage: 'included',
+    locked: false,
     title: null,
     description: null,
     tags: [],
@@ -365,5 +376,203 @@ describe('gif/webp export (ADR-0026 §4, #547)', () => {
       assert.equal(fromPreview, false, file);
       assert.equal(jpeg.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])), true, `${file} produced a JPEG`);
     }
+  });
+});
+
+// #497 / ADR-0031 §6: one declared payload mode. Bake renders the head
+// transform into the pixels; Original + sidecars ships the byte-identical
+// original with an XMP naming the edits; Original only ships nothing beside
+// it. The preflight names what a mode cannot carry.
+describe('edited export (#497, ADR-0031 §6)', () => {
+  const ROTATED: EditTransform = { quarterTurns: 1, flipped: false, crop: null };
+  const head = (transform: EditTransform, unsupported: string | null = null): EditRevisionView => ({
+    id: '01J8EDT000000000000000000A',
+    parentId: null,
+    createdAt: '2026-09-02T10:00:00.000Z',
+    operations: [],
+    transform,
+    unsupported,
+  });
+  const dims = async (bytes: Buffer): Promise<[number, number]> => {
+    const meta = await sharp(bytes).metadata();
+    return [meta.width ?? 0, meta.height ?? 0];
+  };
+
+  test('Bake renders the head transform at the chosen quality; an unedited photo bakes as plain JPEG', async () => {
+    const world = await seededWorld(2);
+    const engine = new ExportEngine({ ...world.deps, editHead: (id) => (id === 'PHOTO0' ? head(ROTATED) : null) });
+    const summary = await engine.exportPhotos(['PHOTO0', 'PHOTO1'], world.destination, undefined, 'original', 'original', {
+      mode: 'baked',
+      quality: 80,
+    });
+    assert.deepEqual(
+      { exported: summary.exported, bakedEdits: summary.bakedEdits, editSidecars: summary.editSidecars },
+      { exported: 2, bakedEdits: 1, editSidecars: 0 },
+    );
+    const [sourceWidth, sourceHeight] = await dims(world.bytesById.get('PHOTO0') ?? Buffer.alloc(0));
+    assert.deepEqual(
+      await dims(readFileSync(join(world.destination, 'IMG_4021.jpg'))),
+      [sourceHeight, sourceWidth],
+      'a quarter turn swaps the edges',
+    );
+    assert.deepEqual(
+      await dims(readFileSync(join(world.destination, 'IMG_4022.jpg'))),
+      await dims(world.bytesById.get('PHOTO1') ?? Buffer.alloc(0)),
+    );
+    assert.deepEqual(readdirSync(world.destination).sort(), ['IMG_4021.jpg', 'IMG_4022.jpg'], 'no sidecars beside a bake');
+  });
+
+  test('Original + XMP ships the byte-identical original beside a sidecar that reads back as the head transform', async () => {
+    const world = await seededWorld(1);
+    const engine = new ExportEngine({ ...world.deps, editHead: () => head(ROTATED) });
+    const summary = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'none', { mode: 'original-sidecars' });
+    assert.deepEqual(
+      { exported: summary.exported, editSidecars: summary.editSidecars, bakedEdits: summary.bakedEdits },
+      { exported: 1, editSidecars: 1, bakedEdits: 0 },
+    );
+    assert.deepEqual(readFileSync(join(world.destination, 'IMG_4021.JPG')), world.bytesById.get('PHOTO0'));
+    const xmp = readFileSync(join(world.destination, 'IMG_4021.xmp'), 'utf8');
+    assert.deepEqual(parseEditsXmp(xmp), ROTATED, 'the reviewed reader returns what the writer meant');
+    assert.equal(xmp.includes('<dc:'), false, 'Metadata: None adds no authored fields');
+  });
+
+  test('the generated packet keeps the canonical stem; a retained XMP companion is preserved under the suffix', async () => {
+    const world = await seededWorld(1);
+    const engine = new ExportEngine({
+      ...world.deps,
+      editHead: () => head(ROTATED),
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarStream: () => Readable.from(['source sidecar']),
+    });
+    const summary = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'original', {
+      mode: 'original-sidecars',
+    });
+    assert.deepEqual(summary.files[0]?.sidecarNames, ['IMG_4021.xmp', 'IMG_4021 (1).xmp']);
+    assert.deepEqual(parseEditsXmp(readFileSync(join(world.destination, 'IMG_4021.xmp'), 'utf8')), ROTATED, 'the stem carries the edits');
+    assert.equal(readFileSync(join(world.destination, 'IMG_4021 (1).xmp'), 'utf8'), 'source sidecar', 'the companion is not lost');
+    // Without edits to carry, the companion keeps the stem as before.
+    const plain = new ExportEngine({
+      ...world.deps,
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarStream: () => Readable.from(['source sidecar']),
+    });
+    const other = await seededWorld(1);
+    const untouched = await plain.exportPhotos(['PHOTO0'], other.destination, undefined, 'original', 'original', {
+      mode: 'original-sidecars',
+    });
+    assert.deepEqual(untouched.files[0]?.sidecarNames, ['IMG_4021.xmp']);
+  });
+
+  test('Original only writes nothing beside the original, whatever the metadata policy', async () => {
+    const world = await seededWorld(1);
+    const row = world.rows.get('PHOTO0');
+    assert.ok(row);
+    world.rows.set('PHOTO0', { ...row, title: 'Titled' });
+    const engine = new ExportEngine({ ...world.deps, editHead: () => head(ROTATED) });
+    const summary = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'overlook', { mode: 'original' });
+    assert.equal(summary.exported, 1);
+    assert.deepEqual(readdirSync(world.destination), ['IMG_4021.JPG']);
+    assert.deepEqual(readFileSync(join(world.destination, 'IMG_4021.JPG')), world.bytesById.get('PHOTO0'));
+  });
+
+  test('format: jpeg stays Baked on the wire; format: original stays Original + sidecars', async () => {
+    const world = await seededWorld(1);
+    const engine = new ExportEngine({ ...world.deps, editHead: () => head(ROTATED) });
+    const baked = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'jpeg');
+    assert.equal(baked.bakedEdits, 1);
+    const original = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original');
+    assert.equal(original.editSidecars, 1);
+  });
+
+  test('the preflight names an operation this build cannot carry; Original only reports the omission instead', async () => {
+    const world = await seededWorld(3);
+    const engine = new ExportEngine({
+      ...world.deps,
+      editHead: (id) => (id === 'PHOTO0' ? head(IDENTITY_TRANSFORM, 'tone-curve v2') : id === 'PHOTO1' ? head(ROTATED) : null),
+    });
+    const ids = ['PHOTO0', 'PHOTO1', 'PHOTO2'];
+    assert.deepEqual(engine.preflightEdits(ids, 'baked'), {
+      edited: 2,
+      losses: [{ photoId: 'PHOTO0', fileName: 'IMG_4021.JPG', reason: 'tone-curve v2' }],
+    });
+    assert.equal(engine.preflightEdits(ids, 'original-sidecars').losses.length, 1);
+    assert.deepEqual(engine.preflightEdits(ids, 'original'), { edited: 2, losses: [] });
+    // A bake of the unsupported stack fails that entry honestly; the batch continues.
+    const summary = await engine.exportPhotos(ids, world.destination, undefined, 'original', 'original', { mode: 'baked' });
+    assert.deepEqual(
+      { exported: summary.exported, failed: summary.failed, bakedEdits: summary.bakedEdits },
+      { exported: 2, failed: 1, bakedEdits: 1 },
+    );
+    assert.match(summary.failures[0]?.reason ?? '', /cannot render \(tone-curve v2\)/u);
+    // Original + sidecars ships the bytes and names no edit it cannot serialize.
+    const sidecars = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'none', { mode: 'original-sidecars' });
+    assert.equal(sidecars.exported, 1);
+    assert.equal(sidecars.editSidecars, 0);
+  });
+});
+
+describe('disclosure classes at the export boundary (#509, ADR-0032 §6)', () => {
+  const planner: NonNullable<ExportEngineDeps['disclosure']> = (_photoId, intent) =>
+    compileDisclosurePlan({
+      boundary: 'export',
+      destination: intent.destination,
+      chain: { library: DEFAULT_DISCLOSURE_POLICY },
+      operation: intent.operation,
+    });
+
+  async function worldWithLocation() {
+    const world = await seededWorld(1);
+    const current = world.rows.get('PHOTO0')!;
+    world.rows.set(current.id, { ...current, title: 'Harbour at dusk', gpsLat: 52.37, gpsLon: 4.9 });
+    return { ...world, engine: new ExportEngine({ ...world.deps, disclosure: planner }) };
+  }
+
+  function onDisk(destination: string): string {
+    return readdirSync(destination)
+      .map((name) => readFileSync(join(destination, name), 'latin1'))
+      .join('\n');
+  }
+
+  test('an original whose bytes embed a private field is refused, crosses when the operation widens it, and crosses Baked untouched', async () => {
+    const refused = await worldWithLocation();
+    await assert.rejects(refused.engine.exportPhotos(['PHOTO0'], refused.destination, undefined, 'original'), (error: unknown) => {
+      assert.ok(error instanceof ExportPreflightError);
+      assert.match(error.message, /disclosure: location \(1\)/u);
+      return true;
+    });
+    assert.deepEqual(readdirSync(refused.destination), [], 'nothing crossed');
+
+    const widened = await worldWithLocation();
+    const summary = await widened.engine.exportPhotos(['PHOTO0'], widened.destination, undefined, 'original', 'none', undefined, {
+      destination: 'shared',
+      operation: { narrow: [], widen: ['location'] },
+    });
+    assert.equal(summary.files.length, 1);
+    assert.deepEqual(readdirSync(widened.destination), ['IMG_4021.JPG']);
+
+    const baked = await worldWithLocation();
+    const bakedSummary = await baked.engine.exportPhotos(['PHOTO0'], baked.destination, undefined, 'jpeg');
+    assert.equal(bakedSummary.files.length, 1, 'a baked payload carries no embedded metadata, so nothing is withheld');
+  });
+
+  test('authored XMP carries only what the plan discloses; a public destination discloses nothing by default', async () => {
+    const disclosed = await worldWithLocation();
+    await disclosed.engine.exportPhotos(['PHOTO0'], disclosed.destination, undefined, 'jpeg', 'overlook');
+    assert.ok(onDisk(disclosed.destination).includes('Harbour at dusk'), 'a shared title crosses to a named recipient');
+
+    const narrowed = await worldWithLocation();
+    const summary = await narrowed.engine.exportPhotos(['PHOTO0'], narrowed.destination, undefined, 'jpeg', 'overlook', undefined, {
+      destination: 'shared',
+      operation: { narrow: ['title'], widen: [] },
+    });
+    assert.equal(summary.files.length, 1);
+    assert.ok(!onDisk(narrowed.destination).includes('Harbour at dusk'), 'the narrowed title never reaches disk');
+
+    const published = await worldWithLocation();
+    await published.engine.exportPhotos(['PHOTO0'], published.destination, undefined, 'jpeg', 'overlook', undefined, {
+      destination: 'public',
+      operation: { narrow: [], widen: [] },
+    });
+    assert.ok(!onDisk(published.destination).includes('Harbour at dusk'), 'nothing defaults to public');
   });
 });

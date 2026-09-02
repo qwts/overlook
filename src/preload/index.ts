@@ -251,6 +251,29 @@ const overlook: OverlookApi = {
     setPredicate: createInvoker(channels.albumSetPredicate, invokeTransport),
     duplicate: createInvoker(channels.albumDuplicate, invokeTransport),
   }),
+  edits: Object.freeze({
+    head: createInvoker(channels.photoEditHead, invokeTransport),
+    save: createInvoker(channels.photoEditSave, invokeTransport),
+    reset: createInvoker(channels.photoEditReset, invokeTransport),
+    revert: createInvoker(channels.photoEditRevert, invokeTransport),
+  }),
+  provenance: Object.freeze({
+    get: createInvoker(channels.photoProvenance, invokeTransport),
+    refresh: createInvoker(channels.photoProvenanceRefresh, invokeTransport),
+  }),
+  variants: Object.freeze({
+    duplicate: createInvoker(channels.photoDuplicate, invokeTransport),
+    family: createInvoker(channels.photoVariants, invokeTransport),
+    promote: createInvoker(channels.photoPromoteVariant, invokeTransport),
+  }),
+  histogram: Object.freeze({
+    get: createInvoker(channels.photoHistogram, invokeTransport),
+  }),
+  duplicates: Object.freeze({
+    review: async () => createInvoker(channels.duplicatesReview, invokeTransport)({}),
+    rescan: async () => createInvoker(channels.duplicatesRescan, invokeTransport)({}),
+    onChanged: createSubscriber(events.duplicatesChanged, subscribeTransport),
+  }),
   boards: Object.freeze({
     list: async () => boardList({}),
     get: createInvoker(channels.boardGet, invokeTransport),
@@ -280,6 +303,11 @@ const overlook: OverlookApi = {
     cancelExport: async () => protectedAlbumExportCancel({}),
     onChanged: createSubscriber(events.protectedAlbumsChanged, subscribeTransport),
     onProgress: createSubscriber(events.protectedWorkflowProgress, subscribeTransport),
+  }),
+  coverage: Object.freeze({
+    preflight: createInvoker(channels.coveragePreflight, invokeTransport),
+    exclude: createInvoker(channels.coverageExclude, invokeTransport),
+    include: createInvoker(channels.coverageInclude, invokeTransport),
   }),
   backup: Object.freeze({
     run: createInvoker(channels.backupRun, invokeTransport),
@@ -311,6 +339,7 @@ const overlook: OverlookApi = {
     runAll: createInvoker(channels.exportRunAll, invokeTransport),
     runBoard: createInvoker(channels.exportRunBoard, invokeTransport),
     cancel: createInvoker(channels.exportCancel, invokeTransport),
+    preflight: createInvoker(channels.exportPreflight, invokeTransport),
     onProgress: createSubscriber(events.exportProgress, subscribeTransport),
   }),
   keys: Object.freeze({
@@ -318,6 +347,22 @@ const overlook: OverlookApi = {
     export: createInvoker(channels.keysExport, invokeTransport),
     pickFile: async () => keysPickFile({}),
     import: createInvoker(channels.keysImport, invokeTransport),
+  }),
+  disclosure: Object.freeze({
+    policy: async () => createInvoker(channels.disclosurePolicy, invokeTransport)({}),
+    setField: createInvoker(channels.disclosureSetField, invokeTransport),
+    overrides: createInvoker(channels.disclosureOverrides, invokeTransport),
+    setOverride: createInvoker(channels.disclosureSetOverride, invokeTransport),
+    preview: createInvoker(channels.disclosurePreview, invokeTransport),
+  }),
+  keyring: Object.freeze({
+    list: async () => createInvoker(channels.keyringList, invokeTransport)({}),
+    export: createInvoker(channels.keyringExport, invokeTransport),
+    pickFile: async () => createInvoker(channels.keyringPickFile, invokeTransport)({}),
+    import: createInvoker(channels.keyringImport, invokeTransport),
+    removePreflight: createInvoker(channels.keyringRemovePreflight, invokeTransport),
+    remove: createInvoker(channels.keyringRemove, invokeTransport),
+    setLabel: createInvoker(channels.keyringSetLabel, invokeTransport),
   }),
   restore: Object.freeze({
     profileStatus: async () => restoreProfileStatus({}),

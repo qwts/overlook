@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, type Dispatch } from 'react';
+import { duplicatePhotos } from '../grid/duplicate-photos.js';
 
 import type { CommandId, CommandSurface } from '../../../shared/commands/registry.js';
+import { VIEW_MODE_BY_COMMAND } from '../../../shared/commands/view-modes.js';
 import type { AppAction, AppState } from '../../../shared/library/app-state.js';
 import type { SettingsSection } from '../settings/SettingsDialog';
 import { getApplicationThemeLayer } from '../theme/user-theme-layer';
@@ -171,11 +173,9 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         case 'view.mode.grid':
         case 'view.mode.list':
+        case 'view.mode.feed':
         case 'view.mode.moodboard':
-          dispatch({
-            type: 'view/set',
-            view: commandId === 'view.mode.grid' ? 'grid' : commandId === 'view.mode.list' ? 'list' : 'moodboard',
-          });
+          dispatch({ type: 'view/set', view: VIEW_MODE_BY_COMMAND[commandId] });
           return;
         case 'view.lightbox.close':
           dispatch({ type: 'lightbox/closed' });
@@ -216,6 +216,9 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           setExportPhotoIds(targetIds);
           dispatch({ type: 'dialog/set', dialog: 'export', open: true });
           return;
+        case 'photo.duplicate':
+          duplicatePhotos(dispatch, targetIds);
+          return;
         case 'photo.restore':
           if (targetIds.length === 0) return;
           void window.overlook.library.restore({ photoIds: targetIds }).then(({ restored }) => {
@@ -249,6 +252,11 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           closeOverlays();
           dispatch({ type: 'dialog/set', dialog: 'activity', open: true });
           return;
+        case 'library.duplicates':
+          if (state.protectedAlbum !== null) return;
+          closeOverlays();
+          dispatch({ type: 'dialog/set', dialog: 'duplicates', open: true });
+          return;
         case 'help.open':
           // macOS opens this from main (the menu never forwards it to the
           // renderer); the Windows/Linux titlebar Help menu reaches it here.
@@ -269,6 +277,8 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         case 'photo.open':
         case 'photo.offload':
         case 'photo.restoreOriginal':
+        case 'photo.coverage.exclude':
+        case 'photo.coverage.include':
         case 'photo.transfer':
         case 'photo.original.mark':
         case 'photo.original.unmark':

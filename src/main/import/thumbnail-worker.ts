@@ -2,7 +2,9 @@ import { parentPort } from 'node:worker_threads';
 
 import sharp from 'sharp';
 
+import { bakeTransform, decodable, type DecodableInput } from './bake-transform.js';
 import { displayDimensions } from './display-dimensions.js';
+import { isIdentityTransform, type EditTransform } from '../../shared/library/edit-revision.js';
 
 // Thumbnail worker (#86): decode → resize → WebP per ADR-0006, off the main
 // thread. Derivatives are sRGB and metadata-free — a thumbnail must never
@@ -13,6 +15,10 @@ export interface ThumbJobRequest {
   readonly jobId: number;
   /** Decodable image bytes (RAW callers resolve embedded/native previews first). */
   readonly bytes: Uint8Array;
+  /** Persisted edits to bake into the derivatives (#493, ADR-0031 §2):
+   * EXIF orientation first, then rotate/flip, then the crop in oriented
+   * space. Absent or identity = the untouched pipeline. */
+  readonly transform?: EditTransform | undefined;
 }
 
 export interface ThumbJobResponse {
@@ -31,28 +37,28 @@ const THUMB_QUALITY = 80;
 const MID_EDGE = 2048;
 const MID_QUALITY = 85;
 
-async function derivative(bytes: Uint8Array, edge: number, quality: number): Promise<Buffer> {
+async function derivative(input: DecodableInput, edge: number, quality: number): Promise<Buffer> {
   // sharp strips metadata and resolves to sRGB by default (no withMetadata /
   // withIccProfile) — exactly the ADR's privacy stance; rotate() bakes the
   // EXIF orientation in before the tag is dropped.
-  return sharp(bytes, { failOn: 'error' })
-    .rotate()
-    .resize(edge, edge, { fit: 'inside', withoutEnlargement: true })
-    .webp({ quality })
-    .toBuffer();
+  return decodable(input).rotate().resize(edge, edge, { fit: 'inside', withoutEnlargement: true }).webp({ quality }).toBuffer();
 }
 
-async function makeDerivatives(bytes: Uint8Array): Promise<Omit<ThumbJobResponse, 'jobId' | 'ok' | 'error'>> {
+async function makeDerivatives(bytes: Uint8Array, transform?: EditTransform): Promise<Omit<ThumbJobResponse, 'jobId' | 'ok' | 'error'>> {
   const meta = await sharp(bytes, { failOn: 'error' }).metadata();
   const dimensions = displayDimensions(meta.width, meta.height, meta.orientation);
   if (dimensions === null) throw new Error('decoded image has invalid dimensions');
-  const thumb = await derivative(bytes, THUMB_EDGE, THUMB_QUALITY);
-  const mid = await derivative(bytes, MID_EDGE, MID_QUALITY);
+  const input =
+    transform === undefined || isIdentityTransform(transform)
+      ? { bytes }
+      : await bakeTransform(bytes, transform, dimensions.width, dimensions.height);
+  const thumb = await derivative(input, THUMB_EDGE, THUMB_QUALITY);
+  const mid = await derivative(input, MID_EDGE, MID_QUALITY);
   return { thumb, mid, ...dimensions };
 }
 
 parentPort?.on('message', (request: ThumbJobRequest) => {
-  void makeDerivatives(request.bytes)
+  void makeDerivatives(request.bytes, request.transform)
     .then((result) => {
       parentPort?.postMessage({ jobId: request.jobId, ok: true, ...result } satisfies ThumbJobResponse);
     })

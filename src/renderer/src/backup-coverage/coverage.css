@@ -1,0 +1,39 @@
+.ovl-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--text-body);
+}
+
+.ovl-coverage__loading,
+.ovl-coverage__line,
+.ovl-coverage__skips {
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-wide);
+}
+
+.ovl-coverage__summary {
+  font-size: var(--text-lg);
+}
+
+.ovl-coverage__remote {
+  color: var(--accent-red);
+}
+
+.ovl-coverage__safety {
+  padding: var(--space-3);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  background: var(--gray-2);
+  color: var(--text-muted);
+}
+
+.ovl-coverage__skips ul {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-4);
+  color: var(--text-body);
+}
+
+.ovl-coverage__error {
+  color: var(--accent-red);
+}

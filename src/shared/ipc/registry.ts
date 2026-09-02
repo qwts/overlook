@@ -77,6 +77,12 @@ export function createInvoker<TRequest extends z.ZodType, TResponse extends z.Zo
 
 /** Main-side handler wrapper: validates both directions and converts every
  * failure into a detail-free transport envelope. Full detail stays main-side. */
+/** The `ipcMain.handle` surface an IPC adapter registers on; tests hand in a map
+ * so the adapter runs without Electron. */
+export interface IpcHandlerRegistrar {
+  readonly handle: (channel: string, handler: (event: unknown, request: unknown) => unknown) => void;
+}
+
 export function wrapHandler<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   channel: ChannelDefinition<TRequest, TResponse>,
   handler: (request: z.output<TRequest>) => Promise<z.output<TResponse>> | z.output<TResponse>,

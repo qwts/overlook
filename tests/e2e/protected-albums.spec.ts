@@ -140,6 +140,9 @@ async function recoverAlbumPassword(page: Page): Promise<void> {
 }
 
 async function configureAppLock(page: Page): Promise<void> {
+  // The idle lock reads the machine's idle time, which a driven session never
+  // resets; this spec exercises explicit and lifecycle locks, not idleness.
+  await page.evaluate("window.overlook.settings.set({ patch: { appLockIdle: 'never' } })");
   await openPrivacy(page);
   await page.getByRole('button', { name: 'Set password…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Set app password' });

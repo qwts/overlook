@@ -4,6 +4,7 @@ import { addAbortSignal, Readable } from 'node:stream';
 import { createDecryptStream, type KeyResolver } from '../crypto/envelope.js';
 import { MIGRATIONS } from '../db/migrations.js';
 import { parseBackupManifest, type RestorableBackupManifest } from './backup-manifest.js';
+import { blobPhotos } from './backup-manifest-coverage.js';
 import { openRecoveryBootstrap, recoveryBootstrapResolver, type RecoveryBootstrap } from './recovery-bootstrap.js';
 import { ProviderError, type RemoteEntry, type StorageProvider } from './provider.js';
 import { RestoreError, toRestoreError } from './restore-types.js';
@@ -88,7 +89,7 @@ function validateManifest(manifest: RestorableBackupManifest, bootstrap: Recover
     if (resolveKey(keyId) === undefined) throw new RestoreError('wrong-key', `manifest key ${String(keyId)} is unavailable`);
   }
   const blobPaths = new Set<string>();
-  for (const photo of manifest.photos) {
+  for (const photo of blobPhotos(manifest.photos)) {
     if (blobPaths.has(photo.blobPath)) throw new RestoreError('corrupt', `duplicate blob reference ${photo.blobPath}`);
     blobPaths.add(photo.blobPath);
   }

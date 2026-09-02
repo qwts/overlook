@@ -118,7 +118,7 @@ async function world() {
     return JSON.parse(sealed.toString('utf8')) as { sidecars: { photoId: string; blobPath: string }[]; photos: { id: string }[] };
   }
 
-  return { deps, repo, store, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
+  return { deps, repo, store, ledger, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
 }
 
 describe('sidecar backup round trip (#484)', () => {
@@ -147,6 +147,32 @@ describe('sidecar backup round trip (#484)', () => {
     assert.deepEqual(
       manifest.sidecars.map((sidecar) => sidecar.photoId),
       ['P0'],
+    );
+  });
+
+  test('ADR-0033 §4 (PR #1124 review): an excluded photo keeps its record but its companion leaves the manifest', async () => {
+    const w = await world();
+    const hash = await w.addPhoto('P0', 1, true);
+    await w.addPhoto('P1', 2, true);
+    assert.equal((await w.engine.run()).manifestUploaded, true);
+    assert.deepEqual((await w.latestManifest()).sidecars.map((sidecar) => sidecar.photoId).sort(), ['P0', 'P1']);
+
+    // The coverage ceremony records the exclusion and owes a generation;
+    // the generation that lands must not reference the companion the
+    // settlement is about to delete.
+    w.ledger.markExcluding('P0', 'user', '2026-09-02T04:00:00.000Z');
+    w.engine.oweManifest();
+    assert.equal((await w.engine.run()).manifestUploaded, true);
+    const manifest = await w.latestManifest();
+    assert.deepEqual(
+      manifest.photos.map((photo) => photo.id).sort(),
+      ['P0', 'P1'],
+      'the excluded record is still carried for its metadata',
+    );
+    assert.deepEqual(
+      manifest.sidecars.map((sidecar) => sidecar.photoId),
+      ['P1'],
+      `sidecars/P0/${hash ?? ''} is not promised by the recording generation`,
     );
   });
 

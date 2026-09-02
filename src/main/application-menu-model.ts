@@ -50,6 +50,9 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return context.hasLibrary && !context.providerBusy && !locked(context);
     case 'library.exportAll':
       return context.hasLibrary && context.dialog === 'none' && !context.protectedAlbumOpen;
+    case 'library.duplicates':
+      // Ordinary-library review (#650): protected albums have no fingerprints.
+      return context.hasLibrary && !context.protectedAlbumOpen;
     case 'library.source.all':
     case 'library.source.favorites':
     case 'library.source.recent':
@@ -69,6 +72,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return (context.surface === 'grid' || context.surface === 'lightbox') && context.dialog === 'none';
     case 'view.mode.grid':
     case 'view.mode.list':
+    case 'view.mode.feed':
     case 'view.mode.moodboard':
       return context.surface === 'grid' && context.dialog === 'none';
     case 'view.lightbox.close':
@@ -88,6 +92,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
         ((context.surface === 'lightbox' && context.hasTarget && context.targetTrashable) ||
           (context.surface !== 'lightbox' && context.source !== 'deleted' && context.selectionCount > 0))
       );
+    case 'photo.duplicate':
     case 'photo.export':
       return context.dialog === 'none' && hasPhotoTarget(context);
     case 'album.membership.add':
@@ -105,9 +110,6 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return (context.surface === 'grid' || context.surface === 'lightbox') && context.dialog === 'none';
     case 'selection.clear':
       return context.surface === 'grid' && context.dialog === 'none' && !context.editable && context.selectionCount > 0;
-    // Feed view has not landed yet (#689) — the item stays disabled.
-    case 'view.mode.feed':
-      return false;
     case 'album.rename':
     case 'album.delete':
     case 'album.transfer':
@@ -128,6 +130,8 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'photo.open':
     case 'photo.offload':
     case 'photo.restoreOriginal':
+    case 'photo.coverage.exclude':
+    case 'photo.coverage.include':
     case 'photo.transfer':
     case 'photo.purge':
     case 'trash.empty':
@@ -143,6 +147,10 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'view.lightbox.flipHorizontal':
     case 'view.lightbox.flipVertical':
     case 'view.lightbox.orientationReset':
+    case 'photo.edit.save':
+    case 'photo.edit.reset':
+    case 'photo.edit.crop':
+    case 'photo.edit.revert':
     case 'grid.focus.left':
     case 'grid.focus.right':
     case 'grid.focus.up':
@@ -262,6 +270,7 @@ function macApplicationMenuTemplate(
         commandItem('library.import', context, dispatch, translate),
         commandItem('photo.export', context, dispatch, translate),
         commandItem('library.exportAll', context, dispatch, translate),
+        commandItem('library.duplicates', context, dispatch, translate),
         separator,
         commandItem('library.switch', context, dispatch, translate),
         commandItem('library.move', context, dispatch, translate),
@@ -292,7 +301,7 @@ function macApplicationMenuTemplate(
         separator,
         commandItem('view.mode.grid', context, dispatch, translate, { type: 'radio', checked: context.view === 'grid' }),
         commandItem('view.mode.list', context, dispatch, translate, { type: 'radio', checked: context.view === 'list' }),
-        commandItem('view.mode.feed', context, dispatch, translate, { type: 'radio', checked: false }),
+        commandItem('view.mode.feed', context, dispatch, translate, { type: 'radio', checked: context.view === 'feed' }),
         commandItem('view.mode.moodboard', context, dispatch, translate, { type: 'radio', checked: context.view === 'moodboard' }),
         separator,
         commandItem('view.inspector.toggle', context, dispatch, translate, { type: 'checkbox', checked: context.inspectorOpen }),

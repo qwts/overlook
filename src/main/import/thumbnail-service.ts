@@ -4,6 +4,7 @@ import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey } from '../crypto/envelope.js';
 import type { ThumbnailDerivatives, ThumbnailPool } from './thumbnail-pool.js';
 import type { FileKind } from '../../shared/library/types.js';
+import type { EditTransform } from '../../shared/library/edit-revision.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
 
 // Thumbnail generation service (#86): pool output → encrypted blob store.
@@ -23,10 +24,16 @@ export interface ThumbnailRequest {
   readonly photoId: string;
   /** Original file bytes (the pool resolves RAW previews itself). */
   readonly bytes: Buffer;
-  /** Content hash of the ORIGINAL — derivatives are addressed under it. */
+  /** Content hash of the ORIGINAL — derivatives are addressed under it
+   * unless `derivativeKey` says otherwise. */
   readonly contentHash: string;
+  /** The variant's derivative address (#496): a duplicate's thumbs must not
+   * overwrite its siblings'. Absent = the content hash (a root variant). */
+  readonly derivativeKey?: string | undefined;
   readonly key: EnvelopeKey;
   readonly fileKind?: FileKind | undefined;
+  /** Persisted edits baked into the derivatives (#493); absent = as imported. */
+  readonly transform?: EditTransform | undefined;
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -53,7 +60,7 @@ export class ThumbnailService {
   }
 
   private async generateAndStore(request: ThumbnailRequest, replace: boolean): Promise<ThumbnailOutcome> {
-    const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind);
+    const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind, request.transform);
     if (derivatives === null) {
       return { generated: false, width: null, height: null };
     }
@@ -70,11 +77,12 @@ export class ThumbnailService {
   }
 
   private async store(request: ThumbnailRequest, derivatives: ThumbnailDerivatives, replace: boolean): Promise<void> {
+    const address = request.derivativeKey ?? request.contentHash;
     const put = async (bytes: Buffer, size: 'thumb' | 'mid'): Promise<void> => {
       if (replace) {
-        await this.blobStore.replaceThumb(Readable.from([bytes]), request.key, request.photoId, request.contentHash, size);
+        await this.blobStore.replaceThumb(Readable.from([bytes]), request.key, request.photoId, address, size);
       } else {
-        await this.blobStore.putThumb(Readable.from([bytes]), request.key, request.photoId, request.contentHash, size);
+        await this.blobStore.putThumb(Readable.from([bytes]), request.key, request.photoId, address, size);
       }
     };
     await put(derivatives.thumb, 'thumb');

@@ -84,8 +84,13 @@ test('search + chips filter the library live; impossible filter shows the empty 
       .toBe(true);
 
     const filterToggle = page.getByRole('button', { name: 'Filters' });
-    await filterToggle.click();
-    await expect(filterToggle).toHaveAttribute('aria-pressed', 'true');
+    // Linux runners are still settling the window here (see the Import poll
+    // above); a click that lands mid-reflow toggles nothing, so retry until
+    // the toggle reads pressed.
+    await expect(async () => {
+      await filterToggle.click();
+      await expect(filterToggle).toHaveAttribute('aria-pressed', 'true', { timeout: 1000 });
+    }).toPass();
     // The sidebar's derived RAW source (#512) is also a button named RAW.
     const rawFilter = page.getByTestId('chip-row').getByRole('button', { name: 'RAW' });
     await expect(rawFilter).toBeVisible();

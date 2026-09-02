@@ -1,4 +1,7 @@
 import { createWriteStream } from 'node:fs';
+import { discloses, permissivePlan } from '../../shared/disclosure/policy.js';
+import type { ExportDisclosureIntentWire } from '../../shared/ipc/export-channels.js';
+import { embeddedFieldsOf, type DisclosurePlanner } from '../disclosure/disclosure-service.js';
 import { lstat, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -17,6 +20,8 @@ interface OpenedOriginal {
 }
 
 export interface PhotoKitServiceDeps {
+  /** ADR-0032 §6 planner (#509); absent = permissive (unit worlds). */
+  readonly disclosure?: DisclosurePlanner | undefined;
   readonly bridge: PhotoKitBridge;
   readonly dataDir: string;
   readonly getPhoto: (photoId: string) => PhotoRecord | undefined;
@@ -177,7 +182,7 @@ export class PhotoKitService {
     });
   }
 
-  runExport(photoIds: readonly string[]): Promise<PhotoKitExportResult> {
+  runExport(photoIds: readonly string[], disclosure?: ExportDisclosureIntentWire): Promise<PhotoKitExportResult> {
     return this.start(async (signal) => {
       const authorization = await this.deps.bridge.requestAuthorization('add-only');
       if (!allowed(authorization) || !this.deps.admit()) {
@@ -205,6 +210,18 @@ export class PhotoKitService {
             failures.push({ photoId, fileName: photo?.fileName ?? photoId, reason: 'Photo is unavailable or unsupported' });
             continue;
           }
+          // ADR-0032 §6: Apple Photos is a named recipient (the user's own
+          // library). The staged original carries its embedded fields as they
+          // are, so a withheld one fails this photo closed — the dialog's
+          // preview names it and the widening is the user's explicit action.
+          const plan =
+            this.deps.disclosure?.plan(photoId, 'photo-kit', disclosure?.destination ?? 'shared', disclosure?.operation) ??
+            permissivePlan('photo-kit');
+          const blocked = embeddedFieldsOf(photo).filter((field) => !discloses(plan, field));
+          if (blocked.length > 0) {
+            failures.push({ photoId, fileName: photo.fileName, reason: `Withheld by disclosure policy: ${blocked.join(', ')}` });
+            continue;
+          }
           let opened: OpenedOriginal | undefined;
           try {
             const fileName = uniqueName(photo.fileName, used);
@@ -217,9 +234,9 @@ export class PhotoKitService {
               path: filePath,
               fileName,
               mediaType,
-              createdAt: photo.takenAt,
-              latitude: photo.gpsLat,
-              longitude: photo.gpsLon,
+              createdAt: discloses(plan, 'captureTime') ? photo.takenAt : null,
+              latitude: discloses(plan, 'location') ? photo.gpsLat : null,
+              longitude: discloses(plan, 'location') ? photo.gpsLon : null,
             });
           } catch (error) {
             failures.push({

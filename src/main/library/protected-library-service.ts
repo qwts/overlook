@@ -78,6 +78,7 @@ function visiblePhoto(metadata: ProtectedPhotoMetadata): ProtectedPhotoRecord {
   const { contentHash: _contentHash, ...photo } = metadata.photo;
   // mediaInfo is optional in sealed metadata (pre-0026 blobs verify by exact
   // re-stringification, so parsing may not insert keys); records are not.
+  // Protected records carry no lineage (#496 keeps Duplicate ordinary).
   return {
     ...photo,
     mediaInfo: photo.mediaInfo ?? null,
@@ -233,6 +234,9 @@ export class ProtectedLibraryService {
       const metadata = this.requirePhoto(albumId, photoId).metadata.photo;
       return {
         ...metadata,
+        derivativeKey: metadata.contentHash,
+        variantSourceId: null,
+        assetOwnerId: null,
         mediaInfo: metadata.mediaInfo ?? null,
         ...visibleMetadata(metadata),
         isOriginal: false,
@@ -240,6 +244,8 @@ export class ProtectedLibraryService {
         previewFailure: null,
         dimensionStatus: 'verified',
         syncState: 'local',
+        coverage: 'included',
+        locked: false,
       };
     });
   }
@@ -267,6 +273,9 @@ export class ProtectedLibraryService {
       return {
         photo: {
           ...authorized.metadata.photo,
+          derivativeKey: authorized.metadata.photo.contentHash,
+          variantSourceId: null,
+          assetOwnerId: null,
           mediaInfo: authorized.metadata.photo.mediaInfo ?? null,
           ...visibleMetadata(authorized.metadata.photo),
           isOriginal: false,
@@ -274,6 +283,8 @@ export class ProtectedLibraryService {
           previewFailure: null,
           dimensionStatus: 'verified',
           syncState: 'local',
+          coverage: 'included',
+          locked: false,
         },
         stream,
         release,

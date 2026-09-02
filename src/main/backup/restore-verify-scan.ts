@@ -1,3 +1,4 @@
+import { blobPhotos } from './backup-manifest-coverage.js';
 import type { StorageProvider } from './provider.js';
 import type { RestoreCandidate } from './restore-discovery.js';
 import type { RestoreProgress } from './restore-types.js';
@@ -15,7 +16,7 @@ export function verifyObjectCount(candidate: RestoreCandidate): number {
           (sum, photo) => sum + photo.objects.filter((object) => object.status === 'synced').length,
           0,
         );
-  return candidate.manifest.photos.length + sidecars + protectedObjects;
+  return blobPhotos(candidate.manifest.photos).length + sidecars + protectedObjects;
 }
 
 export function addPresenceFingerprint(fingerprints: string[], path: string, bytes: number): void {

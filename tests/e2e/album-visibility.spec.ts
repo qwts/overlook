@@ -15,6 +15,14 @@ async function launchSeeded(): Promise<{ app: ElectronApplication; page: Page }>
   return { app, page };
 }
 
+/** The actions button is revealed by hovering its row (pointer-events: none
+ * until then), so the pointer moves there before the click's hit test runs. */
+async function openActions(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name: `Actions for ${name}` });
+  await button.hover({ force: true });
+  await button.click();
+}
+
 // #494 / ADR-0030 §2 acceptance over the real IPC boundary: hiding an album
 // removes exactly its photos from All Photos (each seeded photo belongs to one
 // album), the album's own view keeps them, the sidebar and status bar
@@ -30,7 +38,7 @@ test('hiding an album from All Photos is disclosed, presentation-only, and rever
     await expect(page.getByRole('button', { name: 'All Photos 12' })).toBeVisible();
     await expect(grid.locator('.ovl-grid__cell')).toHaveCount(12);
 
-    await page.getByRole('button', { name: 'Actions for Family' }).click();
+    await openActions(page, 'Family');
     await page.getByRole('menuitem', { name: /Hide from All Photos/u }).click();
 
     await expect(page.getByRole('button', { name: 'All Photos 9' })).toBeVisible();
@@ -50,7 +58,7 @@ test('hiding an album from All Photos is disclosed, presentation-only, and rever
     );
     expect(listing.albums.find((album) => album.name === 'Family')).toMatchObject({ showInAllPhotos: false, visibleElsewhere: 0 });
 
-    await page.getByRole('button', { name: 'Actions for Family' }).click();
+    await openActions(page, 'Family');
     await page.getByRole('menuitem', { name: /Show in All Photos/u }).click();
     await page.getByRole('button', { name: 'All Photos 12' }).click();
     await expect(grid.locator('.ovl-grid__cell')).toHaveCount(12);

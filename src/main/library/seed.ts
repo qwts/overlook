@@ -88,14 +88,25 @@ export interface SeedResult {
 }
 
 /** Seeds an EMPTY library through the real crypto/blob/DB path. */
-export async function seedLibrary(db: BetterSqlite3.Database, blobStore: BlobStore, key: EnvelopeKey, count: number): Promise<SeedResult> {
+export async function seedLibrary(
+  db: BetterSqlite3.Database,
+  blobStore: BlobStore,
+  defaultKey: EnvelopeKey,
+  count: number,
+  /** Per-photo sealing key (#517 keyring e2e); defaults to the current key. */
+  keyFor: (index: number) => EnvelopeKey = () => defaultKey,
+): Promise<SeedResult> {
   const repo = new PhotosRepository(db);
   if (repo.stats().photos > 0) {
     return { photos: 0, albums: 0 };
   }
-  run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (?, 'seed-managed', ?)`, key.id, '2026-07-01T00:00:00.000Z');
+  const registerKey = (key: EnvelopeKey): void =>
+    run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (?, 'seed-managed', ?)`, key.id, '2026-07-01T00:00:00.000Z');
+  registerKey(defaultKey);
 
   for (let index = 0; index < count; index += 1) {
+    const key = keyFor(index);
+    registerKey(key);
     const meta = seedPhoto(index);
     const bytes = sampleJpeg(index);
     const ref = await blobStore.putOriginal(Readable.from([bytes]), key, meta.id);
