@@ -12,12 +12,12 @@ import {
   type BackupManifestSnapshotV11,
 } from '../../src/main/backup/backup-manifest.js';
 import type { BackupManifestEditRevisionV11 } from '../../src/main/backup/backup-manifest-edit-revisions.js';
-import { editRevisionsMatch, restoreEditRevisions } from '../../src/main/backup/restore-edit-revisions.js';
+import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms } from '../../src/main/backup/restore-edit-revisions.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
-import type { EditOperation, EditRevisionDocument } from '../../src/shared/library/edit-revision.js';
+import { foldOperations, type EditOperation, type EditRevisionDocument } from '../../src/shared/library/edit-revision.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 // #493 / ADR-0031 §7: edit revisions are library data. Schema 11 carries
@@ -172,5 +172,41 @@ describe('edit revisions in backup manifests (#493)', () => {
     assert.ok(!editRevisionsMatch(target.db, parsed.manifest), 'an extra revision is a mismatch');
     source.db.close();
     target.db.close();
+  });
+  test('restore bakes the head transform into rebuilt derivatives, skipping empty and unbakeable heads', () => {
+    const { db, photos, revisions } = open();
+    const first = revisions.append('P1', document(null, [ROTATE]));
+    revisions.append('P1', document(first.id, [ROTATE, ROTATE]));
+    const foreign = { type: 'curve', version: 9, points: [1, 2] } as unknown as EditOperation;
+    revisions.append('P2', document(null, [foreign]));
+    const carried = revisions.snapshot(new Set(['P1', 'P2']));
+    const manifest = buildBackupManifestV11({ libraryId: LIBRARY, generatedAt: AT, snapshot: snapshotOf(photos, carried) });
+    const parsed = parseBackupManifest(JSON.parse(JSON.stringify(manifest)));
+    assert.ok(parsed.restorable);
+    const transforms = restoredHeadTransforms(parsed.manifest);
+    assert.deepEqual(transforms.get('P1'), foldOperations([ROTATE, ROTATE]), 'the head, not the first revision, is what bakes');
+    assert.equal(transforms.has('P2'), false, 'a head this build cannot bake rebuilds from the untouched original');
+
+    const reverted = revisions.append('P1', document(null, []));
+    assert.equal(reverted.parentId, null);
+    const back = parseBackupManifest(
+      JSON.parse(
+        JSON.stringify(
+          buildBackupManifestV11({
+            libraryId: LIBRARY,
+            generatedAt: AT,
+            snapshot: snapshotOf(photos, revisions.snapshot(new Set(['P1']))),
+          }),
+        ),
+      ),
+    );
+    assert.ok(back.restorable);
+    assert.equal(restoredHeadTransforms(back.manifest).has('P1'), false, 'an empty head is the untouched original');
+    const { editRevisions: _revisions, ...tenSnapshot } = snapshotOf(photos, []);
+    const ten = buildBackupManifestV10({ libraryId: LIBRARY, generatedAt: AT, snapshot: tenSnapshot });
+    const legacy = parseBackupManifest(JSON.parse(JSON.stringify(ten)));
+    assert.ok(legacy.restorable);
+    assert.equal(restoredHeadTransforms(legacy.manifest).size, 0);
+    db.close();
   });
 });

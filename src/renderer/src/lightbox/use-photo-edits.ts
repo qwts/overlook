@@ -84,14 +84,21 @@ export function usePhotoEdits(photoId: string, api?: PhotoEditApi): PhotoEdits {
       setState((previous) => ({ ...previous, busy: true }));
       try {
         const result = await operation(resolvedApi);
-        setState({ head: { photoId: result.photoId, head: result.head, history: result.history }, busy: false });
+        // The hook may have been re-pointed at another photo while the
+        // mutation was in flight; a result for a different photo must not
+        // become this photo's head (codex review on #1111).
+        setState((previous) =>
+          result.photoId === photoId
+            ? { head: { photoId: result.photoId, head: result.head, history: result.history }, busy: false }
+            : { ...previous, busy: false },
+        );
         return result;
       } catch (error) {
         setState((previous) => ({ ...previous, busy: false }));
         throw error;
       }
     },
-    [resolvedApi],
+    [photoId, resolvedApi],
   );
 
   const save = useCallback(

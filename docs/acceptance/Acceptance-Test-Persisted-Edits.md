@@ -87,7 +87,9 @@ provider configured for the steps below.
 17. Run a backup. Confirm the manifest is schema 11 and carries an
     `editRevisions` entry per revision with `current` set on each head.
 18. Restore the backup into a fresh library. Confirm every edited photo opens
-    on its head, the Inspector shows the same revision counts, and Revert
+    on its head, its grid tile and preview already show the head's edits
+    (the rebuilt derivatives bake the restored head, not the untouched
+    original), the Inspector shows the same revision counts, and Revert
     walks the same history. Confirm a corrupted `editRevisions` entry (a parent
     from another photo, two heads for one photo) fails the restore with a
     clear error rather than a partial library.

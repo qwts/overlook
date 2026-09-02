@@ -1,7 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { EditRevisionRepository } from '../db/edit-revision-repository.js';
-import { canonicalJson } from '../../shared/library/edit-revision.js';
+import { canonicalJson, foldOperations, parseEditRevision, type EditTransform } from '../../shared/library/edit-revision.js';
 import type { RestorableBackupManifest } from './backup-manifest.js';
 
 // Edit revisions are library data (ADR-0031 §7): a restored library carries
@@ -12,6 +12,25 @@ import type { RestorableBackupManifest } from './backup-manifest.js';
 export function restoreEditRevisions(db: BetterSqlite3.Database, manifest: RestorableBackupManifest): void {
   if (!('editRevisions' in manifest)) return;
   new EditRevisionRepository(db).restore(manifest.editRevisions);
+}
+
+/**
+ * The head transform per carried photo, for baking restored derivatives with
+ * the same edits the backed-up library showed. Photos with no head, an empty
+ * root head, or a head this build cannot bake (a newer operation) are
+ * omitted and rebuild from the original untouched — the same fallback the
+ * lightbox uses for an unsupported head.
+ */
+export function restoredHeadTransforms(manifest: RestorableBackupManifest): ReadonlyMap<string, EditTransform> {
+  const transforms = new Map<string, EditTransform>();
+  if (!('editRevisions' in manifest)) return transforms;
+  for (const revision of manifest.editRevisions) {
+    if (!revision.current) continue;
+    const parsed = parseEditRevision(revision.document);
+    if (!parsed.ok || parsed.unsupported !== null || parsed.operations.length === 0) continue;
+    transforms.set(revision.photoId, foldOperations(parsed.operations));
+  }
+  return transforms;
 }
 
 function fingerprint(
