@@ -98,8 +98,14 @@ export function inclusionParams(policy: GalleryPolicy): { readonly minimumPixels
  * behind the All Photos page and its sidebar count (ADR-0030 §6). */
 export function allPhotosWhere(policy: GalleryPolicy): string {
   const inclusion = inclusionWhere(policy);
-  return inclusion === null ? sourceWhere('all') : `${sourceWhere('all')} AND ${inclusion}`;
+  return inclusion === null ? ALL_PHOTOS_MEMBERSHIP_WHERE : `${ALL_PHOTOS_MEMBERSHIP_WHERE} AND ${inclusion}`;
 }
+
+/** Collection visibility (#494, ADR-0030 §2): a photo hidden by every album
+ * that contains it leaves the All Photos presentation and nothing else. The
+ * flag is maintained transactionally (album-visibility-repository.ts). */
+export const HIDDEN_BY_ALBUMS_WHERE = 'p.in_all_photos = 0';
+export const ALL_PHOTOS_MEMBERSHIP_WHERE = `${sourceWhere('all')} AND p.in_all_photos = 1`;
 
 /** Inclusion rules govern the All Photos presentation only: an album view,
  * an explicit search, and every other source see the unfiltered rows. */

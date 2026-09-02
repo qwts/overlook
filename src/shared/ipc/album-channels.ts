@@ -6,11 +6,24 @@ const defineChannel = <TRequest extends z.ZodType, TResponse extends z.ZodType>(
   response,
 });
 
+/** An album as the sidebar lists it (#80) with its All Photos policy and the
+ * ADR-0030 §2 disclosure (#494): photos another visible album keeps in All
+ * Photos, and which albums those are. */
+export const albumListingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  count: z.number().int().nonnegative(),
+  showInAllPhotos: z.boolean(),
+  visibleElsewhere: z.number().int().nonnegative(),
+  visibleVia: z.array(z.object({ id: z.string(), name: z.string() })).readonly(),
+});
+
 export const albumChannels = {
-  albumCreate: defineChannel(
-    'album:create',
-    z.object({ name: z.string().min(1).max(120) }),
-    z.object({ album: z.object({ id: z.string(), name: z.string(), count: z.number().int().nonnegative() }) }),
+  albumCreate: defineChannel('album:create', z.object({ name: z.string().min(1).max(120) }), z.object({ album: albumListingSchema })),
+  albumSetVisibility: defineChannel(
+    'album:set-visibility',
+    z.object({ albumId: z.string().min(1), showInAllPhotos: z.boolean() }),
+    z.object({ album: albumListingSchema }),
   ),
   albumRename: defineChannel('album:rename', z.object({ albumId: z.string(), name: z.string().min(1).max(120) }), z.object({})),
   albumDelete: defineChannel('album:delete', z.object({ albumId: z.string() }), z.object({})),

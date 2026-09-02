@@ -27,6 +27,9 @@ export interface StartupMaintenanceOptions {
   /** FTS5 integrity-check → rebuild-on-failure (#390). Optional — undefined
    * skips it, same convention as `repair` before the library is open. */
   readonly verifySearchIndex?: () => Promise<SearchIndexVerification> | undefined;
+  /** All Photos composition flag sweep (#494, ADR-0030 §6): a mismatch is
+   * rebuilt from the rows, never trusted. Optional, same convention. */
+  readonly verifyAllPhotosFlag?: () => Promise<{ readonly mismatched: number; readonly rebuilt: boolean }> | undefined;
 }
 
 export class StartupMaintenance {
@@ -95,6 +98,19 @@ export class StartupMaintenance {
           })
           .catch((error: unknown) => {
             console.error('[overlook] video poster capture failed', error);
+          }),
+      );
+    }
+
+    const verifyAllPhotosFlag = this.options.verifyAllPhotosFlag?.();
+    if (verifyAllPhotosFlag !== undefined) {
+      void this.work.track(
+        verifyAllPhotosFlag
+          .then((result) => {
+            if (result.rebuilt) console.warn(`[overlook] All Photos flag rebuilt for ${String(result.mismatched)} photo(s)`);
+          })
+          .catch((error: unknown) => {
+            console.error('[overlook] All Photos flag verification failed', error);
           }),
       );
     }

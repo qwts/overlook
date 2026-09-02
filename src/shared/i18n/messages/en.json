@@ -83,6 +83,12 @@
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
   },
+  "album.visibility.elsewhere": {
+    "defaultMessage": "{count, plural, one {# photo stays} other {# photos stay}} in All Photos via other albums"
+  },
+  "album.visibility.open": {
+    "defaultMessage": "Open {album}"
+  },
   "appLock.anchorPolicy.harden.ack": {
     "defaultMessage": "I saved the new recovery-key export and understand that losing it can make this library inaccessible."
   },
@@ -104,6 +110,9 @@
   "commands.album.delete": {
     "defaultMessage": "Delete album…"
   },
+  "commands.album.hide": {
+    "defaultMessage": "Hide from All Photos"
+  },
   "commands.album.membership.add": {
     "defaultMessage": "Add to album"
   },
@@ -124,6 +133,9 @@
   },
   "commands.album.reorder.up": {
     "defaultMessage": "Move up"
+  },
+  "commands.album.show": {
+    "defaultMessage": "Show in All Photos"
   },
   "commands.album.transfer": {
     "defaultMessage": "Transfer & Sync…"
@@ -2105,6 +2117,9 @@
   "sidebar.album.actions": {
     "defaultMessage": "Actions for {name}"
   },
+  "sidebar.album.hiddenFromAllPhotos": {
+    "defaultMessage": "Hidden from All Photos"
+  },
   "sidebar.album.name": {
     "defaultMessage": "Album name"
   },
@@ -2182,6 +2197,9 @@
   },
   "statusbar.inclusion.excluded": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules"
+  },
+  "statusbar.inclusion.hiddenByAlbums": {
+    "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings"
   },
   "titlebar.help": {
     "defaultMessage": "Help"

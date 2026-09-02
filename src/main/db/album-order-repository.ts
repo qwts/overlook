@@ -1,6 +1,5 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { AlbumSummary } from '../../shared/library/types.js';
 import { queryAll, runNamed } from './sql.js';
 
 export interface AlbumOrderResult {
@@ -11,18 +10,6 @@ export interface AlbumOrderResult {
 
 export function readAlbumOrder(db: BetterSqlite3.Database): string[] {
   return queryAll<{ id: string }>(db, 'SELECT id FROM albums ORDER BY position, id').map(({ id }) => id);
-}
-
-export function readAlbumSummaries(db: BetterSqlite3.Database): AlbumSummary[] {
-  return queryAll<{ id: string; name: string; n: number }>(
-    db,
-    `SELECT a.id, a.name, count(ap.photo_id) AS n
-       FROM albums a
-       LEFT JOIN album_photos ap
-         ON ap.album_id = a.id
-        AND ap.photo_id IN (SELECT id FROM ordinary_visible_photos)
-       GROUP BY a.id ORDER BY a.position`,
-  ).map((row) => ({ id: row.id, name: row.name, count: row.n }));
 }
 
 export function replaceAlbumOrder(db: BetterSqlite3.Database, order: readonly string[]): AlbumOrderResult {

@@ -259,7 +259,7 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
   assert.ok(dbKey !== undefined);
   const db = openLibraryDatabase({ path: join(world.targetDir, 'library.db'), dbKey });
   const repo = new PhotosRepository(db);
-  assert.deepEqual(repo.albums(), [{ id: 'A1', name: 'Recovered', count: 2 }]);
+  assert.deepEqual(repo.albums(), [{ id: 'A1', name: 'Recovered', count: 2, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] }]);
   assert.equal(repo.pendingCount(), 0);
   assert.equal(queryGet<{ count: number }>(db, 'SELECT count(*) AS count FROM photos_fts')?.count, 2);
   assert.equal(queryGet<{ count: number }>(db, 'SELECT count(*) AS count FROM keys')?.count, 2, 'the rotated key seeds the catalog');

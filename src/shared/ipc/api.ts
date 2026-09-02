@@ -161,6 +161,7 @@ export interface OverlookApi {
     readonly removePhotos: (request: Req<typeof channels.albumRemovePhotos>) => Promise<Res<typeof channels.albumRemovePhotos>>;
     readonly movePhotos: (request: Req<typeof channels.albumMovePhotos>) => Promise<Res<typeof channels.albumMovePhotos>>;
     readonly reorder: (request: Req<typeof channels.albumReorder>) => Promise<Res<typeof channels.albumReorder>>;
+    readonly setVisibility: (request: Req<typeof channels.albumSetVisibility>) => Promise<Res<typeof channels.albumSetVisibility>>;
   };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;

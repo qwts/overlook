@@ -166,13 +166,27 @@ export interface SelectionRangeResult {
 
 /** Per-source counts plus `excluded`: rows the active All Photos inclusion
  * rules hide (ADR-0030 §4 disclosure). Zero when no rule is active. */
-export type SourceCounts = Readonly<Record<SourceFilter, number>> & { readonly excluded: number };
+export type SourceCounts = Readonly<Record<SourceFilter, number>> & {
+  /** Rows the All Photos inclusion rules hide (#512). */
+  readonly excluded: number;
+  /** Rows every containing album hides from All Photos (#494). */
+  readonly hiddenByAlbums: number;
+};
 
 /** Sidebar albums list (#80); CRUD arrives with M10. */
 export interface AlbumSummary {
   readonly id: string;
   readonly name: string;
   readonly count: number;
+}
+
+/** An album as the sidebar lists it: the summary plus its All Photos policy
+ * and the ADR-0030 §2 disclosure — how many of its photos another visible
+ * album keeps in All Photos, and which albums those are (#494). */
+export interface AlbumListing extends AlbumSummary {
+  readonly showInAllPhotos: boolean;
+  readonly visibleElsewhere: number;
+  readonly visibleVia: readonly { readonly id: string; readonly name: string }[];
 }
 
 export interface LibraryStats {

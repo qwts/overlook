@@ -4,6 +4,7 @@ export const activityEventTypes = [
   'album.renamed',
   'album.deleted',
   'album.reordered',
+  'album.visibility-changed',
   'album.membership-added',
   'album.membership-removed',
   'album.membership-moved',

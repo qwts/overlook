@@ -39,7 +39,7 @@ import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
 import { libraryQuerySchema } from './library-query-schemas.js';
 import { galleryPolicySchema } from '../library/gallery-policy.js';
-import { albumChannels } from './album-channels.js';
+import { albumChannels, albumListingSchema } from './album-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
@@ -399,6 +399,7 @@ export const channels = {
       unavailable: z.number(),
       deleted: z.number(),
       excluded: z.number().int().nonnegative(),
+      hiddenByAlbums: z.number().int().nonnegative(),
     }),
   ),
   // All Photos inclusion rules (#512, ADR-0030 §4): read and written in the
@@ -409,11 +410,7 @@ export const channels = {
     z.object({ policy: galleryPolicySchema }),
     z.object({ policy: galleryPolicySchema }),
   ),
-  libraryAlbums: defineChannel(
-    'library:albums',
-    z.object({}),
-    z.object({ albums: z.array(z.object({ id: z.string(), name: z.string(), count: z.number().int().nonnegative() })).readonly() }),
-  ),
+  libraryAlbums: defineChannel('library:albums', z.object({}), z.object({ albums: z.array(albumListingSchema).readonly() })),
   activityPage: defineChannel('activity:page', activityPageRequestSchema, activityPageResponseSchema),
   historyStatus: defineChannel('history:status', z.object({}), historyStatusSchema),
   historyUndo: defineChannel('history:undo', historyExecuteRequestSchema, historyExecuteResponseSchema),

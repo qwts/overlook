@@ -16,7 +16,7 @@ import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.j
 import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
-import { PhotosRepository, verifySearchIndexAsync } from './db/photos-repository.js';
+import { PhotosRepository, verifyInAllPhotosAsync, verifySearchIndexAsync } from './db/photos-repository.js';
 import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
@@ -394,6 +394,7 @@ const startupMaintenance = new StartupMaintenance({
   rawRepair: () => (ensureMaintenanceServices(), rawRepairService)?.repair(),
   posterCapture: () => (ensureMaintenanceServices(), posterCaptureService)?.capture(),
   verifySearchIndex: () => libraryParts && verifySearchIndexAsync(libraryParts.db),
+  verifyAllPhotosFlag: () => libraryParts && verifyInAllPhotosAsync(libraryParts.db),
 });
 
 function cancelScheduledLibraryWork(): void {

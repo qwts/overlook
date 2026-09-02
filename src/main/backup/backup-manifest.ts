@@ -7,7 +7,7 @@ import { boardSchema } from '../../shared/moodboard/board.js';
 import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../../shared/library/photo-metadata.js';
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 7 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 8 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -403,7 +403,7 @@ export const backupManifestV6Schema = z
 export const backupManifestV7Schema = z
   .strictObject({
     ...backupManifestV6Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(7),
     galleryPolicy: galleryPolicySchema.strict(),
   })
   .superRefine((manifest, context) => {
@@ -411,6 +411,32 @@ export const backupManifestV7Schema = z
     const previous = backupManifestV6Schema.safeParse({ ...withoutPolicy, schema: 6 });
     if (!previous.success) {
       context.addIssue({ code: 'custom', message: `schema-6 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+  });
+
+// Collection visibility (#494, ADR-0030 §5/§7): the albums hidden from All
+// Photos travel as library data; the per-photo flag never does — restore
+// rebuilds it from the rows.
+export const backupManifestV8Schema = z
+  .strictObject({
+    ...backupManifestV7Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    hiddenAlbumIds: z.array(z.string().min(1)).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { hiddenAlbumIds, ...withoutVisibility } = manifest;
+    const previous = backupManifestV7Schema.safeParse({ ...withoutVisibility, schema: 7 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-7 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    const albumIds = new Set(manifest.albums.map((album) => album.id));
+    const seen = new Set<string>();
+    for (const [index, albumId] of hiddenAlbumIds.entries()) {
+      if (!albumIds.has(albumId)) {
+        context.addIssue({ code: 'custom', path: ['hiddenAlbumIds', index], message: 'hidden album is not in albums' });
+      }
+      if (seen.has(albumId)) context.addIssue({ code: 'custom', path: ['hiddenAlbumIds', index], message: 'duplicate hidden album' });
+      seen.add(albumId);
     }
   });
 
@@ -428,8 +454,9 @@ export type BackupManifestV5 = z.infer<typeof backupManifestV5Schema>;
 export type BackupManifestSidecarV6 = z.infer<typeof backupManifestSidecarV6Schema>;
 export type BackupManifestV6 = z.infer<typeof backupManifestV6Schema>;
 export type BackupManifestV7 = z.infer<typeof backupManifestV7Schema>;
+export type BackupManifestV8 = z.infer<typeof backupManifestV8Schema>;
 export type RestorableBackupManifest =
-  BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6 | BackupManifestV7;
+  BackupManifestV2 | BackupManifestV3 | BackupManifestV4 | BackupManifestV5 | BackupManifestV6 | BackupManifestV7 | BackupManifestV8;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -458,6 +485,10 @@ export interface BackupManifestSnapshotV6 extends BackupManifestSnapshotV5 {
 
 export interface BackupManifestSnapshotV7 extends BackupManifestSnapshotV6 {
   readonly galleryPolicy: BackupManifestV7['galleryPolicy'];
+}
+
+export interface BackupManifestSnapshotV8 extends BackupManifestSnapshotV7 {
+  readonly hiddenAlbumIds: readonly string[];
 }
 
 export type ParsedBackupManifest =
@@ -525,7 +556,15 @@ export function buildBackupManifestV7(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV7;
 }): BackupManifestV7 {
-  return backupManifestV7Schema.parse({
+  return backupManifestV7Schema.parse({ schema: 7, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV8(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV8;
+}): BackupManifestV8 {
+  return backupManifestV8Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -600,10 +639,17 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+  if (version.data.schema === 7) {
     const parsed = backupManifestV7Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-7 manifest: ${z.prettifyError(parsed.error)}`);
+    }
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  }
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+    const parsed = backupManifestV8Schema.safeParse(input);
+    if (!parsed.success) {
+      throw new BackupManifestError(`invalid schema-8 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }

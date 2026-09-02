@@ -13,10 +13,14 @@ import { queryAll, queryGet, run, runNamed } from './sql.js';
 import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
-import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
+import { moveAlbum, readAlbumOrder, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
+import { readAlbumListings, readHiddenAlbumIds, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
+export { verifyInAllPhotosAsync } from './album-visibility-repository.js';
 import {
+  ALL_PHOTOS_MEMBERSHIP_WHERE,
   allPhotosWhere,
   buildQueryPlan,
+  HIDDEN_BY_ALBUMS_WHERE,
   inclusionParams,
   ORDERINGS,
   select,
@@ -30,7 +34,7 @@ import { manifestSnapshot as readManifestSnapshot, restoreManifest as restoreMan
 import { PhotoMetadataRepository } from './photo-metadata-repository.js';
 
 import type {
-  AlbumSummary,
+  AlbumListing,
   LibraryQuery,
   LibraryStats,
   PageCursor,
@@ -538,8 +542,8 @@ export class PhotosRepository {
   }
 
   /** Sidebar albums list (#80): names + live membership counts. */
-  albums(): AlbumSummary[] {
-    return readAlbumSummaries(this.db);
+  albums(): AlbumListing[] {
+    return readAlbumListings(this.db);
   }
 
   albumOrder(): string[] {
@@ -587,14 +591,14 @@ export class PhotosRepository {
 
   /** Albums CRUD (#117). Deleting an album NEVER deletes photos — the
    * CASCADE clears membership only (Clear-vs-Delete language rules). */
-  createAlbum(id: string, name: string): AlbumSummary {
+  createAlbum(id: string, name: string): AlbumListing {
     runNamed(
       this.db,
       `INSERT INTO albums (id, name, created_at, position)
        VALUES (@id, @name, @createdAt, (SELECT COALESCE(max(position) + 1, 0) FROM albums))`,
       { id, name, createdAt: new Date().toISOString() },
     );
-    return { id, name, count: 0 };
+    return { id, name, count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] };
   }
 
   /** Renames; returns the members to re-manifest. */
@@ -624,6 +628,7 @@ export class PhotosRepository {
       for (const photoId of members) {
         markDirty(this.db, photoId);
       }
+      refreshInAllPhotos(this.db, members);
       return members;
     })();
   }
@@ -650,6 +655,7 @@ export class PhotosRepository {
           added.push(photoId);
         }
       }
+      refreshInAllPhotos(this.db, added);
       return added;
     })();
   }
@@ -672,6 +678,7 @@ export class PhotosRepository {
           removed.push(photoId);
         }
       }
+      refreshInAllPhotos(this.db, removed);
       return removed;
     })();
   }
@@ -713,6 +720,7 @@ export class PhotosRepository {
         markDirty(this.db, photoId);
         moved.push(photoId);
       }
+      refreshInAllPhotos(this.db, moved);
       return { moved, alreadyInTarget };
     })();
   }
@@ -913,10 +921,11 @@ export class PhotosRepository {
     // exists only to disclose how many rows those rules hide.
     const filters = [
       `count(*) FILTER (WHERE ${allPhotosWhere(policy)}) AS "all"`,
-      `count(*) FILTER (WHERE ${sourceWhere('all')}) AS "unfiltered"`,
+      `count(*) FILTER (WHERE ${ALL_PHOTOS_MEMBERSHIP_WHERE}) AS "unfiltered"`,
+      `count(*) FILTER (WHERE ${sourceWhere('all')} AND ${HIDDEN_BY_ALBUMS_WHERE}) AS "hiddenByAlbums"`,
       ...sources.map((source) => `count(*) FILTER (WHERE ${sourceWhere(source)}) AS "${source}"`),
     ].join(', ');
-    const row = queryAll<Record<(typeof sources)[number] | 'all' | 'unfiltered', number>>(
+    const row = queryAll<Record<(typeof sources)[number] | 'all' | 'unfiltered' | 'hiddenByAlbums', number>>(
       this.db,
       `SELECT ${filters} FROM ordinary_visible_photos p LEFT JOIN sync_ledger l ON l.photo_id = p.id`,
       { recentSince, ...inclusionParams(policy) },
@@ -931,7 +940,18 @@ export class PhotosRepository {
       unavailable: row?.unavailable ?? 0,
       deleted: row?.deleted ?? 0,
       excluded: Math.max(0, (row?.unfiltered ?? 0) - all),
+      hiddenByAlbums: row?.hiddenByAlbums ?? 0,
     };
+  }
+
+  /** Collection visibility (#494): the policy write and the members' flag
+   * refresh share one transaction; returns the photos that changed sides. */
+  setAlbumVisibility(albumId: string, showInAllPhotos: boolean): string[] {
+    return writeAlbumVisibility(this.db, albumId, showInAllPhotos);
+  }
+
+  hiddenAlbumIds(): string[] {
+    return readHiddenAlbumIds(this.db);
   }
 
   /** All Photos inclusion rules (#512) — library data read per query so a

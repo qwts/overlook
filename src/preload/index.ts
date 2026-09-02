@@ -244,6 +244,7 @@ const overlook: OverlookApi = {
     removePhotos: createInvoker(channels.albumRemovePhotos, invokeTransport),
     movePhotos: createInvoker(channels.albumMovePhotos, invokeTransport),
     reorder: createInvoker(channels.albumReorder, invokeTransport),
+    setVisibility: createInvoker(channels.albumSetVisibility, invokeTransport),
   }),
   boards: Object.freeze({
     list: async () => boardList({}),

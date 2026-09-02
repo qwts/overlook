@@ -328,8 +328,8 @@ describe('library IPC contract', () => {
     run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('AL1', '01J8LIB001', 1)`);
     run(db, `INSERT INTO albums (id, name, created_at, position) VALUES ('AL2', 'Empty', '2026-07-01T00:00:00Z', 1)`);
     assert.deepEqual(service.albums(), [
-      { id: 'AL1', name: 'Travel', count: 2 },
-      { id: 'AL2', name: 'Empty', count: 0 },
+      { id: 'AL1', name: 'Travel', count: 2, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+      { id: 'AL2', name: 'Empty', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
     ]);
   });
 
@@ -363,6 +363,19 @@ describe('library IPC contract', () => {
     assert.equal(events.changed.length, before + 1, 'one library:changed so open galleries and counts re-evaluate');
     assert.deepEqual(events.changed[before], []);
     assert.throws(() => service.setGalleryPolicy({ showUnavailable: true, minimumMegapixels: 0 }), 'hostile values never reach SQL');
+  });
+
+  test('album visibility is library data: the toggle announces the photos that changed sides (#494)', () => {
+    const { service, db, events } = seededService();
+    run(db, `INSERT INTO albums (id, name, created_at, position) VALUES ('AL1', 'Hidden', '2026-07-01T00:00:00Z', 0)`);
+    run(db, `INSERT INTO album_photos (album_id, photo_id, position) VALUES ('AL1', '01J8LIB000', 0)`);
+    const before = events.changed.length;
+    const album = service.setAlbumVisibility('AL1', false);
+    assert.equal(album.showInAllPhotos, false);
+    assert.equal(events.changed.length, before + 1);
+    assert.deepEqual(events.changed[before], ['01J8LIB000'], 'the hidden photo is the one open galleries must drop');
+    assert.equal(service.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);
+    assert.throws(() => service.setAlbumVisibility('missing', true), /does not exist/u);
   });
 
   test('stats reports live photo count, bytes, and pending for the chrome', async () => {

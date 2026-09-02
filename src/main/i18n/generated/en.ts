@@ -5,6 +5,7 @@
 
 export const en: Readonly<Record<string, string>> = {
   "commands.album.delete": "Delete album…",
+  "commands.album.hide": "Hide from All Photos",
   "commands.album.membership.add": "Add to album",
   "commands.album.membership.remove": "Remove from album",
   "commands.album.rename": "Rename album…",
@@ -12,6 +13,7 @@ export const en: Readonly<Record<string, string>> = {
   "commands.album.reorder.down": "Move down",
   "commands.album.reorder.top": "Move to top",
   "commands.album.reorder.up": "Move up",
+  "commands.album.show": "Show in All Photos",
   "commands.album.transfer": "Transfer & Sync…",
   "commands.app.lock.now": "Lock Now",
   "commands.app.search.focus": "Focus search",

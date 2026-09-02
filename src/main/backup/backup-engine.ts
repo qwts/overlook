@@ -5,11 +5,11 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV7,
+  buildBackupManifestV8,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
   type BackupManifestSidecarV6,
-  type BackupManifestSnapshotV7,
+  type BackupManifestSnapshotV8,
   type ProtectedBackupAlbumV3,
   type ProtectedBackupPhotoV3,
 } from './backup-manifest.js';
@@ -125,6 +125,8 @@ export interface BackupEngineDeps {
   readonly boardsSnapshot?: (() => readonly BackupManifestBoardV5[]) | undefined;
   /** All Photos inclusion rules (#512) — library data carried by the manifest. */
   readonly galleryPolicySnapshot?: (() => GalleryPolicy) | undefined;
+  /** Albums hidden from All Photos (#494) — library data carried by the manifest. */
+  readonly hiddenAlbumIdsSnapshot?: (() => readonly string[]) | undefined;
   /** Encrypted sidecar custody (#484): every companion row (for the manifest
    * + per-photo upload) and its RAW ciphertext stream. Absent = no sidecar
    * support (tests, pre-#484 callers) — manifests carry an empty list. */
@@ -798,7 +800,7 @@ export class BackupEngine {
     const generatedAt = new Date(this.deps.now()).toISOString();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
-    const manifest = buildBackupManifestV7({
+    const manifest = buildBackupManifestV8({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {
@@ -809,7 +811,8 @@ export class BackupEngine {
         boards: this.deps.boardsSnapshot?.() ?? [],
         sidecars: await this.sidecarManifestObjects(new Set(snapshot.photos.map((photo) => photo.id))),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
-      } satisfies BackupManifestSnapshotV7,
+        hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
+      } satisfies BackupManifestSnapshotV8,
     });
     // Preflight before ANY remote write of this publication — a blocked
     // generation must not upload, prune, or even refresh the bootstrap.

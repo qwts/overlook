@@ -102,7 +102,17 @@ describe('source truth (#119)', () => {
     }
     // And the world actually exercises every source (#512 adds the derived
     // RAW/Unavailable sources and the inclusion-rule disclosure count).
-    assert.deepEqual(counts, { all: 6, favorites: 2, recent: 2, raw: 2, offloaded: 1, unavailable: 0, deleted: 2, excluded: 0 });
+    assert.deepEqual(counts, {
+      all: 6,
+      favorites: 2,
+      recent: 2,
+      raw: 2,
+      offloaded: 1,
+      unavailable: 0,
+      deleted: 2,
+      excluded: 0,
+      hiddenByAlbums: 0,
+    });
     db.close();
   });
 

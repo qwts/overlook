@@ -11,10 +11,11 @@ import type { BackupEngineDeps } from './backup-engine.js';
 export function libraryDataBackupDeps(
   db: BetterSqlite3.Database,
   repo: PhotosRepository,
-): Pick<BackupEngineDeps, 'activitySnapshot' | 'boardsSnapshot' | 'galleryPolicySnapshot'> {
+): Pick<BackupEngineDeps, 'activitySnapshot' | 'boardsSnapshot' | 'galleryPolicySnapshot' | 'hiddenAlbumIdsSnapshot'> {
   return {
     activitySnapshot: () => activityBackupSnapshot(db),
     boardsSnapshot: () => boardsSnapshot(db),
     galleryPolicySnapshot: () => repo.galleryPolicy(),
+    hiddenAlbumIdsSnapshot: () => repo.hiddenAlbumIds(),
   };
 }

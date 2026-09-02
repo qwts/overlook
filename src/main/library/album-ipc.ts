@@ -23,6 +23,15 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
+  ipcMain.handle(channels.albumSetVisibility.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumSetVisibility, ({ albumId, showInAllPhotos }) =>
+      mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().setAlbumVisibility(albumId, showInAllPhotos) }),
+        () => ({ eventType: 'album.visibility-changed', entityIds: [albumId], outcome: 'succeeded', payload: { showInAllPhotos } }),
+      ),
+    )(request),
+  );
   ipcMain.handle(channels.albumRename.name, (_event, request: unknown) =>
     wrapHandler(channels.albumRename, ({ albumId, name }) => {
       mutateWithActivity(

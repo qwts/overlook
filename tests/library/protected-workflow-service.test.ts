@@ -139,7 +139,9 @@ describe('ProtectedWorkflowService (#329)', () => {
     assert.deepEqual(await value.workflow.unprotect('protected-private', 'wrong password'), { ok: false, reason: 'wrong-password' });
     assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
     assert.equal(value.albumRecords.get('protected-private'), undefined);
-    assert.deepEqual(value.photos.albums(), [{ id: 'ordinary-private', name: 'Private album', count: 1 }]);
+    assert.deepEqual(value.photos.albums(), [
+      { id: 'ordinary-private', name: 'Private album', count: 1, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+    ]);
     assert.equal(value.photos.get(PHOTO_ID)?.place, 'private place');
     assert.equal(
       await value.ordinary.verifyOriginal(value.contentHash, (keyId) => (keyId === 1 ? value.libraryKey : undefined), PHOTO_ID),

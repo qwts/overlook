@@ -68,6 +68,8 @@ export type CommandId =
   | 'album.rename'
   | 'album.delete'
   | 'album.transfer'
+  | 'album.hide'
+  | 'album.show'
   | 'album.reorder.up'
   | 'album.reorder.down'
   | 'album.reorder.top'
@@ -152,6 +154,8 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'album.rename': { id: 'commands.album.rename', defaultMessage: 'Rename album…' },
   'album.delete': { id: 'commands.album.delete', defaultMessage: 'Delete album…' },
   'album.transfer': { id: 'commands.album.transfer', defaultMessage: 'Transfer & Sync…' },
+  'album.hide': { id: 'commands.album.hide', defaultMessage: 'Hide from All Photos' },
+  'album.show': { id: 'commands.album.show', defaultMessage: 'Show in All Photos' },
   'album.reorder.up': { id: 'commands.album.reorder.up', defaultMessage: 'Move up' },
   'album.reorder.down': { id: 'commands.album.reorder.down', defaultMessage: 'Move down' },
   'album.reorder.top': { id: 'commands.album.reorder.top', defaultMessage: 'Move to top' },
@@ -371,6 +375,8 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'album.rename', label: label('album.rename', 'Rename album…'), surfaces: [], target: 'focused-item' },
   { id: 'album.delete', label: label('album.delete', 'Delete album…'), surfaces: [], target: 'focused-item' },
   { id: 'album.transfer', label: label('album.transfer', 'Transfer & Sync…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.hide', label: label('album.hide', 'Hide from All Photos'), surfaces: [], target: 'focused-item' },
+  { id: 'album.show', label: label('album.show', 'Show in All Photos'), surfaces: [], target: 'focused-item' },
   { id: 'album.reorder.up', label: label('album.reorder.up', 'Move up'), surfaces: [], target: 'focused-item', key: 'ArrowUp', alt: true },
   {
     id: 'album.reorder.down',

@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { migrateGalleryPolicy } from './gallery-policy-migration.js';
+import { migrateAlbumVisibility } from './album-visibility-migration.js';
 import { migrateDurableLiveLocalObjects } from './interop-migrations.js';
 import { queryAll, run } from './sql.js';
 
@@ -882,10 +883,9 @@ const SCHEMA_V26: Migration = {
   up: migrateDurableLiveLocalObjects,
 };
 
-// Migration 027 — All Photos inclusion rules (#512); body in
-// gallery-policy-migration.ts to keep this registry under the size gate.
-const SCHEMA_V27: Migration = { version: 27, name: 'gallery-policy', up: migrateGalleryPolicy };
-
+// 027 — All Photos inclusion rules (#512) and 028 — collection visibility
+// (#494) are registered inline below; their bodies live in their own modules
+// to keep this registry under the size gate.
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -913,7 +913,8 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V24,
   SCHEMA_V25,
   SCHEMA_V26,
-  SCHEMA_V27,
+  { version: 27, name: 'gallery-policy', up: migrateGalleryPolicy },
+  { version: 28, name: 'album-visibility', up: migrateAlbumVisibility },
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */

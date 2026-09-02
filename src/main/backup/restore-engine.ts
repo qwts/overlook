@@ -15,6 +15,7 @@ import { openLibraryDatabase } from '../db/database.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-policy.js';
+import { albumVisibilityMatches, restoreAlbumVisibility } from './restore-album-visibility.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
@@ -793,8 +794,9 @@ export class RestoreEngine {
       createManifestDebtStore(db, () => new Date()).save(true);
       if ('boards' in candidate.manifest) restoreBoards(db, candidate.manifest.boards);
       restoreGalleryPolicy(db, candidate.manifest);
+      restoreAlbumVisibility(db, candidate.manifest);
       if (candidate.manifest.schema !== 2) new ProtectedRecoveryRepository(db).restore(candidate.manifest);
-      if (candidate.manifest.schema === 6 || candidate.manifest.schema === 7) {
+      if ('sidecars' in candidate.manifest) {
         const sidecarRepo = new SidecarRepository(db);
         // A NOT FOUND sidecar row is omitted rather than kept: unlike a
         // photo row it carries no album membership, and a row pointing at
@@ -866,6 +868,7 @@ export class RestoreEngine {
         }
       }
       if (!galleryPolicyMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored gallery policy mismatch');
+      if (!albumVisibilityMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored album visibility mismatch');
     } finally {
       db.close();
     }

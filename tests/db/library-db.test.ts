@@ -678,7 +678,8 @@ describe('PhotosRepository', () => {
     repo.insert(deleted);
     run(db, `UPDATE photos SET deleted_at = ? WHERE id = ?`, '2026-07-12T00:00:00.000Z', deleted.id);
 
-    const counts = repo.counts('2026-07-10T00:00:00.000Z');
+    const { hiddenByAlbums, ...counts } = repo.counts('2026-07-10T00:00:00.000Z');
+    assert.equal(hiddenByAlbums, 0);
     assert.deepEqual(counts, { all: 3, favorites: 1, recent: 1, raw: 3, offloaded: 1, unavailable: 0, deleted: 1, excluded: 0 });
     db.close();
   });
@@ -734,8 +735,9 @@ describe('albums (#117)', () => {
     const ids = repo.page({ source: 'all', limit: 10 }).photos.map((photo) => photo.id);
 
     const album = repo.createAlbum('ALB1', 'Kyoto trip');
-    assert.deepEqual(album, { id: 'ALB1', name: 'Kyoto trip', count: 0 });
-    assert.deepEqual(repo.albums().at(-1), { id: 'ALB1', name: 'Kyoto trip', count: 0 });
+    const listing = { id: 'ALB1', name: 'Kyoto trip', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] };
+    assert.deepEqual(album, listing);
+    assert.deepEqual(repo.albums().at(-1), listing);
 
     repo.addToAlbum('ALB1', [ids[0] ?? '']);
     assert.equal(repo.albums().at(-1)?.count, 1);

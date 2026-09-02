@@ -5,7 +5,7 @@ import { PhotoMetadataRepository, type PhotoMetadataMutationResult } from '../db
 import { HistoryLibraryRepository } from '../history/history-library-repository.js';
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
 import type {
-  AlbumSummary,
+  AlbumListing,
   LibraryMembershipChange,
   LibraryQuery,
   LibraryStats,
@@ -198,7 +198,18 @@ export class LibraryService {
     return this.repo.stats();
   }
 
-  albums(): AlbumSummary[] {
+  /** Collection visibility (#494, ADR-0030 §2): the policy is library data;
+   * the photos that changed sides are announced so All Photos and the
+   * sidebar counts re-evaluate, and the album's own view is untouched. */
+  setAlbumVisibility(albumId: string, showInAllPhotos: boolean): AlbumListing {
+    const changed = this.repo.setAlbumVisibility(albumId, showInAllPhotos);
+    this.events.libraryChanged(changed, 'library');
+    const album = this.repo.albums().find((listing) => listing.id === albumId);
+    if (album === undefined) throw new Error(`album ${albumId} does not exist`);
+    return album;
+  }
+
+  albums(): AlbumListing[] {
     return this.repo.albums();
   }
 
@@ -221,7 +232,7 @@ export class LibraryService {
   // Albums CRUD (#117): every mutation pushes targeted change events —
   // membership/rename/delete dirty the affected photos (manifest-relevant
   // per ADR-0007), so pendingCount rides along.
-  createAlbum(id: string, name: string): AlbumSummary {
+  createAlbum(id: string, name: string): AlbumListing {
     const album = this.repo.createAlbum(id, name);
     this.events.libraryChanged([], 'none');
     return album;
