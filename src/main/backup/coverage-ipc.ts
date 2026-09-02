@@ -1,19 +1,20 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
-import { wrapHandler } from '../../shared/ipc/registry.js';
+import { wrapHandler, type IpcHandlerRegistrar } from '../../shared/ipc/registry.js';
 import type { CoverageService } from './coverage-service.js';
 
 // Backup coverage over IPC (#506): preflight is read-only; exclude and
 // include mutate custody and count as provider work while they run.
-export function registerCoverageHandlers(
+export function registerCoverageHandlersWith(
   getService: () => CoverageService,
   admit: () => void,
+  registrar: IpcHandlerRegistrar,
   withProviderWork: <T>(operation: () => Promise<T>) => Promise<T>,
 ): void {
   const reportError = ({ channelName, code, error }: { channelName: string; code: string; error: unknown }): void =>
     console.error(`[overlook] ${code} on ${channelName}`, error);
-  ipcMain.handle(channels.coveragePreflight.name, (_event, request: unknown) =>
+  registrar.handle(channels.coveragePreflight.name, (_event, request: unknown) =>
     wrapHandler(
       channels.coveragePreflight,
       async ({ photoIds }) => {
@@ -23,7 +24,7 @@ export function registerCoverageHandlers(
       { reportError },
     )(request),
   );
-  ipcMain.handle(channels.coverageExclude.name, (_event, request: unknown) =>
+  registrar.handle(channels.coverageExclude.name, (_event, request: unknown) =>
     wrapHandler(
       channels.coverageExclude,
       async ({ photoIds, authorization }) => {
@@ -33,7 +34,7 @@ export function registerCoverageHandlers(
       { reportError },
     )(request),
   );
-  ipcMain.handle(channels.coverageInclude.name, (_event, request: unknown) =>
+  registrar.handle(channels.coverageInclude.name, (_event, request: unknown) =>
     wrapHandler(
       channels.coverageInclude,
       async ({ photoIds }) => {
@@ -43,4 +44,12 @@ export function registerCoverageHandlers(
       { reportError },
     )(request),
   );
+}
+
+export function registerCoverageHandlers(
+  getService: () => CoverageService,
+  admit: () => void,
+  withProviderWork: <T>(operation: () => Promise<T>) => Promise<T>,
+): void {
+  registerCoverageHandlersWith(getService, admit, electron.ipcMain, withProviderWork);
 }

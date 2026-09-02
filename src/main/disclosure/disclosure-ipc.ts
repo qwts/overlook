@@ -1,17 +1,21 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
-import { wrapHandler } from '../../shared/ipc/registry.js';
+import { wrapHandler, type IpcHandlerRegistrar } from '../../shared/ipc/registry.js';
 import type { DisclosureService } from './disclosure-service.js';
 
 // Disclosure classes over IPC (#509). Every channel admits through the
 // app-lock gate first; the renderer only ever sends intent (a field and a
 // class, a scope id, an operation) — main compiles the plan.
-export function registerDisclosureHandlers(getService: () => DisclosureService, admit: () => void): void {
+export function registerDisclosureHandlersWith(
+  getService: () => DisclosureService,
+  admit: () => void,
+  registrar: IpcHandlerRegistrar,
+): void {
   const reportError = ({ channelName, code, error }: { channelName: string; code: string; error: unknown }): void =>
     console.error(`[overlook] ${code} on ${channelName}`, error);
   const options = { reportError };
-  ipcMain.handle(channels.disclosurePolicy.name, (_event, request: unknown) =>
+  registrar.handle(channels.disclosurePolicy.name, (_event, request: unknown) =>
     wrapHandler(
       channels.disclosurePolicy,
       () => {
@@ -22,7 +26,7 @@ export function registerDisclosureHandlers(getService: () => DisclosureService, 
       options,
     )(request),
   );
-  ipcMain.handle(channels.disclosureSetField.name, (_event, request: unknown) =>
+  registrar.handle(channels.disclosureSetField.name, (_event, request: unknown) =>
     wrapHandler(
       channels.disclosureSetField,
       ({ field, class: cls }) => {
@@ -32,7 +36,7 @@ export function registerDisclosureHandlers(getService: () => DisclosureService, 
       options,
     )(request),
   );
-  ipcMain.handle(channels.disclosureOverrides.name, (_event, request: unknown) =>
+  registrar.handle(channels.disclosureOverrides.name, (_event, request: unknown) =>
     wrapHandler(
       channels.disclosureOverrides,
       ({ scope, id }) => {
@@ -42,7 +46,7 @@ export function registerDisclosureHandlers(getService: () => DisclosureService, 
       options,
     )(request),
   );
-  ipcMain.handle(channels.disclosureSetOverride.name, (_event, request: unknown) =>
+  registrar.handle(channels.disclosureSetOverride.name, (_event, request: unknown) =>
     wrapHandler(
       channels.disclosureSetOverride,
       ({ scope, id, field, class: cls }) => {
@@ -52,7 +56,7 @@ export function registerDisclosureHandlers(getService: () => DisclosureService, 
       options,
     )(request),
   );
-  ipcMain.handle(channels.disclosurePreview.name, (_event, request: unknown) =>
+  registrar.handle(channels.disclosurePreview.name, (_event, request: unknown) =>
     wrapHandler(
       channels.disclosurePreview,
       (preview) => {
@@ -62,4 +66,8 @@ export function registerDisclosureHandlers(getService: () => DisclosureService, 
       options,
     )(request),
   );
+}
+
+export function registerDisclosureHandlers(getService: () => DisclosureService, admit: () => void): void {
+  registerDisclosureHandlersWith(getService, admit, electron.ipcMain);
 }

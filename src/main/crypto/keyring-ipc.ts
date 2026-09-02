@@ -1,16 +1,16 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
-import { wrapHandler } from '../../shared/ipc/registry.js';
+import { wrapHandler, type IpcHandlerRegistrar } from '../../shared/ipc/registry.js';
 import type { KeyringService } from './keyring-service.js';
 
 // The keyring over IPC (#517). Every channel admits through the app-lock
 // gate first: a locked library has no keyring to show or change.
-export function registerKeyringHandlers(getService: () => KeyringService, admit: () => void): void {
+export function registerKeyringHandlersWith(getService: () => KeyringService, admit: () => void, registrar: IpcHandlerRegistrar): void {
   const reportError = ({ channelName, code, error }: { channelName: string; code: string; error: unknown }): void =>
     console.error(`[overlook] ${code} on ${channelName}`, error);
   const options = { reportError };
-  ipcMain.handle(channels.keyringList.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringList.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringList,
       () => {
@@ -20,7 +20,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringExport.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringExport.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringExport,
       async ({ id, password }) => {
@@ -30,7 +30,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringPickFile.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringPickFile.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringPickFile,
       async () => {
@@ -40,7 +40,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringImport.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringImport.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringImport,
       async ({ path, password }) => {
@@ -50,7 +50,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringRemovePreflight.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringRemovePreflight.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringRemovePreflight,
       ({ id }) => {
@@ -60,7 +60,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringRemove.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringRemove.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringRemove,
       ({ id, authorization }) => {
@@ -70,7 +70,7 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
-  ipcMain.handle(channels.keyringSetLabel.name, (_event, request: unknown) =>
+  registrar.handle(channels.keyringSetLabel.name, (_event, request: unknown) =>
     wrapHandler(
       channels.keyringSetLabel,
       ({ id, label }) => {
@@ -81,4 +81,8 @@ export function registerKeyringHandlers(getService: () => KeyringService, admit:
       options,
     )(request),
   );
+}
+
+export function registerKeyringHandlers(getService: () => KeyringService, admit: () => void): void {
+  registerKeyringHandlersWith(getService, admit, electron.ipcMain);
 }

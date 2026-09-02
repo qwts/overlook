@@ -1,16 +1,20 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
-import { wrapHandler } from '../../shared/ipc/registry.js';
+import { wrapHandler, type IpcHandlerRegistrar } from '../../shared/ipc/registry.js';
 import type { DuplicateIndexService } from './duplicate-index-service.js';
 
 // Perceptual duplicate review over IPC (#650): the derived review and the
 // explicit rescan. Deletion is not here — the dialog routes it through the
 // ordinary library delete so #482's protection applies unchanged.
-export function registerDuplicateHandlers(getService: () => DuplicateIndexService, admit: () => void): void {
+export function registerDuplicateHandlersWith(
+  getService: () => DuplicateIndexService,
+  admit: () => void,
+  registrar: IpcHandlerRegistrar,
+): void {
   const reportError = ({ channelName, code, error }: { channelName: string; code: string; error: unknown }): void =>
     console.error(`[overlook] ${code} on ${channelName}`, error);
-  ipcMain.handle(channels.duplicatesReview.name, (_event, request: unknown) =>
+  registrar.handle(channels.duplicatesReview.name, (_event, request: unknown) =>
     wrapHandler(
       channels.duplicatesReview,
       () => {
@@ -20,7 +24,7 @@ export function registerDuplicateHandlers(getService: () => DuplicateIndexServic
       { reportError },
     )(request),
   );
-  ipcMain.handle(channels.duplicatesRescan.name, (_event, request: unknown) =>
+  registrar.handle(channels.duplicatesRescan.name, (_event, request: unknown) =>
     wrapHandler(
       channels.duplicatesRescan,
       () => {
@@ -30,4 +34,8 @@ export function registerDuplicateHandlers(getService: () => DuplicateIndexServic
       { reportError },
     )(request),
   );
+}
+
+export function registerDuplicateHandlers(getService: () => DuplicateIndexService, admit: () => void): void {
+  registerDuplicateHandlersWith(getService, admit, electron.ipcMain);
 }
