@@ -14,6 +14,10 @@ const messages = defineMessages({
     id: 'statusbar.inclusion.excluded',
     defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules',
   },
+  hiddenByAlbums: {
+    id: 'statusbar.inclusion.hiddenByAlbums',
+    defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by album settings',
+  },
 });
 
 // The 26px mono strip (#81) per the design's StatusBar.jsx — always tells
@@ -39,10 +43,11 @@ export function StatusBar({
   // ADR-0030 §4: an All Photos that is filtered must say so and show the
   // excluded count. Albums, other sources, and explicit search are never
   // filtered, so the disclosure only appears on the plain All Photos view.
-  const excluded =
-    counts !== null && state.source === 'all' && state.album === null && state.protectedAlbum === null && state.query === ''
-      ? counts.excluded
-      : 0;
+  const plainAllPhotos = state.source === 'all' && state.album === null && state.protectedAlbum === null && state.query === '';
+  const excluded = counts !== null && plainAllPhotos ? counts.excluded : 0;
+  // ADR-0030 §2: albums hidden from All Photos are disclosed the same way,
+  // as their own number — they are a per-album setting, not a Settings rule.
+  const hiddenByAlbums = counts !== null && plainAllPhotos ? counts.hiddenByAlbums : 0;
   const { announce } = useAnnouncer();
   const syncing = state.pendingCount > 0;
   const provider = state.providerLabel;
@@ -74,6 +79,12 @@ export function StatusBar({
           <Icon name="eye-off" size={11} strokeWidth={2} />
           {intl.formatMessage(messages.excluded, { count: excluded })}
         </button>
+      ) : null}
+      {hiddenByAlbums > 0 ? (
+        <span className="ovl-statusbar__item ovl-statusbar__item--amber" data-testid="album-visibility-status">
+          <Icon name="eye-off" size={11} strokeWidth={2} />
+          {intl.formatMessage(messages.hiddenByAlbums, { count: hiddenByAlbums })}
+        </span>
       ) : null}
       <span className="ovl-statusbar__spacer" />
       {restore !== null && restoreLabel !== null ? (

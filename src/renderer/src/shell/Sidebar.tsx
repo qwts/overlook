@@ -5,7 +5,7 @@ import type { MessageDescriptor } from 'react-intl';
 
 import { useFormats } from '../i18n/use-formats.js';
 import { directionOf } from '../../../shared/i18n/locales.js';
-import type { AlbumSummary, LibraryStats, SourceCounts, SourceFilter } from '../../../shared/library/types.js';
+import type { AlbumListing, AlbumSummary, LibraryStats, SourceCounts, SourceFilter } from '../../../shared/library/types.js';
 import { Icon, type IconName } from '../components/Icon';
 import { ProgressBar } from '../components/ProgressBar';
 import { Tooltip } from '../components/Tooltip';
@@ -25,6 +25,7 @@ import { useAlbumReorder, type AlbumReorderCommand } from './use-album-reorder';
 import './shell.css';
 
 const messages = defineMessages({
+  hiddenFromAllPhotos: { id: 'sidebar.album.hiddenFromAllPhotos', defaultMessage: 'Hidden from All Photos' },
   nav: { id: 'sidebar.nav', defaultMessage: 'Library' },
   headingLibrary: { id: 'sidebar.heading.library', defaultMessage: 'Library' },
   headingAlbums: { id: 'sidebar.heading.albums', defaultMessage: 'Albums' },
@@ -85,6 +86,8 @@ interface SideRowProps {
   readonly onOpenActions?: ((position: { readonly x: number; readonly y: number }, origin: HTMLButtonElement) => void) | undefined;
   readonly statusLabel?: string | undefined;
   readonly positionLabel?: string | undefined;
+  /** Album hidden from All Photos (#494): a badge that is part of the accessible name. */
+  readonly hiddenLabel?: string | undefined;
   readonly onReorderShortcut?: ((command: Extract<AlbumReorderCommand, 'album.reorder.up' | 'album.reorder.down'>) => void) | undefined;
 }
 
@@ -99,12 +102,13 @@ function SideRow({
   onOpenActions,
   statusLabel,
   positionLabel,
+  hiddenLabel,
   onReorderShortcut,
 }: SideRowProps): ReactElement {
   const direction = directionOf(useIntl().locale);
   const { formatCount } = useFormats();
   const detail = statusLabel ?? (count === null ? null : formatCount(count));
-  const hint = [label, detail, positionLabel].filter((part) => part !== null && part !== undefined).join(' · ');
+  const hint = [label, hiddenLabel, detail, positionLabel].filter((part) => part !== null && part !== undefined).join(' · ');
   const row = (
     <button
       ref={buttonRef}
@@ -143,6 +147,11 @@ function SideRow({
     >
       <Icon name={icon} size={14} color={active ? 'var(--accent-cyan)' : 'var(--text-faint)'} />
       {collapsed ? null : <span className="ovl-siderow__label">{label}</span>}
+      {collapsed || hiddenLabel === undefined ? null : (
+        <span className="ovl-siderow__hidden" role="img" aria-label={hiddenLabel} title={hiddenLabel}>
+          <Icon name="eye-off" size={12} />
+        </span>
+      )}
       {collapsed || detail === null ? null : (
         <span className={`ovl-siderow__count mono-data${statusLabel === undefined ? '' : ' ovl-siderow__count--status'}`}>{detail}</span>
       )}
@@ -163,7 +172,7 @@ export interface SidebarProps {
   readonly platform: CommandPlatform;
   readonly counts: SourceCounts | null;
   readonly stats: LibraryStats | null;
-  readonly albums: readonly AlbumSummary[];
+  readonly albums: readonly AlbumListing[];
   readonly onTransferAlbum?: ((album: AlbumSummary) => void) | undefined;
   readonly protectedAlbums?: readonly {
     readonly id: string;
@@ -217,7 +226,7 @@ export function Sidebar({
   // Inline album creation (#117) — the design gives the + affordance but no
   // flow; an inline name row keeps it keyboard-first (Enter/Escape).
   const [namingAlbum, setNamingAlbum] = useState(false);
-  const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumSummary; readonly x: number; readonly y: number } | null>(null);
+  const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumListing; readonly x: number; readonly y: number } | null>(null);
   const [renamingAlbum, setRenamingAlbum] = useState<AlbumSummary | null>(null);
   const [deletingAlbum, setDeletingAlbum] = useState<AlbumSummary | null>(null);
   const allPhotosRef = useRef<HTMLButtonElement>(null);
@@ -406,6 +415,7 @@ export function Sidebar({
                     : undefined
                 }
                 statusLabel={albumDrop.feedback?.albumId === album.id ? albumDrop.feedback.label : undefined}
+                hiddenLabel={album.showInAllPhotos ? undefined : intl.formatMessage(messages.hiddenFromAllPhotos)}
                 onClick={() => {
                   dispatch({ type: 'album/set', albumId: album.id });
                 }}
@@ -494,6 +504,17 @@ export function Sidebar({
           onDelete={() => {
             setAlbumMenu(null);
             setDeletingAlbum(albumMenu.album);
+          }}
+          onSetVisibility={(showInAllPhotos) => {
+            const album = albumMenu.album;
+            setAlbumMenu(null);
+            restoreAlbumActionFocus();
+            // The albums list and counts refresh off the library:changed push.
+            void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos });
+          }}
+          onOpenAlbum={(albumId) => {
+            setAlbumMenu(null);
+            dispatch({ type: 'album/set', albumId });
           }}
           onTransfer={
             onTransferAlbum === undefined

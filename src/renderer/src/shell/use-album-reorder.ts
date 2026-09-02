@@ -47,8 +47,10 @@ function commandFor(from: number, to: number, total: number): AlbumReorderComman
   return to < from ? 'album.reorder.up' : 'album.reorder.down';
 }
 
-export function useAlbumReorder(albums: readonly AlbumSummary[]): {
-  readonly albums: readonly AlbumSummary[];
+export function useAlbumReorder<T extends AlbumSummary>(
+  albums: readonly T[],
+): {
+  readonly albums: readonly T[];
   readonly grabbedId: string | null;
   readonly draggingId: string | null;
   readonly invalid: boolean;

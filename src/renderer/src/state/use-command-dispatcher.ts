@@ -62,6 +62,8 @@ export function useCommandDispatcher(
         case 'album.rename':
         case 'album.delete':
         case 'album.transfer':
+        case 'album.hide':
+        case 'album.show':
         case 'album.reorder.up':
         case 'album.reorder.down':
         case 'album.reorder.top':

@@ -4,7 +4,7 @@ import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import './shell.css';
 import { useFormats } from '../i18n/use-formats.js';
-import type { AlbumSummary, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
+import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
 import { Icon } from '../components/Icon';
 import { TitleBar } from '../components/TitleBar';
 import { TitlebarHelpMenu } from '../components/TitlebarHelpMenu';
@@ -181,7 +181,7 @@ export function Shell({
     return unsubscribe;
   }, [openDroppedPaths]);
   const [stats, setStats] = useState<LibraryStats | null>(null);
-  const [albums, setAlbums] = useState<readonly AlbumSummary[]>([]);
+  const [albums, setAlbums] = useState<readonly AlbumListing[]>([]);
   // Current library name for the titlebar trigger (#386). Registry reads
   // never require content access, so this works while locked too.
   const [libraryName, setLibraryName] = useState<string | null>(null);

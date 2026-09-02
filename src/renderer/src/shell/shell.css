@@ -235,6 +235,13 @@
   color: var(--text-faint);
 }
 
+/* Album hidden from All Photos (#494): a quiet glyph beside the name. */
+.ovl-siderow__hidden {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+}
+
 /* After the base .ovl-siderow rules — same specificity, so source order is
  * what lets the rail metrics win (PR #245 review). */
 .ovl-siderow--collapsed {

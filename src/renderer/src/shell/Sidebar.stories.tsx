@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 
 import { Sidebar } from './Sidebar';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
-import type { AlbumSummary, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
+import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
 import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { beginPhotoDrag } from '../grid/photo-drag-session';
 
@@ -47,7 +47,17 @@ function installStub(): void {
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, albums: albumActions };
 }
 
-const counts: SourceCounts = { all: 204318, favorites: 11, recent: 96, raw: 0, offloaded: 12, unavailable: 0, deleted: 3, excluded: 0 };
+const counts: SourceCounts = {
+  all: 204318,
+  favorites: 11,
+  recent: 96,
+  raw: 0,
+  offloaded: 12,
+  unavailable: 0,
+  deleted: 3,
+  excluded: 0,
+  hiddenByAlbums: 0,
+};
 const stats: LibraryStats = {
   photos: 204318,
   bytes: 1_580_000_000_000,
@@ -55,9 +65,9 @@ const stats: LibraryStats = {
   lastBackupAt: null,
   offloadedBytes: 380_000_000_000,
 };
-const albums: readonly AlbumSummary[] = [
-  { id: 'a1', name: 'Iceland', count: 214 },
-  { id: 'a2', name: 'Studio scans', count: 1042 },
+const albums: readonly AlbumListing[] = [
+  { id: 'a1', name: 'Iceland', count: 214, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
+  { id: 'a2', name: 'Studio scans', count: 1042, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [] },
 ];
 
 const meta: Meta<typeof Sidebar> = {
@@ -275,6 +285,35 @@ export const DerivedSourcesWithCounts: Story = {
       .filter((text) => /^(All Photos|Favorites|Recent imports|RAW|Offloaded|Unavailable|Trash)/u.test(text))
       .map((text) => text.replace(/[\d,]+$/u, '').trim());
     await expect(order).toEqual(['All Photos', 'Favorites', 'Recent imports', 'RAW', 'Offloaded', 'Unavailable', 'Trash']);
+  },
+};
+
+// #494 / ADR-0030 §2: a hidden album is marked in the row, and its actions
+// menu discloses how many photos stay in All Photos via other albums and
+// offers to open them.
+export const HiddenAlbumDisclosesInclusion: Story = {
+  args: {
+    albums: [
+      {
+        id: 'a1',
+        name: 'Iceland',
+        count: 214,
+        showInAllPhotos: false,
+        visibleElsewhere: 12,
+        visibleVia: [{ id: 'a2', name: 'Studio scans' }],
+      },
+      { id: 'a2', name: 'Studio scans', count: 1042, showInAllPhotos: true, visibleElsewhere: 12, visibleVia: [] },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('img', { name: 'Hidden from All Photos' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    const body = within(document.body);
+    await expect(body.getByRole('menuitem', { name: /Show in All Photos/u })).toBeVisible();
+    await expect(body.getByRole('menuitem', { name: /12 photos stay in All Photos via other albums/u })).toBeVisible();
+    await expect(body.getByRole('menuitem', { name: 'Open Studio scans' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
   },
 };
 

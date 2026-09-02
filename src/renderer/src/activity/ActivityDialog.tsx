@@ -48,6 +48,7 @@ const eventMessages: Readonly<Record<ActivityEventType, { readonly id: string; r
   'album.renamed': { id: 'activity.event.albumRenamed', defaultMessage: 'Renamed an album' },
   'album.deleted': { id: 'activity.event.albumDeleted', defaultMessage: 'Deleted an album; photos were kept' },
   'album.reordered': { id: 'activity.event.albumReordered', defaultMessage: 'Reordered an album' },
+  'album.visibility-changed': { id: 'activity.event.albumVisibility', defaultMessage: 'Changed whether an album shows in All Photos' },
   'board.layout-changed': { id: 'activity.event.boardLayout', defaultMessage: 'Edited a moodboard' },
   'album.membership-added': {
     id: 'activity.event.albumAdded',
