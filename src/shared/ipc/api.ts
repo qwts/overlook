@@ -184,6 +184,10 @@ export interface OverlookApi {
     readonly family: (request: Req<typeof channels.photoVariants>) => Promise<Res<typeof channels.photoVariants>>;
     readonly promote: (request: Req<typeof channels.photoPromoteVariant>) => Promise<Res<typeof channels.photoPromoteVariant>>;
   };
+  /** Inspector histogram (#498): bins over the photo's own mid derivative. */
+  readonly histogram: {
+    readonly get: (request: Req<typeof channels.photoHistogram>) => Promise<Res<typeof channels.photoHistogram>>;
+  };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;
     readonly get: (request: Req<typeof channels.boardGet>) => Promise<Res<typeof channels.boardGet>>;

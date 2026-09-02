@@ -69,6 +69,8 @@ import type { PhotoEditService } from './library/photo-edit-service.js';
 import { registerProvenanceHandlers } from './library/provenance-ipc.js';
 import type { ProvenanceService } from './library/provenance-service.js';
 import { registerVariantHandlers } from './library/variant-ipc.js';
+import { registerHistogramHandlers } from './library/histogram-ipc.js';
+import type { HistogramService } from './library/histogram-service.js';
 import type { VariantService } from './library/variant-service.js';
 
 export interface AppServicesOptions {
@@ -86,6 +88,7 @@ export interface AppServicesOptions {
   readonly getEdits: () => PhotoEditService;
   readonly getProvenance: () => ProvenanceService;
   readonly getVariants: () => VariantService;
+  readonly getHistogram: () => HistogramService;
   readonly getFull: () => FullService;
   readonly getImport: () => ImportService;
   readonly getEmbedding: () => EmbeddingService;
@@ -220,6 +223,7 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerPhotoEditHandlers(options.getEdits, options.requireContentAccess, options.getActivity, options.onManifestChanged);
   registerProvenanceHandlers(options.getProvenance, options.requireContentAccess, options.onManifestChanged);
   registerVariantHandlers(options.getVariants, options.requireContentAccess, options.onManifestChanged);
+  registerHistogramHandlers(options.getHistogram, options.requireContentAccess);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);
   registerHistoryHandlers(options.getHistory, options.requireContentAccess);
   registerProtectedAlbumHandlers(

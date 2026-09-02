@@ -13,6 +13,7 @@ import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { PhotoMetadataEditor } from './PhotoMetadataEditor.js';
 import { EditsSection } from './EditsSection.js';
+import { HistogramSection } from './HistogramSection.js';
 import { ProvenanceSection } from './ProvenanceSection.js';
 import { VariantsSection } from './VariantsSection.js';
 import { custodyPresentation } from '../backup/custody-presentation.js';
@@ -200,6 +201,7 @@ export function Inspector({
         <MetadataRow label="Size" value={formatBytes(photo.bytes)} />
         <MetadataRow label="Imported" value={`${formatCalendarDate(photo.importedAt)} · ${photo.importSource}`} />
       </Section>
+      <HistogramSection photo={photo} />
       <EditsSection photoId={photo.id} />
       <VariantsSection photo={photo} onShowPhoto={onShowPhoto} />
       <ProvenanceSection photoId={photo.id} />

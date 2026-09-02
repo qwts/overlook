@@ -268,3 +268,44 @@
   font: var(--type-meta);
   color: var(--text-faint);
 }
+
+/* Histogram (#498): the RGB fills share one square-root scale and the luma
+ * line rides on top; every color is an accent token so the chart reads the
+ * same in both themes. Fixed height keeps the 256-bin SVG legible. */
+.ovl-inspector__histogram {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin: var(--space-1) 0 var(--space-2);
+  background: var(--gray-2);
+  border-radius: var(--radius-tile);
+}
+
+.ovl-inspector__histogramChannel {
+  opacity: 0.5;
+}
+
+.ovl-inspector__histogramChannel--red {
+  fill: var(--accent-red);
+}
+
+.ovl-inspector__histogramChannel--green {
+  fill: var(--accent-green);
+}
+
+.ovl-inspector__histogramChannel--blue {
+  fill: var(--accent-iris);
+}
+
+.ovl-inspector__histogramLuma {
+  fill: none;
+  stroke: var(--text-body);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.ovl-inspector__histogramNote {
+  margin: 0;
+  font: var(--type-meta);
+  color: var(--text-muted);
+}

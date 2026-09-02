@@ -656,8 +656,7 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
-  maintenance?.rawRepair.close();
-  maintenance?.posterCapture.close();
+  maintenance?.close();
   for (const controller of activeBackupControllers) controller.abort();
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     Promise.all([productionInterop.lockDesktop(), closeProductionInboundMoveLibrary()]),
@@ -838,6 +837,7 @@ void externalOpen.whenReady().then(async () => {
     getEdits: () => ensureMaintenanceServices().photoEdits,
     getProvenance: () => ensureMaintenanceServices().provenance,
     getVariants: () => ensureMaintenanceServices().variants,
+    getHistogram: () => ensureMaintenanceServices().histogram.service,
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,

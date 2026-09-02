@@ -6,6 +6,7 @@ import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { VariantFamilyView } from './use-photo-variants';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import type { PhotoCustodyStatus } from '../../../shared/backup/custody-status.js';
+import type { HistogramPayload } from '../../../shared/ipc/histogram-channels.js';
 import type { ProvenancePayload } from '../../../shared/ipc/provenance-channels.js';
 import { PROVENANCE_EVALUATOR, type ProvenanceSource } from '../../../shared/library/provenance.js';
 
@@ -78,6 +79,26 @@ function provenanceOf(
   };
 }
 
+// #498: a histogram as main would report it — four bell curves so the
+// overlaid traces are legible, small shadow clipping and highlight clipping
+// above the amber threshold.
+function histogramOf(photoId: string): HistogramPayload {
+  const bell = (center: number, width: number): number[] =>
+    Array.from({ length: 256 }, (_, index) => Math.round(1000 * Math.exp(-(((index - center) / width) ** 2))));
+  return {
+    state: 'ready',
+    photoId,
+    revisionId: null,
+    source: 'mid',
+    width: 2048,
+    height: 1365,
+    pixels: 2048 * 1365,
+    channels: { red: bell(96, 40), green: bell(128, 44), blue: bell(160, 48), luma: bell(122, 42) },
+    clipping: { shadows: { red: 0.002, green: 0.001, blue: 0 }, highlights: { red: 0.014, green: 0.01, blue: 0.005 } },
+    digest: 'story001',
+  };
+}
+
 const meta: Meta<typeof Inspector> = {
   title: 'App/Inspector',
   component: Inspector,
@@ -125,7 +146,9 @@ const meta: Meta<typeof Inspector> = {
         promote: ({ photoId }: { photoId: string }) => Promise.resolve({ ...family, representativeId: photoId }),
         duplicate: () => Promise.resolve({ created: [], skipped: 0, unsupported: 0, pendingCount: 0 }),
       } as unknown as OverlookApi['variants'];
-      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance, variants };
+      const histogramPayload = (context.parameters['histogram'] as HistogramPayload | undefined) ?? histogramOf(PHOTO.id);
+      const histogram = { get: () => Promise.resolve(histogramPayload) } as unknown as OverlookApi['histogram'];
+      (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance, variants, histogram };
       return (
         <div style={{ width: 'var(--inspector-w)', height: 480, background: 'var(--gray-1)', borderLeft: '1px solid var(--border-1)' }}>
           <Story />
@@ -489,5 +512,33 @@ export const VariantsFamily: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /^Promote .* to representative$/u }));
     await expect(canvas.getAllByTestId('inspector-variant')[0]).toHaveAttribute('data-representative', 'true');
     await expect(canvas.getByRole('button', { name: 'Duplicate' })).toBeEnabled();
+  },
+};
+
+// #498: the Histogram section over the stubbed bins — chart, clipping row
+// (amber: highlights clip above 1%), and the honest source row.
+export const Histogram: Story = {
+  args: { photo: PHOTO },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { level: 3, name: 'Histogram' })).toBeVisible();
+    const section = canvasElement.querySelector('[data-testid="inspector-histogram"]');
+    await expect(section).toHaveAttribute('data-state', 'ready');
+    await expect(section).toHaveAttribute('data-digest', 'story001');
+    await expect(canvas.getByRole('img', { name: 'Histogram of IMG_4021.RAF: red, green, blue and luminance' })).toBeVisible();
+    await expect(canvas.getByText('Shadows 0.2% · Highlights 1.4%')).toBeVisible();
+    await expect(canvas.getByText('Preview · sRGB · 2048×1365')).toBeVisible();
+  },
+};
+
+export const HistogramUnavailable: Story = {
+  args: { photo: PHOTO },
+  parameters: { histogram: { state: 'unavailable', photoId: PHOTO.id, reason: 'missing' } satisfies HistogramPayload },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = canvasElement.querySelector('[data-testid="inspector-histogram"]');
+    await expect(section).toHaveAttribute('data-state', 'unavailable');
+    await expect(canvas.getByText('No preview in custody yet — repair pending')).toBeVisible();
+    await expect(canvas.queryByRole('img', { name: /^Histogram of/u })).toBeNull();
   },
 };

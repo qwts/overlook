@@ -400,6 +400,19 @@
       ]
     },
     {
+      "id": "498-histogram",
+      "wiki": "Acceptance-Test-Histogram",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/histogram.spec.ts" },
+        { "type": "storybook", "path": "src/renderer/src/inspector/Inspector.stories.tsx" },
+        { "type": "unit-dom", "paths": ["tests/library/histogram.test.ts", "tests/library/histogram-service.test.ts"] },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Histogram.md for the offloaded-original, failed-preview and detached-Inspector checks."
+        }
+      ]
+    },
+    {
       "id": "497-edited-export",
       "wiki": "Acceptance-Test-Edited-Export",
       "coverage": [

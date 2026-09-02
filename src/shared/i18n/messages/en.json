@@ -893,6 +893,39 @@
   "inspector.file.metadata": {
     "defaultMessage": "Metadata"
   },
+  "inspector.histogram.chart": {
+    "defaultMessage": "Histogram of {name}: red, green, blue and luminance"
+  },
+  "inspector.histogram.clipping": {
+    "defaultMessage": "Clipping"
+  },
+  "inspector.histogram.clippingValue": {
+    "defaultMessage": "Shadows {shadows} · Highlights {highlights}"
+  },
+  "inspector.histogram.computing": {
+    "defaultMessage": "Computing…"
+  },
+  "inspector.histogram.corrupt": {
+    "defaultMessage": "Preview did not decode — repair pending"
+  },
+  "inspector.histogram.failed": {
+    "defaultMessage": "Histogram unavailable"
+  },
+  "inspector.histogram.missing": {
+    "defaultMessage": "No preview in custody yet — repair pending"
+  },
+  "inspector.histogram.source": {
+    "defaultMessage": "Source"
+  },
+  "inspector.histogram.sourceValue": {
+    "defaultMessage": "Preview · sRGB · {width}×{height}"
+  },
+  "inspector.histogram.state": {
+    "defaultMessage": "State"
+  },
+  "inspector.histogram.title": {
+    "defaultMessage": "Histogram"
+  },
   "inspector.metadata.addTag": {
     "defaultMessage": "Add tag"
   },

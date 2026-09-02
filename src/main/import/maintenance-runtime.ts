@@ -6,6 +6,7 @@ import { createPosterCaptureRuntime } from './poster-capture-runtime.js';
 import type { PosterCaptureService } from './poster-capture-service.js';
 import { createRawRepairRuntime } from './raw-repair-runtime.js';
 import type { RawRepairService } from './raw-repair-service.js';
+import { createHistogramRuntime, type HistogramRuntime } from '../library/histogram-runtime.js';
 import { createPhotoEditRuntime } from '../library/photo-edit-runtime.js';
 import type { PhotoEditService } from '../library/photo-edit-service.js';
 import { createProvenanceRuntime } from '../library/provenance-runtime.js';
@@ -42,6 +43,10 @@ export interface MaintenanceServices {
   readonly photoEdits: PhotoEditService;
   readonly provenance: ProvenanceService;
   readonly variants: VariantService;
+  /** Inspector histogram (#498). */
+  readonly histogram: HistogramRuntime;
+  /** Stops the background passes and the histogram worker with the library. */
+  readonly close: () => void;
 }
 
 export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceServices {
@@ -54,12 +59,19 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     currentKey: () => parts.keyStore.currentKey(),
     resolveKey: parts.keyStore.resolver(),
   };
+  // Every derivative regeneration below also drops the histogram cached for
+  // that photo (#498): a repair or re-bake changes the pixels, not the head.
+  const histogram = createHistogramRuntime({ parts });
+  const invalidateThumb = (id: string): void => {
+    ctx.invalidateThumb(id);
+    histogram.service.invalidate([id]);
+  };
   const rawRepair = createRawRepairRuntime({
     ...shared,
     repo,
     changed: (ids) => {
       for (const id of ids) {
-        ctx.invalidateThumb(id);
+        invalidateThumb(id);
         ctx.invalidateFull(id);
       }
       ctx.emitChanged(ids);
@@ -73,7 +85,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     db: parts.db,
     captureFrame: captureVideoPosterFrame,
     changed: (ids) => {
-      for (const id of ids) ctx.invalidateThumb(id);
+      for (const id of ids) invalidateThumb(id);
       // Poster capture only regenerates a derivative — refresh the tiles, never
       // refetch the page (#744 review).
       ctx.emitThumbsChanged(ids);
@@ -84,7 +96,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     parts,
     runtime,
     appVersion: ctx.appVersion,
-    invalidateThumb: ctx.invalidateThumb,
+    invalidateThumb: invalidateThumb,
     emitThumbsChanged: ctx.emitThumbsChanged,
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
@@ -94,11 +106,23 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     parts,
     runtime,
     appVersion: ctx.appVersion,
-    invalidateThumb: ctx.invalidateThumb,
+    invalidateThumb: invalidateThumb,
     emitChanged: ctx.emitChanged,
     emitCreated: ctx.emitCreated,
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });
-  return { rawRepair, posterCapture, photoEdits, provenance, variants };
+  return {
+    rawRepair,
+    posterCapture,
+    photoEdits,
+    provenance,
+    variants,
+    histogram,
+    close: () => {
+      rawRepair.close();
+      posterCapture.close();
+      void histogram.close();
+    },
+  };
 }
