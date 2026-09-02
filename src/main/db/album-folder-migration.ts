@@ -14,7 +14,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 // by convention.
 export function migrateAlbumFolders(db: BetterSqlite3.Database): void {
   db.exec(`
-    ALTER TABLE albums ADD COLUMN kind TEXT NOT NULL DEFAULT 'album' CHECK (kind IN ('album', 'folder'));
+    ALTER TABLE albums ADD COLUMN kind TEXT NOT NULL DEFAULT 'album' CHECK (kind IN ('album', 'folder', 'smart'));
     ALTER TABLE albums ADD COLUMN parent_id TEXT REFERENCES albums(id);
     ALTER TABLE albums ADD COLUMN inherits_visibility INTEGER NOT NULL DEFAULT 0
       CHECK (inherits_visibility IN (0, 1));
