@@ -14,6 +14,19 @@ const messages = defineMessages({
     id: 'statusbar.inclusion.excluded',
     defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules',
   },
+  hiddenByAlbums: {
+    id: 'statusbar.inclusion.hiddenByAlbums',
+    defaultMessage: '{count, plural, one {# photo hidden} other {# photos hidden}} by album settings',
+  },
+  removalPending: {
+    id: 'statusbar.coverage.removalPending',
+    defaultMessage: '{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal',
+  },
+  allBackedUp: { id: 'statusbar.sync.allBackedUp', defaultMessage: 'All backed up' },
+  backedUpExceptLocalOnly: {
+    id: 'statusbar.sync.backedUpExceptLocalOnly',
+    defaultMessage: 'Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}',
+  },
 });
 
 // The 26px mono strip (#81) per the design's StatusBar.jsx — always tells
@@ -39,10 +52,11 @@ export function StatusBar({
   // ADR-0030 §4: an All Photos that is filtered must say so and show the
   // excluded count. Albums, other sources, and explicit search are never
   // filtered, so the disclosure only appears on the plain All Photos view.
-  const excluded =
-    counts !== null && state.source === 'all' && state.album === null && state.protectedAlbum === null && state.query === ''
-      ? counts.excluded
-      : 0;
+  const plainAllPhotos = state.source === 'all' && state.album === null && state.protectedAlbum === null && state.query === '';
+  const excluded = counts !== null && plainAllPhotos ? counts.excluded : 0;
+  // ADR-0030 §2: albums hidden from All Photos are disclosed the same way,
+  // as their own number — they are a per-album setting, not a Settings rule.
+  const hiddenByAlbums = counts !== null && plainAllPhotos ? counts.hiddenByAlbums : 0;
   const { announce } = useAnnouncer();
   const syncing = state.pendingCount > 0;
   const provider = state.providerLabel;
@@ -75,6 +89,18 @@ export function StatusBar({
           {intl.formatMessage(messages.excluded, { count: excluded })}
         </button>
       ) : null}
+      {hiddenByAlbums > 0 ? (
+        <span className="ovl-statusbar__item ovl-statusbar__item--amber" data-testid="album-visibility-status">
+          <Icon name="eye-off" size={11} strokeWidth={2} />
+          {intl.formatMessage(messages.hiddenByAlbums, { count: hiddenByAlbums })}
+        </span>
+      ) : null}
+      {stats !== null && stats.pendingRemovals > 0 ? (
+        <span className="ovl-statusbar__item ovl-statusbar__item--amber" data-testid="coverage-status">
+          <Icon name="cloud-off" size={11} strokeWidth={2} />
+          {intl.formatMessage(messages.removalPending, { count: stats.pendingRemovals })}
+        </span>
+      ) : null}
       <span className="ovl-statusbar__spacer" />
       {restore !== null && restoreLabel !== null ? (
         <button
@@ -103,9 +129,15 @@ export function StatusBar({
           Encrypting {formatCount(state.pendingCount)} → {provider}
         </span>
       ) : (
+        // ADR-0033 §6: a library holding local-only photos never claims
+        // "all backed up" — the sync chip names what the cloud lacks.
         <span className="ovl-statusbar__item ovl-statusbar__item--green" data-testid="sync-state">
           <Icon name="cloud-check" size={12} strokeWidth={2} />
-          All backed up · {state.lastBackupLabel}
+          {stats !== null && stats.excludedCount > 0
+            ? intl.formatMessage(messages.backedUpExceptLocalOnly, { count: stats.excludedCount })
+            : intl.formatMessage(messages.allBackedUp)}
+          {' · '}
+          {state.lastBackupLabel}
         </span>
       )}
       <span className="ovl-statusbar__item ovl-statusbar__item--green">

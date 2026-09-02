@@ -9,6 +9,7 @@ import { extractMetadata, type ExtractedMetadata } from '../import/exif.js';
 import type { ThumbnailOutcome, ThumbnailService } from '../import/thumbnail-service.js';
 import { queryGet } from '../db/sql.js';
 import type { InteropReviewCategory } from '../../shared/interop/contract.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 import type { FileKind, ImageFileKind, PhotoInsert, PhotoRecord } from '../../shared/library/types.js';
 import { probeMediaInfo, sniffImageKind } from '../../shared/library/media-signatures.js';
 import type { InteropAlbum, InteropRecord } from '../../shared/interop/records.js';
@@ -197,7 +198,9 @@ export class InboundPhotoImporter {
     duplicate: PhotoRecord,
     hooks: Pick<InboundAcceptanceHooks, 'assertActive' | 'databaseCommitted'>,
   ): Promise<InboundAcceptance> {
-    if (!(await this.options.blobs.verifyOriginal(duplicate.contentHash, this.options.resolveKey, duplicate.id))) {
+    // A variant reads the shared original under its asset owner (#496): a
+    // surviving duplicate of a purged root still verifies.
+    if (!(await this.options.blobs.verifyOriginal(duplicate.contentHash, this.options.resolveKey, assetOwnerOf(duplicate)))) {
       return this.rejected('conflict', 'Matching native photo custody could not be verified.');
     }
     hooks.assertActive?.();

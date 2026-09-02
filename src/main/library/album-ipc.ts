@@ -15,13 +15,94 @@ export function registerAlbumIpcHandlers(
   onManifestChanged?: () => void,
 ): void {
   ipcMain.handle(channels.albumCreate.name, (_event, request: unknown) =>
-    wrapHandler(channels.albumCreate, ({ name }) =>
+    wrapHandler(channels.albumCreate, ({ name, kind, parentId, predicate }) =>
       mutateWithActivity(
         getActivity,
-        () => ({ album: getService().createAlbum(newId(), name) }),
-        ({ album }) => ({ eventType: 'album.created', entityIds: [album.id], outcome: 'succeeded', payload: {} }),
+        () => ({ album: getService().createAlbum(newId(), name, { kind: kind ?? 'album', parentId: parentId ?? null, predicate }) }),
+        ({ album }) => ({
+          eventType: 'album.created',
+          entityIds: [album.id],
+          outcome: 'succeeded',
+          payload: { kind: album.kind, parentId: album.parentId },
+        }),
       ),
     )(request),
+  );
+  ipcMain.handle(channels.albumSetVisibility.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumSetVisibility, ({ albumId, showInAllPhotos }) =>
+      mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().setAlbumVisibility(albumId, showInAllPhotos) }),
+        ({ album }) => ({
+          eventType: 'album.visibility-changed',
+          entityIds: [albumId],
+          outcome: 'succeeded',
+          payload: { showInAllPhotos: album.showInAllPhotos, inherited: showInAllPhotos === 'inherit' },
+        }),
+      ),
+    )(request),
+  );
+  ipcMain.handle(channels.albumMove.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumMove, ({ albumId, parentId }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().moveAlbum(albumId, parentId) }),
+        () => ({
+          eventType: 'album.moved',
+          entityIds: [albumId, ...(parentId === null ? [] : [parentId])],
+          outcome: 'succeeded',
+          payload: { parentId },
+        }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.albumSetTags.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumSetTags, ({ albumId, tags }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().setAlbumTags(albumId, tags, newId) }),
+        ({ album }) => ({
+          eventType: 'album.tags-changed',
+          entityIds: [albumId],
+          outcome: 'succeeded',
+          payload: { count: album.tags.length },
+        }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.albumSetPredicate.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumSetPredicate, ({ albumId, predicate }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().setSmartAlbumPredicate(albumId, predicate) }),
+        () => ({
+          eventType: 'album.predicate-changed',
+          entityIds: [albumId],
+          outcome: 'succeeded',
+          payload: { groups: predicate.groups.length, composition: predicate.composition },
+        }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.albumDuplicate.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumDuplicate, ({ albumId }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().duplicateSmartAlbum(albumId, newId(), newId) }),
+        ({ album }) => ({ eventType: 'album.duplicated', entityIds: [albumId, album.id], outcome: 'succeeded', payload: {} }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.libraryFacetValues.name, (_event, request: unknown) =>
+    wrapHandler(channels.libraryFacetValues, ({ facet }) => ({ values: getService().facetValues(facet) }))(request),
   );
   ipcMain.handle(channels.albumRename.name, (_event, request: unknown) =>
     wrapHandler(channels.albumRename, ({ albumId, name }) => {
@@ -34,11 +115,11 @@ export function registerAlbumIpcHandlers(
     })(request),
   );
   ipcMain.handle(channels.albumDelete.name, (_event, request: unknown) =>
-    wrapHandler(channels.albumDelete, ({ albumId }) => {
+    wrapHandler(channels.albumDelete, ({ albumId, folder }) => {
       mutateWithActivity(
         getActivity,
-        () => getService().deleteAlbum(albumId),
-        () => ({ eventType: 'album.deleted', entityIds: [albumId], outcome: 'succeeded', payload: {} }),
+        () => getService().deleteAlbum(albumId, folder),
+        () => ({ eventType: 'album.deleted', entityIds: [albumId], outcome: 'succeeded', payload: { mode: folder?.mode ?? 'album' } }),
       );
       return {};
     })(request),
@@ -107,13 +188,13 @@ export function registerAlbumIpcHandlers(
                 eventType: 'album.reordered',
                 entityIds: [albumId],
                 outcome: 'succeeded',
-                payload: { position: completed.after.indexOf(albumId) + 1, total: completed.after.length },
+                payload: { position: completed.position + 1, total: completed.total },
               }
             : undefined,
         (completed) => albumOrderCommand(commandId, albumId, completed.before, completed.after),
       );
       if (result.changed) onManifestChanged?.();
-      return { changed: result.changed, position: result.after.indexOf(albumId), total: result.after.length };
+      return { changed: result.changed, position: result.position, total: result.total };
     })(request),
   );
 }

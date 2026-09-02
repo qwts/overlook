@@ -17,10 +17,13 @@ export interface PhotoContextMenuProps {
   readonly onToggleFavorite: () => void;
   readonly onSetOriginal: (isOriginal: boolean) => void;
   readonly onExport: () => void;
+  readonly onDuplicate: () => void;
   readonly onAddToAlbum: () => void;
   readonly onRemoveFromAlbum: () => void;
   readonly onOffload: () => void;
   readonly onRestoreOriginal: () => void;
+  readonly onKeepOnDevice: () => void;
+  readonly onBackUpAgain: () => void;
   readonly onTransfer?: (() => void) | undefined;
   readonly onTrash: () => void;
   readonly onRestore: () => void;
@@ -40,10 +43,13 @@ export function PhotoContextMenu({
   onToggleFavorite,
   onSetOriginal,
   onExport,
+  onDuplicate,
   onAddToAlbum,
   onRemoveFromAlbum,
   onOffload,
   onRestoreOriginal,
+  onKeepOnDevice,
+  onBackUpAgain,
   onTransfer,
   onTrash,
   onRestore,
@@ -87,11 +93,19 @@ export function PhotoContextMenu({
           ? item('photo.original.unmark', 'shield-check', () => onSetOriginal(false))
           : item('photo.original.mark', 'shield-check', () => onSetOriginal(true)),
         ...(quickActionIds.has('photo.export') ? [] : [item('photo.export', 'share', onExport)]),
+        item('photo.duplicate', 'copy', onDuplicate),
         ...(quickActionIds.has('album.membership.add') ? [] : [item('album.membership.add', 'album', onAddToAlbum)]),
         ...(inAlbum ? [item('album.membership.remove', 'x', onRemoveFromAlbum)] : []),
-        photo.syncState === 'offloaded'
-          ? item('photo.restoreOriginal', 'cloud-download', onRestoreOriginal)
-          : item('photo.offload', 'cloud-upload', onOffload),
+        // Backup coverage (#506): a row kept on this device only has no cloud
+        // copy to offload to or restore from — its one action is re-enabling.
+        ...(photo.coverage === 'included'
+          ? [
+              photo.syncState === 'offloaded'
+                ? item('photo.restoreOriginal', 'cloud-download', onRestoreOriginal)
+                : item('photo.offload', 'cloud-upload', onOffload),
+              item('photo.coverage.exclude', 'hard-drive', onKeepOnDevice),
+            ]
+          : [item('photo.coverage.include', 'cloud-upload', onBackUpAgain)]),
         ...(onTransfer === undefined ? [] : [item('photo.transfer', 'refresh-cw', onTransfer)]),
         ...(trashQuickActionItem === undefined
           ? [item('photo.trash', 'trash-2', onTrash, { danger: true, separatorBefore: true })]

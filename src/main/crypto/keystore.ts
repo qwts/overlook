@@ -1,10 +1,11 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const AUTH_TAG_BYTES = 16;
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { EnvelopeKey, KeyResolver } from './envelope.js';
+import type { KeyKind, KeyOrigin } from '../../shared/keyring/types.js';
 
 // Master-key + versioned-library-key lifecycle per ADR-0004 §custody/rotation
 // (#68). The Electron safeStorage dependency is injected so node:test proves
@@ -21,12 +22,28 @@ export class KeyCustodyError extends Error {
   override readonly name = 'KeyCustodyError';
 }
 
+/** Non-secret registry facts a custody record carries (ADR-0032 §2). Absent
+ * on records written before #517; the keyring reconciles them at open. */
+export interface KeyRegistryFacts {
+  readonly keyRef: string;
+  readonly version: number;
+  readonly kind: KeyKind;
+  readonly origin: KeyOrigin;
+}
+
 export interface KeyDisplay {
   /** The Inspector's "KEY #N". */
   readonly id: number;
+  readonly keyRef?: string | undefined;
+  readonly version?: number | undefined;
+  readonly kind?: KeyKind | undefined;
+  readonly origin?: KeyOrigin | undefined;
   readonly createdAt: string;
-  readonly status: 'active' | 'retired';
+  /** `held`: imported custody that is never the write key (#517). */
+  readonly status: 'active' | 'retired' | 'held';
 }
+
+export type KeyImportResult = 'imported' | 'already-present' | 'mismatch';
 
 export interface WrappedKeyRecord extends KeyDisplay {
   /** base64(nonce | tag | ciphertext) — the 32 key bytes GCM-wrapped by the
@@ -233,6 +250,10 @@ export class KeyStore {
       status: 'active',
       wrappedKey: wrapKey(this.masterKey, id, keyBytes),
       nonceHighWater: '0',
+      keyRef: randomBytes(16).toString('hex'),
+      version: 1,
+      kind: 'library',
+      origin: 'local',
     };
     this.records = [
       ...this.records.map((existing) => (existing.status === 'active' ? { ...existing, status: 'retired' as const } : existing)),
@@ -305,9 +326,72 @@ export class KeyStore {
     return this.createKey();
   }
 
-  /** Metadata for the Inspector's "KEY #N" row and future key management. */
+  /** Metadata for the Inspector's "KEY #N" row and the keyring registry. */
   listKeys(): readonly KeyDisplay[] {
-    return this.records.map(({ id, createdAt, status }) => ({ id, createdAt, status }));
+    return this.records.map(({ wrappedKey: _wrapped, nonceHighWater: _nonce, ...display }) => display);
+  }
+
+  hasKey(id: number): boolean {
+    return this.keys.has(id);
+  }
+
+  /** A copy of one unwrapped data key for export (#517). Callers wipe it. */
+  keyBytes(id: number): Buffer | undefined {
+    const key = this.keys.get(id);
+    return key === undefined ? undefined : Buffer.from(key);
+  }
+
+  /** Attaches registry facts to a pre-#517 record; a no-op once present. */
+  adoptRegistryFacts(id: number, facts: KeyRegistryFacts): void {
+    const record = this.records.find((candidate) => candidate.id === id);
+    if (record === undefined) throw new KeyCustodyError(`key ${String(id)} has no custody record`);
+    if (record.keyRef !== undefined) return;
+    this.records = this.records.map((existing) => (existing.id === id ? { ...existing, ...facts } : existing));
+    this.persist();
+  }
+
+  /** Takes an imported data key into custody under the registry id its
+   * (key_ref, version) resolved to. Idempotent for identical material;
+   * different material under a held id is refused, never replaced. */
+  importKey(id: number, keyBytes: Buffer, facts: KeyRegistryFacts): KeyImportResult {
+    if (keyBytes.length !== 32) throw new KeyCustodyError('imported key must be 32 bytes');
+    const held = this.keys.get(id);
+    if (held !== undefined) return timingSafeEqual(held, keyBytes) ? 'already-present' : 'mismatch';
+    if (this.records.some((record) => record.id === id)) {
+      throw new KeyCustodyError(`key ${String(id)} has a custody record without material`);
+    }
+    const record: WrappedKeyRecord = {
+      id,
+      createdAt: (this.options.now?.() ?? new Date()).toISOString(),
+      status: 'held',
+      wrappedKey: wrapKey(this.masterKey, id, keyBytes),
+      nonceHighWater: '0',
+      ...facts,
+    };
+    this.records = [...this.records, record].sort((left, right) => left.id - right.id);
+    this.keys.set(id, Buffer.from(keyBytes));
+    this.nextNonceByKey.set(id, 0n);
+    this.persist();
+    return 'imported';
+  }
+
+  /** Drops a key's material and custody record (#517 removal ceremony).
+   * The write key can never be removed: the store must always seal. */
+  removeKey(id: number): void {
+    const record = this.records.find((candidate) => candidate.id === id);
+    if (record === undefined) throw new KeyCustodyError(`key ${String(id)} has no custody record`);
+    if (record.status === 'active') throw new KeyCustodyError(`key ${String(id)} is the write key and cannot be removed`);
+    const previousRecords = this.records;
+    this.records = this.records.filter((existing) => existing.id !== id);
+    try {
+      this.persist();
+    } catch (error) {
+      this.records = previousRecords;
+      throw error;
+    }
+    this.keys.get(id)?.fill(0);
+    this.keys.delete(id);
+    this.nextNonceByKey.delete(id);
   }
 
   /** Wrapped library-key records for the recovery bootstrap (#289). They

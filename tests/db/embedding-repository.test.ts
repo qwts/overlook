@@ -157,13 +157,15 @@ describe('EmbeddingRepository', () => {
     assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 2, completed: 0, pending: 2 });
     assert.deepEqual(
       embeddings.pending(MODEL_VERSION, 1),
-      [{ photoId: first.id, contentHash: first.contentHash }],
+      [{ photoId: first.id, contentHash: first.contentHash, derivativeKey: first.contentHash }],
       'candidate order is stable and bounded',
     );
 
     embeddings.put({ photoId: first.id, contentHash: first.contentHash }, MODEL_VERSION, vector(1), '2026-07-25T01:00:00.000Z');
     assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 2, completed: 1, pending: 1 });
-    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [{ photoId: second.id, contentHash: second.contentHash }]);
+    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [
+      { photoId: second.id, contentHash: second.contentHash, derivativeKey: second.contentHash },
+    ]);
     assert.equal(embeddings.vectorCount(), 1);
     db.close();
   });
@@ -177,12 +179,16 @@ describe('EmbeddingRepository', () => {
 
     embeddings.defer({ photoId: first.id, contentHash: first.contentHash }, MODEL_VERSION, 'derivative-unavailable');
     assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 1, completed: 0, pending: 1 });
-    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [{ photoId: second.id, contentHash: second.contentHash }]);
+    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [
+      { photoId: second.id, contentHash: second.contentHash, derivativeKey: second.contentHash },
+    ]);
     db.close();
 
     const reopened = openLibraryDatabase({ path, dbKey: DB_KEY });
     const resumed = new EmbeddingRepository(reopened);
-    assert.deepEqual(resumed.pending(MODEL_VERSION, 10), [{ photoId: second.id, contentHash: second.contentHash }]);
+    assert.deepEqual(resumed.pending(MODEL_VERSION, 10), [
+      { photoId: second.id, contentHash: second.contentHash, derivativeKey: second.contentHash },
+    ]);
     assert.equal(resumed.clearDeferred(MODEL_VERSION, [first.id]), 1);
     assert.deepEqual(resumed.status(MODEL_VERSION), { total: 2, completed: 0, pending: 2 });
     reopened.close();
@@ -203,8 +209,8 @@ describe('EmbeddingRepository', () => {
     assert.equal(embeddings.vectorCount(), 1);
     assert.deepEqual(embeddings.status(MODEL_VERSION), { total: 1, completed: 1, pending: 0 });
     assert.deepEqual(embeddings.pending('old-model', 10), [
-      { photoId: indexed.id, contentHash: indexed.contentHash },
-      { photoId: deferred.id, contentHash: deferred.contentHash },
+      { photoId: indexed.id, contentHash: indexed.contentHash, derivativeKey: indexed.contentHash },
+      { photoId: deferred.id, contentHash: deferred.contentHash, derivativeKey: deferred.contentHash },
     ]);
     db.close();
   });
@@ -216,8 +222,10 @@ describe('EmbeddingRepository', () => {
     photos.insert(photo('P-EDITED', originalHash));
     embeddings.put({ photoId: 'P-EDITED', contentHash: originalHash }, MODEL_VERSION, vector(-2));
 
-    run(db, 'UPDATE photos SET content_hash = ? WHERE id = ?', changedHash, 'P-EDITED');
-    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [{ photoId: 'P-EDITED', contentHash: changedHash }]);
+    run(db, 'UPDATE photos SET content_hash = ?, derivative_key = ? WHERE id = ?', changedHash, changedHash, 'P-EDITED');
+    assert.deepEqual(embeddings.pending(MODEL_VERSION, 10), [
+      { photoId: 'P-EDITED', contentHash: changedHash, derivativeKey: changedHash },
+    ]);
     assert.equal(embeddings.deleteStale(MODEL_VERSION), 1);
     assert.equal(embeddings.vectorCount(), 0);
 

@@ -1,10 +1,19 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import type { AlbumSummary } from '../../../shared/library/types.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
+
+// Smart Album deletion copy (#514): the ceremony names the saved query, and
+// the survival line says how many photos match it today — none are touched.
+const smartMessages = defineMessages({
+  question: { id: 'album.smart.delete.question', defaultMessage: 'Delete the Smart Album “{name}”?' },
+  matches: { id: 'album.smart.delete.matches', defaultMessage: '{count, plural, one {# photo matches} other {# photos match}} it today.' },
+  failed: { id: 'album.smart.delete.failed', defaultMessage: 'Could not delete this Smart Album. Try again.' },
+});
 
 export function RenameAlbumDialog({
   album,
@@ -73,16 +82,20 @@ export function RenameAlbumDialog({
 
 export function DeleteAlbumDialog({
   album,
+  kind = 'album',
   onClose,
   onComplete,
 }: {
   readonly album: AlbumSummary;
+  readonly kind?: 'album' | 'smart';
   readonly onClose: () => void;
   readonly onComplete: () => void;
 }): ReactElement {
+  const intl = useIntl();
   const { formatCount } = useFormats();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const action = kind === 'smart' ? destructiveActions.deleteSmartAlbum : destructiveActions.deleteAlbum;
   const noun = album.count === 1 ? 'photo stays' : 'photos stay';
   const remove = (): void => {
     if (deleting) return;
@@ -93,13 +106,13 @@ export function DeleteAlbumDialog({
       .then(onComplete)
       .catch(() => {
         setDeleting(false);
-        setError('Could not delete this album. Try again.');
+        setError(kind === 'smart' ? intl.formatMessage(smartMessages.failed) : 'Could not delete this album. Try again.');
       });
   };
   return (
     <Dialog
       open
-      title={destructiveActions.deleteAlbum.label}
+      title={action.label}
       icon="trash-2"
       {...(deleting ? {} : { onClose })}
       footer={
@@ -108,15 +121,21 @@ export function DeleteAlbumDialog({
             Cancel
           </Button>
           <Button variant="danger" onClick={remove} disabled={deleting}>
-            {deleting ? 'Deleting…' : destructiveActions.deleteAlbum.label}
+            {deleting ? 'Deleting…' : action.label}
           </Button>
         </>
       }
     >
-      <p>Delete “{album.name}”?</p>
-      <p className="ovl-album-dialog__safe-copy">
-        {destructiveActions.deleteAlbum.survival} All {formatCount(album.count)} {noun} in your library.
-      </p>
+      {kind === 'smart' ? <p>{intl.formatMessage(smartMessages.question, { name: album.name })}</p> : <p>Delete “{album.name}”?</p>}
+      {kind === 'smart' ? (
+        <p className="ovl-album-dialog__safe-copy">
+          {action.survival} {intl.formatMessage(smartMessages.matches, { count: album.count })}
+        </p>
+      ) : (
+        <p className="ovl-album-dialog__safe-copy">
+          {action.survival} All {formatCount(album.count)} {noun} in your library.
+        </p>
+      )}
       {error === null ? null : (
         <div className="ovl-album-dialog__error" role="alert">
           {error}

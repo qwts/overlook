@@ -9,6 +9,8 @@ export const EMBEDDING_DIMENSIONS = 512;
 export interface EmbeddingCandidate {
   readonly photoId: string;
   readonly contentHash: string;
+  /** Where the mid derivative lives (#496): a duplicate's own key, else the hash. */
+  readonly derivativeKey: string;
 }
 
 export interface EmbeddingIndexStatus {
@@ -47,9 +49,9 @@ export class EmbeddingRepository {
 
   pending(modelVersion: string, limit: number): readonly EmbeddingCandidate[] {
     if (!Number.isSafeInteger(limit) || limit <= 0) throw new RangeError('embedding candidate limit must be a positive safe integer');
-    return queryAll<{ photoId: string; contentHash: string }>(
+    return queryAll<{ photoId: string; contentHash: string; derivativeKey: string }>(
       this.db,
-      `SELECT p.id AS photoId, p.content_hash AS contentHash
+      `SELECT p.id AS photoId, p.content_hash AS contentHash, p.derivative_key AS derivativeKey
          FROM ordinary_visible_photos p
         WHERE p.deleted_at IS NULL
           AND NOT EXISTS (
@@ -111,7 +113,12 @@ export class EmbeddingRepository {
     );
   }
 
-  put(candidate: EmbeddingCandidate, modelVersion: string, embedding: Int8Array, embeddedAt = new Date().toISOString()): void {
+  put(
+    candidate: Pick<EmbeddingCandidate, 'photoId' | 'contentHash'>,
+    modelVersion: string,
+    embedding: Int8Array,
+    embeddedAt = new Date().toISOString(),
+  ): void {
     const bytes = embeddingBytes(embedding);
     this.db.transaction(() => {
       runNamed(
@@ -149,7 +156,7 @@ export class EmbeddingRepository {
   }
 
   defer(
-    candidate: EmbeddingCandidate,
+    candidate: Pick<EmbeddingCandidate, 'photoId' | 'contentHash'>,
     modelVersion: string,
     reason: 'derivative-unavailable',
     deferredAt = new Date().toISOString(),

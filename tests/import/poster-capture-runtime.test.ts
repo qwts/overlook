@@ -70,7 +70,7 @@ function runtime(overrides: Partial<PosterCaptureRuntimeOptions>): PosterCapture
 
 describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
   test('captures the injected frame and stores it as a PNG poster for a local video row', async () => {
-    const stored: Array<{ photoId: string; fileKind: string; bytes: Buffer }> = [];
+    const stored: Array<{ photoId: string; derivativeKey: string; fileKind: string; bytes: Buffer }> = [];
     const changed: string[][] = [];
     let captureCalls = 0;
     const frame = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -78,8 +78,8 @@ describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
     const service = createPosterCaptureRuntime(
       runtime({
         thumbnails: {
-          regenerateFor: (opts: { photoId: string; fileKind: string; bytes: Buffer }) => {
-            stored.push({ photoId: opts.photoId, fileKind: opts.fileKind, bytes: opts.bytes });
+          regenerateFor: (opts: { photoId: string; derivativeKey: string; fileKind: string; bytes: Buffer }) => {
+            stored.push({ photoId: opts.photoId, derivativeKey: opts.derivativeKey, fileKind: opts.fileKind, bytes: opts.bytes });
             return Promise.resolve({ generated: true, width: 1, height: 1 });
           },
         } as unknown as PosterCaptureRuntimeOptions['thumbnails'],
@@ -93,8 +93,9 @@ describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
 
     assert.deepEqual(await service.capture(), { scanned: 1, captured: 1, failed: 0, skipped: 0 });
     assert.equal(captureCalls, 1);
-    // The captured frame is stored through the sharp chain AS A PNG (§6).
-    assert.deepEqual(stored, [{ photoId: VIDEO_ID, fileKind: 'png', bytes: frame }]);
+    // The captured frame is stored through the sharp chain AS A PNG (§6),
+    // under the row's own derivative key (#496).
+    assert.deepEqual(stored, [{ photoId: VIDEO_ID, derivativeKey: 'hash-runtime', fileKind: 'png', bytes: frame }]);
     assert.deepEqual(changed, [[VIDEO_ID]]);
   });
 

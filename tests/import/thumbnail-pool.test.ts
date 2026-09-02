@@ -182,3 +182,37 @@ describe('thumbnail pipeline (#86)', () => {
     assert.deepEqual(decrypted, expected?.thumb);
   });
 });
+
+// #493: a saved edit re-bakes the derivatives from the original with the
+// head's transform — the original is never touched, the derivatives are.
+describe('edit transforms in the thumbnail worker (#493)', () => {
+  async function source(): Promise<Buffer> {
+    return sharp({ create: { width: 30, height: 20, channels: 3, background: '#3a3' } })
+      .jpeg()
+      .toBuffer();
+  }
+
+  test('a quarter turn swaps the derivative axes', async () => {
+    const result = await pool.generate(await source(), undefined, 'jpeg', { quarterTurns: 1, flipped: false, crop: null });
+    assert.ok(result !== null && !('failure' in result));
+    // The record keeps the ORIGINAL's dimensions; only the derivatives turn.
+    assert.deepEqual({ width: result.width, height: result.height }, { width: 30, height: 20 });
+    const mid = await sharp(result.mid).metadata();
+    assert.deepEqual({ width: mid.width, height: mid.height }, { width: 20, height: 30 });
+  });
+
+  test('a crop bakes only the framed region; the identity transform is a plain derivative', async () => {
+    const cropped = await pool.generate(await source(), undefined, 'jpeg', {
+      quarterTurns: 0,
+      flipped: false,
+      crop: { left: 0, top: 0, width: 0.5, height: 1 },
+    });
+    assert.ok(cropped !== null && !('failure' in cropped));
+    const croppedMid = await sharp(cropped.mid).metadata();
+    assert.deepEqual({ width: croppedMid.width, height: croppedMid.height }, { width: 15, height: 20 });
+    const plain = await pool.generate(await source(), undefined, 'jpeg', { quarterTurns: 0, flipped: false, crop: null });
+    assert.ok(plain !== null && !('failure' in plain));
+    const plainMid = await sharp(plain.mid).metadata();
+    assert.deepEqual({ width: plainMid.width, height: plainMid.height }, { width: 30, height: 20 });
+  });
+});

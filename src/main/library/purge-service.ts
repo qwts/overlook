@@ -106,11 +106,14 @@ export class PurgeService {
       }
       if (authorized) this.deps.repo.purgeRowAuthorized(photoId);
       else this.deps.repo.purgeRow(photoId);
-      // Content-addressed blobs may back other rows (deleted twins count —
-      // they still own their bytes until their own purge).
+      // The variant's own derivatives die with it (#496, ADR-0031 §8)…
+      await this.deps.blobs.deleteThumbs(photo.derivativeKey);
+      // …but the original asset may back other variants (trashed siblings
+      // count — they still own their bytes until their own purge). Custody,
+      // its legacy derivatives, and the remote copy go only at last reference.
       if (this.deps.repo.countAnyByContentHash(photo.contentHash) === 0) {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
-        await this.deps.blobs.deleteThumbs(photo.contentHash);
+        if (photo.derivativeKey !== photo.contentHash) await this.deps.blobs.deleteThumbs(photo.contentHash);
         remoteFailures += await this.deleteRemote(
           photoId,
           photo.contentHash,

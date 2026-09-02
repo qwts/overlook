@@ -49,9 +49,9 @@ export function registerPhotoKitHandlersWith(
     })(request),
   );
   registrar.handle(channels.photoKitExportRun.name, (_event, request: unknown) =>
-    wrapHandler(channels.photoKitExportRun, async ({ photoIds }) => {
+    wrapHandler(channels.photoKitExportRun, async ({ photoIds, disclosure }) => {
       admit();
-      const result = await getService().runExport(photoIds);
+      const result = await getService().runExport(photoIds, disclosure);
       getActivity?.().record({
         eventType: 'photo.exported',
         entityIds: photoIds,
@@ -60,6 +60,9 @@ export function registerPhotoKitHandlersWith(
           destination: 'apple-photos',
           format: 'original',
           metadata: 'embedded-supported',
+          disclosureDestination: disclosure?.destination ?? 'shared',
+          disclosureWidened: disclosure?.operation.widen.join(',') ?? '',
+          disclosureNarrowed: disclosure?.operation.narrow.join(',') ?? '',
           exported: result.exported,
           failed: result.failed,
           cancelled: result.cancelled,

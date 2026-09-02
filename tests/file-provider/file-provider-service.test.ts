@@ -9,6 +9,8 @@ import type { PhotoRecord } from '../../src/shared/library/types.js';
 import type { FileProviderDomain, FileProviderBridge } from '../../src/main/file-provider/file-provider-bridge.js';
 import { FileProviderService, type OpenedProviderOriginal } from '../../src/main/file-provider/file-provider-service.js';
 import { FileProviderStore } from '../../src/main/file-provider/file-provider-store.js';
+import type { DisclosurePlanner } from '../../src/main/disclosure/disclosure-service.js';
+import { compileDisclosurePlan, DEFAULT_DISCLOSURE_POLICY } from '../../src/shared/disclosure/policy.js';
 
 function photo(id: string, fileName = `${id}.jpg`, syncState: PhotoRecord['syncState'] = 'local'): PhotoRecord {
   return {
@@ -19,13 +21,16 @@ function photo(id: string, fileName = `${id}.jpg`, syncState: PhotoRecord['syncS
     height: 1,
     bytes: 5,
     contentHash: id.padEnd(64, '0'),
+    derivativeKey: id.padEnd(64, '0'),
+    variantSourceId: null,
+    assetOwnerId: null,
     camera: null,
     lens: null,
     iso: null,
     aperture: null,
     shutter: null,
     focalLength: null,
-    takenAt: null,
+    takenAt: id === 'P1' ? '2026-05-05T00:00:00.000Z' : null,
     gpsLat: null,
     gpsLon: null,
     place: null,
@@ -46,6 +51,8 @@ function photo(id: string, fileName = `${id}.jpg`, syncState: PhotoRecord['syncS
     dimensionStatus: 'verified',
     mediaInfo: null,
     syncState,
+    coverage: 'included',
+    locked: false,
   };
 }
 
@@ -90,7 +97,7 @@ class FakeBridge implements FileProviderBridge {
   }
 }
 
-function fixture() {
+function fixture(disclosure?: DisclosurePlanner) {
   const bridge = new FakeBridge();
   const directory = mkdtempSync(path.join(tmpdir(), 'overlook-file-provider-'));
   const store = new FileProviderStore(path.join(directory, 'file-provider.json'));
@@ -138,6 +145,7 @@ function fixture() {
       libraryChangedListeners.add(listener);
       return () => libraryChangedListeners.delete(listener);
     },
+    disclosure,
   });
   return {
     bridge,
@@ -295,5 +303,24 @@ describe('read-only macOS File Provider (#797)', () => {
     assert.deepEqual(bridge.evicted, ['com.zts1.overlook.library.LIB1']);
     assert.deepEqual(bridge.removed, ['com.zts1.overlook.library.LIB1']);
     assert.deepEqual(transportCalls, ['start', 'stop']);
+  });
+
+  test('mounts the capture time as the file date only while the disclosure plan lets it cross (#509)', async () => {
+    const shared = fixture();
+    await shared.service.enable({ kind: 'albums', albumIds: ['A1'] }, 1);
+    const sharedFiles = shared.service.enumerate(shared.service.enumerate('root')[0]?.id ?? 'missing');
+    assert.equal(sharedFiles[0]?.modifiedAt, '2026-05-05T00:00:00.000Z', 'capture time is shared by default');
+
+    const narrowed = fixture({
+      plan: (_photoId, boundary) =>
+        compileDisclosurePlan({
+          boundary,
+          destination: 'shared',
+          chain: { library: DEFAULT_DISCLOSURE_POLICY, photo: [{ field: 'captureTime', class: 'private', widened: false }] },
+        }),
+    });
+    await narrowed.service.enable({ kind: 'albums', albumIds: ['A1'] }, 1);
+    const narrowedFiles = narrowed.service.enumerate(narrowed.service.enumerate('root')[0]?.id ?? 'missing');
+    assert.equal(narrowedFiles[0]?.modifiedAt, '2026-01-01T00:00:00.000Z', 'a private capture time falls back to the import date');
   });
 });

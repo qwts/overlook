@@ -64,6 +64,27 @@ the shared-bytes exception count) and **Keep on this device only** (Tier M when
 no remote copy exists, stating that nothing is destroyed; escalating to the
 Tier D ceremony when one does).
 
+**Amended 2026-09-02 by
+[ADR-0031](./ADR-0031-Editing-Variants-Provenance-And-Export-Boundary.md)
+§8 (#496), resolving that ADR's requirement that variants add their derived
+data to this list in the same change:** §4's derived-death list gains the
+purged variant's own thumb and mid derivatives (addressed by its
+`derivative_key`), its edit revisions and provenance record (cascaded with the
+row), its album seats, and its Promoted-representative pointer. The original
+asset's encrypted blob, its legacy derivatives, its remote copy, and its
+imported sidecars leave the list until the same purge proves no variant — live
+or in Trash — still references the content hash; only then do they die, in
+that order. §6's honest sentence gains one line whenever a purged photo has
+surviving variants: the original bytes are kept for them and no cloud copy is
+removed.
+
+**Amended 2026-09-02 by #650 (perceptual duplicate review):** §4's
+derived-death list gains the purged photo's `photo_fingerprints` row — the
+rotation-aware perceptual hash over its own mid derivative — removed by the
+same cascade as `purgeRow()` and dropped by the protect migration alongside
+its embedding. Pair results are never stored, so nothing else is owed; the
+review is re-derived from the surviving rows.
+
 **Amended 2026-07-30 by
 [ADR-0034](./ADR-0034-On-Device-Face-Grouping-And-Biometric-Derived-Data.md)
 (#795), resolving this ADR's "revisit when … face data (#285) lands" debt:**

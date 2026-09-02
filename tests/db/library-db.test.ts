@@ -678,7 +678,8 @@ describe('PhotosRepository', () => {
     repo.insert(deleted);
     run(db, `UPDATE photos SET deleted_at = ? WHERE id = ?`, '2026-07-12T00:00:00.000Z', deleted.id);
 
-    const counts = repo.counts('2026-07-10T00:00:00.000Z');
+    const { hiddenByAlbums, ...counts } = repo.counts('2026-07-10T00:00:00.000Z');
+    assert.equal(hiddenByAlbums, 0);
     assert.deepEqual(counts, { all: 3, favorites: 1, recent: 1, raw: 3, offloaded: 1, unavailable: 0, deleted: 1, excluded: 0 });
     db.close();
   });
@@ -686,9 +687,9 @@ describe('PhotosRepository', () => {
   test('200K synthetic rows: one keyset page stays fast (baseline recorded)', () => {
     const { db, repo } = openSeeded();
     const insert = db.prepare(
-      `INSERT INTO photos (id, file_name, file_kind, width, height, bytes, content_hash,
+      `INSERT INTO photos (id, file_name, file_kind, width, height, bytes, content_hash, derivative_key,
         imported_at, import_source, favorite, key_id, taken_at)
-       VALUES (?, ?, 'jpeg', 6000, 4000, 8400000, ?, '2026-07-01T00:00:00.000Z', 'seed', 0, 1, ?)`,
+       VALUES (?, ?, 'jpeg', 6000, 4000, 8400000, ?, ?, '2026-07-01T00:00:00.000Z', 'seed', 0, 1, ?)`,
     );
     db.transaction(() => {
       for (let i = 0; i < 200_000; i += 1) {
@@ -696,6 +697,7 @@ describe('PhotosRepository', () => {
         insert.run(
           `01J8SEED${n}`,
           `IMG_${n}.JPG`,
+          `seed-hash-${n}`,
           `seed-hash-${n}`,
           `2026-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}T08:00:00.000Z`,
         );
@@ -734,8 +736,10 @@ describe('albums (#117)', () => {
     const ids = repo.page({ source: 'all', limit: 10 }).photos.map((photo) => photo.id);
 
     const album = repo.createAlbum('ALB1', 'Kyoto trip');
-    assert.deepEqual(album, { id: 'ALB1', name: 'Kyoto trip', count: 0 });
-    assert.deepEqual(repo.albums().at(-1), { id: 'ALB1', name: 'Kyoto trip', count: 0 });
+    const placement = { kind: 'album', parentId: null, inheritsVisibility: false, tags: [], predicate: null, unsupported: null };
+    const listing = { id: 'ALB1', name: 'Kyoto trip', count: 0, showInAllPhotos: true, visibleElsewhere: 0, visibleVia: [], ...placement };
+    assert.deepEqual(album, listing);
+    assert.deepEqual(repo.albums().at(-1), listing);
 
     repo.addToAlbum('ALB1', [ids[0] ?? '']);
     assert.equal(repo.albums().at(-1)?.count, 1);

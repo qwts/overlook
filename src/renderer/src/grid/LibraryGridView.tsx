@@ -8,10 +8,14 @@ import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { videoTileProps } from '../media/device-capabilities.js';
 import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
+import { activePredicate, anyDialogOpen } from '../../../shared/library/app-state.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
+import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
+import { glyphStateOf } from '../components/StatusGlyph';
+import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
 import { PurgeConfirm } from './PurgeConfirm';
 import { SelectionPill } from './SelectionPill';
@@ -69,6 +73,8 @@ export function LibraryGridView({
   platform,
   onExport,
   onOffload,
+  onKeepOnDevice,
+  onBackUpAgain,
   onTransfer,
 }: {
   readonly knownTotal: number | null;
@@ -76,6 +82,8 @@ export function LibraryGridView({
   readonly platform: CommandPlatform;
   readonly onExport: (photoIds: readonly string[]) => void;
   readonly onOffload: (photoIds: readonly string[], clearSelection?: boolean) => void;
+  readonly onKeepOnDevice: (photoIds: readonly string[]) => void;
+  readonly onBackUpAgain: (photoIds: readonly string[]) => void;
   readonly onTransfer?: ((entry: 'selection' | 'lightbox', photoIds: readonly string[]) => void) | undefined;
 }): ReactElement {
   const intl = useIntl();
@@ -84,7 +92,8 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
-  const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
+  const facetsActive = activePredicate(state) !== undefined;
+  const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}|${facetsActive ? JSON.stringify(state.facets) : ''}`;
   const selectionAnchorRef = useRef<string | null>(null);
   const rangeRequestRef = useRef(0);
   const projectionKeyRef = useRef(projectionKey);
@@ -115,6 +124,7 @@ export function LibraryGridView({
           ...(Object.values(state.chips).some(Boolean) ? { chips: state.chips } : {}),
           ...(state.sortOrder === 'date' ? {} : { order: state.sortOrder }),
           ...(state.album === null ? {} : { albumId: state.album }),
+          ...(facetsActive ? { predicate: state.facets } : {}),
         })
         .then(({ photoIds }) => {
           if (requestId !== rangeRequestRef.current || projectionKeyRef.current !== projectionKey) return;
@@ -128,9 +138,11 @@ export function LibraryGridView({
     },
     [
       dispatch,
+      facetsActive,
       projectionKey,
       state.album,
       state.chips,
+      state.facets,
       state.query,
       state.search.appliedMode,
       state.searchMode,
@@ -219,15 +231,11 @@ export function LibraryGridView({
 
   // An active album narrows like query/chips do (#117): the sidebar count
   // sized for the source no longer applies — track the loaded set instead.
-  const filtersActive = state.query !== '' || state.album !== null || Object.values(state.chips).some(Boolean);
+  const filtersActive = state.query !== '' || state.album !== null || facetsActive || Object.values(state.chips).some(Boolean);
   const total = filtersActive || knownTotal === null ? (exhausted ? state.photos.length : state.photos.length + 1) : knownTotal;
   const inTrash = state.source === 'deleted';
   const modalOpen =
-    state.importOpen ||
-    state.exportOpen ||
-    state.settingsOpen ||
-    state.activityOpen ||
-    state.librariesOpen ||
+    anyDialogOpen(state) ||
     state.lightboxId !== null ||
     purgeIds !== null ||
     originalDeleteIds !== null ||
@@ -240,14 +248,7 @@ export function LibraryGridView({
       if (event.defaultPrevented || originalDeleteIds !== null) return;
       const editable =
         event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]') !== null;
-      const dialogOpen =
-        state.importOpen ||
-        state.exportOpen ||
-        state.settingsOpen ||
-        state.activityOpen ||
-        state.librariesOpen ||
-        purgeIds !== null ||
-        quickAlbumIds !== null;
+      const dialogOpen = anyDialogOpen(state) || purgeIds !== null || quickAlbumIds !== null;
       const command = resolveCommand(event, {
         surface: state.lightboxId === null ? 'grid' : 'lightbox',
         dialogOpen,
@@ -454,40 +455,49 @@ export function LibraryGridView({
     // Cache-bust the thumb/poster URL once a derivative is (re)generated in
     // place, so the tile reloads without a navigation (thumbEpoch, #548 §6).
     const epoch = state.thumbEpoch[photo.id];
-    const tileSrc = epoch === undefined ? thumbUrl(photo.id) : `${thumbUrl(photo.id)}&v=${String(epoch)}`;
-    return state.view === 'list' ? (
-      <ListRow
-        photo={photo}
-        src={tileSrc}
-        accessibleName={accessibleName}
-        selected={state.selection.has(photo.id)}
-        onOpen={() => {
+    const bust = (url: string): string => (epoch === undefined ? url : `${url}&v=${String(epoch)}`);
+    const tileSrc = bust(thumbUrl(photo.id));
+    if (state.view === 'list' || state.view === 'feed') {
+      // ListRow and FeedCard (#516) share one contract; only the layout differs.
+      const rowProps = {
+        photo,
+        src: tileSrc,
+        accessibleName,
+        selected: state.selection.has(photo.id),
+        onOpen: () => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
-        }}
-        onToggleSelect={(extend) => selectPhoto(photo.id, extend)}
-        onToggleFavorite={() => toggleFavorite(photo)}
-        favoritePending={favoritePending.has(photo.id)}
-        retentionLabel={retentionLabel}
-        onContextAction={(point) => openContextMenu(photo, point)}
-        quickActions={quickActions}
-        onQuickActionTargetChange={onQuickActionTargetChange}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        {...keyboard}
-      />
-    ) : (
+        },
+        onToggleSelect: (extend: boolean) => selectPhoto(photo.id, extend),
+        onToggleFavorite: () => toggleFavorite(photo),
+        favoritePending: favoritePending.has(photo.id),
+        retentionLabel,
+        onContextAction: (point: Parameters<typeof openContextMenu>[1]) => openContextMenu(photo, point),
+        quickActions,
+        onQuickActionTargetChange,
+        onDragStart,
+        onDragEnd,
+        ...keyboard,
+      };
+      return state.view === 'feed' ? (
+        <FeedCard {...rowProps} media={tileMedia} fullSrc={bust(thumbUrl(photo.id, 'mid'))} />
+      ) : (
+        <ListRow {...rowProps} />
+      );
+    }
+    return (
       <PhotoTile
         src={tileSrc}
         alt={photo.fileName}
         accessibleName={accessibleName}
         favorite={photo.favorite}
         isOriginal={photo.isOriginal}
-        status={photo.syncState}
+        status={glyphStateOf(photo)}
         previewFailure={photo.previewFailure}
         unknownDimensions={photo.dimensionStatus === 'unavailable' || photo.width <= 0 || photo.height <= 0}
         duration={tileMedia?.duration}
         preserved={tileMedia?.preserved ?? false}
         placeholder={tileMedia?.placeholder}
+        locked={photo.locked}
         selected={state.selection.has(photo.id)}
         onClick={() => {
           dispatch({ type: 'lightbox/opened', photoId: photo.id });
@@ -514,7 +524,7 @@ export function LibraryGridView({
         photos={state.photos}
         total={total}
         zoom={state.zoom}
-        mode={state.view === 'list' ? 'list' : 'grid'}
+        mode={state.view === 'list' || state.view === 'feed' ? state.view : 'grid'}
         topInset={inTrash}
         onNeedMore={loadMore}
         renderTile={renderTile}
@@ -663,6 +673,8 @@ export function LibraryGridView({
             });
           }}
           onOffload={() => onOffload(contextPhoto.targetIds)}
+          onKeepOnDevice={() => onKeepOnDevice(contextPhoto.targetIds)}
+          onBackUpAgain={() => onBackUpAgain(contextPhoto.targetIds)}
           onRestoreOriginal={() => {
             void window.overlook.backup.restoreOriginals({ photoIds: [...contextPhoto.targetIds] }).then(({ restored, failed }) => {
               dispatch({
@@ -677,6 +689,7 @@ export function LibraryGridView({
               });
             });
           }}
+          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds)}
           onTransfer={
             onTransfer === undefined
               ? undefined
@@ -768,6 +781,7 @@ export function LibraryGridView({
       {purgeIds !== null && purgeIds.length > 0 ? (
         <PurgeConfirm
           count={purgeIds.length}
+          excludedCount={purgeIds.filter((id) => state.photos.find((photo) => photo.id === id)?.coverage !== 'included').length}
           onCancel={() => {
             setPurgeIds(null);
           }}

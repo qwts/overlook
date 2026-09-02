@@ -27,6 +27,8 @@ export interface GridLayout {
   readonly gap: number;
   /** Outer padding (grid: equals gap; list: the mock's space-3). */
   readonly padding: number;
+  /** Left edge of column 0 (grid and list: the padding; feed: centered). */
+  readonly columnStart: number;
   readonly total: number;
 }
 
@@ -40,7 +42,7 @@ export function computeLayout(spec: GridSpec): GridLayout {
   const rowHeight = tileSize + gap;
   const rows = total === 0 ? 0 : Math.ceil(total / columns);
   const totalHeight = rows === 0 ? 0 : 2 * gap + rows * rowHeight - gap;
-  return { columns, tileSize, cellWidth: tileSize, rowHeight, rows, totalHeight, gap, padding: gap, total };
+  return { columns, tileSize, cellWidth: tileSize, rowHeight, rows, totalHeight, gap, padding: gap, columnStart: gap, total };
 }
 
 /** Single-column row mode (#77) — same windowing functions, list geometry. */
@@ -58,7 +60,30 @@ export function computeListLayout(spec: ListSpec): GridLayout {
   const stride = rowHeight + gap;
   const rows = total;
   const totalHeight = rows === 0 ? 0 : 2 * padding + rows * stride - gap;
-  return { columns: 1, tileSize: rowHeight, cellWidth, rowHeight: stride, rows, totalHeight, gap, padding, total };
+  return { columns: 1, tileSize: rowHeight, cellWidth, rowHeight: stride, rows, totalHeight, gap, padding, columnStart: padding, total };
+}
+
+/**
+ * Feed mode (#516) — one centered column of fixed-height cards, capped at a
+ * reading width. Same windowing functions; the engine never measures a card.
+ */
+export interface FeedSpec {
+  readonly viewportWidth: number;
+  readonly cardHeight: number;
+  readonly gap: number;
+  readonly padding: number;
+  readonly maxWidth: number;
+  readonly total: number;
+}
+
+export function computeFeedLayout(spec: FeedSpec): GridLayout {
+  const { viewportWidth, cardHeight, gap, padding, maxWidth, total } = spec;
+  const innerWidth = Math.max(0, viewportWidth - 2 * padding);
+  const cellWidth = Math.min(innerWidth, maxWidth);
+  const columnStart = padding + Math.floor((innerWidth - cellWidth) / 2);
+  const stride = cardHeight + gap;
+  const totalHeight = total === 0 ? 0 : 2 * padding + total * stride - gap;
+  return { columns: 1, tileSize: cardHeight, cellWidth, rowHeight: stride, rows: total, totalHeight, gap, padding, columnStart, total };
 }
 
 export interface VisibleRange {
@@ -95,7 +120,7 @@ export function visibleRange(layout: GridLayout, scrollTop: number, viewportHeig
 /** Absolute position of a tile inside the scrollable content. */
 export function tilePosition(layout: GridLayout, index: number): { readonly left: number; readonly top: number } {
   return {
-    left: layout.padding + (index % layout.columns) * (layout.cellWidth + layout.gap),
+    left: layout.columnStart + (index % layout.columns) * (layout.cellWidth + layout.gap),
     top: layout.padding + Math.floor(index / layout.columns) * layout.rowHeight,
   };
 }

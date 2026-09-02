@@ -21,7 +21,8 @@ export function AlbumPicker({ onPick, onClose, position }: AlbumPickerProps): Re
 
   useEffect(() => {
     void window.overlook.library.albums().then(({ albums: loaded }) => {
-      setAlbums(loaded);
+      // Folders never hold photos (ADR-0030 §1, #505).
+      setAlbums(loaded.filter((album) => album.kind === 'album'));
     });
   }, []);
 
@@ -69,24 +70,28 @@ export function AlbumPicker({ onPick, onClose, position }: AlbumPickerProps): Re
             }
       }
       data-testid="album-picker"
-      role="menu"
-      aria-label="Add to album"
     >
-      {(albums ?? []).map((album) => (
-        <button
-          key={album.id}
-          type="button"
-          role="menuitem"
-          className="ovl-albumpicker__row"
-          onClick={() => {
-            onPick(album);
-          }}
-        >
-          <Icon name="album" size={14} color="var(--text-faint)" />
-          <span className="ovl-albumpicker__name">{album.name}</span>
-          <span className="ovl-albumpicker__count mono-data">{formatCount(album.count)}</span>
-        </button>
-      ))}
+      {/* The menu holds only menu items (aria-required-children); the create
+          field is a sibling so it is not a child of the menu. */}
+      {albums !== null && albums.length > 0 ? (
+        <div className="ovl-albumpicker__list" role="menu" aria-label="Add to album">
+          {albums.map((album) => (
+            <button
+              key={album.id}
+              type="button"
+              role="menuitem"
+              className="ovl-albumpicker__row"
+              onClick={() => {
+                onPick(album);
+              }}
+            >
+              <Icon name="album" size={14} color="var(--text-faint)" />
+              <span className="ovl-albumpicker__name">{album.name}</span>
+              <span className="ovl-albumpicker__count mono-data">{formatCount(album.count)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <input
         className="ovl-albumpicker__create"
         aria-label="New album name"

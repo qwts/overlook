@@ -26,6 +26,22 @@ export interface LightboxOrientation {
   readonly flipped: boolean;
 }
 
+/** A persisted crop (#493): normalized to the ORIENTED image. */
+export interface LightboxCrop {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** clip-path inset fractions in the element's own (source) space. */
+export interface LightboxClipInset {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
 export const DEFAULT_ORIENTATION: LightboxOrientation = { quarterTurns: 0, flipped: false };
 export const DEFAULT_VIEW_INTENT: LightboxViewIntent = { mode: 'fit', zoom: 1, panX: 0, panY: 0 };
 
@@ -51,6 +67,46 @@ export function flipVerticalOrientation(orientation: LightboxOrientation): Light
 
 export function orientedSize(size: LightboxSize, orientation: LightboxOrientation): LightboxSize {
   return orientation.quarterTurns % 2 === 0 ? size : { width: size.height, height: size.width };
+}
+
+/** The framed region's size: the oriented image, or the crop cut from it. */
+export function croppedSize(oriented: LightboxSize, crop: LightboxCrop | null): LightboxSize {
+  return crop === null ? oriented : { width: oriented.width * crop.width, height: oriented.height * crop.height };
+}
+
+/** Where the crop's center sits relative to the oriented image's center, as
+ * fractions of the oriented size (0 = centered). */
+export function cropCenterOffset(crop: LightboxCrop | null): LightboxPoint {
+  return crop === null ? { x: 0, y: 0 } : { x: crop.left + crop.width / 2 - 0.5, y: crop.top + crop.height / 2 - 0.5 };
+}
+
+/** Maps a crop drawn in oriented space back to the element's source space.
+ * The element renders as flipX(rotate(source)), so a visual point goes back
+ * through the mirror first and then through the inverse (counterclockwise)
+ * turns. clip-path is evaluated in that source space, before the transform. */
+export function cropInSourceSpace(crop: LightboxCrop, orientation: LightboxOrientation): LightboxCrop {
+  const corners: [number, number][] = [
+    [crop.left, crop.top],
+    [crop.left + crop.width, crop.top],
+    [crop.left, crop.top + crop.height],
+    [crop.left + crop.width, crop.top + crop.height],
+  ];
+  const mapped = corners.map(([u, v]) => {
+    let x = orientation.flipped ? 1 - u : u;
+    let y = v;
+    for (let turn = 0; turn < orientation.quarterTurns; turn += 1) [x, y] = [y, 1 - x];
+    return [x, y] as const;
+  });
+  const xs = mapped.map(([x]) => x);
+  const ys = mapped.map(([, y]) => y);
+  const left = Math.min(...xs);
+  const top = Math.min(...ys);
+  return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
+}
+
+export function cropClipInset(crop: LightboxCrop, orientation: LightboxOrientation): LightboxClipInset {
+  const source = cropInSourceSpace(crop, orientation);
+  return { top: source.top, right: 1 - (source.left + source.width), bottom: 1 - (source.top + source.height), left: source.left };
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

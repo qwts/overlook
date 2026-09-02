@@ -283,9 +283,21 @@ jobs:
       # so without this a hung Storybook run would burn the whole job timeout instead of
       # failing this step. No guard diagnostics follow it — the guard never runs here and
       # writes no .guard/last-run.json on a runner.
+      # Same shape as the E2E step: the failing stories and the axe verdicts are surfaced as a
+      # ::error annotation, because a red step otherwise shows only a blank "Error:" in the UI
+      # and the raw log is the only other place the detail lands.
       - name: Storybook interaction tests
         timeout-minutes: 30
-        run: npm run test:stories:ci:inner
+        run: |
+          set +e
+          mkdir -p test-results
+          npm run test:stories:ci:inner 2>&1 | tee test-results/stories-output.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            node scripts/annotate-storybook-failures.mjs test-results/stories-output.log
+          fi
+          exit "$status"
 
   # Required Windows parity for every complete-suite decision. Coverage and the
   # exhaustive browser lanes stay on Ubuntu; Windows proves the full unit/DOM

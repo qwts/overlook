@@ -1,10 +1,21 @@
+import {
+  EMPTY_PREDICATE,
+  clearFacet,
+  setComposition,
+  setMegapixelRanges,
+  toggleFacetValue,
+  type FacetComposition,
+  type FacetId,
+  type MegapixelRange,
+  type SmartPredicate,
+} from './smart-album.js';
 import type { ChipFilters, PageResult, PhotoRecord, SearchMode, SortOrder, SourceFilter } from './types.js';
 
 // App state backbone (#73) — the mock's state shape as a pure reducer, kept
 // process-free so the unit lane floors it. The renderer provides it via
 // context; IPC push events dispatch into it.
 
-export type ViewMode = 'grid' | 'list' | 'moodboard';
+export type ViewMode = 'grid' | 'list' | 'feed' | 'moodboard';
 
 export const ZOOM_MIN = 96;
 export const ZOOM_MAX = 320;
@@ -30,6 +41,12 @@ export interface AppState {
   readonly sortOrder: SortOrder;
   /** Active album filter (#117) — an album acts as a source; null = none. */
   readonly album: string | null;
+  /** Live facet predicate (#514, ADR-0030 §3) — the same document a Smart
+   * Album saves. Empty groups = no facet filter. */
+  readonly facets: SmartPredicate;
+  /** The Smart Album whose saved query `facets` started from; null when the
+   * facets are a live filter over a source. */
+  readonly smartAlbum: string | null;
   /** Independent protected-domain route. Ordinary photo records are cleared
    * before this is set and never represent protected content. */
   readonly protectedAlbum: string | null;
@@ -51,6 +68,8 @@ export interface AppState {
   readonly exportOpen: boolean;
   readonly settingsOpen: boolean;
   readonly activityOpen: boolean;
+  /** Perceptual duplicate review dialog (#650). */
+  readonly duplicatesOpen: boolean;
   readonly librariesOpen: boolean;
   readonly toast: {
     readonly title: string;
@@ -80,6 +99,8 @@ export const initialAppState: AppState = {
   chips: {},
   sortOrder: 'date',
   album: null,
+  facets: EMPTY_PREDICATE,
+  smartAlbum: null,
   protectedAlbum: null,
   selection: new Set<string>(),
   selectionMode: 'explicit',
@@ -94,6 +115,7 @@ export const initialAppState: AppState = {
   exportOpen: false,
   settingsOpen: false,
   activityOpen: false,
+  duplicatesOpen: false,
   librariesOpen: false,
   toast: null,
   pendingCount: 0,
@@ -119,6 +141,11 @@ export type AppAction =
   | { type: 'chip/toggled'; chip: keyof ChipFilters }
   | { type: 'sortOrder/set'; order: SortOrder }
   | { type: 'album/set'; albumId: string | null }
+  | { type: 'facet/toggled'; facet: Exclude<FacetId, 'megapixels'>; value: string; additive: boolean }
+  | { type: 'facet/rangeSet'; ranges: readonly MegapixelRange[] }
+  | { type: 'facet/cleared'; facet?: FacetId | undefined }
+  | { type: 'facetComposition/set'; composition: FacetComposition }
+  | { type: 'smartAlbum/set'; albumId: string; predicate: SmartPredicate }
   | { type: 'protectedAlbum/set'; albumId: string | null }
   | { type: 'selection/toggled'; photoId: string }
   | { type: 'selection/all'; photoIds: readonly string[] }
@@ -132,7 +159,7 @@ export type AppAction =
   | { type: 'inspector/detached' }
   | { type: 'inspector/detached-closed' }
   | { type: 'inspector/stepped'; delta: 1 | -1 }
-  | { type: 'dialog/set'; dialog: 'import' | 'export' | 'settings' | 'libraries' | 'activity'; open: boolean }
+  | { type: 'dialog/set'; dialog: 'import' | 'export' | 'settings' | 'libraries' | 'activity' | 'duplicates'; open: boolean }
   | { type: 'toast/shown'; toast: NonNullable<AppState['toast']> }
   | { type: 'toast/dismissed' }
   | { type: 'pendingCount/set'; count: number }
@@ -214,7 +241,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'source/set':
       // Selection is NOT cleared here: the next photos/loaded intersects it
       // with the new visible set (still-visible items survive, #78).
-      return { ...state, source: action.source, album: null, protectedAlbum: null, selectionMode: 'explicit' };
+      // Leaving a Smart Album drops its query; a live facet filter stays,
+      // like the chips, until the user clears it (#514).
+      return {
+        ...state,
+        source: action.source,
+        album: null,
+        protectedAlbum: null,
+        smartAlbum: null,
+        facets: state.smartAlbum === null ? state.facets : EMPTY_PREDICATE,
+        selectionMode: 'explicit',
+      };
     case 'chip/toggled': {
       const next = { ...state.chips, [action.chip]: state.chips[action.chip] !== true };
       return { ...state, chips: next, selectionMode: 'explicit' };
@@ -222,12 +259,42 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'album/set':
       // An album behaves like a source (design §Sidebar): selecting one
       // resets the source to 'all'; picking any source clears it below.
-      return { ...state, album: action.albumId, protectedAlbum: null, source: 'all', selectionMode: 'explicit' };
+      return {
+        ...state,
+        album: action.albumId,
+        protectedAlbum: null,
+        source: 'all',
+        smartAlbum: null,
+        facets: state.smartAlbum === null ? state.facets : EMPTY_PREDICATE,
+        selectionMode: 'explicit',
+      };
+    case 'facet/toggled':
+      return { ...state, facets: toggleFacetValue(state.facets, action.facet, action.value, action.additive), selectionMode: 'explicit' };
+    case 'facet/rangeSet':
+      return { ...state, facets: setMegapixelRanges(state.facets, action.ranges), selectionMode: 'explicit' };
+    case 'facet/cleared':
+      return { ...state, facets: clearFacet(state.facets, action.facet), selectionMode: 'explicit' };
+    case 'facetComposition/set':
+      return { ...state, facets: setComposition(state.facets, action.composition), selectionMode: 'explicit' };
+    case 'smartAlbum/set':
+      // A Smart Album opens as its saved query over All Photos (ADR-0030 §3):
+      // the facets become editable live, and saving writes them back.
+      return {
+        ...state,
+        smartAlbum: action.albumId,
+        facets: action.predicate,
+        album: null,
+        protectedAlbum: null,
+        source: 'all',
+        selectionMode: 'explicit',
+      };
     case 'protectedAlbum/set':
       return {
         ...state,
         protectedAlbum: action.albumId,
         album: null,
+        smartAlbum: null,
+        facets: EMPTY_PREDICATE,
         source: 'all',
         photos: [],
         selection: new Set<string>(),
@@ -373,6 +440,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           exportOpen: action.dialog === 'export',
           settingsOpen: action.dialog === 'settings',
           activityOpen: action.dialog === 'activity',
+          duplicatesOpen: action.dialog === 'duplicates',
           librariesOpen: action.dialog === 'libraries',
         };
       }
@@ -382,6 +450,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         exportOpen: action.dialog === 'export' ? action.open : state.exportOpen,
         settingsOpen: action.dialog === 'settings' ? action.open : state.settingsOpen,
         activityOpen: action.dialog === 'activity' ? action.open : state.activityOpen,
+        duplicatesOpen: action.dialog === 'duplicates' ? action.open : state.duplicatesOpen,
         librariesOpen: action.dialog === 'libraries' ? action.open : state.librariesOpen,
       };
     case 'toast/shown':
@@ -422,7 +491,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+// #514 review: an open Smart Album is an explicit query even when its
+// document has no groups (a cleared-then-saved album), so the page, the
+// count, Select All and range selection all carry the predicate whenever one
+// is open — never falling back to the inclusion-filtered All Photos view.
+export function activePredicate(state: Pick<AppState, 'facets' | 'smartAlbum'>): SmartPredicate | undefined {
+  return state.smartAlbum !== null || state.facets.groups.length > 0 ? state.facets : undefined;
+}
+
 function selectedPhotoId(photos: readonly PhotoRecord[], selection: ReadonlySet<string>, preferred: string | null): string | null {
   if (preferred !== null && selection.has(preferred) && photos.some((photo) => photo.id === preferred)) return preferred;
   return photos.find((photo) => selection.has(photo.id))?.id ?? null;
+}
+
+/** Any modal dialog slot open — the grid's keyboard and quick-action gates. */
+export function anyDialogOpen(state: AppState): boolean {
+  return state.importOpen || state.exportOpen || state.settingsOpen || state.activityOpen || state.duplicatesOpen || state.librariesOpen;
 }

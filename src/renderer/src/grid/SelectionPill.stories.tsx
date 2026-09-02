@@ -8,15 +8,17 @@ import type { AlbumSummary } from '../../../shared/library/types.js';
 // working inline create. Only the two calls the picker makes are stubbed,
 // so the global slot is typed unknown rather than faking a full OverlookApi.
 function installStub(): void {
-  const albums: AlbumSummary[] = [
-    { id: 'A1', name: 'Big Sur', count: 10 },
-    { id: 'A2', name: 'Kyoto', count: 4 },
+  // The picker lists albums only — folders never hold photos (#505) — so the
+  // stub names each row's kind the way the bridge does.
+  const albums: (AlbumSummary & { readonly kind: 'album' })[] = [
+    { id: 'A1', name: 'Big Sur', count: 10, kind: 'album' },
+    { id: 'A2', name: 'Kyoto', count: 4, kind: 'album' },
   ];
   (globalThis as { overlook?: unknown }).overlook = {
     library: { albums: () => Promise.resolve({ albums }) },
     albums: {
       create: ({ name }: { name: string }) => {
-        const album = { id: `A${String(albums.length + 1)}`, name, count: 0 };
+        const album = { id: `A${String(albums.length + 1)}`, name, count: 0, kind: 'album' as const };
         albums.push(album);
         return Promise.resolve({ album });
       },
@@ -111,13 +113,13 @@ export const AlbumPickerFlow: Story = {
     // land on the first album row, not back on the trigger.
     await waitFor(() => expect(canvas.getByRole('menuitem', { name: /Big Sur/ })).toHaveFocus());
     await userEvent.click(canvas.getByRole('menuitem', { name: /Big Sur/ }));
-    await expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A1', name: 'Big Sur', count: 10 });
+    await expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A1', name: 'Big Sur', count: 10, kind: 'album' });
     await expect(canvas.queryByTestId('album-picker')).toBeNull();
 
     // Inline create picks the fresh album.
     await userEvent.click(canvas.getByRole('button', { name: /Add to album/ }));
     await userEvent.type(await canvas.findByLabelText('New album name'), 'Yosemite{Enter}');
-    await waitFor(() => expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A3', name: 'Yosemite', count: 0 }));
+    await waitFor(() => expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A3', name: 'Yosemite', count: 0, kind: 'album' }));
 
     // Escape closes without picking.
     await userEvent.click(canvas.getByRole('button', { name: /Add to album/ }));

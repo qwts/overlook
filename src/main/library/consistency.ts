@@ -35,7 +35,7 @@ export interface RepairSummary extends ConsistencyReport {
 }
 
 export interface ConsistencyDeps {
-  readonly rows: () => readonly { id: string; contentHash: string; syncState: string }[];
+  readonly rows: () => readonly { id: string; contentHash: string; syncState: string; derivativeKey?: string | undefined }[];
   /** Owned companion custody (#484): `photoId:hash` pairs from
    * photo_sidecars. Absent = no sidecar support (pre-#484 callers). */
   readonly ownedSidecars?: (() => readonly { photoId: string; contentHash: string }[]) | undefined;
@@ -72,8 +72,11 @@ export class ConsistencyChecker {
     const orphanOriginals = (await this.deps.blobs.listOriginalHashes())
       .filter((entry) => !owned.has(entry.hash) && entry.ageMs > LEFTOVER_MIN_AGE_MS)
       .map((entry) => entry.hash);
+    // Derivatives live under each variant's key (#496); a duplicate's thumbs
+    // are owned even though no original carries that hash.
+    const ownedThumbs = new Set([...owned, ...rows.map((row) => row.derivativeKey ?? row.contentHash)]);
     const orphanThumbs = (await this.deps.blobs.listThumbHashes())
-      .filter((entry) => !owned.has(entry.hash) && entry.ageMs > LEFTOVER_MIN_AGE_MS)
+      .filter((entry) => !ownedThumbs.has(entry.hash) && entry.ageMs > LEFTOVER_MIN_AGE_MS)
       .map((entry) => entry.hash);
     // LIVE puts stage in the same directory — only old strands are
     // leftovers (a startup scan once reaped an in-flight seed write).

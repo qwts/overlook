@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import { PhotosRepository } from '../db/photos-repository.js';
+import type { DisclosurePlanner } from '../disclosure/disclosure-service.js';
 import type { LibraryParts } from '../library/library-parts.js';
 import { createFileProviderBridge } from './file-provider-bridge.js';
 import { FileProviderService } from './file-provider-service.js';
@@ -20,6 +21,7 @@ interface FileProviderRuntimeFactoryDeps {
   readonly platform: NodeJS.Platform;
   readonly packaged: boolean;
   readonly onLibraryChanged: (listener: () => void) => () => void;
+  readonly disclosure?: DisclosurePlanner | undefined;
 }
 
 export function createFileProviderService(deps: FileProviderRuntimeFactoryDeps): FileProviderService {
@@ -62,6 +64,7 @@ export function createFileProviderService(deps: FileProviderRuntimeFactoryDeps):
     admit: () => deps.unlocked() && deps.currentParts() === deps.parts,
     transport,
     onLibraryChanged: deps.onLibraryChanged,
+    ...(deps.disclosure === undefined ? {} : { disclosure: deps.disclosure }),
   });
   serviceReference.current = service;
   return service;

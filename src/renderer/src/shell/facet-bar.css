@@ -1,0 +1,131 @@
+/* Facet bar (#514): a second toolbar row under the chips. Every colour and
+ * length is a token; the value buttons reuse the chip vocabulary so a
+ * chosen facet value reads like a chosen filter chip. */
+
+.ovl-facetbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.ovl-facetbar__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ovl-facetbar__spacer {
+  flex: 1;
+}
+
+.ovl-facetbar__summary {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  margin-inline-start: var(--space-2);
+}
+
+.ovl-facetbar__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-2);
+  background: var(--surface-panel);
+}
+
+.ovl-facetbar__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-height: calc(var(--control-h-sm) * 6);
+  overflow-y: auto;
+}
+
+.ovl-facetbar__value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-1);
+  background: var(--gray-2);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.ovl-facetbar__value:hover {
+  color: var(--text-body);
+}
+
+.ovl-facetbar__value[aria-pressed='true'] {
+  background: var(--accent-cyan-dim);
+  border-color: var(--accent-cyan);
+  color: var(--text-body);
+}
+
+.ovl-facetbar__value:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ovl-facetbar__count {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ovl-facetbar__panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ovl-facetbar__additive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.ovl-facetbar__hint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ovl-facetbar__range {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.ovl-facetbar__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ovl-facetbar__field input {
+  height: var(--control-h-sm);
+  width: calc(var(--space-9) * 2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.ovl-facetbar__field input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

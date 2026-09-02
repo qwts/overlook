@@ -139,7 +139,22 @@ describe('ProtectedWorkflowService (#329)', () => {
     assert.deepEqual(await value.workflow.unprotect('protected-private', 'wrong password'), { ok: false, reason: 'wrong-password' });
     assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
     assert.equal(value.albumRecords.get('protected-private'), undefined);
-    assert.deepEqual(value.photos.albums(), [{ id: 'ordinary-private', name: 'Private album', count: 1 }]);
+    assert.deepEqual(value.photos.albums(), [
+      {
+        id: 'ordinary-private',
+        name: 'Private album',
+        count: 1,
+        showInAllPhotos: true,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
+    ]);
     assert.equal(value.photos.get(PHOTO_ID)?.place, 'private place');
     assert.equal(
       await value.ordinary.verifyOriginal(value.contentHash, (keyId) => (keyId === 1 ? value.libraryKey : undefined), PHOTO_ID),
@@ -147,6 +162,36 @@ describe('ProtectedWorkflowService (#329)', () => {
     );
     assert.equal(value.changes(), 3);
     assert.deepEqual(value.ordinaryChanges, [[PHOTO_ID], [PHOTO_ID]]);
+    value.db.close();
+  });
+
+  test('a hidden album keeps its All Photos policy through protect and unprotect (#494)', async () => {
+    const value = await world();
+    value.photos.setAlbumVisibility('ordinary-private', false);
+    assert.equal(value.photos.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);
+    assert.deepEqual(await value.workflow.protect('ordinary-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+    assert.deepEqual(await value.workflow.unlock('protected-private', PASSWORD), { ok: true, outcome: 'opened' });
+    assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+    assert.deepEqual(value.photos.albums(), [
+      {
+        id: 'ordinary-private',
+        name: 'Private album',
+        count: 1,
+        showInAllPhotos: false,
+        visibleElsewhere: 0,
+        visibleVia: [],
+        kind: 'album',
+        parentId: null,
+        inheritsVisibility: false,
+        tags: [],
+        predicate: null,
+        unsupported: null,
+      },
+    ]);
+    // The flag was recomputed inside the unprotect transaction, not left for startup.
+    assert.equal(value.photos.counts('2026-07-01T00:00:00.000Z').hiddenByAlbums, 1);
+    assert.equal(value.photos.page({ source: 'all', limit: 10 }).photos.length, 0);
+    assert.equal(value.photos.page({ source: 'all', limit: 10, albumId: 'ordinary-private' }).photos.length, 1);
     value.db.close();
   });
 

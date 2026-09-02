@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 
 import { Sidebar } from './Sidebar';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
-import type { AlbumSummary, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
+import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
 import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { beginPhotoDrag } from '../grid/photo-drag-session';
 
@@ -22,6 +22,32 @@ const movePhotos = fn((request: { photoIds: readonly string[] }) =>
   Promise.resolve({ moved: request.photoIds.length, alreadyInTarget: 0 }),
 );
 const reorderAlbum = fn((request: { position: number }) => Promise.resolve({ changed: true, position: request.position, total: 2 }));
+const moveAlbum = fn();
+const deleteFolder = fn();
+
+/** A row reveals its actions button on hover/focus (pointer-events: none
+ * until then): focus first so user-event's pointer check sees a live target. */
+async function openActions(actions: HTMLElement): Promise<void> {
+  actions.focus();
+  await waitFor(() => expect(window.getComputedStyle(actions).pointerEvents).toBe('auto'));
+  await userEvent.click(actions);
+}
+
+/** A listing fixture: a top-level, visible, untagged album unless overridden (#505). */
+function listing(overrides: Partial<AlbumListing> & Pick<AlbumListing, 'id' | 'name' | 'count'>): AlbumListing {
+  return {
+    showInAllPhotos: true,
+    visibleElsewhere: 0,
+    visibleVia: [],
+    kind: 'album',
+    parentId: null,
+    inheritsVisibility: false,
+    tags: [],
+    predicate: null,
+    unsupported: null,
+    ...overrides,
+  };
+}
 
 function installStub(): void {
   // Sidebar listens to backup progress; AppStateProvider to pending pushes.
@@ -36,28 +62,45 @@ function installStub(): void {
       renameAlbum(request);
       return Promise.resolve({});
     },
-    delete: (request: unknown) => {
-      deleteAlbum(request);
+    delete: (request: { albumId: string; folder?: unknown }) => {
+      (request.folder === undefined ? deleteAlbum : deleteFolder)(request);
       return Promise.resolve({});
     },
     addPhotos,
     movePhotos,
     reorder: reorderAlbum,
+    move: (request: { albumId: string; parentId: string | null }) => {
+      moveAlbum(request);
+      return Promise.resolve({ album: listing({ id: request.albumId, name: 'Iceland', count: 214, parentId: request.parentId }) });
+    },
   } as unknown as OverlookApi['albums'];
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, albums: albumActions };
 }
 
-const counts: SourceCounts = { all: 204318, favorites: 11, recent: 96, raw: 0, offloaded: 12, unavailable: 0, deleted: 3, excluded: 0 };
+const counts: SourceCounts = {
+  all: 204318,
+  favorites: 11,
+  recent: 96,
+  raw: 0,
+  offloaded: 12,
+  unavailable: 0,
+  deleted: 3,
+  excluded: 0,
+  hiddenByAlbums: 0,
+};
 const stats: LibraryStats = {
   photos: 204318,
   bytes: 1_580_000_000_000,
   pending: 0,
   lastBackupAt: null,
   offloadedBytes: 380_000_000_000,
+  excludedCount: 0,
+  excludedBytes: 0,
+  pendingRemovals: 0,
 };
-const albums: readonly AlbumSummary[] = [
-  { id: 'a1', name: 'Iceland', count: 214 },
-  { id: 'a2', name: 'Studio scans', count: 1042 },
+const albums: readonly AlbumListing[] = [
+  listing({ id: 'a1', name: 'Iceland', count: 214 }),
+  listing({ id: 'a2', name: 'Studio scans', count: 1042 }),
 ];
 
 const meta: Meta<typeof Sidebar> = {
@@ -278,6 +321,35 @@ export const DerivedSourcesWithCounts: Story = {
   },
 };
 
+// #494 / ADR-0030 §2: a hidden album is marked in the row, and its actions
+// menu discloses how many photos stay in All Photos via other albums and
+// offers to open them.
+export const HiddenAlbumDisclosesInclusion: Story = {
+  args: {
+    albums: [
+      listing({
+        id: 'a1',
+        name: 'Iceland',
+        count: 214,
+        showInAllPhotos: false,
+        visibleElsewhere: 12,
+        visibleVia: [{ id: 'a2', name: 'Studio scans' }],
+      }),
+      listing({ id: 'a2', name: 'Studio scans', count: 1042, visibleElsewhere: 12 }),
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('img', { name: 'Hidden from All Photos' })).toBeVisible();
+    await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    const body = within(document.body);
+    await expect(body.getByRole('menuitem', { name: /Show in All Photos/u })).toBeVisible();
+    await expect(body.getByRole('menuitem', { name: /12 photos stay in All Photos via other albums/u })).toBeVisible();
+    await expect(body.getByRole('menuitem', { name: 'Open Studio scans' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
 export const LockedProtectedAlbumLeaksNothing: Story = {
   args: {
     protectedAlbums: [{ id: 'opaque-protected-id', label: 'Protected album', locked: true, name: 'Family', count: 842 }],
@@ -309,9 +381,7 @@ export const AlbumManagement: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const actions = canvas.getByRole('button', { name: 'Actions for Iceland' });
-    actions.focus();
-    await waitFor(() => expect(window.getComputedStyle(actions).pointerEvents).toBe('auto'));
-    await userEvent.click(actions);
+    await openActions(actions);
     await userEvent.click(canvas.getByRole('menuitem', { name: 'Rename album…' }));
     const renameDialog = within(canvas.getByRole('dialog', { name: 'Rename album' }));
     await userEvent.clear(renameDialog.getByRole('textbox', { name: 'Album name' }));
@@ -416,6 +486,63 @@ function dataTransfer(): DataTransfer {
   return new DataTransfer();
 }
 
+// #505 / ADR-0030 §1–§2: folders nest albums with one indent per level, the
+// folder row discloses its children, a child following the folder's policy
+// says so and can leave it, "Move to folder…" offers every other folder, and
+// deleting a non-empty folder names exactly what goes with it — never photos.
+export const AlbumFolders: Story = {
+  args: {
+    albums: [
+      listing({ id: 'f1', name: 'Trips', count: 214, kind: 'folder', showInAllPhotos: false, tags: ['travel'] }),
+      listing({ id: 'a1', name: 'Iceland', count: 214, parentId: 'f1', showInAllPhotos: false, inheritsVisibility: true }),
+      listing({ id: 'f2', name: 'Archive', count: 0, kind: 'folder' }),
+      listing({ id: 'a2', name: 'Studio scans', count: 1042 }),
+    ],
+  },
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      window.localStorage.removeItem('overlook.albumFoldersCollapsed');
+      moveAlbum.mockClear();
+      deleteFolder.mockClear();
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    const trips = canvas.getByRole('button', { name: /^Trips/u });
+    await expect(trips).toHaveAttribute('aria-expanded', 'true');
+    const iceland = canvas.getByText('Iceland').closest('.ovl-sidebar__albumrow');
+    await expect(iceland).toHaveAttribute('data-depth', '1');
+    await expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toBeDisabled();
+
+    await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    await expect(body.getByRole('menuitem', { name: /Show in All Photos.*Follows the folder setting/u })).toBeVisible();
+    await expect(body.queryByRole('menuitem', { name: 'Use folder setting' })).not.toBeInTheDocument();
+    await userEvent.click(body.getByRole('menuitem', { name: 'Move to folder…' }));
+    const move = within(canvas.getByRole('dialog', { name: 'Move Iceland' }));
+    await userEvent.selectOptions(move.getByRole('combobox', { name: 'Folder' }), 'Archive');
+    await userEvent.click(move.getByRole('button', { name: 'Move' }));
+    await waitFor(() => expect(moveAlbum).toHaveBeenCalledWith({ albumId: 'a1', parentId: 'f2' }));
+
+    await userEvent.click(trips);
+    await expect(trips).toHaveAttribute('aria-expanded', 'false');
+    await expect(canvas.queryByText('Iceland')).not.toBeInTheDocument();
+    await userEvent.click(trips);
+    await expect(canvas.getByText('Iceland')).toBeVisible();
+
+    await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
+    await expect(body.getByRole('menuitem', { name: /Tags….*travel/u })).toBeVisible();
+    await userEvent.click(body.getByRole('menuitem', { name: 'Delete folder…' }));
+    const remove = within(canvas.getByRole('dialog', { name: 'Delete folder' }));
+    await expect(remove.getByText(/only the folder, the albums inside it, and their membership are removed/u)).toBeVisible();
+    await userEvent.click(remove.getByRole('radio', { name: 'Also delete 1 album inside it' }));
+    await userEvent.click(remove.getByRole('button', { name: 'Delete folder' }));
+    await waitFor(() => expect(deleteFolder).toHaveBeenCalledWith({ albumId: 'f1', folder: { mode: 'recursive' } }));
+  },
+};
+
 export const AlbumDropStates: Story = {
   tags: ['album-drop'],
   loaders: [
@@ -458,5 +585,53 @@ export const AlbumDropStates: Story = {
     await fireEvent.drop(iceland, { dataTransfer: noOpTransfer });
     await expect(addPhotos).toHaveBeenCalledTimes(1);
     await expect(movePhotos).toHaveBeenCalledTimes(1);
+  },
+};
+
+// #514 / ADR-0030 §3: a Smart Album row carries the funnel, its count is the
+// query evaluated now, its menu edits or duplicates the query and never
+// offers to hide membership it does not have, and a query this version
+// cannot evaluate is marked rather than dropped.
+export const SmartAlbums: Story = {
+  args: {
+    albums: [
+      listing({ id: 'f1', name: 'Trips', count: 0, kind: 'folder' }),
+      listing({
+        id: 's1',
+        name: 'Fuji RAW',
+        count: 14,
+        kind: 'smart',
+        parentId: 'f1',
+        predicate: { version: 1, composition: 'and', groups: [{ facet: 'camera', values: ['FUJIFILM X-T5'] }] },
+      }),
+      listing({
+        id: 's2',
+        name: 'From the future',
+        count: 0,
+        kind: 'smart',
+        unsupported: 'predicate version 99 is newer than this app understands',
+      }),
+      listing({ id: 'a1', name: 'Family', count: 3 }),
+    ],
+  },
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      window.localStorage.removeItem('overlook.albumFoldersCollapsed');
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rows = canvas.getAllByRole('listitem');
+    await expect(rows.find((row) => row.textContent?.includes('Fuji RAW'))).toHaveAttribute('data-kind', 'smart');
+    await expect(canvas.getByRole('img', { name: 'Saved query cannot be evaluated by this version' })).toBeInTheDocument();
+    await openActions(canvas.getByRole('button', { name: 'Actions for Fuji RAW' }));
+    const menu = canvas.getByRole('menu', { name: 'Actions for Fuji RAW' });
+    await expect(within(menu).getByRole('menuitem', { name: 'Edit Smart Album' })).toBeInTheDocument();
+    await expect(within(menu).getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument();
+    await expect(within(menu).getByRole('menuitem', { name: 'Delete Smart Album…' })).toBeInTheDocument();
+    await expect(within(menu).queryByRole('menuitem', { name: /Hide from All Photos/u })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
   },
 };

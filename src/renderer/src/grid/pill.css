@@ -105,6 +105,12 @@
   box-shadow: var(--shadow-2);
 }
 
+.ovl-albumpicker__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
 .ovl-albumpicker--context {
   position: fixed;
   z-index: 220;

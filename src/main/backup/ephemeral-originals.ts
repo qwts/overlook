@@ -4,6 +4,7 @@ import { CustodyResolutionError, type CustodyHandle, type CustodyHandleResolver 
 import { ProviderError } from './provider.js';
 import type { SyncStatus } from '../../shared/library/types.js';
 import { custodyStateFromFailure, type EphemeralFailureReason, type PhotoCustodyStatus } from '../../shared/backup/custody-status.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 export type OriginalPurpose = 'view' | 'prefetch' | 'export';
 export type OriginalCustody = 'durable' | 'ephemeral';
@@ -35,7 +36,7 @@ export interface EphemeralOriginalDeps {
     readonly setStatus: (photoId: string, status: SyncStatus) => void;
   };
   readonly repo: {
-    readonly get: (photoId: string) => { readonly contentHash: string } | undefined;
+    readonly get: (photoId: string) => { readonly contentHash: string; readonly assetOwnerId?: string | null | undefined } | undefined;
   };
   readonly blobs: {
     readonly hasOriginal: (contentHash: string) => boolean;
@@ -89,7 +90,7 @@ export class EphemeralOriginalService {
     return {
       stream:
         custody === 'durable'
-          ? this.deps.blobs.durableStream(photo.contentHash, photoId)
+          ? this.deps.blobs.durableStream(photo.contentHash, assetOwnerOf({ id: photoId, ...photo }))
           : this.deps.blobs.ephemeralStream(photo.contentHash, photoId),
       custody,
     };

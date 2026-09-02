@@ -6,6 +6,7 @@ import { ProviderError, type ProviderAuthState, type StorageProvider } from './p
 import { CustodyResolutionError, type CustodyHandle, type CustodyHandleResolver } from './custody-handle.js';
 import type { SyncLedger } from './sync-ledger.js';
 import type { SyncStatus } from '../../shared/library/types.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 // Offload + rehydrate (#107, ADR-0007): originals live only in the cloud,
 // safely, and come back when needed. Eligibility trusts the verified bit
@@ -98,7 +99,9 @@ export interface OffloadDeps {
   readonly custody: Pick<CustodyHandleResolver, 'resolve'>;
   readonly ledger: SyncLedger;
   readonly repo: {
-    readonly get: (id: string) => { contentHash: string; bytes: number; deletedAt: string | null } | undefined;
+    readonly get: (
+      id: string,
+    ) => { contentHash: string; bytes: number; deletedAt: string | null; assetOwnerId?: string | null | undefined } | undefined;
     /** Live photos (not deleted) sharing this content hash. */
     readonly countByContentHash: (hash: string) => number;
     readonly offloadedIds: () => readonly string[];
@@ -326,10 +329,12 @@ export class OffloadService {
       // restoreOriginal verifies (decrypt + re-hash against the content
       // address) BEFORE publishing; a bad download never becomes local
       // truth and the record stays cleanly offloaded.
-      await this.deps.blobs.restoreOriginal(photo.contentHash, ciphertext, photoId).catch((error: unknown) => {
-        this.deps.audit(`REHYDRATE-FAIL photo=${photoId} stage=verify`);
-        throw new RehydrateError(error instanceof Error ? error.message : 'restore failed', 'verify-failed');
-      });
+      await this.deps.blobs
+        .restoreOriginal(photo.contentHash, ciphertext, assetOwnerOf({ id: photoId, ...photo }))
+        .catch((error: unknown) => {
+          this.deps.audit(`REHYDRATE-FAIL photo=${photoId} stage=verify`);
+          throw new RehydrateError(error instanceof Error ? error.message : 'restore failed', 'verify-failed');
+        });
     }
     this.deps.ledger.setStatus(photoId, 'synced');
     this.deps.custodyChanged();

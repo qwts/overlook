@@ -126,7 +126,7 @@ export class ProtectedWorkflowService {
           name: source.name,
           createdAt: source.createdAt,
           position: source.position,
-          ordinaryAlbum: { id: source.id, createdAt: source.createdAt, position: source.position },
+          ordinaryAlbum: { id: source.id, createdAt: source.createdAt, position: source.position, showInAllPhotos: source.showInAllPhotos },
           members: source.photoIds.map((photoId, position) => ({ photoId, position, ordinaryMemberships: [] })),
         },
       });
@@ -198,7 +198,8 @@ export class ProtectedWorkflowService {
       await this.advanceAll(migrationId, 'unprotect', photoIds.length, authority);
       this.finishRemoval(albumId, photoIds);
       return { ok: true, albumId };
-    } catch {
+    } catch (error) {
+      console.error('[overlook] protected album unprotect failed', error);
       if (!committed) await this.options.migrations.repairStartup();
       return { ok: false, reason: this.controller.signal.aborted ? 'cancelled' : 'failed' };
     } finally {

@@ -208,7 +208,7 @@ test('app lock withholds content across configuration, bypass attempts, restart,
 
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('tab', { name: 'Privacy' }).click();
-    await page.getByRole('button', { name: 'Remove…' }).click();
+    await page.getByLabel('App password').getByRole('button', { name: 'Remove…' }).click();
     const removeDialog = page.getByRole('dialog', { name: 'Remove app password' });
     await removeDialog.getByLabel('Current password').fill(NEXT_PASSWORD);
     await removeDialog.getByRole('button', { name: 'Remove app password' }).click();

@@ -97,7 +97,8 @@
 }
 
 .ovl-lightbox__orientation,
-.ovl-lightbox__zoom {
+.ovl-lightbox__zoom,
+.ovl-lightbox__edit {
   --ovl-lightbox-handoff-space: calc(var(--space-2) + var(--space-1));
 
   position: absolute;
@@ -129,8 +130,50 @@
 }
 
 .ovl-lightbox__zoom {
-  inset-inline-start: calc(50% + 105px);
+  inset-inline-start: calc(50% + var(--lightbox-toolbar-handoff));
   translate: 0 0;
+}
+
+/* Persisted-edit controls (#493): the zoom cluster's mirror image, the same
+   hand-off from the centered orientation toolbar on the other side. */
+.ovl-lightbox__edit {
+  inset-inline-end: calc(50% + var(--lightbox-toolbar-handoff));
+  translate: 0 0;
+}
+
+.ovl-lightbox__edit-dirty {
+  color: var(--accent-amber);
+  padding-inline: var(--space-1);
+}
+
+.ovl-lightbox__edit-status {
+  position: absolute;
+  inset-inline-start: 50%;
+  bottom: var(--space-6);
+  translate: -50% 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--accent-amber);
+  pointer-events: none;
+}
+
+/* Crop drawing surface: sits exactly over the oriented image (#493). */
+.ovl-lightbox__crop {
+  position: absolute;
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.ovl-lightbox__crop-rect {
+  position: absolute;
+  border: 1px solid var(--accent-cyan);
+  /* A spread larger than any viewport turns the shadow into the scrim
+     outside the framed region; the rectangle itself stays lit. */
+  box-shadow: 0 0 0 200vmax var(--scrim);
+  pointer-events: none;
 }
 
 .ovl-lightbox__orientation.ovl-lightbox__chrome--on,
@@ -340,4 +383,23 @@
  * panel sits beside the photo, exactly like the mock's flex row. */
 .ovl-lightbox--docked {
   inset-inline-end: var(--inspector-w);
+}
+
+/* Locked photo (#517): the viewport stays dark until the key is imported. */
+.ovl-lightbox__locked {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  color: var(--accent-amber);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.ovl-lightbox__lockedHint {
+  color: var(--text-muted);
+  font: var(--type-meta);
+  max-width: 36ch;
 }

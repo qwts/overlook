@@ -124,7 +124,7 @@ test('full circle: import a real RAF, lightbox-export as JPEG from its preview',
     await expect(page.getByTestId('lightbox')).toBeVisible();
     await page.getByTestId('lightbox').getByRole('button', { name: 'Export' }).click();
     await expect(page.getByText('1 photo selected')).toBeVisible();
-    await page.getByRole('radio', { name: 'JPEG' }).click();
+    await page.getByRole('radio', { name: 'Bake', exact: true }).click();
     await page.getByRole('button', { name: /Choose folder/u }).click();
     await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
 
@@ -171,7 +171,7 @@ test('HEIC import renders oriented previews and Original export remains byte-fai
     await expect(page.getByText('PREVIEW UNAVAILABLE')).toHaveCount(0);
 
     await page.getByTestId('lightbox').getByRole('button', { name: 'Export' }).click();
-    await page.getByRole('radio', { name: 'Original' }).click();
+    await page.getByRole('radio', { name: 'Original only', exact: true }).click();
     await page.getByRole('button', { name: /Choose folder/u }).click();
     await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
     await expect(page.getByText('1 photo exported and decrypted.')).toBeVisible({ timeout: 20_000 });
@@ -209,7 +209,7 @@ test('metadata-lite JPEG imports with decoded dimensions, renders, and exports b
     await expect(page.getByTestId('inspector')).toContainText('960×1280 · 1.2 MP');
 
     await page.getByTestId('lightbox').getByRole('button', { name: 'Export' }).click();
-    await page.getByRole('radio', { name: 'Original' }).click();
+    await page.getByRole('radio', { name: 'Original only', exact: true }).click();
     await page.getByRole('button', { name: /Choose folder/u }).click();
     await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
     await expect(page.getByText('1 photo exported and decrypted.')).toBeVisible({ timeout: 20_000 });

@@ -6,6 +6,7 @@ import type { PhotosRepository } from '../db/photos-repository.js';
 import type { EphemeralOriginalService } from '../backup/ephemeral-originals.js';
 import { FullService } from './full-service.js';
 import { videoMimeFor } from '../../shared/library/media-info.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 export interface FullRuntimeOptions {
   readonly repo: PhotosRepository;
@@ -31,7 +32,7 @@ export function createFullRuntime(options: FullRuntimeOptions): FullService {
         }
       }
       try {
-        const stream = options.blobs.getStream(photo.contentHash, options.resolveKey, photoId);
+        const stream = options.blobs.getStream(photo.contentHash, options.resolveKey, assetOwnerOf(photo));
         return { bytes: await buffer(stream), contentHash: photo.contentHash, fileKind: photo.fileKind };
       } catch (error) {
         if (error instanceof BlobStoreError) return null;
@@ -54,7 +55,11 @@ export function createFullRuntime(options: FullRuntimeOptions): FullService {
         }
       }
       try {
-        return { stream: options.blobs.getStream(photo.contentHash, options.resolveKey, photoId), totalBytes: photo.bytes, mime };
+        return {
+          stream: options.blobs.getStream(photo.contentHash, options.resolveKey, assetOwnerOf(photo)),
+          totalBytes: photo.bytes,
+          mime,
+        };
       } catch (error) {
         if (error instanceof BlobStoreError) return null;
         throw error;

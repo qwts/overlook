@@ -77,6 +77,7 @@ test('macOS menu items are the exact per-menu spec order (#689)', () => {
     'Import Photos…',
     'Export…',
     'Export All Unencrypted…',
+    'Review Duplicates…',
     '—',
     'Switch Library…',
     'Move Library…',
@@ -191,8 +192,9 @@ test('File/Edit/View additions are target-aware and enabled with a library (#689
   assert.equal(commandEnabled('selection.clear', { ...grid, selectionCount: 2 }), true);
   assert.equal(commandEnabled('selection.clear', grid), false);
   assert.equal(commandEnabled('selection.clear', { ...grid, selectionCount: 2, editable: true }), false);
-  // Feed has no view yet — it stays disabled.
-  assert.equal(commandEnabled('view.mode.feed', grid), false);
+  // Feed is a real view (#516): enabled with the grid, off behind a dialog.
+  assert.equal(commandEnabled('view.mode.feed', grid), true);
+  assert.equal(commandEnabled('view.mode.feed', { ...grid, dialog: 'settings' }), false);
   assert.equal(commandEnabled('library.exportAll', grid), true);
   assert.equal(commandEnabled('library.exportAll', { ...grid, protectedAlbumOpen: true }), false);
 });

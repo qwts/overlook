@@ -1,6 +1,8 @@
 import sharp from 'sharp';
 
+import { bakeDecoded, decodable } from '../import/bake-transform.js';
 import { embeddedJpegFromRaf } from '../import/raf-preview.js';
+import { IDENTITY_TRANSFORM, isIdentityTransform, type EditTransform } from '../../shared/library/edit-revision.js';
 import type { FileKind } from '../../shared/library/types.js';
 
 // JPEG transcode for export (#98): "Format: JPEG" must open anywhere,
@@ -9,9 +11,18 @@ import type { FileKind } from '../../shared/library/types.js';
 // Metadata is STRIPPED on transcode (sharp's default, kept deliberately):
 // per ADR-0006's GPS stance, location and camera identity travel only when
 // the user exports ORIGINALS. Orientation is baked in before the tag drops.
+// The Baked mode (#497, ADR-0031 §6) renders the head edit stack into the
+// pixels with the same math the derivatives use, at an explicit quality.
 
-/** Recorded quality setting (#98). */
+/** Recorded default quality setting (#98). */
 export const EXPORT_JPEG_QUALITY = 90;
+
+export interface TranscodeOptions {
+  /** Edits to bake into the pixels; absent or identity = the untouched pipeline. */
+  readonly transform?: EditTransform | undefined;
+  /** JPEG quality 1–100; defaults to EXPORT_JPEG_QUALITY. */
+  readonly quality?: number | undefined;
+}
 
 export interface TranscodeResult {
   readonly jpeg: Buffer;
@@ -19,7 +30,7 @@ export interface TranscodeResult {
   readonly fromPreview: boolean;
 }
 
-export async function transcodeToJpeg(bytes: Buffer, fileKind: FileKind): Promise<TranscodeResult> {
+export async function transcodeToJpeg(bytes: Buffer, fileKind: FileKind, options: TranscodeOptions = {}): Promise<TranscodeResult> {
   let source = bytes;
   let fromPreview = false;
   if (fileKind === 'raw') {
@@ -34,6 +45,14 @@ export async function transcodeToJpeg(bytes: Buffer, fileKind: FileKind): Promis
     source = preview;
     fromPreview = true;
   }
-  const jpeg = await sharp(source, { failOn: 'error' }).rotate().jpeg({ quality: EXPORT_JPEG_QUALITY }).toBuffer();
+  const transform = options.transform ?? IDENTITY_TRANSFORM;
+  const quality = options.quality ?? EXPORT_JPEG_QUALITY;
+  if (isIdentityTransform(transform)) {
+    const jpeg = await sharp(source, { failOn: 'error' }).rotate().jpeg({ quality }).toBuffer();
+    return { jpeg, fromPreview };
+  }
+  const jpeg = await decodable(await bakeDecoded(source, transform))
+    .jpeg({ quality })
+    .toBuffer();
   return { jpeg, fromPreview };
 }

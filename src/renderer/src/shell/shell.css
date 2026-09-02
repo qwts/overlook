@@ -235,6 +235,13 @@
   color: var(--text-faint);
 }
 
+/* Album hidden from All Photos (#494): a quiet glyph beside the name. */
+.ovl-siderow__hidden {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+}
+
 /* After the base .ovl-siderow rules — same specificity, so source order is
  * what lets the rail metrics win (PR #245 review). */
 .ovl-siderow--collapsed {
@@ -414,11 +421,28 @@
 
 .ovl-sidebar__albumrow {
   position: relative;
-  width: 100%;
+  width: auto;
+  /* Folder depth (#505): one indent step per level, set by the row. */
+  margin-inline-start: calc(var(--ovl-album-depth, 0) * var(--space-4));
 }
 
 .ovl-sidebar--collapsed .ovl-sidebar__albumrow {
   width: 36px;
+  margin-inline-start: 0;
+}
+
+.ovl-sidebar__headingActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* The group, not each gear, carries the heading's optical edge: two 24px
+     targets pulled over each other by per-button negative margins shrink
+     each other's usable area below SC 2.5.8 (axe target-size). */
+  margin-inline-end: -6px;
+}
+
+.ovl-sidebar__headingActions .ovl-sidebar__gear {
+  margin-inline: 0;
 }
 
 .ovl-sidebar__albumrow .ovl-siderow:not(.ovl-siderow--collapsed) {
@@ -584,6 +608,44 @@
 .ovl-album-dialog__safe-copy,
 .ovl-album-dialog__error {
   margin-top: var(--space-3);
+}
+
+/* Folder ceremonies (#505): destination pickers and the delete choices. */
+.ovl-album-dialog__select {
+  width: 100%;
+  min-height: var(--interactive-target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-1);
+  background: var(--gray-2);
+  color: var(--text-body);
+  font: inherit;
+}
+
+.ovl-album-dialog__select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ovl-album-dialog__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ovl-album-dialog__choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  color: var(--text-body);
+}
+
+.ovl-album-dialog__choice .ovl-album-dialog__select {
+  grid-column: 2;
 }
 
 /* Full-window drop overlay (#237) — the mock's own metrics. */

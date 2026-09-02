@@ -1,8 +1,9 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { migrateGalleryPolicy } from './gallery-policy-migration.js';
+import { COLLECTION_MIGRATIONS } from './collection-migrations.js';
 import { migrateDurableLiveLocalObjects } from './interop-migrations.js';
 import { queryAll, run } from './sql.js';
+import { runMigrationTransaction } from './migration-rebuild.js';
 
 // Forward-only, versioned, transactional migrations per ADR-0005 (#69).
 // Broken migrations roll forward with a fix — there are no down migrations.
@@ -11,6 +12,8 @@ export interface Migration {
   readonly version: number;
   readonly name: string;
   readonly up: (db: BetterSqlite3.Database) => void;
+  /** Rebuilds a table — see migration-rebuild.ts for the foreign-key guard. */
+  readonly rebuild?: boolean;
 }
 
 // Migration 001 — ADR-0005 schema v1 (+ the recorded photos.deleted_at
@@ -882,10 +885,9 @@ const SCHEMA_V26: Migration = {
   up: migrateDurableLiveLocalObjects,
 };
 
-// Migration 027 — All Photos inclusion rules (#512); body in
-// gallery-policy-migration.ts to keep this registry under the size gate.
-const SCHEMA_V27: Migration = { version: 27, name: 'gallery-policy', up: migrateGalleryPolicy };
-
+// 027 — All Photos inclusion rules (#512) and 028 — collection visibility
+// (#494) are registered inline below; their bodies live in their own modules
+// to keep this registry under the size gate.
 export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V1,
   SCHEMA_V2,
@@ -913,7 +915,7 @@ export const MIGRATIONS: readonly Migration[] = [
   SCHEMA_V24,
   SCHEMA_V25,
   SCHEMA_V26,
-  SCHEMA_V27,
+  ...COLLECTION_MIGRATIONS,
 ];
 
 /** Applies pending migrations in order; each in its own transaction. */
@@ -930,10 +932,10 @@ export function migrate(db: BetterSqlite3.Database, migrations: readonly Migrati
     if (applied.has(migration.version)) {
       continue;
     }
-    db.transaction(() => {
+    runMigrationTransaction(db, migration, () => {
       migration.up(db);
       run(db, 'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', migration.version, new Date().toISOString());
-    })();
+    });
     ran += 1;
   }
   return ran;

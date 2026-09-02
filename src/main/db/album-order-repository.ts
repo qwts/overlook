@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import type { AlbumSummary } from '../../shared/library/types.js';
+import { siblingReorderedOrder } from './album-tree-repository.js';
 import { queryAll, runNamed } from './sql.js';
 
 export interface AlbumOrderResult {
@@ -11,18 +11,6 @@ export interface AlbumOrderResult {
 
 export function readAlbumOrder(db: BetterSqlite3.Database): string[] {
   return queryAll<{ id: string }>(db, 'SELECT id FROM albums ORDER BY position, id').map(({ id }) => id);
-}
-
-export function readAlbumSummaries(db: BetterSqlite3.Database): AlbumSummary[] {
-  return queryAll<{ id: string; name: string; n: number }>(
-    db,
-    `SELECT a.id, a.name, count(ap.photo_id) AS n
-       FROM albums a
-       LEFT JOIN album_photos ap
-         ON ap.album_id = a.id
-        AND ap.photo_id IN (SELECT id FROM ordinary_visible_photos)
-       GROUP BY a.id ORDER BY a.position`,
-  ).map((row) => ({ id: row.id, name: row.name, count: row.n }));
 }
 
 export function replaceAlbumOrder(db: BetterSqlite3.Database, order: readonly string[]): AlbumOrderResult {
@@ -44,15 +32,16 @@ export function replaceAlbumOrder(db: BetterSqlite3.Database, order: readonly st
   })();
 }
 
-export function moveAlbum(db: BetterSqlite3.Database, albumId: string, position: number): AlbumOrderResult {
+/** Moves an album to `position` among its siblings (#505: one ordering
+ * mechanism, scoped to the parent). The history still records the full
+ * depth-first order, so undo replays through `replaceAlbumOrder`. */
+export function moveAlbum(
+  db: BetterSqlite3.Database,
+  albumId: string,
+  position: number,
+): AlbumOrderResult & { readonly position: number; readonly total: number } {
   return db.transaction(() => {
-    const before = readAlbumOrder(db);
-    const current = before.indexOf(albumId);
-    if (current === -1) throw new Error(`album ${albumId} does not exist`);
-    if (!Number.isInteger(position) || position < 0 || position >= before.length) throw new Error('album position is out of range');
-    const after = [...before];
-    after.splice(current, 1);
-    after.splice(position, 0, albumId);
-    return replaceAlbumOrder(db, after);
+    const sibling = siblingReorderedOrder(db, albumId, position);
+    return { ...replaceAlbumOrder(db, sibling.order), position: sibling.position, total: sibling.total };
   })();
 }

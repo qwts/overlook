@@ -19,6 +19,9 @@ import {
 } from '../backup/provider-descriptor.js';
 import { ephemeralFailureReasonSchema, photoCustodyStatusSchema } from '../backup/custody-status.js';
 import { diagnosticsChannels } from './diagnostics-channels.js';
+import { coverageChannels } from './coverage-channels.js';
+import { keyringChannels } from './keyring-channels.js';
+import { disclosureChannels } from './disclosure-channels.js';
 import { llmChannels, llmEvents } from './llm-channels.js';
 import {
   restoreDiscoverResponseSchema,
@@ -39,7 +42,12 @@ import * as originalPolicy from './original-policy-channels.js';
 import * as librarySelection from './library-selection-channels.js';
 import { libraryQuerySchema } from './library-query-schemas.js';
 import { galleryPolicySchema } from '../library/gallery-policy.js';
-import { albumChannels } from './album-channels.js';
+import { albumChannels, albumListingSchema } from './album-channels.js';
+import { photoEditChannels } from './photo-edit-channels.js';
+import { provenanceChannels } from './provenance-channels.js';
+import { variantChannels } from './variant-channels.js';
+import { histogramChannels } from './histogram-channels.js';
+import { duplicateChannels, duplicateEvents } from './duplicate-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
@@ -217,6 +225,9 @@ const photoRecordSchema = z.object({
   height: z.number(),
   bytes: z.number(),
   contentHash: z.string(),
+  derivativeKey: z.string(),
+  variantSourceId: z.string().nullable(),
+  assetOwnerId: z.string().nullable(),
   camera: z.string().nullable(),
   lens: z.string().nullable(),
   iso: z.number().nullable(),
@@ -244,15 +255,22 @@ const photoRecordSchema = z.object({
   dimensionStatus: z.enum(['legacy', 'verified', 'metadata-mismatch', 'unavailable']),
   mediaInfo: mediaInfoSchema.nullable(),
   syncState: syncStatusSchema,
+  coverage: z.enum(['included', 'excluding', 'excluded']),
+  locked: z.boolean(),
 });
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
   contentHash: true,
+  derivativeKey: true,
+  variantSourceId: true,
+  assetOwnerId: true,
   isOriginal: true,
   keyId: true,
   previewFailure: true,
   dimensionStatus: true,
   syncState: true,
+  coverage: true,
+  locked: true,
 });
 const protectedPageCursorSchema = z.object({ position: z.number().int().nonnegative(), id: z.string().min(1) });
 
@@ -399,6 +417,7 @@ export const channels = {
       unavailable: z.number(),
       deleted: z.number(),
       excluded: z.number().int().nonnegative(),
+      hiddenByAlbums: z.number().int().nonnegative(),
     }),
   ),
   // All Photos inclusion rules (#512, ADR-0030 §4): read and written in the
@@ -409,11 +428,7 @@ export const channels = {
     z.object({ policy: galleryPolicySchema }),
     z.object({ policy: galleryPolicySchema }),
   ),
-  libraryAlbums: defineChannel(
-    'library:albums',
-    z.object({}),
-    z.object({ albums: z.array(z.object({ id: z.string(), name: z.string(), count: z.number().int().nonnegative() })).readonly() }),
-  ),
+  libraryAlbums: defineChannel('library:albums', z.object({}), z.object({ albums: z.array(albumListingSchema).readonly() })),
   activityPage: defineChannel('activity:page', activityPageRequestSchema, activityPageResponseSchema),
   historyStatus: defineChannel('history:status', z.object({}), historyStatusSchema),
   historyUndo: defineChannel('history:undo', historyExecuteRequestSchema, historyExecuteResponseSchema),
@@ -581,6 +596,14 @@ export const channels = {
   // never deletes photos (Clear-vs-Delete rules); membership edits dirty
   // the ledger (manifest-relevant, ADR-0007).
   ...albumChannels,
+  // Persisted edits (#493, ADR-0031 §2): immutable revision documents per photo.
+  ...photoEditChannels,
+  ...provenanceChannels,
+  ...variantChannels(photoRecordSchema),
+  // Inspector histogram (#498): main bins the photo's own mid derivative.
+  ...histogramChannels,
+  // Perceptual duplicate review (#650): derived from fresh fingerprints, never stored.
+  ...duplicateChannels(photoRecordSchema),
   ...boardChannels,
   ...embeddingChannels,
   // Import sources (#84): discovery + the source-card scan. Copying is #87.
@@ -818,6 +841,9 @@ export const channels = {
   settingsSet: defineChannel('settings:set', z.object({ patch: settingsPatchSchema }), z.object({ settings: settingsSchema })),
   ...themeChannels,
   ...diagnosticsChannels,
+  ...coverageChannels,
+  ...keyringChannels,
+  ...disclosureChannels,
   libraryStats: defineChannel(
     'library:stats',
     z.object({}),
@@ -827,6 +853,9 @@ export const channels = {
       pending: z.number().int().nonnegative(),
       lastBackupAt: z.string().nullable(),
       offloadedBytes: z.number().nonnegative(),
+      excludedCount: z.number().int().nonnegative(),
+      excludedBytes: z.number().nonnegative(),
+      pendingRemovals: z.number().int().nonnegative(),
     }),
   ),
   // Multi-library registry (#384, ADR-0017 §1/§2): list/create/select/remove
@@ -993,6 +1022,7 @@ export const events = {
   // dropping deep scroll/lightbox/selection state (#744).
   libraryChanged: defineEvent('library:changed', libraryChangedSchema),
   ...originalPolicy.originalPolicyEvents,
+  ...duplicateEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',
     z.object({ updates: z.array(z.object({ id: z.string(), syncState: syncStatusSchema })) }),
