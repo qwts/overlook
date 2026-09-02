@@ -86,7 +86,8 @@ test('search + chips filter the library live; impossible filter shows the empty 
     const filterToggle = page.getByRole('button', { name: 'Filters' });
     await filterToggle.click();
     await expect(filterToggle).toHaveAttribute('aria-pressed', 'true');
-    const rawFilter = page.getByRole('button', { name: 'RAW' });
+    // The sidebar's derived RAW source (#512) is also a button named RAW.
+    const rawFilter = page.getByTestId('chip-row').getByRole('button', { name: 'RAW' });
     await expect(rawFilter).toBeVisible();
     await rawFilter.press('Enter');
     await expect(grid.locator('.ovl-grid__cell')).toHaveCount(3);
