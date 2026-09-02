@@ -14,7 +14,18 @@ import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, readAlbumSummaries, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
-import { buildQueryPlan, ORDERINGS, select, selectRankedWithProjection, selectWithProjection, sourceWhere } from './photo-query.js';
+import {
+  allPhotosWhere,
+  buildQueryPlan,
+  inclusionParams,
+  ORDERINGS,
+  select,
+  selectRankedWithProjection,
+  selectWithProjection,
+  sourceWhere,
+} from './photo-query.js';
+import { readGalleryPolicy, writeGalleryPolicy } from './gallery-policy-repository.js';
+import type { GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import { manifestSnapshot as readManifestSnapshot, restoreManifest as restoreManifestFromBackup } from './photo-backup-repository.js';
 import { PhotoMetadataRepository } from './photo-metadata-repository.js';
 
@@ -177,7 +188,7 @@ export class PhotosRepository {
    * A query that tokenizes to nothing (pure punctuation/whitespace) falls
    * back to the legacy case-insensitive substring match. */
   page(request: PageRequest): PageResult {
-    const plan = buildQueryPlan(request);
+    const plan = buildQueryPlan(request, this.galleryPolicy());
     // The ranked branch's ORDER BY must stay the literal `rank` token (see
     // fromRanked) — it can't reuse ORDERINGS' generic `sort_key`/tuple-
     // cursor shape without losing the index-order optimization, so the tie
@@ -233,7 +244,7 @@ export class PhotosRepository {
 
   /** Top keyword candidates used by ADR-0018 reciprocal-rank fusion. */
   searchIds(request: LibraryQuery, limit: number): readonly string[] {
-    const plan = buildQueryPlan(request);
+    const plan = buildQueryPlan(request, this.galleryPolicy());
     const order = request.order ?? 'date';
     return queryAll<{ id: string }>(
       this.db,
@@ -263,7 +274,7 @@ export class PhotosRepository {
 
   /** Returns every ID in the logical collection, independent of paging. */
   selectAllIds(request: LibraryQuery): readonly string[] {
-    const plan = buildQueryPlan(request);
+    const plan = buildQueryPlan(request, this.galleryPolicy());
     const order = request.order ?? 'date';
     const rows = queryAll<{ id: string }>(
       this.db,
@@ -277,7 +288,7 @@ export class PhotosRepository {
 
   /** Resolves one inclusive range against the complete active projection. */
   selectionRange(request: SelectionRangeRequest): readonly string[] {
-    const plan = buildQueryPlan(request);
+    const plan = buildQueryPlan(request, this.galleryPolicy());
     const order = request.order ?? 'date';
     const ids = queryAll<{ id: string }>(
       this.db,
@@ -895,20 +906,42 @@ export class PhotosRepository {
    * with FILTER clauses (#124): five separate counts cost ~690ms at 200K;
    * one scan serves them all. */
   counts(recentSince: string): SourceCounts {
-    const sources = ['all', 'favorites', 'recent', 'offloaded', 'deleted'] as const;
-    const filters = sources.map((source) => `count(*) FILTER (WHERE ${sourceWhere(source)}) AS "${source}"`).join(', ');
-    const row = queryAll<Record<(typeof sources)[number], number>>(
+    const policy = this.galleryPolicy();
+    const sources = ['favorites', 'recent', 'raw', 'offloaded', 'unavailable', 'deleted'] as const;
+    // All Photos counts through allPhotosWhere — the same clause page() uses
+    // when inclusion rules are active (#512, ADR-0030 §6) — and `unfiltered`
+    // exists only to disclose how many rows those rules hide.
+    const filters = [
+      `count(*) FILTER (WHERE ${allPhotosWhere(policy)}) AS "all"`,
+      `count(*) FILTER (WHERE ${sourceWhere('all')}) AS "unfiltered"`,
+      ...sources.map((source) => `count(*) FILTER (WHERE ${sourceWhere(source)}) AS "${source}"`),
+    ].join(', ');
+    const row = queryAll<Record<(typeof sources)[number] | 'all' | 'unfiltered', number>>(
       this.db,
       `SELECT ${filters} FROM ordinary_visible_photos p LEFT JOIN sync_ledger l ON l.photo_id = p.id`,
-      { recentSince },
+      { recentSince, ...inclusionParams(policy) },
     )[0];
+    const all = row?.all ?? 0;
     return {
-      all: row?.all ?? 0,
+      all,
       favorites: row?.favorites ?? 0,
       recent: row?.recent ?? 0,
+      raw: row?.raw ?? 0,
       offloaded: row?.offloaded ?? 0,
+      unavailable: row?.unavailable ?? 0,
       deleted: row?.deleted ?? 0,
+      excluded: Math.max(0, (row?.unfiltered ?? 0) - all),
     };
+  }
+
+  /** All Photos inclusion rules (#512) — library data read per query so a
+   * Settings change applies to the very next page and count. */
+  galleryPolicy(): GalleryPolicy {
+    return readGalleryPolicy(this.db);
+  }
+
+  setGalleryPolicy(policy: GalleryPolicy): GalleryPolicy {
+    return writeGalleryPolicy(this.db, policy);
   }
 }
 

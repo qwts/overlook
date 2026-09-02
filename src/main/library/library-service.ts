@@ -17,6 +17,7 @@ import type {
   SourceCounts,
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
+import type { GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import type { PhotoMetadataUpdate, PhotoTagManagement } from '../../shared/library/photo-metadata.js';
 import { SemanticSearch, type SemanticEmbeddingFacade } from './semantic-search.js';
 
@@ -178,6 +179,19 @@ export class LibraryService {
 
   counts(recentSince: string): SourceCounts {
     return this.repo.counts(recentSince);
+  }
+
+  galleryPolicy(): GalleryPolicy {
+    return this.repo.galleryPolicy();
+  }
+
+  /** Persists the All Photos inclusion rules (#512) and announces a
+   * library-wide membership change so every open gallery and the sidebar
+   * counts re-evaluate without a restart. */
+  setGalleryPolicy(policy: GalleryPolicy): GalleryPolicy {
+    const stored = this.repo.setGalleryPolicy(policy);
+    this.events.libraryChanged([], 'library');
+    return stored;
   }
 
   stats(): LibraryStats {
