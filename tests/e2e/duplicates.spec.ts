@@ -43,8 +43,9 @@ test('duplicates: review groups the copies, Trash and the Original policy reshap
 
   // File → Review Duplicates… (⌥⌘D is this item's accelerator, which lives
   // on the native menu, so the item is what a synthetic key press cannot reach).
-  // Windows/Linux run with no native menu bar (ADR-0024 §5): there the
-  // renderer's keymap owns the shortcut.
+  // Windows/Linux run with no native menu bar (ADR-0024 §5), and the
+  // renderer keymap defers this command to the (absent) native accelerator,
+  // so deliver it over the same IPC event the menu item would have used.
   if (process.platform === 'darwin') {
     await app.evaluate(({ BrowserWindow, Menu }) => {
       const item = Menu.getApplicationMenu()?.getMenuItemById('library.duplicates');
@@ -56,7 +57,11 @@ test('duplicates: review groups the copies, Trash and the Original policy reshap
       ]);
     });
   } else {
-    await page.keyboard.press('Control+Alt+d');
+    await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      if (win === undefined) throw new Error('no window to receive library.duplicates');
+      win.webContents.send('commands:invoked', { id: 'library.duplicates' });
+    });
   }
   const dialog = page.getByRole('dialog', { name: 'Review Duplicates' });
   await expect(dialog).toBeVisible();

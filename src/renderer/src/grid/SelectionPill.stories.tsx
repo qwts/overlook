@@ -113,13 +113,13 @@ export const AlbumPickerFlow: Story = {
     // land on the first album row, not back on the trigger.
     await waitFor(() => expect(canvas.getByRole('menuitem', { name: /Big Sur/ })).toHaveFocus());
     await userEvent.click(canvas.getByRole('menuitem', { name: /Big Sur/ }));
-    await expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A1', name: 'Big Sur', count: 10 });
+    await expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A1', name: 'Big Sur', count: 10, kind: 'album' });
     await expect(canvas.queryByTestId('album-picker')).toBeNull();
 
     // Inline create picks the fresh album.
     await userEvent.click(canvas.getByRole('button', { name: /Add to album/ }));
     await userEvent.type(await canvas.findByLabelText('New album name'), 'Yosemite{Enter}');
-    await waitFor(() => expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A3', name: 'Yosemite', count: 0 }));
+    await waitFor(() => expect(args.onAddToAlbum).toHaveBeenCalledWith({ id: 'A3', name: 'Yosemite', count: 0, kind: 'album' }));
 
     // Escape closes without picking.
     await userEvent.click(canvas.getByRole('button', { name: /Add to album/ }));
