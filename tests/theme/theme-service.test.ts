@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { describe, test } from 'node:test';
 
 import { ThemeService, THEME_PREVIEW_MS, type ThemeSettingsStore } from '../../src/main/theme/theme-service.js';
 import { defaultSettings, mergeSettings, type AppSettings, type SettingsPatch } from '../../src/shared/settings/settings.js';
+import { THEME_TOKENS } from '../../src/shared/theme/theme-file.js';
 
 const themeFile = {
   meta: { name: 'Night Sky', author: 'Overlook', version: '1.2.3', base: 'dark', tokensVersion: 1 },
@@ -118,6 +119,68 @@ describe('profile theme service (#396)', () => {
     assert.deepEqual(await service.active(), { theme: null, notice: 'missing' });
     assert.equal(settings.get().userTheme, null);
     assert.equal(service.reset().appearance, 'dark');
+    service.dispose();
+  });
+});
+
+describe('theme template export (#397)', () => {
+  const fullTokens = (): Record<string, string> => {
+    const text = new Set(['--white-1', '--white-2', '--white-3', '--text-body', '--text-muted', '--text-faint', '--text-tertiary']);
+    const accents = new Set([
+      '--accent-iris',
+      '--accent-cyan',
+      '--accent-cyan-bright',
+      '--accent-violet',
+      '--accent-amber',
+      '--accent-green',
+      '--accent-red',
+    ]);
+    return Object.fromEntries(
+      THEME_TOKENS.map((token) => {
+        if (text.has(token)) return [token, '#f4f4f8'];
+        if (accents.has(token)) return [token, '#8fa5ff'];
+        if (token === '--text-on-accent' || token === '--on-danger-strong') return [token, '#101418'];
+        return [token, '#161a20'];
+      }),
+    );
+  };
+
+  test('writes a complete, importable template and appends the theme suffix', async () => {
+    const { root, service } = world();
+    const destination = path.join(root, 'exports', 'my-template');
+    const result = await service.exportTemplate(destination, { base: 'light', tokens: fullTokens() });
+    assert.deepEqual(result, { status: 'exported', tokenCount: THEME_TOKENS.length, warnings: [] });
+
+    const written = path.join(root, 'exports', 'my-template.overlook-theme.json');
+    const parsed = JSON.parse(readFileSync(written, 'utf8')) as {
+      meta: { base: string };
+      tokens: Record<string, string>;
+      docs: Record<string, string>;
+    };
+    assert.equal(parsed.meta.base, 'light');
+    assert.deepEqual(Object.keys(parsed.tokens), [...THEME_TOKENS]);
+    assert.deepEqual(Object.keys(parsed.docs), [...THEME_TOKENS]);
+
+    const imported = await service.importPath(written);
+    assert.equal(imported.status, 'imported');
+    if (imported.status === 'imported') assert.equal(imported.theme.meta.name, 'Overlook light template');
+    service.dispose();
+  });
+
+  test('refuses to write when any effective value is not a literal color', async () => {
+    const { root, service } = world();
+    const destination = path.join(root, 'broken.overlook-theme.json');
+    const result = await service.exportTemplate(destination, {
+      base: 'dark',
+      tokens: { ...fullTokens(), '--selection': 'var(--accent-iris)' },
+    });
+    assert.equal(result.status, 'invalid');
+    if (result.status === 'invalid')
+      assert.deepEqual(
+        result.errors.map((error) => error.path),
+        ['tokens.--selection'],
+      );
+    assert.equal(existsSync(destination), false);
     service.dispose();
   });
 });

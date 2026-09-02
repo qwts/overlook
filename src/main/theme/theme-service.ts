@@ -2,9 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ApplicableTheme, InstalledTheme, ThemeImportResult } from '../../shared/ipc/theme-channels.js';
+import type { ApplicableTheme, InstalledTheme, ThemeExportResult, ThemeImportResult } from '../../shared/ipc/theme-channels.js';
 import type { AppSettings, SettingsPatch } from '../../shared/settings/settings.js';
 import { themeIdSchema, validateThemeFile, type ParsedThemeFile, type ThemeValidationError } from '../../shared/theme/theme-file.js';
+import { buildThemeTemplate, type ThemeTemplateInput } from '../../shared/theme/theme-template.js';
 
 const THEME_SUFFIX = '.overlook-theme.json';
 const MAX_THEME_BYTES = 256 * 1024;
@@ -108,6 +109,30 @@ export class ThemeService {
       throw error;
     });
     return { status: 'imported', theme: installed(id, result.theme) };
+  }
+
+  /**
+   * ADR-0019 §6: write the annotated template for the renderer's current
+   * token values. The file is re-validated through the import path before a
+   * byte is written, so an unmodified export always re-imports cleanly.
+   */
+  async exportTemplate(destination: string, input: ThemeTemplateInput): Promise<ThemeExportResult> {
+    const built = buildThemeTemplate(input);
+    if (!built.ok) return { status: 'invalid', errors: built.errors };
+    const validated = validateThemeFile(built.template);
+    if (!validated.ok) return { status: 'invalid', errors: validated.errors };
+    if (validated.theme.warnings.some((warning) => warning.kind === 'unknown-token')) {
+      return { status: 'invalid', errors: [{ path: 'tokens', message: 'Template contains a token the importer does not recognize' }] };
+    }
+    const target = destination.toLowerCase().endsWith(THEME_SUFFIX) ? destination : `${destination}${THEME_SUFFIX}`;
+    await mkdir(path.dirname(target), { recursive: true });
+    const temporary = `${target}.${randomUUID()}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(built.template, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+    await rename(temporary, target).catch(async (error: unknown) => {
+      await rm(temporary, { force: true });
+      throw error;
+    });
+    return { status: 'exported', tokenCount: Object.keys(built.template.tokens).length, warnings: validated.theme.warnings };
   }
 
   async active(): Promise<{ readonly theme: ApplicableTheme | null; readonly notice: 'missing' | 'invalid' | null }> {

@@ -3,6 +3,7 @@ import type { DragEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { ApplicableTheme, InstalledTheme, ThemeImportResult } from '../../../shared/ipc/theme-channels.js';
+import { THEME_TOKENS } from '../../../shared/theme/theme-file.js';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
@@ -34,6 +35,12 @@ const messages = defineMessages({
   },
   swatches: { id: 'settings.theme.swatches', defaultMessage: '{name} color swatches' },
   version: { id: 'settings.theme.version', defaultMessage: 'v{version}' },
+  exportTemplate: { id: 'settings.theme.exportTemplate', defaultMessage: 'Export theme template' },
+  exported: {
+    id: 'settings.theme.exported',
+    defaultMessage:
+      'Exported a template with {count, plural, one {# token} other {# tokens}}{warnings, plural, =0 {} one { and # contrast warning} other { and # contrast warnings}}.',
+  },
 });
 
 interface PreviewState {
@@ -76,6 +83,7 @@ export function ThemeManager(): ReactElement {
   const [seconds, setSeconds] = useState(0);
   const [errors, setErrors] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [notice, setNotice] = useState(layer.notice());
   const previewRef = useRef<PreviewState | null>(null);
 
@@ -226,6 +234,33 @@ export function ThemeManager(): ReactElement {
       .catch(() => setErrors([intl.formatMessage(messages.failed)]));
   };
 
+  // ADR-0019 §6: the template carries the effective value of every allowlisted
+  // token as the running renderer computes it, so an active user theme and the
+  // current base are exported exactly as they render. var() references are
+  // already substituted in computed custom-property values.
+  const exportTemplate = async (): Promise<void> => {
+    setBusy(true);
+    setErrors([]);
+    setStatus(null);
+    try {
+      const style = getComputedStyle(document.documentElement);
+      const tokens = Object.fromEntries(THEME_TOKENS.map((token) => [token, style.getPropertyValue(token).trim()]));
+      const base = layer.base() ?? (document.documentElement.dataset['theme'] === 'light' ? 'light' : 'dark');
+      const result = await window.overlook.themes.exportTemplate({ base, tokens });
+      if (result.status === 'invalid') {
+        setErrors(result.errors.map((error) => `${error.path}: ${error.message}`));
+        return;
+      }
+      if (result.status === 'exported') {
+        setStatus(intl.formatMessage(messages.exported, { count: result.tokenCount, warnings: result.warnings.length }));
+      }
+    } catch {
+      setErrors([intl.formatMessage(messages.failed)]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reset = (): void => {
     void window.overlook.themes
       .reset()
@@ -254,6 +289,9 @@ export function ThemeManager(): ReactElement {
           <Icon name="upload" size={16} />
           <span>{intl.formatMessage(messages.dropHint)}</span>
         </button>
+        <Button size="sm" icon="download" disabled={busy} onClick={() => void exportTemplate()}>
+          {intl.formatMessage(messages.exportTemplate)}
+        </Button>
         <Button size="sm" icon="rotate-ccw" disabled={busy} onClick={reset}>
           {intl.formatMessage(messages.reset)}
         </Button>
@@ -261,6 +299,11 @@ export function ThemeManager(): ReactElement {
       {notice === null ? null : (
         <div className="ovl-theme-manager__notice" role="status">
           {intl.formatMessage(notice === 'missing' ? messages.missingNotice : messages.invalidNotice)}
+        </div>
+      )}
+      {status === null ? null : (
+        <div className="ovl-theme-manager__notice" role="status">
+          {status}
         </div>
       )}
       {errors.length === 0 ? null : (

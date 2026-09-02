@@ -1919,6 +1919,12 @@
   "settings.theme.empty": {
     "defaultMessage": "No custom themes installed."
   },
+  "settings.theme.exportTemplate": {
+    "defaultMessage": "Export theme template"
+  },
+  "settings.theme.exported": {
+    "defaultMessage": "Exported a template with {count, plural, one {# token} other {# tokens}}{warnings, plural, =0 {} one { and # contrast warning} other { and # contrast warnings}}."
+  },
   "settings.theme.failed": {
     "defaultMessage": "The theme operation failed. Try again."
   },

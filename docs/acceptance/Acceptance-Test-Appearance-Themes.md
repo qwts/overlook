@@ -38,6 +38,11 @@ token use, and standard/high-contrast passes over both first-party themes.
 6. Remove the active custom theme. Confirm the previously selected first-party
    appearance returns. Delete an active theme file outside the app and relaunch;
    confirm Overlook skips it, clears the stale pointer, and displays a notice.
+7. Choose **Export theme template** and save the file. Confirm it validates
+   against the theme schema, lists every user-themable token with a `docs`
+   description, contains only literal colors (no `var()`, keywords, or
+   references), and that importing it unchanged and keeping it produces no
+   visible difference. Repeat under Light and under an active custom theme.
 
 ## Recovery paths
 

@@ -275,6 +275,9 @@ export interface OverlookApi {
     readonly list: () => Promise<Res<typeof themeChannels.themeList>>;
     readonly pickImport: () => Promise<Res<typeof themeChannels.themePickImport>>;
     readonly importPath: (request: Req<typeof themeChannels.themeImportPath>) => Promise<Res<typeof themeChannels.themeImportPath>>;
+    readonly exportTemplate: (
+      request: Req<typeof themeChannels.themeExportTemplate>,
+    ) => Promise<Res<typeof themeChannels.themeExportTemplate>>;
     readonly active: () => Promise<Res<typeof themeChannels.themeActive>>;
     readonly preview: (request: Req<typeof themeChannels.themePreview>) => Promise<Res<typeof themeChannels.themePreview>>;
     readonly previewHealthy: (

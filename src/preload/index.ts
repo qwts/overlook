@@ -333,6 +333,7 @@ const overlook: OverlookApi = {
     list: async () => themeList({}),
     pickImport: async () => themePickImport({}),
     importPath: createInvoker(channels.themeImportPath, invokeTransport),
+    exportTemplate: createInvoker(channels.themeExportTemplate, invokeTransport),
     active: async () => themeActive({}),
     preview: createInvoker(channels.themePreview, invokeTransport),
     previewHealthy: createInvoker(channels.themePreviewHealthy, invokeTransport),
