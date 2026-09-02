@@ -433,6 +433,33 @@ describe('edited export (#497, ADR-0031 §6)', () => {
     assert.equal(xmp.includes('<dc:'), false, 'Metadata: None adds no authored fields');
   });
 
+  test('the generated packet keeps the canonical stem; a retained XMP companion is preserved under the suffix', async () => {
+    const world = await seededWorld(1);
+    const engine = new ExportEngine({
+      ...world.deps,
+      editHead: () => head(ROTATED),
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarStream: () => Readable.from(['source sidecar']),
+    });
+    const summary = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'original', {
+      mode: 'original-sidecars',
+    });
+    assert.deepEqual(summary.files[0]?.sidecarNames, ['IMG_4021.xmp', 'IMG_4021 (1).xmp']);
+    assert.deepEqual(parseEditsXmp(readFileSync(join(world.destination, 'IMG_4021.xmp'), 'utf8')), ROTATED, 'the stem carries the edits');
+    assert.equal(readFileSync(join(world.destination, 'IMG_4021 (1).xmp'), 'utf8'), 'source sidecar', 'the companion is not lost');
+    // Without edits to carry, the companion keeps the stem as before.
+    const plain = new ExportEngine({
+      ...world.deps,
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarStream: () => Readable.from(['source sidecar']),
+    });
+    const other = await seededWorld(1);
+    const untouched = await plain.exportPhotos(['PHOTO0'], other.destination, undefined, 'original', 'original', {
+      mode: 'original-sidecars',
+    });
+    assert.deepEqual(untouched.files[0]?.sidecarNames, ['IMG_4021.xmp']);
+  });
+
   test('Original only writes nothing beside the original, whatever the metadata policy', async () => {
     const world = await seededWorld(1);
     const row = world.rows.get('PHOTO0');

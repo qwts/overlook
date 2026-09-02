@@ -310,17 +310,21 @@ export class ExportEngine {
         const fileName = await this.resolveCollision(destination, targetName);
         await this.deps.writeFile(this.deps.joinPath(destination, fileName), plaintext);
         const editsTravel = mode === 'original-sidecars' && !isIdentityTransform(transform);
+        // The generated packet owns the canonical stem (`IMG.xmp`): sidecar
+        // consumers associate XMP by stem, so it is written first and a
+        // retained companion that would take the same name is preserved
+        // under the collision suffix rather than displacing the edits.
         const sidecarNames =
           mode === 'original'
             ? []
             : [
-                ...(mode === 'original-sidecars' && metadata === 'original' ? await this.exportSidecars(photo, destination, fileName) : []),
                 ...(await this.exportAuthoredMetadata(
                   metadata === 'overlook' ? photo : null,
                   editsTravel ? transform : IDENTITY_TRANSFORM,
                   destination,
                   fileName,
                 )),
+                ...(mode === 'original-sidecars' && metadata === 'original' ? await this.exportSidecars(photo, destination, fileName) : []),
               ];
         files.push({
           photoId: photo.id,

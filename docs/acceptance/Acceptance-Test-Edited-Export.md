@@ -27,7 +27,10 @@ Automated coverage: `tests/e2e/export-edits.spec.ts`, `tests/export/edit-xmp.tes
    folder holds `IMG_4028.JPG` byte-identical to the imported original and
    `IMG_4028.xmp` containing `tiff:Orientation="6"`. Metadata **Edits** adds the
    title/description/tags to the same packet; Metadata **None** still writes
-   the edit sidecar (edits are not metadata).
+   the edit sidecar (edits are not metadata). With Metadata **Source** and a
+   retained `.xmp` companion, the generated packet keeps the stem
+   (`IMG_4028.xmp`) and the companion is preserved as `IMG_4028 (1).xmp` —
+   consumers associate XMP by stem, so the edits are what travels.
 4. Choose **Bake**. **Expected:** a _JPEG quality_ control appears (Best · 95,
    High · 90, Small · 80). Export. **Expected:** the done copy reads "… 1 with
    edits baked."; the new `.jpg` has its width and height swapped relative to
