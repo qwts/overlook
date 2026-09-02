@@ -249,7 +249,9 @@ export class RestoreEngine {
     signal: AbortSignal | undefined,
     ticker: ScanTicker,
   ): Promise<void> {
-    if (candidate.manifest.schema !== 6) return;
+    // Every schema from 6 on carries the sidecar section; gate on the section,
+    // not the version, so a newer manifest era never silently skips it.
+    if (!('sidecars' in candidate.manifest)) return;
     for (const sidecar of candidate.manifest.sidecars) {
       assertNotAborted(signal);
       try {
@@ -480,7 +482,7 @@ export class RestoreEngine {
     missing: MissingObjects,
     signal?: AbortSignal,
   ): Promise<RestoreCheckpoint> {
-    if (candidate.manifest.schema !== 6) return checkpoint;
+    if (!('sidecars' in candidate.manifest)) return checkpoint;
     const entries = candidate.manifest.sidecars.map((sidecar) => ({ sidecar, id: `${sidecar.photoId}:${sidecar.hash}` }));
     const ids = new Set(entries.map((entry) => entry.id));
     const completed = new Set((checkpoint.completedSidecarIds ?? []).filter((id) => ids.has(id)));
