@@ -3191,6 +3191,9 @@
   "statusbar.inclusion.hiddenByAlbums": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings"
   },
+  "statusbar.sync.backedUpExceptLocalOnly": {
+    "defaultMessage": "Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}"
+  },
   "titlebar.help": {
     "defaultMessage": "Help"
   },

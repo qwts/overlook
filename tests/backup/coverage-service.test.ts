@@ -94,6 +94,7 @@ async function world(spec: readonly { readonly id: string; readonly sample: numb
   const libraryChanges: string[][] = [];
   let storageChanges = 0;
   let manifestsOwed = 0;
+  const excludingWhenOwed: number[] = [];
   let connected = true;
   let restoreOutcome: 'restored' | 'failed' = 'restored';
   const engineDeps: BackupEngineDeps = {
@@ -148,6 +149,7 @@ async function world(spec: readonly { readonly id: string; readonly sample: numb
       Promise.resolve(connected ? { provider: 'Local mock', account: 'Mock account' } : { provider: null, account: null }),
     oweManifest: () => {
       manifestsOwed += 1;
+      excludingWhenOwed.push(coverageRepo.excluding().length);
       engine.oweManifest();
     },
     runBackup: () => engine.run(),
@@ -172,6 +174,7 @@ async function world(spec: readonly { readonly id: string; readonly sample: numb
       new VariantRepository(db).duplicate(source, id, '2026-09-02T02:00:00.000Z');
     },
     audits,
+    excludingWhenOwed,
     syncUpdates,
     libraryChanges,
     storageChanges: () => storageChanges,
@@ -253,6 +256,7 @@ describe('backup coverage service (#506, ADR-0033)', () => {
     assert.equal(remoteBlobs(w.rootDir).length, 1, 'only the sibling remains remote');
     assert.equal(remoteBlobs(w.rootDir).includes(w.hashOf('P1')), true);
     assert.equal(w.manifestsOwed(), 1);
+    assert.deepEqual(w.excludingWhenOwed, [0], 'manifest debt is durable before any row is marked excluding');
     assert.equal(w.repo.pendingCount(), 0, 'an excluded row is not backup work');
     assert.equal(w.repo.stats().excludedCount, 1);
     // §2 order is visible in the audit trail: excluding was recorded before

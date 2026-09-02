@@ -196,6 +196,12 @@ export class CoverageService {
         results.push({ photoId: item.photoId, outcome: 'failed', reason: 'local-missing' });
         continue;
       }
+      // Manifest debt is durable BEFORE the first row is marked: a process
+      // that dies between the two would otherwise leave an `excluding` row
+      // with no debt, and the next run would settle it — deleting the
+      // provider object the newest manifest still describes (PR #1124
+      // review). A spare generation is the harmless failure.
+      if (marked.length === 0) this.deps.oweManifest();
       this.deps.ledger.markExcluding(item.photoId, 'user', at);
       this.deps.audit(`COVERAGE-EXCLUDING photo=${item.photoId} hash=${row.contentHash} remote=${item.remoteCopy ? 'yes' : 'no'}`);
       marked.push(item);
@@ -206,7 +212,6 @@ export class CoverageService {
       for (const item of marked) {
         if (!item.remoteCopy) this.deps.ledger.markExcluded(item.photoId);
       }
-      this.deps.oweManifest();
       if (marked.some((item) => item.remoteCopy)) {
         // The engine publishes the recording generation and then calls
         // settlePending() — the only path that touches the provider.
