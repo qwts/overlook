@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
-import { ZOOM_MAX, ZOOM_MIN } from '../../../shared/library/app-state.js';
+import { ZOOM_MAX, ZOOM_MIN, type ViewMode } from '../../../shared/library/app-state.js';
 import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
+import { VIEW_MODE_BY_COMMAND, VIEW_MODE_COMMAND_IDS } from '../../../shared/commands/view-modes.js';
 import type { AlbumListing, ChipFilters, SearchMode } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -26,6 +27,16 @@ const QUERY_DEBOUNCE_MS = 250;
 // string ratchet, which flags only literal JSX text.
 const BRAND_WORDMARK = 'OVERLOOK';
 
+/** The view control is a projection of the `view.mode.*` commands (labels
+ * from the registry, modes from the shared table); only the glyphs are the
+ * toolbar's own. */
+const VIEW_MODE_ICON: Readonly<Record<ViewMode, 'layout-grid' | 'list' | 'captions' | 'layout-dashboard'>> = {
+  grid: 'layout-grid',
+  list: 'list',
+  feed: 'captions',
+  moodboard: 'layout-dashboard',
+};
+
 const FILTERS: readonly { key: keyof ChipFilters; icon: 'star' | 'image' | 'cloud' | 'hard-drive' }[] = [
   { key: 'favorites', icon: 'star' },
   { key: 'raw', icon: 'image' },
@@ -37,10 +48,6 @@ const messages = defineMessages({
   search: { id: 'toolbar.search', defaultMessage: 'Search library' },
   filters: { id: 'toolbar.filters', defaultMessage: 'Filters' },
   view: { id: 'toolbar.view', defaultMessage: 'View' },
-  viewGrid: { id: 'toolbar.view.grid', defaultMessage: 'Grid' },
-  viewList: { id: 'toolbar.view.list', defaultMessage: 'List' },
-  viewFeed: { id: 'toolbar.view.feed', defaultMessage: 'Feed' },
-  viewMoodboard: { id: 'toolbar.view.moodboard', defaultMessage: 'Moodboard' },
   zoom: { id: 'toolbar.zoom', defaultMessage: 'Zoom' },
   region: { id: 'toolbar.region', defaultMessage: 'Photo tools' },
   backupNow: { id: 'toolbar.backup.now', defaultMessage: 'Back up now' },
@@ -167,14 +174,16 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
         <div className="ovl-toolbar__spacer" />
         <Segmented
           label={intl.formatMessage(messages.view)}
-          options={[
-            { value: 'grid', label: intl.formatMessage(messages.viewGrid), icon: 'layout-grid', iconOnly: true },
-            { value: 'list', label: intl.formatMessage(messages.viewList), icon: 'list', iconOnly: true },
-            { value: 'feed', label: intl.formatMessage(messages.viewFeed), icon: 'captions', iconOnly: true },
-            { value: 'moodboard', label: intl.formatMessage(messages.viewMoodboard), icon: 'layout-dashboard', iconOnly: true },
-          ]}
+          options={VIEW_MODE_COMMAND_IDS.map((id) => ({
+            value: VIEW_MODE_BY_COMMAND[id],
+            label: intl.formatMessage(commandById(id).label),
+            icon: VIEW_MODE_ICON[VIEW_MODE_BY_COMMAND[id]],
+            iconOnly: true,
+          }))}
           value={state.view}
           onChange={(view) => {
+            // The same `view/set` the native View menu reaches through
+            // `VIEW_MODE_BY_COMMAND` (use-native-command-router).
             dispatch({ type: 'view/set', view });
           }}
         />

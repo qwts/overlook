@@ -5,6 +5,7 @@ import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/tes
 import realPhoto from '../../../../design/handoff/assets/thumbs/t02.png';
 import wide from '../../../../design/handoff/assets/thumbs/t01.png';
 import type { PhotoRecord, SyncStatus } from '../../../shared/library/types.js';
+import type { VideoTileProps } from '../media/device-capabilities.js';
 import { FeedCard } from './FeedCard';
 
 // #516: the feed card's title / image / description contract, its missing
@@ -67,10 +68,29 @@ const TITLED = photo(0, 'synced', {
   favorite: true,
 });
 
-function Card({ record, src = realPhoto, selected = false }: { record: PhotoRecord; src?: string; selected?: boolean }): ReactElement {
+function Card({
+  record,
+  src = realPhoto,
+  selected = false,
+  media = null,
+}: {
+  record: PhotoRecord;
+  src?: string;
+  selected?: boolean;
+  media?: VideoTileProps | null;
+}): ReactElement {
   return (
     <div style={{ height: CARD_HEIGHT, maxWidth: 720 }}>
-      <FeedCard photo={record} src={src} fullSrc={src} selected={selected} onOpen={fn()} onToggleSelect={fn()} onToggleFavorite={fn()} />
+      <FeedCard
+        photo={record}
+        src={src}
+        fullSrc={src}
+        media={media}
+        selected={selected}
+        onOpen={fn()}
+        onToggleSelect={fn()}
+        onToggleFavorite={fn()}
+      />
     </div>
   );
 }
@@ -111,6 +131,39 @@ export const PreviewUnavailable: Story = {
   play: async ({ canvasElement }) => {
     await waitFor(() => expect(canvasElement.querySelector('.ovl-feedcard__frame')).toHaveAttribute('data-state', 'unavailable'));
     await expect(canvasElement.querySelector('.ovl-feedcard__unavailable')).not.toHaveTextContent('');
+  },
+};
+
+// Audio and still-probing media have no derivatives: the frame shows the
+// kind glyph (PhotoTile's placeholder contract), never the unavailable copy.
+export const AudioPlaceholder: Story = {
+  render: () => (
+    <Card
+      record={photo(4, 'synced', { fileKind: 'audio', fileName: 'REC_0007.M4A' })}
+      src="/missing-feed-preview.png"
+      media={{ duration: null, preserved: false, placeholder: 'audio' }}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.ovl-feedcard__frame')).toHaveAttribute('data-state', 'placeholder');
+    await expect(canvasElement.querySelector('.ovl-feedcard__placeholder')).toBeVisible();
+    await expect(canvasElement.querySelector('.ovl-feedcard__unavailable')).toBeNull();
+  },
+};
+
+// A video whose poster is not captured yet falls back to the film glyph.
+export const VideoAwaitingPoster: Story = {
+  render: () => (
+    <Card
+      record={photo(5, 'synced', { fileKind: 'video', fileName: 'CLIP_0012.MOV' })}
+      src="/missing-feed-poster.png"
+      media={{ duration: 12, preserved: false, placeholder: 'video' }}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(canvasElement.querySelector('.ovl-feedcard__frame')).toHaveAttribute('data-state', 'fallback'));
+    await expect(canvasElement.querySelector('.ovl-feedcard__placeholder--fallback')).toBeVisible();
+    await expect(canvasElement.querySelector('.ovl-feedcard__unavailable')).toHaveTextContent('');
   },
 };
 
@@ -168,5 +221,12 @@ export const ClickTargetsAreIndependent: Story = {
 
     await fireEvent.keyDown(open, { key: 'ContextMenu' });
     await expect(onContextAction).toHaveBeenCalledOnce();
+
+    // The title and description paint above the open button but never
+    // intercept it (PR #1110 review): a pointer on the text hits the button.
+    for (const text of ['Evening at the Tagus', /The last ferry of the day/u]) {
+      const rect = canvas.getByText(text).getBoundingClientRect();
+      await expect(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)).toBe(open);
+    }
   },
 };

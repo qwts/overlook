@@ -5,11 +5,12 @@ import './feed.css';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { FavoriteButton } from '../components/FavoriteButton';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { PhotoOpenButton } from '../components/PhotoOpenButton';
 import { StatusGlyph } from '../components/StatusGlyph';
 import { previewFailureLabel } from '../components/previewFailureLabel';
 import { useFormats } from '../i18n/use-formats.js';
+import type { VideoTileProps } from '../media/device-capabilities.js';
 
 export interface FeedCardProps {
   readonly photo: PhotoRecord;
@@ -17,6 +18,10 @@ export interface FeedCardProps {
   readonly src?: string | undefined;
   /** Larger derivative that fades in over the thumb; defaults to the mid size. */
   readonly fullSrc?: string | undefined;
+  /** Video/audio placeholder state (PhotoTile's contract): audio and
+   * still-probing media show kind iconography instead of derivatives that do
+   * not exist; a video shows its poster with the film glyph as fallback. */
+  readonly media?: VideoTileProps | null | undefined;
   readonly selected: boolean;
   readonly accessibleName?: string | undefined;
   /** Opens the photo (card body). */
@@ -47,11 +52,19 @@ const messages = defineMessages({
   noDescription: { id: 'feed.noDescription', defaultMessage: 'No description' },
 });
 
+/** Kind iconography for placeholder frames (design §Grid tiles). */
+const PLACEHOLDER_ICON: Readonly<Record<'video' | 'audio' | 'probing', IconName>> = {
+  video: 'film',
+  audio: 'music',
+  probing: 'loader',
+};
+
 // Progressive loading state lives on the frame's dataset, like PhotoTile's
 // data-unavailable: the thumb (already cached from the grid) paints first and
 // the larger derivative fades in on load; a failed derivative shows the
-// preview-unavailable copy instead of a broken image.
-function markFrame(image: HTMLImageElement, state: 'loaded' | 'unavailable', label: string): void {
+// preview-unavailable copy instead of a broken image — except for a video,
+// whose missing poster is a success state shown as the film glyph.
+function markFrame(image: HTMLImageElement, state: 'loaded' | 'unavailable' | 'fallback', label: string): void {
   const frame = image.parentElement;
   if (frame === null) return;
   frame.dataset['state'] = state;
@@ -66,6 +79,7 @@ export function FeedCard({
   photo,
   src,
   fullSrc,
+  media,
   selected,
   accessibleName,
   onOpen,
@@ -99,7 +113,11 @@ export function FeedCard({
   const openLabel = accessibleName ?? intl.formatMessage(messages.open, { photo: photo.fileName });
   const selectLabel = intl.formatMessage(selected ? messages.deselect : messages.select, { photo: photoName });
   const protectedLabel = intl.formatMessage(messages.protectedOriginal);
-  const cardClass = ['ovl-feedcard', selected ? 'ovl-feedcard--selected' : null, photo.syncState === 'offloaded' ? 'ovl-feedcard--offloaded' : null]
+  const cardClass = [
+    'ovl-feedcard',
+    selected ? 'ovl-feedcard--selected' : null,
+    photo.syncState === 'offloaded' ? 'ovl-feedcard--offloaded' : null,
+  ]
     .filter(Boolean)
     .join(' ');
   const selectClass = selected ? 'ovl-feedcard__select ovl-feedcard__select--selected' : 'ovl-feedcard__select';
@@ -107,6 +125,42 @@ export function FeedCard({
   const descriptionClass = description === '' ? 'ovl-feedcard__description ovl-feedcard__description--empty' : 'ovl-feedcard__description';
   const thumbSource = src ?? thumbUrl(photo.id);
   const fullSource = fullSrc ?? thumbUrl(photo.id, 'mid');
+  const placeholder = media?.placeholder ?? null;
+  const placeholderClass =
+    placeholder === 'probing' ? 'ovl-feedcard__placeholder ovl-feedcard__placeholder--probing' : 'ovl-feedcard__placeholder';
+  const frame =
+    placeholder !== null && placeholder !== 'video' ? (
+      <div className="ovl-feedcard__frame" data-state="placeholder">
+        <div className={placeholderClass}>
+          <Icon name={PLACEHOLDER_ICON[placeholder]} size={40} strokeWidth={1.75} />
+        </div>
+      </div>
+    ) : (
+      <div key={fullSource} className="ovl-feedcard__frame" data-state="loading">
+        <img src={thumbSource} alt="" draggable={false} className="ovl-feedcard__img ovl-feedcard__img--thumb" />
+        <img
+          src={fullSource}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="ovl-feedcard__img ovl-feedcard__img--full"
+          onLoad={(event) => {
+            markFrame(event.currentTarget, 'loaded', '');
+          }}
+          onError={(event) => {
+            if (placeholder === 'video') markFrame(event.currentTarget, 'fallback', '');
+            else markFrame(event.currentTarget, 'unavailable', unavailableLabel);
+          }}
+        />
+        {placeholder === 'video' ? (
+          <div className="ovl-feedcard__placeholder ovl-feedcard__placeholder--fallback">
+            <Icon name={PLACEHOLDER_ICON.video} size={40} strokeWidth={1.75} />
+          </div>
+        ) : null}
+        <div className="ovl-feedcard__unavailable mono-data" />
+      </div>
+    );
   return (
     <div
       role="group"
@@ -166,7 +220,12 @@ export function FeedCard({
           </span>
         ) : null}
         {quickActions}
-        <FavoriteButton favorite={photo.favorite} pending={favoritePending} className="ovl-feedcard__favorite" onToggle={onToggleFavorite} />
+        <FavoriteButton
+          favorite={photo.favorite}
+          pending={favoritePending}
+          className="ovl-feedcard__favorite"
+          onToggle={onToggleFavorite}
+        />
         {onContextAction === undefined ? null : (
           <button
             type="button"
@@ -187,24 +246,7 @@ export function FeedCard({
           <StatusGlyph state={photo.syncState} size={16} />
         </span>
       </div>
-      <div key={fullSource} className="ovl-feedcard__frame" data-state="loading">
-        <img src={thumbSource} alt="" draggable={false} className="ovl-feedcard__img ovl-feedcard__img--thumb" />
-        <img
-          src={fullSource}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          className="ovl-feedcard__img ovl-feedcard__img--full"
-          onLoad={(event) => {
-            markFrame(event.currentTarget, 'loaded', '');
-          }}
-          onError={(event) => {
-            markFrame(event.currentTarget, 'unavailable', unavailableLabel);
-          }}
-        />
-        <div className="ovl-feedcard__unavailable mono-data" />
-      </div>
+      {frame}
       <p className={descriptionClass}>{description === '' ? intl.formatMessage(messages.noDescription) : description}</p>
     </div>
   );

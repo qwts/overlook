@@ -483,7 +483,11 @@ export function LibraryGridView({
         onDragEnd,
         ...keyboard,
       };
-      return state.view === 'feed' ? <FeedCard {...rowProps} fullSrc={bust(thumbUrl(photo.id, 'mid'))} /> : <ListRow {...rowProps} />;
+      return state.view === 'feed' ? (
+        <FeedCard {...rowProps} media={tileMedia} fullSrc={bust(thumbUrl(photo.id, 'mid'))} />
+      ) : (
+        <ListRow {...rowProps} />
+      );
     }
     return (
       <PhotoTile

@@ -2651,18 +2651,6 @@
   "toolbar.view": {
     "defaultMessage": "View"
   },
-  "toolbar.view.feed": {
-    "defaultMessage": "Feed"
-  },
-  "toolbar.view.grid": {
-    "defaultMessage": "Grid"
-  },
-  "toolbar.view.list": {
-    "defaultMessage": "List"
-  },
-  "toolbar.view.moodboard": {
-    "defaultMessage": "Moodboard"
-  },
   "toolbar.zoom": {
     "defaultMessage": "Zoom"
   }

@@ -36,7 +36,9 @@ some offloaded photos, and at least one unreadable file for the steps below.
    swap happens without a fade.
 8. Confirm an offloaded photo shows dimmed with the offloaded glyph, and a
    photo whose preview cannot be produced shows the preview-unavailable copy
-   instead of a broken image.
+   instead of a broken image. Confirm an audio file shows the music glyph, a
+   video still being probed shows the spinner, and a video without a poster
+   shows the film glyph, exactly as their grid tiles do.
 9. In **Trash**, confirm the meta line shows the retention label instead of
    the date and place.
 
@@ -51,8 +53,10 @@ some offloaded photos, and at least one unreadable file for the steps below.
     the Favorites count in the sidebar follows.
 13. Right-click a card, or press its more-actions button. Confirm the same
     context menu as the grid appears for that photo.
-14. Click a card body. Confirm the lightbox opens on that photo; close it with
-    **Esc** and confirm the feed is exactly where it was.
+14. Click a card body, then click the title and the description. Confirm each
+    opens the lightbox on that photo, and that right-clicking the title opens
+    the context menu; close the lightbox with **Esc** and confirm the feed is
+    exactly where it was.
 15. With a card focused, press the arrow keys, Page Down, and Page Up.
     Confirm focus moves through the cards and the feed scrolls to keep the
     focused card visible (Home and End stay within the row, as in the grid). Confirm a screen reader announces each card as a

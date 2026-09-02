@@ -103,6 +103,9 @@
   z-index: 2;
   flex: 1 1 auto;
   min-width: 0;
+  /* Text sits above the full-card open button only to paint; clicks and
+     context menus fall through to the button beneath (PR #1110 review). */
+  pointer-events: none;
 }
 
 .ovl-feedcard__title {
@@ -112,8 +115,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  user-select: text;
-  -webkit-app-region: no-drag;
 }
 
 /* No title yet: the file name stands in, visibly as machine data. */
@@ -262,6 +263,30 @@
   opacity: 0.55; /* the tile's own offloaded dimming */
 }
 
+/* Kind iconography for audio and still-probing media (PhotoTile's
+   placeholder contract): a success state, never the unavailable copy. */
+.ovl-feedcard__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* A video's poster fallback shows only while the poster is unavailable. */
+.ovl-feedcard__placeholder--fallback {
+  display: none;
+}
+
+.ovl-feedcard__frame[data-state='fallback'] .ovl-feedcard__placeholder--fallback {
+  display: grid;
+}
+
+.ovl-feedcard__placeholder--probing > svg {
+  animation: ovl-spin 1.2s linear infinite;
+}
+
 .ovl-feedcard__description {
   position: relative;
   z-index: 2;
@@ -275,8 +300,7 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  user-select: text;
-  -webkit-app-region: no-drag;
+  pointer-events: none;
 }
 
 .ovl-feedcard__description--empty {
@@ -289,5 +313,9 @@
   .ovl-feedcard__img--full,
   .ovl-feedcard__favorite {
     transition: none;
+  }
+
+  .ovl-feedcard__placeholder--probing > svg {
+    animation: none;
   }
 }

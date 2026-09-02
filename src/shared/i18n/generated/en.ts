@@ -888,9 +888,5 @@ export const en: Readonly<Record<string, string>> = {
   "toolbar.search.status.withIndex": "{status} · {index}",
   "toolbar.transfer": "Transfer & Sync",
   "toolbar.view": "View",
-  "toolbar.view.feed": "Feed",
-  "toolbar.view.grid": "Grid",
-  "toolbar.view.list": "List",
-  "toolbar.view.moodboard": "Moodboard",
   "toolbar.zoom": "Zoom",
 };
