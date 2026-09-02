@@ -28,6 +28,10 @@ export const duplicateResultSchema = z.object({
     .readonly(),
   /** Requested ids that were missing or in Trash. */
   skipped: z.number().int().nonnegative(),
+  /** Requested ids whose head edit carries an operation this build cannot
+   * render: Duplicate fails closed rather than baking an identity stand-in
+   * and calling it the source's presentation. */
+  unsupported: z.number().int().nonnegative(),
   pendingCount: z.number().int().nonnegative(),
 });
 

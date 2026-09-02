@@ -64,16 +64,24 @@ export class VariantService {
   async duplicate(photoIds: readonly string[]): Promise<DuplicateResult> {
     const created: { sourceId: string; photoId: string; derivatives: DuplicateResult['created'][number]['derivatives'] }[] = [];
     let skipped = 0;
+    let unsupported = 0;
     for (const sourceId of photoIds) {
       const source = this.deps.repo.get(sourceId);
       if (source === undefined || source.deletedAt !== null) {
         skipped += 1;
         continue;
       }
+      const head = this.revisions.head(source.id).head;
+      if (head !== null && head.unsupported !== null) {
+        // Fail closed (§3): a stack this build cannot evaluate is neither
+        // dropped nor replaced by an identity stand-in that would claim to
+        // be the source's presentation.
+        unsupported += 1;
+        continue;
+      }
       const id = this.deps.newId();
       const now = this.deps.now();
-      const head = this.revisions.head(source.id).head;
-      const operations = head !== null && head.unsupported === null ? head.operations : [];
+      const operations = head === null ? [] : head.operations;
       this.deps.db.transaction(() => {
         this.variants.duplicate(source, id, now);
         if (operations.length > 0) {
@@ -92,11 +100,11 @@ export class VariantService {
       })();
       const variant = this.deps.repo.get(id);
       if (variant === undefined) throw new Error(`variant ${id} was not created`);
-      const derivatives = await this.bake(variant, head !== null && head.unsupported === null ? head.transform : IDENTITY_TRANSFORM);
+      const derivatives = await this.bake(variant, head === null ? IDENTITY_TRANSFORM : head.transform);
       created.push({ sourceId: source.id, photoId: id, derivatives });
     }
     if (created.length > 0) this.deps.created(created.map((entry) => entry.photoId));
-    return { created, skipped, pendingCount: this.deps.repo.pendingCount() };
+    return { created, skipped, unsupported, pendingCount: this.deps.repo.pendingCount() };
   }
 
   private async bake(variant: PhotoRecord, transform: EditTransform): Promise<DuplicateResult['created'][number]['derivatives']> {

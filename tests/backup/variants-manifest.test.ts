@@ -148,6 +148,23 @@ describe('variants in the backup manifest (#496, schema 13)', () => {
     );
   });
 
+  test('a representative trashed before its first backup is not carried, so the manifest still builds', () => {
+    const { photos, variants } = open('seeded');
+    photos.softDelete(['P2']);
+    assert.deepEqual(variants.familiesSnapshot(), [], 'the manifest does not list P2, so no family may name it');
+    const manifest = buildBackupManifestV13({
+      libraryId: LIBRARY,
+      generatedAt: AT,
+      snapshot: snapshotOf(photos, variants.familiesSnapshot()),
+    });
+    assert.deepEqual(
+      manifest.photos.map((row) => row.id),
+      ['P1'],
+    );
+    assert.deepEqual(manifest.variantFamilies, []);
+    assert.equal(variants.representative(HASH), 'P2', 'Promote itself is untouched; only the snapshot omits it');
+  });
+
   test('a verified-only projection drops the family of a lost original along with its variants', () => {
     const { photos, variants } = open('seeded');
     const manifest = buildBackupManifestV13({

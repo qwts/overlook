@@ -129,11 +129,22 @@ export class VariantRepository {
     })();
   }
 
-  /** Backup snapshot (§7): every family with a chosen representative. */
+  /** Backup snapshot (§7): every family whose representative the manifest
+   * carries — live, or trashed with a synced/offloaded copy, the same rule
+   * as the photo snapshot — so the manifest's link check never rejects a
+   * family over a row the manifest does not list. A family whose
+   * representative is not carried is simply not recorded; Promote is
+   * reversible metadata and restore leaves it unset. */
   familiesSnapshot(): readonly VariantFamilyRow[] {
     return queryAll<{ content_hash: string; representative_id: string }>(
       this.db,
-      `SELECT content_hash, representative_id FROM variant_families WHERE representative_id IS NOT NULL ORDER BY content_hash`,
+      `SELECT f.content_hash, f.representative_id
+         FROM variant_families f
+         JOIN photos p ON p.id = f.representative_id
+         LEFT JOIN sync_ledger l ON l.photo_id = p.id
+        WHERE f.representative_id IS NOT NULL
+          AND (p.deleted_at IS NULL OR l.status IN ('synced', 'offloaded'))
+        ORDER BY f.content_hash`,
     ).map((row) => ({ contentHash: row.content_hash, representativeId: row.representative_id }));
   }
 
