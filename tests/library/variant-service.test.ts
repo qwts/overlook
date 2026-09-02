@@ -163,6 +163,25 @@ describe('VariantService (#496)', () => {
     );
   });
 
+  test('a head this build cannot evaluate refuses the Duplicate instead of baking an identity stand-in', async () => {
+    const h = harness();
+    h.revisions.append('P1', {
+      version: EDIT_REVISION_FORMAT_VERSION,
+      id: '01J8ED00000000000000000099',
+      parentId: null,
+      operations: [{ type: 'curve', version: 7 }],
+      author: { product: EDIT_AUTHOR_PRODUCT, version: '9.9.9' },
+      createdAt: '2026-09-01T09:00:00.000Z',
+      importedFrom: null,
+    });
+    assert.notEqual(h.revisions.head('P1').head?.unsupported, null);
+    const result = await h.service.duplicate(['P1']);
+    assert.deepEqual(result.created, []);
+    assert.deepEqual({ skipped: result.skipped, unsupported: result.unsupported }, { skipped: 0, unsupported: 1 });
+    assert.deepEqual(h.baked, []);
+    assert.deepEqual(h.created, []);
+  });
+
   test('missing and trashed sources are skipped and counted, never duplicated', async () => {
     const h = harness();
     h.repo.insert({ ...photo('P2'), contentHash: 'd'.repeat(64) });

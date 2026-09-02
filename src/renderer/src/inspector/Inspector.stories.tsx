@@ -123,7 +123,7 @@ const meta: Meta<typeof Inspector> = {
       const variants = {
         family: () => Promise.resolve(family),
         promote: ({ photoId }: { photoId: string }) => Promise.resolve({ ...family, representativeId: photoId }),
-        duplicate: () => Promise.resolve({ created: [], skipped: 0, pendingCount: 0 }),
+        duplicate: () => Promise.resolve({ created: [], skipped: 0, unsupported: 0, pendingCount: 0 }),
       } as unknown as OverlookApi['variants'];
       (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library, backup, provenance, variants };
       return (
