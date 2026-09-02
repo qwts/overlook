@@ -9,6 +9,7 @@ import type { AlbumListing, AlbumSummary, LibraryStats, SourceCounts, SourceFilt
 import { Icon, type IconName } from '../components/Icon';
 import { ProgressBar } from '../components/ProgressBar';
 import { Tooltip } from '../components/Tooltip';
+import { EMPTY_PREDICATE } from '../../../shared/library/smart-album.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { AlbumActionMenu } from './AlbumActionMenu';
 import { DeleteAlbumDialog, RenameAlbumDialog } from './AlbumDialogs';
@@ -57,9 +58,12 @@ const messages = defineMessages({
   deletedFolder: {
     id: 'sidebar.folder.deleted',
     defaultMessage:
-      'Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}} removed · photos kept',
+      'Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}}{smart, plural, =0 {} one {, # Smart Album} other {, # Smart Albums}} removed · photos kept',
   },
   savedTags: { id: 'sidebar.album.tagsSaved', defaultMessage: 'Saved tags for {name}' },
+  deletedSmart: { id: 'sidebar.smart.deleted', defaultMessage: 'Deleted Smart Album {name} · photos kept' },
+  duplicated: { id: 'sidebar.smart.duplicated', defaultMessage: 'Duplicated {name} as {copy}' },
+  duplicateFailed: { id: 'sidebar.smart.duplicateFailed', defaultMessage: 'Could not duplicate {name}' },
 });
 
 const SOURCES: readonly { key: SourceFilter; icon: IconName; label: MessageDescriptor }[] = [
@@ -200,7 +204,8 @@ export function Sidebar({
   // The opener belongs to a row being removed: move focus to a stable
   // destination instead of leaving keyboard focus on body.
   const completeRemoval = (removedIds: readonly string[]): void => {
-    if (state.album !== null && removedIds.includes(state.album)) dispatch({ type: 'source/set', source: 'all' });
+    const open = state.album ?? state.smartAlbum;
+    if (open !== null && removedIds.includes(open)) dispatch({ type: 'source/set', source: 'all' });
     setDialog(null);
     albumActionOriginRef.current = null;
     requestAnimationFrame(() => allPhotosRef.current?.focus());
@@ -358,11 +363,14 @@ export function Sidebar({
       </span>
       <AlbumTree
         collapsed={collapsed}
-        activeAlbumId={state.album}
+        activeAlbumId={state.album ?? state.smartAlbum}
         isExpanded={(folderId) => !collapsedFolders.has(folderId)}
         onToggleFolder={toggleFolder}
         onSelectAlbum={(albumId) => {
           dispatch({ type: 'album/set', albumId });
+        }}
+        onSelectSmartAlbum={(album) => {
+          dispatch({ type: 'smartAlbum/set', albumId: album.id, predicate: album.predicate ?? EMPTY_PREDICATE });
         }}
         onOpenActions={openMenuFor}
         albumReorder={albumReorder}
@@ -455,6 +463,25 @@ export function Sidebar({
             setAlbumMenu(null);
             setDialog({ kind: 'tags', album: albumMenu.album });
           }}
+          onEditSmart={() => {
+            const album = albumMenu.album;
+            setAlbumMenu(null);
+            dispatch({ type: 'smartAlbum/set', albumId: album.id, predicate: album.predicate ?? EMPTY_PREDICATE });
+          }}
+          onDuplicate={() => {
+            const album = albumMenu.album;
+            setAlbumMenu(null);
+            restoreAlbumActionFocus();
+            void window.overlook.albums
+              .duplicate({ albumId: album.id })
+              .then(({ album: copy }) => toast(intl.formatMessage(messages.duplicated, { name: album.name, copy: copy.name })))
+              .catch(() =>
+                dispatch({
+                  type: 'toast/shown',
+                  toast: { title: intl.formatMessage(messages.duplicateFailed, { name: album.name }), tone: 'red' },
+                }),
+              );
+          }}
           onTransfer={
             onTransferAlbum === undefined
               ? undefined
@@ -537,21 +564,32 @@ export function Sidebar({
           onComplete={(removed) => {
             const folder = dialog.album;
             toast(
-              intl.formatMessage(messages.deletedFolder, { name: folder.name, folders: removed.folders, albums: removed.albums }),
+              intl.formatMessage(messages.deletedFolder, {
+                name: folder.name,
+                folders: removed.folders,
+                albums: removed.albums,
+                smart: removed.smart,
+              }),
               'neutral',
             );
             completeRemoval(albums.filter((album) => album.id === folder.id || album.parentId === folder.id).map((album) => album.id));
           }}
         />
       ) : null}
-      {dialog?.kind === 'delete' && dialog.album.kind === 'album' ? (
+      {dialog?.kind === 'delete' && dialog.album.kind !== 'folder' ? (
         <DeleteAlbumDialog
           key={dialog.album.id}
           album={dialog.album}
+          kind={dialog.album.kind}
           onClose={closeDialog}
           onComplete={() => {
             const album = dialog.album;
-            toast(`Deleted ${album.name} · ${formatCount(album.count)} ${album.count === 1 ? 'photo' : 'photos'} kept`, 'neutral');
+            toast(
+              album.kind === 'smart'
+                ? intl.formatMessage(messages.deletedSmart, { name: album.name })
+                : `Deleted ${album.name} · ${formatCount(album.count)} ${album.count === 1 ? 'photo' : 'photos'} kept`,
+              'neutral',
+            );
             completeRemoval([album.id]);
           }}
         />

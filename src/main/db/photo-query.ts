@@ -1,11 +1,13 @@
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import type { LibraryQuery, PageRequest, SelectionRangeRequest } from '../../shared/library/types.js';
+import { RAW_WHERE, UNAVAILABLE_WHERE, UNKNOWN_DIMENSIONS_WHERE } from './photo-clauses.js';
+import { compilePredicate } from './predicate-compiler.js';
+
 export const ORDERINGS = {
   date: { expr: 'COALESCE(p.taken_at, p.imported_at)', dir: 'DESC', cmp: '<' },
   name: { expr: 'lower(p.file_name)', dir: 'ASC', cmp: '>' },
   size: { expr: 'p.bytes', dir: 'DESC', cmp: '<' },
 } as const;
-
 export function select(order: keyof typeof ORDERINGS): string {
   return `
   SELECT p.*, l.status AS sync_state, ${ORDERINGS[order].expr} AS sort_key
@@ -48,18 +50,7 @@ function toFtsMatchQuery(raw: string): string | null {
   return tokens.map((token) => `"${token.replace(/"/g, '""')}"*`).join(' AND ');
 }
 
-/** The RAW source and the RAW filter chip compile to this one clause
- * (ADR-0030 §4: the chip is an accelerator over the same predicate). */
-export const RAW_WHERE = `p.file_kind = 'raw'`;
-
-/** Unavailable is derived from the row's typed renderability reasons: a
- * recorded preview failure, or dimensions the decoder could not establish.
- * Repairing either moves the row out of the source with no restart. */
-export const UNAVAILABLE_WHERE = `(p.preview_failure IS NOT NULL OR p.dimension_status = 'unavailable')`;
-
-/** Rows whose dimensions are not known. They are never treated as zero
- * megapixels (ADR-0030 §4) and pass every size threshold. */
-export const UNKNOWN_DIMENSIONS_WHERE = `(p.dimension_status = 'unavailable' OR p.width <= 0 OR p.height <= 0)`;
+export { RAW_WHERE, UNAVAILABLE_WHERE, UNKNOWN_DIMENSIONS_WHERE };
 
 export function sourceWhere(source: PageRequest['source']): string {
   switch (source) {
@@ -109,8 +100,13 @@ export const ALL_PHOTOS_MEMBERSHIP_WHERE = `${sourceWhere('all')} AND p.in_all_p
 
 /** Inclusion rules govern the All Photos presentation only: an album view,
  * an explicit search, and every other source see the unfiltered rows. */
-export function inclusionApplies(request: Pick<LibraryQuery, 'source' | 'albumId' | 'query'>): boolean {
-  return request.source === 'all' && request.albumId === undefined && (request.query === undefined || request.query === '');
+export function inclusionApplies(request: Pick<LibraryQuery, 'source' | 'albumId' | 'query' | 'predicate'>): boolean {
+  return (
+    request.source === 'all' &&
+    request.albumId === undefined &&
+    request.predicate === undefined &&
+    (request.query === undefined || request.query === '')
+  );
 }
 
 export interface QueryPlan {
@@ -134,6 +130,9 @@ export function buildQueryPlan(
   if (request.chips?.offloaded === true) filters.push(`p.id IN (SELECT photo_id FROM sync_ledger WHERE status = 'offloaded')`);
   if (request.chips?.localOnly === true) filters.push(`p.id IN (SELECT photo_id FROM sync_ledger WHERE status = 'local')`);
   if (request.albumId !== undefined) filters.push('p.id IN (SELECT photo_id FROM album_photos WHERE album_id = @albumId)');
+  // Facet filters and Smart Albums share one compiler (ADR-0030 §3).
+  const predicate = request.predicate === undefined ? null : compilePredicate(request.predicate);
+  if (predicate !== null && request.predicate?.groups.length !== 0) filters.push(predicate.where);
   const ftsQuery = request.query !== undefined && request.query !== '' ? toFtsMatchQuery(request.query) : null;
   if (request.query !== undefined && request.query !== '' && ftsQuery === null) {
     filters.push(
@@ -160,6 +159,7 @@ export function buildQueryPlan(
       ftsQuery,
       albumId: request.albumId ?? null,
       ...inclusionParams(policy),
+      ...predicate?.params,
     },
   };
 }

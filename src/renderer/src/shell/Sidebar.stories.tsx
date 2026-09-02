@@ -35,6 +35,8 @@ function listing(overrides: Partial<AlbumListing> & Pick<AlbumListing, 'id' | 'n
     parentId: null,
     inheritsVisibility: false,
     tags: [],
+    predicate: null,
+    unsupported: null,
     ...overrides,
   };
 }
@@ -574,5 +576,53 @@ export const AlbumDropStates: Story = {
     await fireEvent.drop(iceland, { dataTransfer: noOpTransfer });
     await expect(addPhotos).toHaveBeenCalledTimes(1);
     await expect(movePhotos).toHaveBeenCalledTimes(1);
+  },
+};
+
+// #514 / ADR-0030 §3: a Smart Album row carries the funnel, its count is the
+// query evaluated now, its menu edits or duplicates the query and never
+// offers to hide membership it does not have, and a query this version
+// cannot evaluate is marked rather than dropped.
+export const SmartAlbums: Story = {
+  args: {
+    albums: [
+      listing({ id: 'f1', name: 'Trips', count: 0, kind: 'folder' }),
+      listing({
+        id: 's1',
+        name: 'Fuji RAW',
+        count: 14,
+        kind: 'smart',
+        parentId: 'f1',
+        predicate: { version: 1, composition: 'and', groups: [{ facet: 'camera', values: ['FUJIFILM X-T5'] }] },
+      }),
+      listing({
+        id: 's2',
+        name: 'From the future',
+        count: 0,
+        kind: 'smart',
+        unsupported: 'predicate version 99 is newer than this app understands',
+      }),
+      listing({ id: 'a1', name: 'Family', count: 3 }),
+    ],
+  },
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      window.localStorage.removeItem('overlook.albumFoldersCollapsed');
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rows = canvas.getAllByRole('listitem');
+    await expect(rows.find((row) => row.textContent?.includes('Fuji RAW'))).toHaveAttribute('data-kind', 'smart');
+    await expect(canvas.getByRole('img', { name: 'Saved query cannot be evaluated by this version' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Actions for Fuji RAW' }));
+    const menu = canvas.getByRole('menu', { name: 'Actions for Fuji RAW' });
+    await expect(within(menu).getByRole('menuitem', { name: 'Edit Smart Album' })).toBeInTheDocument();
+    await expect(within(menu).getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument();
+    await expect(within(menu).getByRole('menuitem', { name: 'Delete Smart Album…' })).toBeInTheDocument();
+    await expect(within(menu).queryByRole('menuitem', { name: /Hide from All Photos/u })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
   },
 };

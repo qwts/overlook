@@ -47,11 +47,17 @@
   "album.folder.delete": {
     "defaultMessage": "Delete folder…"
   },
+  "album.folder.delete.albums": {
+    "defaultMessage": "{count, plural, one {# album} other {# albums}}"
+  },
   "album.folder.delete.choices": {
     "defaultMessage": "What happens to its contents"
   },
   "album.folder.delete.empty": {
     "defaultMessage": "The folder is empty. Nothing else is removed."
+  },
+  "album.folder.delete.folders": {
+    "defaultMessage": "{count, plural, one {# folder} other {# folders}}"
   },
   "album.folder.delete.move": {
     "defaultMessage": "Move its contents to"
@@ -63,7 +69,10 @@
     "defaultMessage": "Delete “{name}”?"
   },
   "album.folder.delete.recursive": {
-    "defaultMessage": "Also delete {folders, plural, =0 {} one {# folder} other {# folders}}{both, select, yes { and } other {}}{albums, plural, =0 {} one {# album} other {# albums}} inside it"
+    "defaultMessage": "Also delete {contents} inside it"
+  },
+  "album.folder.delete.smart": {
+    "defaultMessage": "{count, plural, one {# Smart Album} other {# Smart Albums}}"
   },
   "album.folder.deleteFailed": {
     "defaultMessage": "Could not delete this folder. Try again."
@@ -167,6 +176,21 @@
   "album.reorder.tooltip": {
     "defaultMessage": "Reorder album"
   },
+  "album.smart.delete": {
+    "defaultMessage": "Delete Smart Album…"
+  },
+  "album.smart.delete.failed": {
+    "defaultMessage": "Could not delete this Smart Album. Try again."
+  },
+  "album.smart.delete.matches": {
+    "defaultMessage": "{count, plural, one {# photo matches} other {# photos match}} it today."
+  },
+  "album.smart.delete.question": {
+    "defaultMessage": "Delete the Smart Album “{name}”?"
+  },
+  "album.smart.rename": {
+    "defaultMessage": "Rename Smart Album…"
+  },
   "album.tags.label": {
     "defaultMessage": "Tags, separated by commas"
   },
@@ -215,6 +239,9 @@
   "commands.album.delete": {
     "defaultMessage": "Delete album…"
   },
+  "commands.album.duplicate": {
+    "defaultMessage": "Duplicate"
+  },
   "commands.album.folder.new": {
     "defaultMessage": "New folder…"
   },
@@ -247,6 +274,12 @@
   },
   "commands.album.show": {
     "defaultMessage": "Show in All Photos"
+  },
+  "commands.album.smart.edit": {
+    "defaultMessage": "Edit Smart Album"
+  },
+  "commands.album.smart.new": {
+    "defaultMessage": "Save as Smart Album…"
   },
   "commands.album.tags": {
     "defaultMessage": "Tags…"
@@ -553,6 +586,132 @@
   },
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
+  },
+  "facets.additive": {
+    "defaultMessage": "Add to selection"
+  },
+  "facets.additive.hint": {
+    "defaultMessage": "Shift-click also adds a value"
+  },
+  "facets.chip": {
+    "defaultMessage": "{facet}{count, plural, =0 {} other { · #}}"
+  },
+  "facets.clearAll": {
+    "defaultMessage": "Clear"
+  },
+  "facets.clearFacet": {
+    "defaultMessage": "Clear {facet}"
+  },
+  "facets.composition": {
+    "defaultMessage": "Combine facets"
+  },
+  "facets.composition.all": {
+    "defaultMessage": "Match all"
+  },
+  "facets.composition.any": {
+    "defaultMessage": "Match any"
+  },
+  "facets.editing": {
+    "defaultMessage": "· Editing {name}"
+  },
+  "facets.facet.availability": {
+    "defaultMessage": "Availability"
+  },
+  "facets.facet.camera": {
+    "defaultMessage": "Camera"
+  },
+  "facets.facet.custody": {
+    "defaultMessage": "Custody"
+  },
+  "facets.facet.favorite": {
+    "defaultMessage": "Favorite"
+  },
+  "facets.facet.fileType": {
+    "defaultMessage": "File type"
+  },
+  "facets.facet.lens": {
+    "defaultMessage": "Lens"
+  },
+  "facets.facet.location": {
+    "defaultMessage": "Location"
+  },
+  "facets.facet.megapixels": {
+    "defaultMessage": "Megapixels"
+  },
+  "facets.facet.tag": {
+    "defaultMessage": "Tag"
+  },
+  "facets.loading": {
+    "defaultMessage": "Loading…"
+  },
+  "facets.megapixels.apply": {
+    "defaultMessage": "Apply"
+  },
+  "facets.megapixels.max": {
+    "defaultMessage": "Maximum megapixels"
+  },
+  "facets.megapixels.min": {
+    "defaultMessage": "Minimum megapixels"
+  },
+  "facets.megapixels.unknown": {
+    "defaultMessage": "Photos with unknown dimensions never match a size range."
+  },
+  "facets.noValues": {
+    "defaultMessage": "No values in this library yet"
+  },
+  "facets.panel": {
+    "defaultMessage": "{facet} values"
+  },
+  "facets.region": {
+    "defaultMessage": "Facet filters"
+  },
+  "facets.saveAs": {
+    "defaultMessage": "Save as Smart Album…"
+  },
+  "facets.saveChanges": {
+    "defaultMessage": "Save changes"
+  },
+  "facets.saveFailed": {
+    "defaultMessage": "Could not save the Smart Album. Try again."
+  },
+  "facets.savedAs": {
+    "defaultMessage": "Saved Smart Album {name}"
+  },
+  "facets.savedChanges": {
+    "defaultMessage": "Saved changes to {name}"
+  },
+  "facets.summary": {
+    "defaultMessage": "{count, plural, one {# facet} other {# facets · {composition, select, and {match all} other {match any}}}}"
+  },
+  "facets.summary.none": {
+    "defaultMessage": "No facets"
+  },
+  "facets.value.availability.available": {
+    "defaultMessage": "Available"
+  },
+  "facets.value.availability.unavailable": {
+    "defaultMessage": "Unavailable"
+  },
+  "facets.value.custody.error": {
+    "defaultMessage": "Error"
+  },
+  "facets.value.custody.local": {
+    "defaultMessage": "Local"
+  },
+  "facets.value.custody.offloaded": {
+    "defaultMessage": "Offloaded"
+  },
+  "facets.value.custody.synced": {
+    "defaultMessage": "Synced"
+  },
+  "facets.value.custody.syncing": {
+    "defaultMessage": "Syncing"
+  },
+  "facets.value.favorite.no": {
+    "defaultMessage": "Not favorite"
+  },
+  "facets.value.favorite.yes": {
+    "defaultMessage": "Favorite"
   },
   "favorite.add": {
     "defaultMessage": "Add to Favorites"
@@ -2255,6 +2414,9 @@
   "sidebar.album.tagsSaved": {
     "defaultMessage": "Saved tags for {name}"
   },
+  "sidebar.album.unsupported": {
+    "defaultMessage": "Saved query cannot be evaluated by this version"
+  },
   "sidebar.backingUp": {
     "defaultMessage": "Backing up"
   },
@@ -2280,7 +2442,7 @@
     "defaultMessage": "Created folder {name}"
   },
   "sidebar.folder.deleted": {
-    "defaultMessage": "Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}} removed · photos kept"
+    "defaultMessage": "Deleted {name} · {folders, plural, one {# folder} other {# folders}}, {albums, plural, one {# album} other {# albums}}{smart, plural, =0 {} one {, # Smart Album} other {, # Smart Albums}} removed · photos kept"
   },
   "sidebar.folder.new": {
     "defaultMessage": "New folder"
@@ -2302,6 +2464,15 @@
   },
   "sidebar.settings": {
     "defaultMessage": "Settings"
+  },
+  "sidebar.smart.deleted": {
+    "defaultMessage": "Deleted Smart Album {name} · photos kept"
+  },
+  "sidebar.smart.duplicateFailed": {
+    "defaultMessage": "Could not duplicate {name}"
+  },
+  "sidebar.smart.duplicated": {
+    "defaultMessage": "Duplicated {name} as {copy}"
   },
   "sidebar.source.all": {
     "defaultMessage": "All Photos"
@@ -2332,6 +2503,39 @@
   },
   "sidebar.trash.actions": {
     "defaultMessage": "Trash actions"
+  },
+  "smartAlbum.save.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "smartAlbum.save.confirm": {
+    "defaultMessage": "Save"
+  },
+  "smartAlbum.save.failed": {
+    "defaultMessage": "Could not save the Smart Album. Try again."
+  },
+  "smartAlbum.save.folder": {
+    "defaultMessage": "Folder"
+  },
+  "smartAlbum.save.name": {
+    "defaultMessage": "Smart Album name"
+  },
+  "smartAlbum.save.note": {
+    "defaultMessage": "A Smart Album keeps the query, not the photos: it re-evaluates every time it opens and never copies anything."
+  },
+  "smartAlbum.save.saving": {
+    "defaultMessage": "Saving…"
+  },
+  "smartAlbum.save.title": {
+    "defaultMessage": "Save as Smart Album"
+  },
+  "smartAlbum.save.topLevel": {
+    "defaultMessage": "Top level (no folder)"
+  },
+  "smartAlbum.unsupported.hint": {
+    "defaultMessage": "Its saved query is kept exactly as it was. Choose facets and save to replace it, or open it in a newer version."
+  },
+  "smartAlbum.unsupported.title": {
+    "defaultMessage": "{name} cannot be shown"
   },
   "statusbar.inclusion.excluded": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by All Photos rules"

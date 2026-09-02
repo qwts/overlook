@@ -194,6 +194,7 @@ const overlook: OverlookApi = {
     setGalleryPolicy: createInvoker(channels.librarySetGalleryPolicy, invokeTransport),
     stats: async () => libraryStats({}),
     albums: async () => libraryAlbums({}),
+    facetValues: createInvoker(channels.libraryFacetValues, invokeTransport),
     delete: createInvoker(channels.libraryDelete, invokeTransport),
     restore: createInvoker(channels.libraryRestore, invokeTransport),
     purge: createInvoker(channels.libraryPurge, invokeTransport),
@@ -247,6 +248,8 @@ const overlook: OverlookApi = {
     setVisibility: createInvoker(channels.albumSetVisibility, invokeTransport),
     move: createInvoker(channels.albumMove, invokeTransport),
     setTags: createInvoker(channels.albumSetTags, invokeTransport),
+    setPredicate: createInvoker(channels.albumSetPredicate, invokeTransport),
+    duplicate: createInvoker(channels.albumDuplicate, invokeTransport),
   }),
   boards: Object.freeze({
     list: async () => boardList({}),

@@ -84,7 +84,8 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
-  const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}`;
+  const facetsActive = state.facets.groups.length > 0;
+  const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}|${facetsActive ? JSON.stringify(state.facets) : ''}`;
   const selectionAnchorRef = useRef<string | null>(null);
   const rangeRequestRef = useRef(0);
   const projectionKeyRef = useRef(projectionKey);
@@ -115,6 +116,7 @@ export function LibraryGridView({
           ...(Object.values(state.chips).some(Boolean) ? { chips: state.chips } : {}),
           ...(state.sortOrder === 'date' ? {} : { order: state.sortOrder }),
           ...(state.album === null ? {} : { albumId: state.album }),
+          ...(facetsActive ? { predicate: state.facets } : {}),
         })
         .then(({ photoIds }) => {
           if (requestId !== rangeRequestRef.current || projectionKeyRef.current !== projectionKey) return;
@@ -128,9 +130,11 @@ export function LibraryGridView({
     },
     [
       dispatch,
+      facetsActive,
       projectionKey,
       state.album,
       state.chips,
+      state.facets,
       state.query,
       state.search.appliedMode,
       state.searchMode,
@@ -219,7 +223,7 @@ export function LibraryGridView({
 
   // An active album narrows like query/chips do (#117): the sidebar count
   // sized for the source no longer applies — track the loaded set instead.
-  const filtersActive = state.query !== '' || state.album !== null || Object.values(state.chips).some(Boolean);
+  const filtersActive = state.query !== '' || state.album !== null || facetsActive || Object.values(state.chips).some(Boolean);
   const total = filtersActive || knownTotal === null ? (exhausted ? state.photos.length : state.photos.length + 1) : knownTotal;
   const inTrash = state.source === 'deleted';
   const modalOpen =

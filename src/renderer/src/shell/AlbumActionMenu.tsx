@@ -24,6 +24,9 @@ export interface AlbumActionMenuProps {
   readonly onNewFolderInside?: (() => void) | undefined;
   readonly onMove?: (() => void) | undefined;
   readonly onTags?: (() => void) | undefined;
+  /** Smart Albums (#514): edit the saved query, or copy it beside the original. */
+  readonly onEditSmart?: (() => void) | undefined;
+  readonly onDuplicate?: (() => void) | undefined;
   readonly position: number;
   readonly total: number;
   readonly platform: CommandPlatform;
@@ -45,6 +48,8 @@ export function AlbumActionMenu({
   onNewFolderInside,
   onMove,
   onTags,
+  onEditSmart,
+  onDuplicate,
   position,
   total,
   platform,
@@ -53,6 +58,7 @@ export function AlbumActionMenu({
 }: AlbumActionMenuProps): ReactElement {
   const intl = useIntl();
   const folder = album.kind === 'folder';
+  const smart = album.kind === 'smart';
   const alreadyFirst = intl.formatMessage({ id: 'album.reorder.alreadyFirstShort', defaultMessage: 'Already first' });
   const alreadyLast = intl.formatMessage({ id: 'album.reorder.alreadyLastShort', defaultMessage: 'Already last' });
   // ADR-0030 §2: inclusion wins, so the toggle discloses how many of this
@@ -69,34 +75,63 @@ export function AlbumActionMenu({
           { count: album.visibleElsewhere },
         )
       : undefined;
-  const visibilityItems: ContextMenuItem[] = [
-    {
-      id: album.showInAllPhotos ? 'album.hide' : 'album.show',
-      label: intl.formatMessage(commandById(album.showInAllPhotos ? 'album.hide' : 'album.show').label),
-      icon: album.showInAllPhotos ? 'eye-off' : 'eye',
-      action: () => onSetVisibility(!album.showInAllPhotos),
-      detail: disclosure,
-      separatorBefore: true,
-    },
-    ...(onInheritVisibility === undefined || album.parentId === null || album.inheritsVisibility
-      ? []
-      : [
-          {
-            id: 'album.visibility.inherit',
-            label: intl.formatMessage(commandById('album.visibility.inherit').label),
-            icon: 'folder' as const,
-            action: onInheritVisibility,
-          },
-        ]),
-    ...(album.showInAllPhotos
-      ? []
-      : album.visibleVia.map((via): ContextMenuItem => ({
-          id: `album.visibility.via.${via.id}`,
-          label: intl.formatMessage({ id: 'album.visibility.open', defaultMessage: 'Open {album}' }, { album: via.name }),
-          icon: 'album',
-          action: () => onOpenAlbum(via.id),
-        }))),
-  ];
+  // A Smart Album has no membership, so nothing to show or hide (§3).
+  const visibilityItems: ContextMenuItem[] = smart
+    ? []
+    : [
+        {
+          id: album.showInAllPhotos ? 'album.hide' : 'album.show',
+          label: intl.formatMessage(commandById(album.showInAllPhotos ? 'album.hide' : 'album.show').label),
+          icon: album.showInAllPhotos ? 'eye-off' : 'eye',
+          action: () => onSetVisibility(!album.showInAllPhotos),
+          detail: disclosure,
+          separatorBefore: true,
+        },
+        ...(onInheritVisibility === undefined || album.parentId === null || album.inheritsVisibility
+          ? []
+          : [
+              {
+                id: 'album.visibility.inherit',
+                label: intl.formatMessage(commandById('album.visibility.inherit').label),
+                icon: 'folder' as const,
+                action: onInheritVisibility,
+              },
+            ]),
+        ...(album.showInAllPhotos
+          ? []
+          : album.visibleVia.map((via): ContextMenuItem => ({
+              id: `album.visibility.via.${via.id}`,
+              label: intl.formatMessage({ id: 'album.visibility.open', defaultMessage: 'Open {album}' }, { album: via.name }),
+              icon: 'album',
+              action: () => onOpenAlbum(via.id),
+            }))),
+      ];
+  const smartItems: ContextMenuItem[] = smart
+    ? [
+        ...(onEditSmart === undefined
+          ? []
+          : [
+              {
+                id: 'album.smart.edit',
+                label: intl.formatMessage(commandById('album.smart.edit').label),
+                icon: 'funnel' as const,
+                action: onEditSmart,
+                separatorBefore: true,
+              },
+            ]),
+        ...(onDuplicate === undefined
+          ? []
+          : [
+              {
+                id: 'album.duplicate',
+                label: intl.formatMessage(commandById('album.duplicate').label),
+                icon: 'images' as const,
+                action: onDuplicate,
+                separatorBefore: onEditSmart === undefined,
+              },
+            ]),
+      ]
+    : [];
   const structureItems: ContextMenuItem[] = [
     ...(folder && onNewAlbumInside !== undefined
       ? [
@@ -128,7 +163,7 @@ export function AlbumActionMenu({
             label: intl.formatMessage(commandById('album.move').label),
             icon: 'folder-open' as const,
             action: onMove,
-            separatorBefore: !folder,
+            separatorBefore: !folder && !smart,
           },
         ]),
     ...(onTags === undefined
@@ -182,18 +217,21 @@ export function AlbumActionMenu({
           action: () => onReorder('album.reorder.bottom'),
           disabledReason: position === total - 1 ? alreadyLast : undefined,
         },
+        ...smartItems,
         ...structureItems,
         ...visibilityItems,
         {
           id: 'album.rename',
           label: folder
             ? intl.formatMessage({ id: 'album.folder.rename', defaultMessage: 'Rename folder…' })
-            : intl.formatMessage(commandById('album.rename').label),
-          icon: folder ? 'folder' : 'album',
+            : smart
+              ? intl.formatMessage({ id: 'album.smart.rename', defaultMessage: 'Rename Smart Album…' })
+              : intl.formatMessage(commandById('album.rename').label),
+          icon: folder ? 'folder' : smart ? 'funnel' : 'album',
           action: onRename,
           separatorBefore: true,
         },
-        ...(onTransfer === undefined || folder
+        ...(onTransfer === undefined || folder || smart
           ? []
           : [
               {
@@ -207,7 +245,9 @@ export function AlbumActionMenu({
           id: 'album.delete',
           label: folder
             ? intl.formatMessage({ id: 'album.folder.delete', defaultMessage: 'Delete folder…' })
-            : intl.formatMessage(commandById('album.delete').label),
+            : smart
+              ? intl.formatMessage({ id: 'album.smart.delete', defaultMessage: 'Delete Smart Album…' })
+              : intl.formatMessage(commandById('album.delete').label),
           icon: 'trash-2',
           action: onDelete,
           danger: true,

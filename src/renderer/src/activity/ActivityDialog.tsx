@@ -51,6 +51,8 @@ const eventMessages: Readonly<Record<ActivityEventType, { readonly id: string; r
   'album.visibility-changed': { id: 'activity.event.albumVisibility', defaultMessage: 'Changed whether an album shows in All Photos' },
   'album.moved': { id: 'activity.event.albumMovedToFolder', defaultMessage: 'Moved an album or folder' },
   'album.tags-changed': { id: 'activity.event.albumTags', defaultMessage: 'Changed the tags on an album or folder' },
+  'album.predicate-changed': { id: 'activity.event.albumPredicate', defaultMessage: 'Edited a Smart Album’s query' },
+  'album.duplicated': { id: 'activity.event.albumDuplicated', defaultMessage: 'Duplicated a Smart Album' },
   'board.layout-changed': { id: 'activity.event.boardLayout', defaultMessage: 'Edited a moodboard' },
   'album.membership-added': {
     id: 'activity.event.albumAdded',

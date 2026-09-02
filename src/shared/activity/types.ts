@@ -7,6 +7,8 @@ export const activityEventTypes = [
   'album.visibility-changed',
   'album.moved',
   'album.tags-changed',
+  'album.predicate-changed',
+  'album.duplicated',
   'album.membership-added',
   'album.membership-removed',
   'album.membership-moved',

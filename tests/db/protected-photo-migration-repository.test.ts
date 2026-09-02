@@ -125,6 +125,8 @@ describe('ProtectedPhotoMigrationRepository', () => {
         parentId: null,
         inheritsVisibility: false,
         tags: [],
+        predicate: null,
+        unsupported: null,
       },
     ]);
     assert.deepEqual(photos.albumMembers('ordinary-a'), []);

@@ -107,6 +107,7 @@ export interface OverlookApi {
     ) => Promise<Res<typeof channels.librarySetGalleryPolicy>>;
     readonly stats: () => Promise<Res<typeof channels.libraryStats>>;
     readonly albums: () => Promise<Res<typeof channels.libraryAlbums>>;
+    readonly facetValues: (request: Req<typeof channels.libraryFacetValues>) => Promise<Res<typeof channels.libraryFacetValues>>;
     readonly delete: (request: Req<typeof channels.libraryDelete>) => Promise<Res<typeof channels.libraryDelete>>;
     readonly restore: (request: Req<typeof channels.libraryRestore>) => Promise<Res<typeof channels.libraryRestore>>;
     readonly purge: (request: Req<typeof channels.libraryPurge>) => Promise<Res<typeof channels.libraryPurge>>;
@@ -164,6 +165,8 @@ export interface OverlookApi {
     readonly setVisibility: (request: Req<typeof channels.albumSetVisibility>) => Promise<Res<typeof channels.albumSetVisibility>>;
     readonly move: (request: Req<typeof channels.albumMove>) => Promise<Res<typeof channels.albumMove>>;
     readonly setTags: (request: Req<typeof channels.albumSetTags>) => Promise<Res<typeof channels.albumSetTags>>;
+    readonly setPredicate: (request: Req<typeof channels.albumSetPredicate>) => Promise<Res<typeof channels.albumSetPredicate>>;
+    readonly duplicate: (request: Req<typeof channels.albumDuplicate>) => Promise<Res<typeof channels.albumDuplicate>>;
   };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;

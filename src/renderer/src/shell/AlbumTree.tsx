@@ -16,6 +16,7 @@ const messages = defineMessages({
   folderPositionSuffix: { id: 'album.folder.positionSuffix', defaultMessage: 'folder {position} of {total}' },
   reorderTooltip: { id: 'album.reorder.tooltip', defaultMessage: 'Reorder album' },
   actions: { id: 'sidebar.album.actions', defaultMessage: 'Actions for {name}' },
+  unsupported: { id: 'sidebar.album.unsupported', defaultMessage: 'Saved query cannot be evaluated by this version' },
 });
 
 export interface AlbumTreeProps {
@@ -25,6 +26,8 @@ export interface AlbumTreeProps {
   readonly isExpanded: (folderId: string) => boolean;
   readonly onToggleFolder: (folderId: string) => void;
   readonly onSelectAlbum: (albumId: string) => void;
+  /** A Smart Album opens as its saved query (#514). */
+  readonly onSelectSmartAlbum: (album: AlbumListing) => void;
   readonly onOpenActions: (album: AlbumListing, position: { readonly x: number; readonly y: number }, origin: HTMLElement) => void;
   readonly albumReorder: ReturnType<typeof useAlbumReorder<AlbumListing>>;
   readonly albumDrop: ReturnType<typeof useAlbumPhotoDrop>;
@@ -40,6 +43,7 @@ export function AlbumTree({
   isExpanded,
   onToggleFolder,
   onSelectAlbum,
+  onSelectSmartAlbum,
   onOpenActions,
   albumReorder,
   albumDrop,
@@ -68,9 +72,11 @@ export function AlbumTree({
         const { depth, visible } = depthOf(album);
         if (!visible) return null;
         const folder = album.kind === 'folder';
+        const smart = album.kind === 'smart';
         const expanded = folder ? isExpanded(album.id) : undefined;
         const { position, total } = albumReorder.placement(album.id);
-        const photoDropProps = folder ? null : albumDrop.targetProps(album);
+        // Folders never hold photos and a Smart Album never takes them (§3).
+        const photoDropProps = folder || smart ? null : albumDrop.targetProps(album);
         const reorderRowProps = albumReorder.rowProps(album);
         const feedback = albumDrop.feedback?.albumId === album.id ? albumDrop.feedback : null;
         return (
@@ -97,7 +103,7 @@ export function AlbumTree({
             }}
           >
             <SideRow
-              icon={folder ? (expanded === true ? 'folder-open' : 'folder') : 'album'}
+              icon={folder ? (expanded === true ? 'folder-open' : 'folder') : smart ? 'funnel' : 'album'}
               label={album.name}
               count={album.count}
               active={activeAlbumId === album.id}
@@ -109,9 +115,16 @@ export function AlbumTree({
                   : undefined
               }
               statusLabel={feedback?.label}
-              hiddenLabel={album.showInAllPhotos ? undefined : intl.formatMessage(messages.hiddenFromAllPhotos)}
+              hiddenLabel={
+                album.unsupported !== null
+                  ? intl.formatMessage(messages.unsupported)
+                  : album.showInAllPhotos || smart
+                    ? undefined
+                    : intl.formatMessage(messages.hiddenFromAllPhotos)
+              }
               onClick={() => {
                 if (folder) onToggleFolder(album.id);
+                else if (smart) onSelectSmartAlbum(album);
                 else onSelectAlbum(album.id);
               }}
               onOpenActions={(menuPosition, origin) => onOpenActions(album, menuPosition, origin)}

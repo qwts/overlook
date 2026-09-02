@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { smartPredicateSchema } from '../library/smart-album.js';
+
 export const sourceFilterSchema = z.enum(['all', 'favorites', 'recent', 'raw', 'offloaded', 'unavailable', 'deleted']);
 
 export const chipFiltersSchema = z.object({
@@ -18,4 +20,5 @@ export const libraryQuerySchema = z.object({
   chips: chipFiltersSchema.optional(),
   order: z.enum(['date', 'name', 'size']).optional(),
   albumId: z.string().optional(),
+  predicate: smartPredicateSchema.optional(),
 });

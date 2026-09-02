@@ -5,6 +5,7 @@
 import type { MediaInfo } from './media-info.js';
 import type { PreviewFailureReason } from './preview.js';
 import type { PhotoMetadataFields } from './photo-metadata.js';
+import type { SmartPredicate } from './smart-album.js';
 
 // ADR-0026 §1: containers do not get kinds — an MP4, a MOV, a WebM, and an
 // MPEG-TS are all `video`; their container × codec facts live in the probed
@@ -129,6 +130,9 @@ export interface LibraryQuery {
   readonly order?: SortOrder | undefined;
   /** Restrict to one album's members (#117) — AND-combined with source. */
   readonly albumId?: string | undefined;
+  /** Facet filters or a Smart Album's saved query (#514, ADR-0030 §3) —
+   * compiled by the same builder as every other clause. */
+  readonly predicate?: SmartPredicate | undefined;
 }
 
 export interface PageRequest extends LibraryQuery {
@@ -158,6 +162,7 @@ export interface SelectionRangeRequest {
   readonly chips?: ChipFilters | undefined;
   readonly order?: SortOrder | undefined;
   readonly albumId?: string | undefined;
+  readonly predicate?: SmartPredicate | undefined;
 }
 
 export interface SelectionRangeResult {
@@ -189,11 +194,16 @@ export interface AlbumListing extends AlbumSummary {
   readonly visibleVia: readonly { readonly id: string; readonly name: string }[];
   /** Folder tree placement and organizational tags (#505, ADR-0030 §1). A
    * folder's count is the distinct photos of every album beneath it. */
-  readonly kind: 'album' | 'folder';
+  readonly kind: 'album' | 'folder' | 'smart';
   readonly parentId: string | null;
   /** The policy follows the containing folder (§2) rather than being this collection's own. */
   readonly inheritsVisibility: boolean;
   readonly tags: readonly string[];
+  /** A Smart Album's saved query (#514, §3). Null for albums and folders,
+   * and for a Smart Album this app cannot evaluate — `unsupported` then
+   * names what it could not understand, and the count is 0. */
+  readonly predicate: SmartPredicate | null;
+  readonly unsupported: string | null;
 }
 
 export interface LibraryStats {

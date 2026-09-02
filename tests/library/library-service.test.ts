@@ -339,6 +339,8 @@ describe('library IPC contract', () => {
         parentId: null,
         inheritsVisibility: false,
         tags: [],
+        predicate: null,
+        unsupported: null,
       },
       {
         id: 'AL2',
@@ -351,6 +353,8 @@ describe('library IPC contract', () => {
         parentId: null,
         inheritsVisibility: false,
         tags: [],
+        predicate: null,
+        unsupported: null,
       },
     ]);
   });

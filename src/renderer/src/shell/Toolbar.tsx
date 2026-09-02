@@ -4,7 +4,7 @@ import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN } from '../../../shared/library/app-state.js';
 import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
-import type { ChipFilters, SearchMode } from '../../../shared/library/types.js';
+import type { AlbumListing, ChipFilters, SearchMode } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { Icon } from '../components/Icon';
@@ -14,6 +14,7 @@ import { Segmented } from '../components/Segmented';
 import { Slider } from '../components/Slider';
 import { Tooltip } from '../components/Tooltip';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
+import { FacetBar } from './FacetBar';
 
 import overlookIcon from '../assets/overlook-icon-64.png';
 
@@ -88,9 +89,11 @@ export interface ToolbarProps {
   readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
   readonly onTransfer?: (() => void) | undefined;
+  /** Collections for the facet bar (#514): the open Smart Album, and folders to save into. */
+  readonly albums?: readonly AlbumListing[] | undefined;
 }
 
-export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }: ToolbarProps): ReactElement {
+export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, albums = [] }: ToolbarProps): ReactElement {
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -112,7 +115,8 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
     }, QUERY_DEBOUNCE_MS);
   };
 
-  const anyFilter = Object.values(state.chips).some(Boolean);
+  const anyFilter = Object.values(state.chips).some(Boolean) || state.facets.groups.length > 0;
+  const smartAlbum = state.smartAlbum === null ? null : (albums.find((album) => album.id === state.smartAlbum) ?? null);
   const searchStatus =
     state.search.fallbackReason === null
       ? intl.formatMessage(
@@ -265,6 +269,9 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer }:
             </span>
           )}
         </div>
+      ) : null}
+      {filterOpen || state.facets.groups.length > 0 || state.smartAlbum !== null ? (
+        <FacetBar smartAlbum={smartAlbum} albums={albums} />
       ) : null}
     </section>
   );

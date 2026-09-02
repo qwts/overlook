@@ -68,6 +68,9 @@ export function useCommandDispatcher(
         case 'album.move':
         case 'album.tags':
         case 'album.visibility.inherit':
+        case 'album.smart.new':
+        case 'album.smart.edit':
+        case 'album.duplicate':
         case 'album.reorder.up':
         case 'album.reorder.down':
         case 'album.reorder.top':

@@ -2,6 +2,8 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { PhotosRepository } from '../db/photos-repository.js';
 import { deleteFolder, moveCollection, setAlbumTags, setCollectionVisibility, type FolderDeletion } from '../db/album-tree-repository.js';
+import { facetValues, type FacetValue } from '../db/smart-album-queries.js';
+import { createSmartAlbum, duplicateSmartAlbum, setSmartAlbumPredicate } from '../db/smart-album-repository.js';
 import { PhotoMetadataRepository, type PhotoMetadataMutationResult } from '../db/photo-metadata-repository.js';
 import { HistoryLibraryRepository } from '../history/history-library-repository.js';
 import { deleteBoard, getBoard, listBoards, saveBoard } from '../db/board-repository.js';
@@ -19,6 +21,7 @@ import type {
 } from '../../shared/library/types.js';
 import type { Board } from '../../shared/moodboard/board.js';
 import type { GalleryPolicy } from '../../shared/library/gallery-policy.js';
+import type { EnumeratedFacet, SmartPredicate } from '../../shared/library/smart-album.js';
 import type { PhotoMetadataUpdate, PhotoTagManagement } from '../../shared/library/photo-metadata.js';
 import { SemanticSearch, type SemanticEmbeddingFacade } from './semantic-search.js';
 
@@ -255,11 +258,40 @@ export class LibraryService {
   createAlbum(
     id: string,
     name: string,
-    placement?: { readonly kind?: 'album' | 'folder'; readonly parentId?: string | null },
+    placement?: {
+      readonly kind?: 'album' | 'folder' | 'smart';
+      readonly parentId?: string | null;
+      readonly predicate?: SmartPredicate | undefined;
+    },
   ): AlbumListing {
-    const album = this.repo.createAlbum(id, name, placement);
+    if (placement?.kind === 'smart') {
+      if (placement.predicate === undefined) throw new Error('a Smart Album needs a predicate');
+      createSmartAlbum(this.db, { id, name, parentId: placement.parentId ?? null, predicate: placement.predicate });
+      this.events.libraryChanged([], 'none');
+      return this.albumListing(id);
+    }
+    const album = this.repo.createAlbum(id, name, { kind: placement?.kind ?? 'album', parentId: placement?.parentId ?? null });
     this.events.libraryChanged([], 'none');
     return album;
+  }
+
+  /** Smart Albums (#514, ADR-0030 §3): the saved query is library data;
+   * editing it never touches photos, so only the listing re-evaluates. */
+  setSmartAlbumPredicate(albumId: string, predicate: SmartPredicate): AlbumListing {
+    setSmartAlbumPredicate(this.db, albumId, predicate);
+    this.events.libraryChanged([], 'none');
+    return this.albumListing(albumId);
+  }
+
+  duplicateSmartAlbum(albumId: string, newId: string, tagId: () => string): AlbumListing {
+    const original = this.albumListing(albumId);
+    duplicateSmartAlbum(this.db, albumId, newId, `${original.name} copy`, tagId);
+    this.events.libraryChanged([], 'none');
+    return this.albumListing(newId);
+  }
+
+  facetValues(facet: EnumeratedFacet): FacetValue[] {
+    return facetValues(this.db, facet);
   }
 
   renameAlbum(albumId: string, name: string): void {

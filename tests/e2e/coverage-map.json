@@ -346,6 +346,22 @@
       ]
     },
     {
+      "id": "514-smart-albums",
+      "wiki": "Acceptance-Test-Smart-Albums",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/smart-albums.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/shell/FacetBar.stories.tsx", "src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/db/smart-albums.test.ts", "tests/backup/smart-albums-manifest.test.ts", "tests/library/facet-state.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Smart-Albums.md for the megapixel and tag facets over a real library, the relaunch check, the folder deletion count that names Smart Albums apart, and the fail-closed empty state for a newer predicate version."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [

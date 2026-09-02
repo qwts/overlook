@@ -72,6 +72,7 @@ existing links resolve — never add content there.
 - [Gallery inclusion acceptance](./acceptance/Acceptance-Test-Gallery-Inclusion.md) — RAW and Unavailable sources, All Photos minimum-size and unavailable rules, disclosure, and restore fidelity
 - [Album visibility acceptance](./acceptance/Acceptance-Test-Album-Visibility.md) — #494 per-album Show in All Photos policy, inclusion-wins disclosure, and restore fidelity
 - [Album folders acceptance](./acceptance/Acceptance-Test-Album-Folders.md) — #505 folders, inherited visibility, organizational tags, the counted deletion ceremony, and restore fidelity
+- [Smart Albums acceptance](./acceptance/Acceptance-Test-Smart-Albums.md) — #514 facet filters, union-within-a-facet and explicit composition, saved predicates that re-evaluate, fail-closed unknown documents, and restore fidelity
 - [Theming reference](./Theming.md) — `.overlook-theme.json` format, every user-themable token with its role, the export → edit → import workflow, an LLM prompt, and example themes
 
 ## Maintenance Convention

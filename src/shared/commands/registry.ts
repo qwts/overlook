@@ -78,6 +78,9 @@ export type CommandId =
   | 'album.move'
   | 'album.tags'
   | 'album.visibility.inherit'
+  | 'album.smart.new'
+  | 'album.smart.edit'
+  | 'album.duplicate'
   | 'view.inspector.toggle'
   | 'view.inspector.detach'
   | 'view.sidebar.toggle'
@@ -164,6 +167,9 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'album.move': { id: 'commands.album.move', defaultMessage: 'Move to folder…' },
   'album.tags': { id: 'commands.album.tags', defaultMessage: 'Tags…' },
   'album.visibility.inherit': { id: 'commands.album.visibility.inherit', defaultMessage: 'Use folder setting' },
+  'album.smart.new': { id: 'commands.album.smart.new', defaultMessage: 'Save as Smart Album…' },
+  'album.smart.edit': { id: 'commands.album.smart.edit', defaultMessage: 'Edit Smart Album' },
+  'album.duplicate': { id: 'commands.album.duplicate', defaultMessage: 'Duplicate' },
   'album.reorder.up': { id: 'commands.album.reorder.up', defaultMessage: 'Move up' },
   'album.reorder.down': { id: 'commands.album.reorder.down', defaultMessage: 'Move down' },
   'album.reorder.top': { id: 'commands.album.reorder.top', defaultMessage: 'Move to top' },
@@ -389,6 +395,9 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'album.move', label: label('album.move', 'Move to folder…'), surfaces: [], target: 'focused-item' },
   { id: 'album.tags', label: label('album.tags', 'Tags…'), surfaces: [], target: 'focused-item' },
   { id: 'album.visibility.inherit', label: label('album.visibility.inherit', 'Use folder setting'), surfaces: [], target: 'focused-item' },
+  { id: 'album.smart.new', label: label('album.smart.new', 'Save as Smart Album…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.smart.edit', label: label('album.smart.edit', 'Edit Smart Album'), surfaces: [], target: 'focused-item' },
+  { id: 'album.duplicate', label: label('album.duplicate', 'Duplicate'), surfaces: [], target: 'focused-item' },
   { id: 'album.reorder.up', label: label('album.reorder.up', 'Move up'), surfaces: [], target: 'focused-item', key: 'ArrowUp', alt: true },
   {
     id: 'album.reorder.down',

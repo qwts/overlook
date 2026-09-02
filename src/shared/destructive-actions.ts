@@ -54,6 +54,12 @@ export const destructiveActions = {
     label: 'Delete folder',
     survival: 'Photos stay in the library; only the folder, the albums inside it, and their membership are removed.',
   },
+  deleteSmartAlbum: {
+    id: 'album.smart.delete',
+    tier: 'structural',
+    label: 'Delete Smart Album',
+    survival: 'Photos stay in the library; only the saved query is removed.',
+  },
   removePhotosFromAlbum: {
     id: 'album.remove-photos',
     tier: 'structural',

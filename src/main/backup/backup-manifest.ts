@@ -8,7 +8,7 @@ import { photoDescriptionSchema, photoTagsSchema, photoTitleSchema } from '../..
 import { galleryPolicySchema } from '../../shared/library/gallery-policy.js';
 import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 9 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 10 as const;
 
 const ulidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/u, 'expected a Crockford ULID');
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, 'expected a lowercase SHA-256 digest');
@@ -465,7 +465,7 @@ export const backupManifestAlbumPlacementV9Schema = z.strictObject({
 export const backupManifestV9Schema = z
   .strictObject({
     ...backupManifestV8Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(9),
     folders: z.array(backupManifestFolderV9Schema).readonly(),
     albumTree: z.array(backupManifestAlbumPlacementV9Schema).readonly(),
   })
@@ -510,6 +510,67 @@ export const backupManifestV9Schema = z
     }
   });
 
+// Smart Albums (#514, ADR-0030 §3/§5): saved predicates are library data.
+// The manifest carries each document as written; restore validates that it
+// is a versioned document and that its placement fits the tree, and a
+// document this app cannot evaluate is preserved and marked unsupported
+// rather than rejected — a backup is never refused for being newer.
+export const backupManifestSmartAlbumV10Schema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  createdAt: isoTimestampSchema,
+  position: z.number().int().nonnegative(),
+  parentId: z.string().min(1).nullable(),
+  predicate: z
+    .record(z.string(), z.unknown())
+    .refine((document) => typeof document['version'] === 'number' && Number.isInteger(document['version']) && document['version'] >= 1, {
+      message: 'predicate needs an integer version',
+    }),
+  tags: collectionTagsSchema,
+});
+export const backupManifestV10Schema = z
+  .strictObject({
+    ...backupManifestV9Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    smartAlbums: z.array(backupManifestSmartAlbumV10Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const { smartAlbums: _smartAlbums, ...withoutSmart } = manifest;
+    const previous = backupManifestV9Schema.safeParse({ ...withoutSmart, schema: 9 });
+    if (!previous.success) {
+      context.addIssue({ code: 'custom', message: `schema-9 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    }
+    const taken = new Set([...manifest.albums.map((album) => album.id), ...manifest.folders.map((folder) => folder.id)]);
+    for (const [index, smart] of manifest.smartAlbums.entries()) {
+      if (taken.has(smart.id))
+        context.addIssue({ code: 'custom', path: ['smartAlbums', index], message: 'smart album id collides with a collection' });
+      taken.add(smart.id);
+    }
+    const albumPositions = new Map(manifest.albums.map((album) => [album.id, album.position]));
+    for (const issue of albumTreeIssues([
+      ...manifest.folders.map((folder) => ({
+        id: folder.id,
+        kind: 'folder' as const,
+        parentId: folder.parentId,
+        position: folder.position,
+      })),
+      ...manifest.albumTree.map((placement) => ({
+        id: placement.albumId,
+        kind: 'album' as const,
+        parentId: placement.parentId,
+        position: albumPositions.get(placement.albumId) ?? -1,
+      })),
+      ...manifest.smartAlbums.map((smart) => ({
+        id: smart.id,
+        kind: 'smart' as const,
+        parentId: smart.parentId,
+        position: smart.position,
+      })),
+    ])) {
+      context.addIssue({ code: 'custom', path: ['smartAlbums'], message: issue });
+    }
+  });
+
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
 export type BackupManifestPhotoV2 = z.infer<typeof backupManifestPhotoV2Schema>;
 export type BackupManifestAlbumV2 = z.infer<typeof backupManifestAlbumV2Schema>;
@@ -528,6 +589,8 @@ export type BackupManifestV8 = z.infer<typeof backupManifestV8Schema>;
 export type BackupManifestFolderV9 = z.infer<typeof backupManifestFolderV9Schema>;
 export type BackupManifestAlbumPlacementV9 = z.infer<typeof backupManifestAlbumPlacementV9Schema>;
 export type BackupManifestV9 = z.infer<typeof backupManifestV9Schema>;
+export type BackupManifestSmartAlbumV10 = z.infer<typeof backupManifestSmartAlbumV10Schema>;
+export type BackupManifestV10 = z.infer<typeof backupManifestV10Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -536,7 +599,8 @@ export type RestorableBackupManifest =
   | BackupManifestV6
   | BackupManifestV7
   | BackupManifestV8
-  | BackupManifestV9;
+  | BackupManifestV9
+  | BackupManifestV10;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -574,6 +638,10 @@ export interface BackupManifestSnapshotV8 extends BackupManifestSnapshotV7 {
 export interface BackupManifestSnapshotV9 extends BackupManifestSnapshotV8 {
   readonly folders: readonly BackupManifestFolderV9[];
   readonly albumTree: readonly BackupManifestAlbumPlacementV9[];
+}
+
+export interface BackupManifestSnapshotV10 extends BackupManifestSnapshotV9 {
+  readonly smartAlbums: readonly BackupManifestSmartAlbumV10[];
 }
 
 export type ParsedBackupManifest =
@@ -657,7 +725,15 @@ export function buildBackupManifestV9(input: {
   readonly generatedAt: string;
   readonly snapshot: BackupManifestSnapshotV9;
 }): BackupManifestV9 {
-  return backupManifestV9Schema.parse({
+  return backupManifestV9Schema.parse({ schema: 9, libraryId: input.libraryId, generatedAt: input.generatedAt, ...input.snapshot });
+}
+
+export function buildBackupManifestV10(input: {
+  readonly libraryId: string;
+  readonly generatedAt: string;
+  readonly snapshot: BackupManifestSnapshotV10;
+}): BackupManifestV10 {
+  return backupManifestV10Schema.parse({
     schema: BACKUP_MANIFEST_SCHEMA_VERSION,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
@@ -746,10 +822,17 @@ export function parseBackupManifest(input: unknown): ParsedBackupManifest {
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }
-  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+  if (version.data.schema === 9) {
     const parsed = backupManifestV9Schema.safeParse(input);
     if (!parsed.success) {
       throw new BackupManifestError(`invalid schema-9 manifest: ${z.prettifyError(parsed.error)}`);
+    }
+    return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
+  }
+  if (version.data.schema === BACKUP_MANIFEST_SCHEMA_VERSION) {
+    const parsed = backupManifestV10Schema.safeParse(input);
+    if (!parsed.success) {
+      throw new BackupManifestError(`invalid schema-10 manifest: ${z.prettifyError(parsed.error)}`);
     }
     return { restorable: true, manifest: upgradeLegacyManifest(parsed.data) };
   }

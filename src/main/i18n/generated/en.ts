@@ -5,6 +5,7 @@
 
 export const en: Readonly<Record<string, string>> = {
   "commands.album.delete": "Delete album…",
+  "commands.album.duplicate": "Duplicate",
   "commands.album.folder.new": "New folder…",
   "commands.album.hide": "Hide from All Photos",
   "commands.album.membership.add": "Add to album",
@@ -16,6 +17,8 @@ export const en: Readonly<Record<string, string>> = {
   "commands.album.reorder.top": "Move to top",
   "commands.album.reorder.up": "Move up",
   "commands.album.show": "Show in All Photos",
+  "commands.album.smart.edit": "Edit Smart Album",
+  "commands.album.smart.new": "Save as Smart Album…",
   "commands.album.tags": "Tags…",
   "commands.album.transfer": "Transfer & Sync…",
   "commands.album.visibility.inherit": "Use folder setting",

@@ -1,3 +1,14 @@
+import {
+  EMPTY_PREDICATE,
+  clearFacet,
+  setComposition,
+  setMegapixelRanges,
+  toggleFacetValue,
+  type FacetComposition,
+  type FacetId,
+  type MegapixelRange,
+  type SmartPredicate,
+} from './smart-album.js';
 import type { ChipFilters, PageResult, PhotoRecord, SearchMode, SortOrder, SourceFilter } from './types.js';
 
 // App state backbone (#73) — the mock's state shape as a pure reducer, kept
@@ -30,6 +41,12 @@ export interface AppState {
   readonly sortOrder: SortOrder;
   /** Active album filter (#117) — an album acts as a source; null = none. */
   readonly album: string | null;
+  /** Live facet predicate (#514, ADR-0030 §3) — the same document a Smart
+   * Album saves. Empty groups = no facet filter. */
+  readonly facets: SmartPredicate;
+  /** The Smart Album whose saved query `facets` started from; null when the
+   * facets are a live filter over a source. */
+  readonly smartAlbum: string | null;
   /** Independent protected-domain route. Ordinary photo records are cleared
    * before this is set and never represent protected content. */
   readonly protectedAlbum: string | null;
@@ -80,6 +97,8 @@ export const initialAppState: AppState = {
   chips: {},
   sortOrder: 'date',
   album: null,
+  facets: EMPTY_PREDICATE,
+  smartAlbum: null,
   protectedAlbum: null,
   selection: new Set<string>(),
   selectionMode: 'explicit',
@@ -119,6 +138,11 @@ export type AppAction =
   | { type: 'chip/toggled'; chip: keyof ChipFilters }
   | { type: 'sortOrder/set'; order: SortOrder }
   | { type: 'album/set'; albumId: string | null }
+  | { type: 'facet/toggled'; facet: Exclude<FacetId, 'megapixels'>; value: string; additive: boolean }
+  | { type: 'facet/rangeSet'; ranges: readonly MegapixelRange[] }
+  | { type: 'facet/cleared'; facet?: FacetId | undefined }
+  | { type: 'facetComposition/set'; composition: FacetComposition }
+  | { type: 'smartAlbum/set'; albumId: string; predicate: SmartPredicate }
   | { type: 'protectedAlbum/set'; albumId: string | null }
   | { type: 'selection/toggled'; photoId: string }
   | { type: 'selection/all'; photoIds: readonly string[] }
@@ -214,7 +238,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'source/set':
       // Selection is NOT cleared here: the next photos/loaded intersects it
       // with the new visible set (still-visible items survive, #78).
-      return { ...state, source: action.source, album: null, protectedAlbum: null, selectionMode: 'explicit' };
+      // Leaving a Smart Album drops its query; a live facet filter stays,
+      // like the chips, until the user clears it (#514).
+      return {
+        ...state,
+        source: action.source,
+        album: null,
+        protectedAlbum: null,
+        smartAlbum: null,
+        facets: state.smartAlbum === null ? state.facets : EMPTY_PREDICATE,
+        selectionMode: 'explicit',
+      };
     case 'chip/toggled': {
       const next = { ...state.chips, [action.chip]: state.chips[action.chip] !== true };
       return { ...state, chips: next, selectionMode: 'explicit' };
@@ -222,12 +256,42 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'album/set':
       // An album behaves like a source (design §Sidebar): selecting one
       // resets the source to 'all'; picking any source clears it below.
-      return { ...state, album: action.albumId, protectedAlbum: null, source: 'all', selectionMode: 'explicit' };
+      return {
+        ...state,
+        album: action.albumId,
+        protectedAlbum: null,
+        source: 'all',
+        smartAlbum: null,
+        facets: state.smartAlbum === null ? state.facets : EMPTY_PREDICATE,
+        selectionMode: 'explicit',
+      };
+    case 'facet/toggled':
+      return { ...state, facets: toggleFacetValue(state.facets, action.facet, action.value, action.additive), selectionMode: 'explicit' };
+    case 'facet/rangeSet':
+      return { ...state, facets: setMegapixelRanges(state.facets, action.ranges), selectionMode: 'explicit' };
+    case 'facet/cleared':
+      return { ...state, facets: clearFacet(state.facets, action.facet), selectionMode: 'explicit' };
+    case 'facetComposition/set':
+      return { ...state, facets: setComposition(state.facets, action.composition), selectionMode: 'explicit' };
+    case 'smartAlbum/set':
+      // A Smart Album opens as its saved query over All Photos (ADR-0030 §3):
+      // the facets become editable live, and saving writes them back.
+      return {
+        ...state,
+        smartAlbum: action.albumId,
+        facets: action.predicate,
+        album: null,
+        protectedAlbum: null,
+        source: 'all',
+        selectionMode: 'explicit',
+      };
     case 'protectedAlbum/set':
       return {
         ...state,
         protectedAlbum: action.albumId,
         album: null,
+        smartAlbum: null,
+        facets: EMPTY_PREDICATE,
         source: 'all',
         photos: [],
         selection: new Set<string>(),

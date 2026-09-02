@@ -483,12 +483,13 @@ export function Shell({
     [restore.restoreToasts, toast],
   );
   const activeAlbum = albums.find((album) => album.id === state.album);
+  const activeSmartAlbum = albums.find((album) => album.id === state.smartAlbum) ?? null;
   const activeProtectedAlbum = protectedAlbums.find((album) => album.id === state.protectedAlbum);
   const viewTitle =
     state.protectedAlbum !== null
       ? (activeProtectedAlbum?.name ?? activeProtectedAlbum?.label ?? intl.formatMessage(viewMessages.protected))
-      : state.album !== null
-        ? (activeAlbum?.name ?? intl.formatMessage(viewMessages.album))
+      : state.album !== null || state.smartAlbum !== null
+        ? (activeAlbum?.name ?? activeSmartAlbum?.name ?? intl.formatMessage(viewMessages.album))
         : intl.formatMessage(viewMessages[state.source]);
   const previousPhotos = useRef(state.photos);
   useEffect(() => {
@@ -548,6 +549,7 @@ export function Shell({
       <MoveResumeBanner />
       <Toolbar
         platform={commandPlatform(platform)}
+        albums={albums}
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
         onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {
@@ -775,6 +777,7 @@ export function Shell({
               platform={commandPlatform(platform)}
               knownTotal={counts === null ? null : counts[state.source]}
               activeAlbum={albums.find((album) => album.id === state.album) ?? null}
+              activeSmartAlbum={activeSmartAlbum}
               onExport={exportDialog.openPhotos}
               onBoardExport={exportDialog.openBoard}
               onOffload={offload.open}

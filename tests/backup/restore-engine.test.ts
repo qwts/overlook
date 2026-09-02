@@ -271,6 +271,8 @@ test('restore engine: fresh staging rebuilds keys, catalog, originals, thumbnail
       parentId: null,
       inheritsVisibility: false,
       tags: [],
+      predicate: null,
+      unsupported: null,
     },
   ]);
   assert.equal(repo.pendingCount(), 0);

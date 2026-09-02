@@ -15,10 +15,10 @@ export function registerAlbumIpcHandlers(
   onManifestChanged?: () => void,
 ): void {
   ipcMain.handle(channels.albumCreate.name, (_event, request: unknown) =>
-    wrapHandler(channels.albumCreate, ({ name, kind, parentId }) =>
+    wrapHandler(channels.albumCreate, ({ name, kind, parentId, predicate }) =>
       mutateWithActivity(
         getActivity,
-        () => ({ album: getService().createAlbum(newId(), name, { kind: kind ?? 'album', parentId: parentId ?? null }) }),
+        () => ({ album: getService().createAlbum(newId(), name, { kind: kind ?? 'album', parentId: parentId ?? null, predicate }) }),
         ({ album }) => ({
           eventType: 'album.created',
           entityIds: [album.id],
@@ -73,6 +73,36 @@ export function registerAlbumIpcHandlers(
       onManifestChanged?.();
       return result;
     })(request),
+  );
+  ipcMain.handle(channels.albumSetPredicate.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumSetPredicate, ({ albumId, predicate }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().setSmartAlbumPredicate(albumId, predicate) }),
+        () => ({
+          eventType: 'album.predicate-changed',
+          entityIds: [albumId],
+          outcome: 'succeeded',
+          payload: { groups: predicate.groups.length, composition: predicate.composition },
+        }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.albumDuplicate.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumDuplicate, ({ albumId }) => {
+      const result = mutateWithActivity(
+        getActivity,
+        () => ({ album: getService().duplicateSmartAlbum(albumId, newId(), newId) }),
+        ({ album }) => ({ eventType: 'album.duplicated', entityIds: [albumId, album.id], outcome: 'succeeded', payload: {} }),
+      );
+      onManifestChanged?.();
+      return result;
+    })(request),
+  );
+  ipcMain.handle(channels.libraryFacetValues.name, (_event, request: unknown) =>
+    wrapHandler(channels.libraryFacetValues, ({ facet }) => ({ values: getService().facetValues(facet) }))(request),
   );
   ipcMain.handle(channels.albumRename.name, (_event, request: unknown) =>
     wrapHandler(channels.albumRename, ({ albumId, name }) => {

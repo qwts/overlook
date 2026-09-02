@@ -151,6 +151,8 @@ describe('ProtectedWorkflowService (#329)', () => {
         parentId: null,
         inheritsVisibility: false,
         tags: [],
+        predicate: null,
+        unsupported: null,
       },
     ]);
     assert.equal(value.photos.get(PHOTO_ID)?.place, 'private place');
@@ -182,6 +184,8 @@ describe('ProtectedWorkflowService (#329)', () => {
         parentId: null,
         inheritsVisibility: false,
         tags: [],
+        predicate: null,
+        unsupported: null,
       },
     ]);
     // The flag was recomputed inside the unprotect transaction, not left for startup.

@@ -57,14 +57,15 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateComp
 // previous set is dropped instead of appended. `exhausted` tells the grid
 // the loaded count IS the filtered total (counts can't answer for filters).
 export function useLibraryPhotos(): { readonly loadMore: () => void; readonly exhausted: boolean } {
-  const { source, query, searchMode, chips, sortOrder, album, photos } = useAppState();
+  const { source, query, searchMode, chips, sortOrder, album, facets, photos } = useAppState();
   const dispatch = useAppDispatch();
   const cursorRef = useRef<PageCursor | null>(null);
   const requestRef = useRef(0);
   const inFlightRef = useRef(false);
   // Exhaustion is keyed to the visible set: switching sets changes the key,
   // which resets `exhausted` derivationally (no setState-in-effect).
-  const setKey = `${source}|${query}|${searchMode}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}`;
+  const facetsActive = facets.groups.length > 0;
+  const setKey = `${source}|${query}|${searchMode}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}|${facetsActive ? JSON.stringify(facets) : ''}`;
   const [exhaustedKey, setExhaustedKey] = useState<string | null>(null);
   const exhausted = exhaustedKey === setKey;
 
@@ -78,8 +79,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       ...(chipsActive(chips) ? { chips } : {}),
       ...(sortOrder === 'date' ? {} : { order: sortOrder }),
       ...(album === null ? {} : { albumId: album }),
+      ...(facetsActive ? { predicate: facets } : {}),
     }),
-    [source, query, searchMode, chips, sortOrder, album],
+    [source, query, searchMode, chips, sortOrder, album, facets, facetsActive],
   );
 
   const fetchFirstPage = useCallback(
@@ -125,7 +127,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // loaded window would reset scroll and drop the lightbox/selection for
       // items beyond page 1 (#744 review). Only membership/metadata changes do.
       if (derivativeOnly === true) return;
-      if (membership === 'none' && query === '') {
+      // A facet view's membership can change with metadata (a favorite, a
+      // tag, a repaired size), so it re-evaluates like a search does (#514).
+      if (membership === 'none' && query === '' && !facetsActive) {
         const loadedIds = new Set(photos.map(({ id }) => id));
         const loadedPhotoIds = photoIds.filter((id) => loadedIds.has(id));
         if (loadedPhotoIds.length === 0) return;
@@ -140,9 +144,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       // Search membership can change when title/description/tags change, so
       // the active logical result page is re-evaluated. The ordinary gallery
       // path above patches only the named records and preserves scroll.
-      fetchFirstPage(membershipChanged(membership, source, chips, album, albumIds));
+      fetchFirstPage(facetsActive || membershipChanged(membership, source, chips, album, albumIds));
     });
-  }, [album, chips, dispatch, fetchFirstPage, photos, query, source]);
+  }, [album, chips, dispatch, facetsActive, fetchFirstPage, photos, query, source]);
 
   // Backup changes only syncState, so patch loaded records instead of
   // replacing the first page (which used to flicker, trim deep selection,
