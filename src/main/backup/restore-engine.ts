@@ -16,7 +16,7 @@ import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-policy.js';
 import { albumVisibilityMatches, restoreAlbumVisibility } from './restore-album-visibility.js';
-import { editRevisionsMatch, restoreEditRevisions } from './restore-edit-revisions.js';
+import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms } from './restore-edit-revisions.js';
 import { provenanceMatches, restoreProvenance } from './restore-provenance.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
@@ -39,6 +39,7 @@ import {
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
+import type { EditTransform } from '../../shared/library/edit-revision.js';
 import { projectVerifiedManifest } from './restore-projection.js';
 import {
   addPresenceFingerprint,
@@ -687,10 +688,14 @@ export class RestoreEngine {
       }
     }
     let done = completed.size;
+    // Restored heads bake into the rebuilt derivatives (ADR-0031 §7): the
+    // revisions land in the catalog later, but the tiles must show the same
+    // edits the backed-up library showed, not the untouched original.
+    const transforms = restoredHeadTransforms(candidate.manifest);
     this.emit('rebuilding', done, candidate.manifest.photos.length, null);
     for (const photo of candidate.manifest.photos.filter((item) => !completed.has(item.id) && !skip.has(item.id))) {
       assertNotAborted(signal);
-      await this.generateThumbnails(thumbnails, store, recoveredKeys, discovery, photo, signal);
+      await this.generateThumbnails(thumbnails, store, recoveredKeys, discovery, photo, transforms.get(photo.id), signal);
       completed.add(photo.id);
       done += 1;
       checkpoint = { ...checkpoint, completedThumbnailIds: [...completed] };
@@ -706,6 +711,7 @@ export class RestoreEngine {
     recoveredKeys: KeyStore,
     discovery: RestoreDiscovery,
     photo: BackupManifestPhotoV2,
+    transform: EditTransform | undefined,
     signal?: AbortSignal,
   ): Promise<void> {
     const plaintext = await buffer(
@@ -720,6 +726,7 @@ export class RestoreEngine {
         contentHash: photo.contentHash,
         key: recoveredKeys.currentKey(),
         fileKind: photo.fileKind,
+        transform,
         signal,
       });
     } finally {

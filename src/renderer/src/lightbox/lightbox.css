@@ -130,14 +130,14 @@
 }
 
 .ovl-lightbox__zoom {
-  inset-inline-start: calc(50% + 105px);
+  inset-inline-start: calc(50% + var(--lightbox-toolbar-handoff));
   translate: 0 0;
 }
 
 /* Persisted-edit controls (#493): the zoom cluster's mirror image, the same
-   105px hand-off from the centered orientation toolbar on the other side. */
+   hand-off from the centered orientation toolbar on the other side. */
 .ovl-lightbox__edit {
-  inset-inline-end: calc(50% + 105px);
+  inset-inline-end: calc(50% + var(--lightbox-toolbar-handoff));
   translate: 0 0;
 }
 

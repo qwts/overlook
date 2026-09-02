@@ -30,6 +30,7 @@
   --statusbar-h: 26px;
   --sidebar-w: 216px;
   --inspector-w: 280px;
+  --lightbox-toolbar-handoff: 105px; /* centered orientation toolbar half-width + gap to its side clusters */
 
   /* Controls */
   --interactive-target-min: 24px; /* WCAG 2.2 SC 2.5.8 */
