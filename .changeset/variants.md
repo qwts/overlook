@@ -1,5 +1,0 @@
----
-'overlook': minor
----
-
-**Variants.** A photo can now be **duplicated** into a sibling variant over the same original: the context menu and the Inspector gain **Duplicate**, which creates a new library row that shares the one encrypted original (no bytes are read for custody or rewritten), starts from the source's metadata and current edit as its own root revision, sits in the same albums, and bakes its own previews under its own derivative key — so editing one variant never touches another's thumbnails. The Inspector's new **Variants** section lists every live variant on the asset, opens any sibling in the lightbox, and lets you **Promote** one as the family's representative (reversible metadata; custody never moves). Trash and purge stay honest for families: purging a variant removes only its own previews, and the shared original, its cloud copy, and its sidecars go only when the last variant — live or in Trash — is gone. Duplicate lineage and representatives ride in backups (manifest schema 13, library schema 33, which rebuilds the photos table to allow several rows per original).
