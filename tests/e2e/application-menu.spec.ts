@@ -166,6 +166,7 @@ test('macOS application menu is the six-menu design-system spec projected from t
       'library.import',
       'photo.export',
       'library.exportAll',
+      'library.duplicates',
       '—',
       'library.switch',
       'library.move',

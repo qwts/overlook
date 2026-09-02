@@ -188,6 +188,12 @@ export interface OverlookApi {
   readonly histogram: {
     readonly get: (request: Req<typeof channels.photoHistogram>) => Promise<Res<typeof channels.photoHistogram>>;
   };
+  /** Perceptual duplicate review (#650): suggestions over the photos' own previews. */
+  readonly duplicates: {
+    readonly review: () => Promise<Res<typeof channels.duplicatesReview>>;
+    readonly rescan: () => Promise<Res<typeof channels.duplicatesRescan>>;
+    readonly onChanged: (listener: (payload: z.output<typeof events.duplicatesChanged.payload>) => void) => () => void;
+  };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;
     readonly get: (request: Req<typeof channels.boardGet>) => Promise<Res<typeof channels.boardGet>>;

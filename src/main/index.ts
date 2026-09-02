@@ -178,9 +178,6 @@ function getLibraryService(): LibraryService {
       keyStore,
       protected: protectedRuntime,
     };
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
     libraryService = new LibraryService(db, {
       libraryChanged: (photoIds, membership, albumIds) => {
         applicationEvents.libraryChanged({
@@ -192,9 +189,10 @@ function getLibraryService(): LibraryService {
       },
       originalClassificationChanged: (photoIds) => {
         broadcast((win) => win.webContents.send(events.originalClassificationChanged.name, { photoIds: [...photoIds] }));
+        maintenance?.duplicates.service.notifyClassificationChanged(photoIds);
       },
       pendingCountChanged: (count) => {
-        emitPending({ count });
+        emitPendingCount({ count });
         // Dirtying edits (favorite, album membership, restore) behave like
         // imports (#267): the debounced trigger runs under the same policy
         // gates (auto-backup setting, connected provider).
@@ -253,7 +251,6 @@ function ensureMaintenanceServices(): MaintenanceServices {
   const parts = libraryParts;
   const runtime = importRuntime;
   if (parts === undefined || runtime === undefined) throw new Error('library bootstrap failed; background maintenance unavailable');
-  const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
   maintenance = buildMaintenanceServices({
     parts,
     runtime,
@@ -263,9 +260,11 @@ function ensureMaintenanceServices(): MaintenanceServices {
     emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
     emitCreated: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
     emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
-    emitPending: (count) => emitPending({ count }),
+    emitPending: (count) => emitPendingCount({ count }),
     scheduleAutoBackup,
     embeddingEligible: notifyEmbeddingEligibilityChanged,
+    emitDuplicatesChanged: (status) => broadcast((win) => win.webContents.send(events.duplicatesChanged.name, status)),
+    onLibraryChanged: applicationEvents.onLibraryChanged,
   });
   return maintenance;
 }
@@ -326,6 +325,9 @@ const changeProviderWork = (delta: 1 | -1): void => {
   embeddingRuntime?.service.notifyWorkAvailable();
 };
 
+const emitPendingCount = createEmitter(events.pendingCountChanged, (name, payload) =>
+  broadcast((win) => win.webContents.send(name, payload)),
+);
 const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
 function getEmbeddingService() {
@@ -435,9 +437,6 @@ function getBackupEngine(): BackupEngine {
     });
     // libraryChanged reuses the module-level emitter — one truth, no shadow.
     const audit = createBackupAuditLogger(path.join(libraryDataDir(), 'backup-audit.log'));
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
     const provider = getProviderRuntime().buildProvider({
       mockRootDir: path.join(app.getPath('userData'), 'mock-remote'),
       fault: harnessEnv('OVERLOOK_BACKUP_FAULT'),
@@ -503,7 +502,7 @@ function getBackupEngine(): BackupEngine {
       events: { progress: (done, total, photoId) => emitProgress({ done, total, photoId }) },
       now: () => Date.now(),
       sleep: async (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-      pendingCountChanged: (count) => emitPending({ count }),
+      pendingCountChanged: (count) => emitPendingCount({ count }),
       pendingCount: () => repo.pendingCount(),
       syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
       audit,
@@ -838,6 +837,7 @@ void externalOpen.whenReady().then(async () => {
     getProvenance: () => ensureMaintenanceServices().provenance,
     getVariants: () => ensureMaintenanceServices().variants,
     getHistogram: () => ensureMaintenanceServices().histogram.service,
+    getDuplicates: () => ensureMaintenanceServices().duplicates.service,
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,

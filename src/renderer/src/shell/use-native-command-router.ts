@@ -252,6 +252,11 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           closeOverlays();
           dispatch({ type: 'dialog/set', dialog: 'activity', open: true });
           return;
+        case 'library.duplicates':
+          if (state.protectedAlbum !== null) return;
+          closeOverlays();
+          dispatch({ type: 'dialog/set', dialog: 'duplicates', open: true });
+          return;
         case 'help.open':
           // macOS opens this from main (the menu never forwards it to the
           // renderer); the Windows/Linux titlebar Help menu reaches it here.

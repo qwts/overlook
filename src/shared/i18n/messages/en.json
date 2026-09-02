@@ -356,6 +356,9 @@
   "commands.history.undo": {
     "defaultMessage": "Undo"
   },
+  "commands.library.duplicates": {
+    "defaultMessage": "Review Duplicates…"
+  },
   "commands.library.exportAll": {
     "defaultMessage": "Export All Unencrypted…"
   },
@@ -535,6 +538,78 @@
   },
   "custody.state.wrongAccount": {
     "defaultMessage": "Wrong {provider} account — reconnect as {account}; this account cannot satisfy the recorded custody."
+  },
+  "duplicates.deferred": {
+    "defaultMessage": "{deferred, plural, one {# photo has no preview to compare yet} other {# photos have no preview to compare yet}}"
+  },
+  "duplicates.empty.clean": {
+    "defaultMessage": "No possible duplicates found."
+  },
+  "duplicates.empty.indexing": {
+    "defaultMessage": "Still comparing previews — nothing to review yet."
+  },
+  "duplicates.evidence.distance": {
+    "defaultMessage": "{distance} of {bits} bits differ"
+  },
+  "duplicates.evidence.nearIdentical": {
+    "defaultMessage": "Near-identical"
+  },
+  "duplicates.evidence.rotated": {
+    "defaultMessage": "rotated {degrees}°"
+  },
+  "duplicates.evidence.similar": {
+    "defaultMessage": "Similar"
+  },
+  "duplicates.evidence.verySimilar": {
+    "defaultMessage": "Very similar"
+  },
+  "duplicates.failed": {
+    "defaultMessage": "Possible duplicates could not be loaded."
+  },
+  "duplicates.group.label": {
+    "defaultMessage": "Possible duplicates, {count} photos"
+  },
+  "duplicates.groups": {
+    "defaultMessage": "{count, plural, one {# group} other {# groups}}"
+  },
+  "duplicates.loading": {
+    "defaultMessage": "Loading…"
+  },
+  "duplicates.photo.original": {
+    "defaultMessage": "Original"
+  },
+  "duplicates.photo.protected": {
+    "defaultMessage": "Protected Original — Shift+Delete in the library overrides"
+  },
+  "duplicates.photo.size": {
+    "defaultMessage": "{width}×{height}"
+  },
+  "duplicates.photo.trash": {
+    "defaultMessage": "Move to Trash"
+  },
+  "duplicates.photo.trashLabel": {
+    "defaultMessage": "Move {name} to Trash"
+  },
+  "duplicates.privacy": {
+    "defaultMessage": "Compared on this device from each photo’s own preview. Suggestions only: nothing is merged or deleted for you."
+  },
+  "duplicates.progress": {
+    "defaultMessage": "{indexed} of {total} {total, plural, one {photo} other {photos}} compared · {pending} pending"
+  },
+  "duplicates.rescan": {
+    "defaultMessage": "Rescan"
+  },
+  "duplicates.title": {
+    "defaultMessage": "Review Duplicates"
+  },
+  "duplicates.toast.missing": {
+    "defaultMessage": "{name} is no longer in the library"
+  },
+  "duplicates.toast.preserved": {
+    "defaultMessage": "Preserved {name}: protected Original"
+  },
+  "duplicates.toast.trashed": {
+    "defaultMessage": "Moved {name} to Trash"
   },
   "export.allPhotos": {
     "defaultMessage": "Export all photos"

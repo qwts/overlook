@@ -313,8 +313,14 @@
       "id": "494-album-visibility",
       "wiki": "Acceptance-Test-Album-Visibility",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/album-visibility.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/album-visibility.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": [
@@ -333,8 +339,14 @@
       "id": "505-album-folders",
       "wiki": "Acceptance-Test-Album-Folders",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/album-folders.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/album-folders.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": ["tests/db/album-folders.test.ts", "tests/backup/album-folders-manifest.test.ts"]
@@ -349,8 +361,14 @@
       "id": "514-smart-albums",
       "wiki": "Acceptance-Test-Smart-Albums",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/smart-albums.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/shell/FacetBar.stories.tsx", "src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/smart-albums.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/shell/FacetBar.stories.tsx", "src/renderer/src/shell/Sidebar.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": ["tests/db/smart-albums.test.ts", "tests/backup/smart-albums-manifest.test.ts", "tests/library/facet-state.test.ts"]
@@ -365,8 +383,14 @@
       "id": "516-feed-view",
       "wiki": "Acceptance-Test-Feed-View",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/feed-view.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/grid/FeedCard.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/feed-view.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/grid/FeedCard.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": ["tests/library/grid-layout.test.ts", "tests/library/app-state.test.ts", "tests/main/application-menu-model.test.ts"]
@@ -381,8 +405,14 @@
       "id": "493-persisted-edits",
       "wiki": "Acceptance-Test-Persisted-Edits",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/photo-edits.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/lightbox/Lightbox.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photo-edits.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/lightbox/Lightbox.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": [
@@ -400,12 +430,47 @@
       ]
     },
     {
+      "id": "650-perceptual-duplicates",
+      "wiki": "Acceptance-Test-Perceptual-Duplicates",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/duplicates.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/duplicates/DuplicatesDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/library/perceptual-hash.test.ts",
+            "tests/db/fingerprints.test.ts",
+            "tests/library/duplicate-index-service.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Perceptual-Duplicates.md for the offloaded-original, missing-preview and interruption checks."
+        }
+      ]
+    },
+    {
       "id": "498-histogram",
       "wiki": "Acceptance-Test-Histogram",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/histogram.spec.ts" },
-        { "type": "storybook", "path": "src/renderer/src/inspector/Inspector.stories.tsx" },
-        { "type": "unit-dom", "paths": ["tests/library/histogram.test.ts", "tests/library/histogram-service.test.ts"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/histogram.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/inspector/Inspector.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/histogram.test.ts", "tests/library/histogram-service.test.ts"]
+        },
         {
           "type": "manual",
           "reason": "Follow docs/acceptance/Acceptance-Test-Histogram.md for the offloaded-original, failed-preview and detached-Inspector checks."
@@ -416,9 +481,18 @@
       "id": "497-edited-export",
       "wiki": "Acceptance-Test-Edited-Export",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/export-edits.spec.ts" },
-        { "type": "storybook", "path": "src/renderer/src/export/ExportDialog.stories.tsx" },
-        { "type": "unit-dom", "paths": ["tests/export/edit-xmp.test.ts", "tests/export/export-engine.test.ts"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/export-edits.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/export/ExportDialog.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/export/edit-xmp.test.ts", "tests/export/export-engine.test.ts"]
+        },
         {
           "type": "manual",
           "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check."
@@ -429,7 +503,10 @@
       "id": "496-variants",
       "wiki": "Acceptance-Test-Variants",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/variants.spec.ts" },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/variants.spec.ts"
+        },
         {
           "type": "storybook",
           "paths": ["src/renderer/src/inspector/Inspector.stories.tsx", "src/renderer/src/grid/PhotoContextMenu.stories.tsx"]
@@ -453,8 +530,14 @@
       "id": "495-ai-provenance",
       "wiki": "Acceptance-Test-AI-Provenance",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/provenance.spec.ts" },
-        { "type": "storybook", "paths": ["src/renderer/src/inspector/Inspector.stories.tsx"] },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/provenance.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/inspector/Inspector.stories.tsx"]
+        },
         {
           "type": "unit-dom",
           "paths": [

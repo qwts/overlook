@@ -204,6 +204,7 @@ export class ProtectedPhotoMigrationRepository {
         );
         if (input.operation === 'protect') {
           run(this.db, 'DELETE FROM photo_embeddings WHERE photo_id = ?', item.photoId);
+          run(this.db, 'DELETE FROM photo_fingerprints WHERE photo_id = ?', item.photoId);
         }
       }
     })();

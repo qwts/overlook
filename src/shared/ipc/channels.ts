@@ -44,6 +44,7 @@ import { photoEditChannels } from './photo-edit-channels.js';
 import { provenanceChannels } from './provenance-channels.js';
 import { variantChannels } from './variant-channels.js';
 import { histogramChannels } from './histogram-channels.js';
+import { duplicateChannels, duplicateEvents } from './duplicate-channels.js';
 import { boardChannels, boardEvents } from './board-channels.js';
 import { embeddingChannels, embeddingEvents } from './embedding-channels.js';
 import { favoriteChannels } from './favorite-channels.js';
@@ -594,6 +595,8 @@ export const channels = {
   ...variantChannels(photoRecordSchema),
   // Inspector histogram (#498): main bins the photo's own mid derivative.
   ...histogramChannels,
+  // Perceptual duplicate review (#650): derived from fresh fingerprints, never stored.
+  ...duplicateChannels(photoRecordSchema),
   ...boardChannels,
   ...embeddingChannels,
   // Import sources (#84): discovery + the source-card scan. Copying is #87.
@@ -1006,6 +1009,7 @@ export const events = {
   // dropping deep scroll/lightbox/selection state (#744).
   libraryChanged: defineEvent('library:changed', libraryChangedSchema),
   ...originalPolicy.originalPolicyEvents,
+  ...duplicateEvents,
   photoSyncStateChanged: defineEvent(
     'library:sync-state-changed',
     z.object({ updates: z.array(z.object({ id: z.string(), syncState: syncStatusSchema })) }),

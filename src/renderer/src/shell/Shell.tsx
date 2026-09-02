@@ -43,6 +43,7 @@ import type { CommandSurface } from '../../../shared/commands/registry.js';
 import type { CommandId } from '../../../shared/commands/registry.js';
 import type { CommandMenuContext } from '../../../shared/commands/menu-contract.js';
 import { ActivityDialog } from '../activity/ActivityDialog';
+import { DuplicatesDialog } from '../duplicates/DuplicatesDialog';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { SelectionAnnouncer } from '../components/SelectionAnnouncer';
 import { useEmptyTrash } from '../grid/use-empty-trash';
@@ -643,6 +644,15 @@ export function Shell({
           open
           onClose={() => {
             dispatch({ type: 'dialog/set', dialog: 'activity', open: false });
+          }}
+        />
+      ) : null}
+      {state.duplicatesOpen ? (
+        <DuplicatesDialog
+          open
+          dispatch={dispatch}
+          onClose={() => {
+            dispatch({ type: 'dialog/set', dialog: 'duplicates', open: false });
           }}
         />
       ) : null}

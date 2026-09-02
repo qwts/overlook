@@ -50,6 +50,9 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
       return context.hasLibrary && !context.providerBusy && !locked(context);
     case 'library.exportAll':
       return context.hasLibrary && context.dialog === 'none' && !context.protectedAlbumOpen;
+    case 'library.duplicates':
+      // Ordinary-library review (#650): protected albums have no fingerprints.
+      return context.hasLibrary && !context.protectedAlbumOpen;
     case 'library.source.all':
     case 'library.source.favorites':
     case 'library.source.recent':
@@ -265,6 +268,7 @@ function macApplicationMenuTemplate(
         commandItem('library.import', context, dispatch, translate),
         commandItem('photo.export', context, dispatch, translate),
         commandItem('library.exportAll', context, dispatch, translate),
+        commandItem('library.duplicates', context, dispatch, translate),
         separator,
         commandItem('library.switch', context, dispatch, translate),
         commandItem('library.move', context, dispatch, translate),

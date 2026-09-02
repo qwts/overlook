@@ -55,6 +55,7 @@ export type CommandId =
   | 'library.new'
   | 'library.import'
   | 'library.exportAll'
+  | 'library.duplicates'
   | 'library.source.all'
   | 'library.source.favorites'
   | 'library.source.recent'
@@ -153,6 +154,7 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'library.new': { id: 'commands.library.new', defaultMessage: 'New Library…' },
   'library.import': { id: 'commands.library.import', defaultMessage: 'Import Photos…' },
   'library.exportAll': { id: 'commands.library.exportAll', defaultMessage: 'Export All Unencrypted…' },
+  'library.duplicates': { id: 'commands.library.duplicates', defaultMessage: 'Review Duplicates…' },
   'library.source.all': { id: 'commands.library.source.all', defaultMessage: 'All Photos' },
   'library.source.favorites': { id: 'commands.library.source.favorites', defaultMessage: 'Favorites' },
   'library.source.recent': { id: 'commands.library.source.recent', defaultMessage: 'Recent Imports' },
@@ -230,6 +232,14 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
 });
 
 const label = (id: CommandId, _defaultMessage: string): CommandDescriptor['label'] => commandLabels[id];
+// Grid focus movement shares one shape: grid surface, focused item, a bare key.
+const gridFocus = (id: Extract<CommandId, `grid.focus.${string}`>, text: string, key: string): CommandDescriptor => ({
+  id,
+  label: label(id, text),
+  surfaces: ['grid'],
+  target: 'focused-item',
+  key,
+});
 
 export const COMMANDS: readonly CommandDescriptor[] = [
   {
@@ -316,6 +326,20 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     surfaces: [],
     target: 'application',
     native: { menu: 'file', lockSafe: false, queueable: false },
+  },
+  {
+    // Perceptual duplicate review (#650): a library-level dialog, so it
+    // lives beside Import/Export in File; ⌥⌘D is the item's accelerator and
+    // reaches the renderer through the native command route.
+    id: 'library.duplicates',
+    label: label('library.duplicates', 'Review Duplicates…'),
+    surfaces: GLOBAL_SURFACES,
+    target: 'window',
+    key: 'd',
+    code: 'KeyD',
+    primaryModifier: true,
+    alt: true,
+    native: { menu: 'file', lockSafe: false, queueable: true },
   },
   {
     id: 'library.source.all',
@@ -685,44 +709,14 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     target: 'application',
     native: { menu: 'help', lockSafe: true, queueable: false },
   },
-  {
-    id: 'grid.focus.left',
-    label: label('grid.focus.left', 'Move focus left'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowLeft',
-  },
-  {
-    id: 'grid.focus.right',
-    label: label('grid.focus.right', 'Move focus right'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowRight',
-  },
-  { id: 'grid.focus.up', label: label('grid.focus.up', 'Move focus up'), surfaces: ['grid'], target: 'focused-item', key: 'ArrowUp' },
-  {
-    id: 'grid.focus.down',
-    label: label('grid.focus.down', 'Move focus down'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowDown',
-  },
-  { id: 'grid.focus.home', label: label('grid.focus.home', 'Move to row start'), surfaces: ['grid'], target: 'focused-item', key: 'Home' },
-  { id: 'grid.focus.end', label: label('grid.focus.end', 'Move to row end'), surfaces: ['grid'], target: 'focused-item', key: 'End' },
-  {
-    id: 'grid.focus.pageUp',
-    label: label('grid.focus.pageUp', 'Move up one page'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'PageUp',
-  },
-  {
-    id: 'grid.focus.pageDown',
-    label: label('grid.focus.pageDown', 'Move down one page'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'PageDown',
-  },
+  gridFocus('grid.focus.left', 'Move focus left', 'ArrowLeft'),
+  gridFocus('grid.focus.right', 'Move focus right', 'ArrowRight'),
+  gridFocus('grid.focus.up', 'Move focus up', 'ArrowUp'),
+  gridFocus('grid.focus.down', 'Move focus down', 'ArrowDown'),
+  gridFocus('grid.focus.home', 'Move to row start', 'Home'),
+  gridFocus('grid.focus.end', 'Move to row end', 'End'),
+  gridFocus('grid.focus.pageUp', 'Move up one page', 'PageUp'),
+  gridFocus('grid.focus.pageDown', 'Move down one page', 'PageDown'),
 ];
 
 function normalizedKey(key: string): string {

@@ -269,6 +269,11 @@ const overlook: OverlookApi = {
   histogram: Object.freeze({
     get: createInvoker(channels.photoHistogram, invokeTransport),
   }),
+  duplicates: Object.freeze({
+    review: async () => createInvoker(channels.duplicatesReview, invokeTransport)({}),
+    rescan: async () => createInvoker(channels.duplicatesRescan, invokeTransport)({}),
+    onChanged: createSubscriber(events.duplicatesChanged, subscribeTransport),
+  }),
   boards: Object.freeze({
     list: async () => boardList({}),
     get: createInvoker(channels.boardGet, invokeTransport),

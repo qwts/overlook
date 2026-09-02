@@ -33,8 +33,16 @@ presenting a pair:
 | non-Original | non-Original | yes      |
 
 Changing the marker emits the affected photo IDs through the targeted
-`originalClassificationChanged` event so future duplicate indexes can
-invalidate only those candidates.
+`originalClassificationChanged` event so duplicate indexes can invalidate
+only those candidates.
+
+The perceptual review (#650,
+[acceptance](./acceptance/Acceptance-Test-Perceptual-Duplicates.md)) is the
+first consumer: it applies `duplicatePairEligible` when groups are formed
+from fresh fingerprints, so a marker change drops the cached review and
+nothing stale is shown, while the fingerprints themselves — which do not
+depend on the marker — are left in place. Its _Move to Trash_ is the ordinary
+delete, so a marked Original is preserved and counted like anywhere else.
 
 ## Custody invariants
 
@@ -42,8 +50,10 @@ invalidate only those candidates.
 - Import continues suppressing an exact plaintext hash before encryption.
 - Separate imported originals never share encrypted blob custody.
 - The policy creates no perceptual fingerprints, duplicate scanner, result
-  store, or automatic merge/delete behavior. Perceptual review belongs to
-  [#650](https://github.com/qwts/photos/issues/650).
+  store, or automatic merge/delete behavior. Perceptual review (#650) adds
+  recomputable fingerprint rows beside the photo and a suggestions-only
+  dialog; it still stores no pair results, merges nothing, shares no
+  encrypted custody, and deletes only through the ordinary delete.
 - Intentional variants are the explicit exception: under
   [ADR-0031 §3](./adr/ADR-0031-Editing-Variants-Provenance-And-Export-Boundary.md#3-variants-share-custody-through-durable-references),
   independent variant identities reference one original asset rather than

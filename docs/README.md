@@ -78,6 +78,7 @@ existing links resolve — never add content there.
 - [AI provenance acceptance](./acceptance/Acceptance-Test-AI-Provenance.md) — #495 evidence tiers (Verified / Declared / Detected / Unknown) in the Inspector, local-only extraction, unverifiable credentials never shown as verified, staleness and deferral, and restore fidelity
 - [Variants acceptance](./acceptance/Acceptance-Test-Variants.md) — #496 Duplicate and Promote over one encrypted original, per-variant previews and edit history, honest purge for families (ADR-0023 §4 as amended), and restore fidelity
 - [Histogram acceptance](./acceptance/Acceptance-Test-Histogram.md) — #498 first slice: RGB + luminance bins over the photo's own mid derivative, computed in main on a worker thread, cached per head revision, honest unavailable states
+- [Perceptual duplicates acceptance](./acceptance/Acceptance-Test-Perceptual-Duplicates.md) — #650 Review Duplicates: rotation-aware fingerprints over each photo's own preview, grouped suggestions with evidence, the #482 pair policy applied at grouping time, variants never candidates, Trash through the ordinary delete
 - [Edited export acceptance](./acceptance/Acceptance-Test-Edited-Export.md) — #497 one declared export mode per ADR-0031 §6: Bake to JPEG at an explicit quality, Original + XMP (`tiff:Orientation`, `crs:Crop*`), Original only, and the preflight loss report
 - [Theming reference](./Theming.md) — `.overlook-theme.json` format, every user-themable token with its role, the export → edit → import workflow, an LLM prompt, and example themes
 

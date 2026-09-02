@@ -28,7 +28,8 @@ export function useCommandDispatcher(
   const direction = directionOf(useIntl().locale);
 
   useEffect(() => {
-    const dialogOpen = helpOpen || state.importOpen || state.exportOpen || state.settingsOpen || state.librariesOpen;
+    const dialogOpen =
+      helpOpen || state.importOpen || state.exportOpen || state.settingsOpen || state.librariesOpen || state.duplicatesOpen;
     const surface: CommandSurface = state.lightboxId === null ? 'grid' : 'lightbox';
     const execute = (id: CommandId, event: KeyboardEvent): boolean => {
       switch (id) {
@@ -45,6 +46,7 @@ export function useCommandDispatcher(
         case 'library.new':
         case 'library.import':
         case 'library.exportAll':
+        case 'library.duplicates':
         case 'view.sidebar.toggle':
         case 'view.mode.feed':
         case 'library.source.all':

@@ -94,7 +94,13 @@ describe('schema 33 — the photos rebuild (#496)', () => {
     const indexesBefore = names(db, 'index');
     const triggersBefore = names(db, 'trigger');
 
-    assert.equal(migrate(db, MIGRATIONS), 1);
+    assert.equal(
+      migrate(
+        db,
+        MIGRATIONS.filter((migration) => migration.version <= 33),
+      ),
+      1,
+    );
 
     assert.deepEqual(queryAll<{ id: string; rowid: number }>(db, `SELECT id, rowid FROM photos ORDER BY id`), rowidsBefore);
     assert.deepEqual(queryAll<{ id: string; key: string }>(db, `SELECT id, derivative_key AS key FROM photos ORDER BY id`), [

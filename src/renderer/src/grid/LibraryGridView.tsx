@@ -8,7 +8,7 @@ import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { videoTileProps } from '../media/device-capabilities.js';
 import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
-import { activePredicate } from '../../../shared/library/app-state.js';
+import { activePredicate, anyDialogOpen } from '../../../shared/library/app-state.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
@@ -230,11 +230,7 @@ export function LibraryGridView({
   const total = filtersActive || knownTotal === null ? (exhausted ? state.photos.length : state.photos.length + 1) : knownTotal;
   const inTrash = state.source === 'deleted';
   const modalOpen =
-    state.importOpen ||
-    state.exportOpen ||
-    state.settingsOpen ||
-    state.activityOpen ||
-    state.librariesOpen ||
+    anyDialogOpen(state) ||
     state.lightboxId !== null ||
     purgeIds !== null ||
     originalDeleteIds !== null ||
@@ -247,14 +243,7 @@ export function LibraryGridView({
       if (event.defaultPrevented || originalDeleteIds !== null) return;
       const editable =
         event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]') !== null;
-      const dialogOpen =
-        state.importOpen ||
-        state.exportOpen ||
-        state.settingsOpen ||
-        state.activityOpen ||
-        state.librariesOpen ||
-        purgeIds !== null ||
-        quickAlbumIds !== null;
+      const dialogOpen = anyDialogOpen(state) || purgeIds !== null || quickAlbumIds !== null;
       const command = resolveCommand(event, {
         surface: state.lightboxId === null ? 'grid' : 'lightbox',
         dialogOpen,

@@ -77,6 +77,7 @@ test('macOS menu items are the exact per-menu spec order (#689)', () => {
     'Import Photos…',
     'Export…',
     'Export All Unencrypted…',
+    'Review Duplicates…',
     '—',
     'Switch Library…',
     'Move Library…',

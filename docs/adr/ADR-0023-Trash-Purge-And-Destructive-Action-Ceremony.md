@@ -78,6 +78,13 @@ that order. §6's honest sentence gains one line whenever a purged photo has
 surviving variants: the original bytes are kept for them and no cloud copy is
 removed.
 
+**Amended 2026-09-02 by #650 (perceptual duplicate review):** §4's
+derived-death list gains the purged photo's `photo_fingerprints` row — the
+rotation-aware perceptual hash over its own mid derivative — removed by the
+same cascade as `purgeRow()` and dropped by the protect migration alongside
+its embedding. Pair results are never stored, so nothing else is owed; the
+review is re-derived from the surviving rows.
+
 **Amended 2026-07-30 by
 [ADR-0034](./ADR-0034-On-Device-Face-Grouping-And-Biometric-Derived-Data.md)
 (#795), resolving this ADR's "revisit when … face data (#285) lands" debt:**

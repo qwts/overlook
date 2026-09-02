@@ -7,6 +7,8 @@ import type { PosterCaptureService } from './poster-capture-service.js';
 import { createRawRepairRuntime } from './raw-repair-runtime.js';
 import type { RawRepairService } from './raw-repair-service.js';
 import { createHistogramRuntime, type HistogramRuntime } from '../library/histogram-runtime.js';
+import { createDuplicateIndexRuntime, type DuplicateIndexRuntime } from '../library/duplicate-index-runtime.js';
+import type { FingerprintIndexStatus } from '../db/fingerprint-repository.js';
 import { createPhotoEditRuntime } from '../library/photo-edit-runtime.js';
 import type { PhotoEditService } from '../library/photo-edit-service.js';
 import { createProvenanceRuntime } from '../library/provenance-runtime.js';
@@ -35,6 +37,11 @@ export interface MaintenanceContext {
   readonly emitPending: (count: number) => void;
   readonly scheduleAutoBackup: () => void;
   readonly embeddingEligible: (photoIds: readonly string[]) => void;
+  /** Perceptual index progress (#650): the review dialog refreshes on it. */
+  readonly emitDuplicatesChanged: (status: FingerprintIndexStatus) => void;
+  /** Every library change (imports, trash, restore, edits) — the perceptual
+   * review is derived, so any row movement makes its cached answer stale. */
+  readonly onLibraryChanged: (listener: () => void) => () => void;
 }
 
 export interface MaintenanceServices {
@@ -45,6 +52,8 @@ export interface MaintenanceServices {
   readonly variants: VariantService;
   /** Inspector histogram (#498). */
   readonly histogram: HistogramRuntime;
+  /** Perceptual duplicate index and review (#650). */
+  readonly duplicates: DuplicateIndexRuntime;
   /** Stops the background passes and the histogram worker with the library. */
   readonly close: () => void;
 }
@@ -62,9 +71,15 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
   // Every derivative regeneration below also drops the histogram cached for
   // that photo (#498): a repair or re-bake changes the pixels, not the head.
   const histogram = createHistogramRuntime({ parts });
+  // …and its perceptual fingerprint (#650): the derivative key stays, the
+  // pixels did not, so the row is dropped and the pass re-indexes it.
+  const duplicates = createDuplicateIndexRuntime({ parts, changed: ctx.emitDuplicatesChanged });
+  const unfollowLibrary = ctx.onLibraryChanged(() => duplicates.service.notifyLibraryChanged());
+  duplicates.service.schedule();
   const invalidateThumb = (id: string): void => {
     ctx.invalidateThumb(id);
     histogram.service.invalidate([id]);
+    duplicates.service.notifyEligibilityChanged([id]);
   };
   const rawRepair = createRawRepairRuntime({
     ...shared,
@@ -119,10 +134,13 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     provenance,
     variants,
     histogram,
+    duplicates,
     close: () => {
       rawRepair.close();
       posterCapture.close();
       void histogram.close();
+      unfollowLibrary();
+      void duplicates.close();
     },
   };
 }
