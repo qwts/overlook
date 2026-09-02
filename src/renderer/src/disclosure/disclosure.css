@@ -1,0 +1,125 @@
+/* Disclosure classes (#509, ADR-0032 §6): the Settings section and the
+   pre-crossing preview. Tokens only. */
+
+.ovl-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-1);
+}
+
+.ovl-disclosure--preview {
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+  background: var(--gray-0);
+}
+
+.ovl-disclosure__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-disclosure__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-body);
+}
+
+.ovl-disclosure__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+.ovl-disclosure__switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ovl-disclosure__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-disclosure__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border-1);
+}
+
+.ovl-disclosure__row--withheld {
+  color: var(--text-faint);
+}
+
+.ovl-disclosure__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ovl-disclosure__count {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.ovl-disclosure__sample {
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-disclosure__blocked {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--accent-amber);
+  line-height: 1.4;
+}
+
+.ovl-disclosure__widen {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-body);
+}
+
+.ovl-disclosure__pinned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-disclosure__pinnedTitle {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-body);
+}
+
+.ovl-disclosure__pinnedList {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  columns: 2;
+  column-gap: var(--space-3);
+}

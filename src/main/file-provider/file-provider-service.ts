@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream';
+import type { DisclosurePlanner } from '../disclosure/disclosure-service.js';
 
 import type { AlbumSummary, PhotoRecord } from '../../shared/library/types.js';
 import {
@@ -19,6 +20,8 @@ export interface OpenedProviderOriginal {
 }
 
 export interface FileProviderServiceDeps {
+  /** ADR-0032 §6 planner (#509): the OS index is an external-index boundary. */
+  readonly disclosure?: DisclosurePlanner | undefined;
   readonly bridge: FileProviderBridge;
   readonly store: FileProviderStore;
   readonly library: { readonly id: string; readonly name: string };
@@ -273,6 +276,10 @@ export class FileProviderService {
     }
   }
 
+  private disclosesCaptureTime(photoId: string): boolean {
+    return this.deps.disclosure?.plan(photoId, 'file-provider').disclosed.includes('captureTime') ?? true;
+  }
+
   private photoItems(albumId?: string): readonly FileProviderItem[] {
     const photos = this.deps
       .selectPhotoIds(albumId)
@@ -286,7 +293,8 @@ export class FileProviderService {
       kind: 'file',
       size: photo.bytes,
       contentType: mediaType(photo),
-      modifiedAt: photo.takenAt ?? photo.importedAt,
+      // Capture time reaches Finder/Spotlight only when the plan discloses it.
+      modifiedAt: this.disclosesCaptureTime(photo.id) ? (photo.takenAt ?? photo.importedAt) : photo.importedAt,
       dataless: photo.syncState === 'offloaded',
       readOnly: true,
     }));

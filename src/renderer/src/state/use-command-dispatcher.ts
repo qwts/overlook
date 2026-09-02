@@ -28,7 +28,8 @@ export function useCommandDispatcher(
   const direction = directionOf(useIntl().locale);
 
   useEffect(() => {
-    const dialogOpen = helpOpen || state.importOpen || state.exportOpen || state.settingsOpen || state.librariesOpen;
+    const dialogOpen =
+      helpOpen || state.importOpen || state.exportOpen || state.settingsOpen || state.librariesOpen || state.duplicatesOpen;
     const surface: CommandSurface = state.lightboxId === null ? 'grid' : 'lightbox';
     const execute = (id: CommandId, event: KeyboardEvent): boolean => {
       switch (id) {
@@ -45,6 +46,7 @@ export function useCommandDispatcher(
         case 'library.new':
         case 'library.import':
         case 'library.exportAll':
+        case 'library.duplicates':
         case 'view.sidebar.toggle':
         case 'view.mode.feed':
         case 'library.source.all':
@@ -68,14 +70,20 @@ export function useCommandDispatcher(
         case 'album.move':
         case 'album.tags':
         case 'album.visibility.inherit':
+        case 'album.smart.new':
+        case 'album.smart.edit':
+        case 'album.duplicate':
         case 'album.reorder.up':
         case 'album.reorder.down':
         case 'album.reorder.top':
         case 'album.reorder.bottom':
         case 'photo.open':
         case 'photo.export':
+        case 'photo.duplicate':
         case 'photo.offload':
         case 'photo.restoreOriginal':
+        case 'photo.coverage.exclude':
+        case 'photo.coverage.include':
         case 'photo.original.mark':
         case 'photo.original.unmark':
         case 'photo.transfer':
@@ -156,6 +164,11 @@ export function useCommandDispatcher(
         case 'view.lightbox.flipHorizontal':
         case 'view.lightbox.flipVertical':
         case 'view.lightbox.orientationReset':
+        case 'photo.edit.save':
+        case 'photo.edit.reset':
+        case 'photo.edit.crop':
+        case 'photo.edit.revert':
+          // Owned by the lightbox viewport (#493); it intercepts them in capture phase.
           return false;
         case 'help.shortcuts':
           onHelp(surface);

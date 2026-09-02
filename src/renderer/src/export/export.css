@@ -135,3 +135,29 @@
   color: var(--accent-amber);
   font-size: var(--text-md);
 }
+
+/* Edits loss report (#497, ADR-0031 §6) */
+.ovl-export__losses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.ovl-export__lossList {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--text-muted);
+  font: var(--type-meta);
+}
+
+.ovl-export__acknowledge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-body);
+  font-size: var(--text-md);
+}

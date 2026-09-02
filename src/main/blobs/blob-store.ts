@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { link, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { Readable } from 'node:stream';
+import { pipeline as composeStreams } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
@@ -184,7 +185,11 @@ export class BlobStore {
     assertHash(contentHash);
     const path = this.sidecarPath(photoId, contentHash);
     if (!existsSync(path)) throw new BlobStoreError(`sidecar ${contentHash} of ${photoId} is not in the store`);
-    return createReadStream(path).pipe(createDecryptStream(resolveKey, { photoId: BlobStore.sidecarContext(photoId) }));
+    return composeStreams(
+      createReadStream(path),
+      createDecryptStream(resolveKey, { photoId: BlobStore.sidecarContext(photoId) }),
+      () => undefined,
+    );
   }
 
   /** RAW ciphertext for backup upload (ADR-0007 encrypt-once). */
@@ -437,7 +442,10 @@ export class BlobStore {
     if (!existsSync(path)) {
       throw new BlobStoreError(`blob ${contentHash} is not in the store`);
     }
-    return createReadStream(path).pipe(createDecryptStream(resolveKey, { photoId }));
+    // Composed with pipeline, not pipe: a consumer that stops early (a bounded
+    // provenance read, an aborted restore) destroys the file stream too, so
+    // no descriptor lingers until GC, and a read error reaches the consumer.
+    return composeStreams(createReadStream(path), createDecryptStream(resolveKey, { photoId }), () => undefined);
   }
 
   getThumbStream(originalHash: string, size: ThumbSize, resolveKey: KeyResolver, photoId: string): Readable {

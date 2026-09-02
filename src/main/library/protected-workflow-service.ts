@@ -198,7 +198,8 @@ export class ProtectedWorkflowService {
       await this.advanceAll(migrationId, 'unprotect', photoIds.length, authority);
       this.finishRemoval(albumId, photoIds);
       return { ok: true, albumId };
-    } catch {
+    } catch (error) {
+      console.error('[overlook] protected album unprotect failed', error);
       if (!committed) await this.options.migrations.repairStartup();
       return { ok: false, reason: this.controller.signal.aborted ? 'cancelled' : 'failed' };
     } finally {

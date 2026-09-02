@@ -99,7 +99,15 @@ describe('export runtime serialization (#311 review)', () => {
     });
 
     const result = await runtime.runAll(destination);
-    assert.deepEqual(result, { exported: 1, failed: 0, cancelled: 0, previewTranscodes: 0, failures: [] });
+    assert.deepEqual(result, {
+      exported: 1,
+      failed: 0,
+      cancelled: 0,
+      previewTranscodes: 0,
+      bakedEdits: 0,
+      editSidecars: 0,
+      failures: [],
+    });
     assert.equal(scopeReads, 1);
   });
 

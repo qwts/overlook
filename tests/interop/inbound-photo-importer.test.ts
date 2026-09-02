@@ -10,6 +10,7 @@ import type { EnvelopeKey, KeyResolver } from '../../src/main/crypto/envelope.js
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
 import {
   deterministicInboundPhotoId,
   inboundFileName,
@@ -130,6 +131,31 @@ test('fallback naming is stable and signature/mime mismatches are retained', asy
   assert.equal(result.accepted, false);
   assert.match(result.reason ?? '', /media type does not match/u);
   assert.equal(world.photos.get(deterministicInboundPhotoId(record.identity.interopId)), undefined);
+  world.db.close();
+});
+
+test('a surviving variant of a purged root verifies the shared original under its asset owner (#496)', async () => {
+  const world = await harness();
+  const first = availableRecord();
+  await world.importer.acceptOriginal(first, [], 'eligible', imageBytes(), hooks().value);
+  const rootId = deterministicInboundPhotoId(first.identity.interopId);
+  const root = world.photos.get(rootId);
+  assert.ok(root);
+  const variantId = '01J8VRNT0000000000000000V1';
+  new VariantRepository(world.db).duplicate(root, variantId, '2026-07-21T18:05:00.000Z');
+  world.photos.softDelete([rootId]);
+  world.photos.purgeRow(rootId);
+  const duplicate = interopRecordSchema.parse({
+    ...first,
+    identity: {
+      ...first.identity,
+      interopId: '5f2c7a90-3b1e-4d2a-9c8e-7a6b5c4d3e2f',
+      origin: { product: 'image-trail', localId: 'bookmark-variant' },
+    },
+  });
+  const linked = await world.importer.acceptOriginal(duplicate, [], 'duplicate', imageBytes(), hooks().value);
+  assert.equal(linked.accepted, true, linked.reason ?? '');
+  assert.equal(linked.targetLocalId, variantId);
   world.db.close();
 });
 

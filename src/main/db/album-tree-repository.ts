@@ -268,6 +268,7 @@ export interface FolderDeletionResult {
   readonly removedIds: string[];
   readonly folders: number;
   readonly albums: number;
+  readonly smart: number;
 }
 
 /** ADR-0023 Tier M ceremony: a non-empty folder either hands its children
@@ -285,6 +286,7 @@ export function deleteFolder(db: BetterSqlite3.Database, folderId: string, delet
     const removedIds: string[] = [];
     let folders = 1;
     let albums = 0;
+    let smart = 0;
     if (deletion.mode === 'move') {
       const destinationId = deletion.destinationId;
       requireFolder(rows, destinationId);
@@ -306,7 +308,11 @@ export function deleteFolder(db: BetterSqlite3.Database, folderId: string, delet
       for (const id of [...descendants].reverse()) {
         const row = rows.get(id);
         if (row === undefined) continue;
-        if (row.kind === 'album') {
+        if (row.kind === 'folder') {
+          folders += 1;
+        } else if (row.kind === 'smart') {
+          smart += 1;
+        } else {
           albums += 1;
           for (const { photoId } of queryAll<{ photoId: string }>(
             db,
@@ -316,8 +322,6 @@ export function deleteFolder(db: BetterSqlite3.Database, folderId: string, delet
           )) {
             members.add(photoId);
           }
-        } else {
-          folders += 1;
         }
         run(db, 'DELETE FROM albums WHERE id = ?', id);
         removedIds.push(id);
@@ -329,7 +333,7 @@ export function deleteFolder(db: BetterSqlite3.Database, folderId: string, delet
     refreshInAllPhotos(db, members);
     normalizeAlbumPositions(db);
     const changed = refreshInheritedVisibility(db);
-    return { members: [...new Set([...members, ...changed])], removedIds, folders, albums };
+    return { members: [...new Set([...members, ...changed])], removedIds, folders, albums, smart };
   })();
 }
 
@@ -404,9 +408,23 @@ export interface AlbumPlacementSnapshot {
   readonly tags: readonly string[];
 }
 
+export interface SmartAlbumSnapshot {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly position: number;
+  readonly parentId: string | null;
+  /** The stored predicate document, as written — unsupported ones included.
+   * A row whose text is not an object carries `{}` so the manifest schema
+   * reports the corruption instead of the backup hiding it. */
+  readonly predicate: Readonly<Record<string, unknown>>;
+  readonly tags: readonly string[];
+}
+
 export interface AlbumTreeSnapshot {
   readonly folders: readonly AlbumFolderSnapshot[];
   readonly albumTree: readonly AlbumPlacementSnapshot[];
+  readonly smartAlbums: readonly SmartAlbumSnapshot[];
 }
 
 /** The structure a backup manifest carries (ADR-0030 §5): folders with their
@@ -417,7 +435,30 @@ export function albumTreeSnapshot(db: BetterSqlite3.Database): AlbumTreeSnapshot
     queryAll<{ id: string; createdAt: string }>(db, 'SELECT id, created_at AS createdAt FROM albums').map((r) => [r.id, r.createdAt]),
   );
   const tree = readAlbumTree(db);
+  const predicates = new Map(
+    queryAll<{ id: string; predicate: string | null }>(db, `SELECT id, predicate FROM albums WHERE kind = 'smart'`).map((row) => {
+      let value: Readonly<Record<string, unknown>> = {};
+      try {
+        const parsed: unknown = row.predicate === null ? null : JSON.parse(row.predicate);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) value = parsed as Record<string, unknown>;
+      } catch {
+        value = {};
+      }
+      return [row.id, value];
+    }),
+  );
   return {
+    smartAlbums: tree
+      .filter((row) => row.kind === 'smart')
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        createdAt: createdAt.get(row.id) ?? '',
+        position: row.position,
+        parentId: row.parentId,
+        predicate: predicates.get(row.id) ?? {},
+        tags: tags.get(row.id) ?? [],
+      })),
     folders: tree
       .filter((row) => row.kind === 'folder')
       .map((row) => ({

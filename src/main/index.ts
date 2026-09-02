@@ -17,15 +17,12 @@ import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifyInAllPhotosAsync, verifySearchIndexAsync } from './db/photos-repository.js';
-import { run } from './db/sql.js';
 import type { FullService } from './fullres/full-service.js';
 import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
 import type { ImportRuntime, ImportService } from './import/import-runtime.js';
 import { createImportApplicationRuntime } from './import/import-application-runtime.js';
-import type { RawRepairService } from './import/raw-repair-service.js';
-import type { PosterCaptureService } from './import/poster-capture-service.js';
-import { buildMaintenanceServices } from './import/maintenance-runtime.js';
+import { buildMaintenanceServices, type MaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
 import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
@@ -48,15 +45,19 @@ import type { ConsistencyChecker } from './library/consistency.js';
 import { createConsistencyChecker } from './library/consistency-factory.js';
 import type { PurgeService } from './library/purge-service.js';
 import { createPurgeService } from './library/purge-factory.js';
+import type { CoverageService } from './backup/coverage-service.js';
+import { createCoverageService, requireCoverageService } from './backup/coverage-factory.js';
 import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-runtime.js';
 import { StartupMaintenance } from './library/startup-maintenance.js';
 import { SyncLedger } from './backup/sync-ledger.js';
 import { createBackupClaimDeps } from './db/backup-claims.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
+import { createKeyringService, requireKeyringService } from './crypto/keyring-factory.js';
+import type { KeyringService } from './crypto/keyring-service.js';
 import { pickExportDestination } from './export/export-destination.js';
 import { registerIpcHandlers, registerRelocationHandlers } from './ipc.js';
 import { activateSettingsLibrary, configureSettingsLibrary, getSettingsStore } from './settings/settings-runtime.js';
-import { throttlePercentOf } from '../shared/settings/settings.js';
+import { backupSettingsOf } from '../shared/settings/settings.js';
 import { LibraryService } from './library/library-service.js';
 import { LibraryRegistryRuntime } from './library/library-registry-runtime.js';
 import { acquireLibraryLock, readLockHolder } from './library/library-lock.js';
@@ -133,16 +134,11 @@ function getLibraryService(): LibraryService {
     refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
-    // photos.key_id references keys(id): the current key's row must exist
-    // before the FIRST real import on a fresh profile (#90 caught this —
-    // previously only the dev seed wrote it). The wrapped key itself lives
-    // in the keystore; this row is FK metadata.
-    run(
-      db,
-      `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (?, 'keystore-managed', ?)`,
-      keyStore.currentKey().id,
-      new Date().toISOString(),
-    );
+    // Keyring registry (#517, ADR-0032 §2): a keys row per custody record (#90) and absent keys marked for `locked`.
+    keyringService = createKeyringService({
+      ...{ db, keyStore, blobStore: store, harnessEnv, libraryChanged: applicationEvents.libraryChanged },
+      invalidate: (id) => [thumbService, fullService].forEach((service) => service?.invalidate(id)),
+    });
     const libraryId = getProviderRuntime().libraryId();
     const protectedRuntime = new ProtectedRuntime({
       dataDir,
@@ -180,9 +176,6 @@ function getLibraryService(): LibraryService {
       keyStore,
       protected: protectedRuntime,
     };
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
     libraryService = new LibraryService(db, {
       libraryChanged: (photoIds, membership, albumIds) => {
         applicationEvents.libraryChanged({
@@ -194,9 +187,10 @@ function getLibraryService(): LibraryService {
       },
       originalClassificationChanged: (photoIds) => {
         broadcast((win) => win.webContents.send(events.originalClassificationChanged.name, { photoIds: [...photoIds] }));
+        maintenance?.duplicates.service.notifyClassificationChanged(photoIds);
       },
       pendingCountChanged: (count) => {
-        emitPending({ count });
+        emitPendingCount({ count });
         // Dirtying edits (favorite, album membership, restore) behave like
         // imports (#267): the debounced trigger runs under the same policy
         // gates (auto-backup setting, connected provider).
@@ -221,7 +215,7 @@ function requireParts(what: string): LibraryParts {
 }
 
 let importRuntime: ImportRuntime | undefined;
-let rawRepairService: RawRepairService | undefined, posterCaptureService: PosterCaptureService | undefined;
+let maintenance: MaintenanceServices | undefined;
 function getImportService(): ImportService {
   if (importRuntime === undefined) {
     const parts = requireParts('import service');
@@ -233,7 +227,7 @@ function getImportService(): ImportService {
       imported: (photoIds) => {
         applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
         ensureMaintenanceServices();
-        void posterCaptureService?.capture().catch(() => undefined);
+        void maintenance?.posterCapture.capture().catch(() => undefined);
         embeddingRuntime?.service.notifyWorkAvailable();
       },
       resumed: () => {
@@ -249,26 +243,28 @@ function getImportService(): ImportService {
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
 // post-import background passes over the same library parts; they share one
 // bootstrap so the runtime factories stay thin.
-function ensureMaintenanceServices(): void {
-  if (rawRepairService !== undefined && posterCaptureService !== undefined) return;
+function ensureMaintenanceServices(): MaintenanceServices {
+  if (maintenance !== undefined) return maintenance;
   getImportService();
   const parts = libraryParts;
   const runtime = importRuntime;
   if (parts === undefined || runtime === undefined) throw new Error('library bootstrap failed; background maintenance unavailable');
-  const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => broadcast((win) => win.webContents.send(name, payload)));
-  const services = buildMaintenanceServices({
+  maintenance = buildMaintenanceServices({
     parts,
     runtime,
+    appVersion: app.getVersion(),
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
     emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitCreated: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
     emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
-    emitPending: (count) => emitPending({ count }),
+    emitPending: (count) => emitPendingCount({ count }),
     scheduleAutoBackup,
     embeddingEligible: notifyEmbeddingEligibilityChanged,
+    emitDuplicatesChanged: (status) => broadcast((win) => win.webContents.send(events.duplicatesChanged.name, status)),
+    onLibraryChanged: applicationEvents.onLibraryChanged,
   });
-  rawRepairService = services.rawRepair;
-  posterCaptureService = services.posterCapture;
+  return maintenance;
 }
 
 let thumbService: ThumbService | undefined, fullService: FullService | undefined;
@@ -281,12 +277,10 @@ function getThumbService(): ThumbService {
       admit: (photoId) => repo.get(photoId) !== undefined,
       loadThumb: async (photoId, size) => {
         const photo = repo.get(photoId);
-        if (photo === undefined) {
-          return null;
-        }
+        if (photo === undefined) return null;
         try {
-          const stream = parts.blobStore.getThumbStream(photo.contentHash, size, parts.keyStore.resolver(), photoId);
-          return { bytes: await buffer(stream), contentHash: photo.contentHash };
+          const stream = parts.blobStore.getThumbStream(photo.derivativeKey, size, parts.keyStore.resolver(), photoId);
+          return { bytes: await buffer(stream), contentHash: photo.derivativeKey };
         } catch (error) {
           if (error instanceof BlobStoreError) {
             return null; // No thumb in the store yet — M05 backfills.
@@ -329,6 +323,8 @@ const changeProviderWork = (delta: 1 | -1): void => {
   embeddingRuntime?.service.notifyWorkAvailable();
 };
 
+const send = (name: string, payload: unknown): void => broadcast((win) => win.webContents.send(name, payload));
+const emitPendingCount = createEmitter(events.pendingCountChanged, send);
 const notifyEmbeddingEligibilityChanged = (ids: readonly string[]): void => embeddingRuntime?.service.notifyEligibilityChanged(ids);
 
 function getEmbeddingService() {
@@ -385,14 +381,15 @@ function markManifestDebt(): void {
   getBackupEngine();
   manifestSyncTrigger?.();
 }
+let coverageService: CoverageService | undefined, keyringService: KeyringService | undefined;
 let purgeService: PurgeService | undefined,
   purgeRuntime: DrainablePurgeFacade | undefined,
   consistencyChecker: ConsistencyChecker | undefined;
 const startupMaintenance = new StartupMaintenance({
   purge: () => getPurgeService().purgeExpired(),
   repair: () => consistencyChecker?.repair(),
-  rawRepair: () => (ensureMaintenanceServices(), rawRepairService)?.repair(),
-  posterCapture: () => (ensureMaintenanceServices(), posterCaptureService)?.capture(),
+  rawRepair: () => ensureMaintenanceServices().rawRepair.repair(),
+  posterCapture: () => ensureMaintenanceServices().posterCapture.capture(),
   verifySearchIndex: () => libraryParts && verifySearchIndexAsync(libraryParts.db),
   verifyAllPhotosFlag: () => libraryParts && verifyInAllPhotosAsync(libraryParts.db),
 });
@@ -430,17 +427,10 @@ function getBackupEngine(): BackupEngine {
     const parts = requireParts('backup');
     const repo = new PhotosRepository(parts.db);
     const ledger = new SyncLedger(parts.db);
-    const emitProgress = createEmitter(events.backupProgress, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
-    const emitCompleted = createEmitter(events.backupCompleted, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitProgress = createEmitter(events.backupProgress, send);
+    const emitCompleted = createEmitter(events.backupCompleted, send);
     // libraryChanged reuses the module-level emitter — one truth, no shadow.
     const audit = createBackupAuditLogger(path.join(libraryDataDir(), 'backup-audit.log'));
-    const emitPending = createEmitter(events.pendingCountChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
     const provider = getProviderRuntime().buildProvider({
       mockRootDir: path.join(app.getPath('userData'), 'mock-remote'),
       fault: harnessEnv('OVERLOOK_BACKUP_FAULT'),
@@ -461,9 +451,7 @@ function getBackupEngine(): BackupEngine {
       audit,
     });
     custodyRoutingLifecycle = custodyRouting;
-    const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, send);
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
       provider,
@@ -492,21 +480,12 @@ function getBackupEngine(): BackupEngine {
       ...sidecarBackupDeps(parts.db, parts.blobStore),
       // Live reads (#111): every run and every maybeAutoRun sees the
       // store's current values — no restart needed after a settings change.
-      settings: () => {
-        const current = getSettingsStore().get();
-        return {
-          throttlePercent: throttlePercentOf(current),
-          wifiOnly: current.wifiOnly,
-          // Disconnected (#114) means no automatic uploads — the switch is
-          // disabled in the dialog for the same reason.
-          autoBackupOnImport: current.autoBackupOnImport && getProviderRuntime().activeId() !== null,
-        };
-      },
+      settings: () => backupSettingsOf(getSettingsStore().get(), getProviderRuntime().activeId() !== null),
       network: () => 'unknown',
       events: { progress: (done, total, photoId) => emitProgress({ done, total, photoId }) },
       now: () => Date.now(),
       sleep: async (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-      pendingCountChanged: (count) => emitPending({ count }),
+      pendingCountChanged: (count) => emitPendingCount({ count }),
       pendingCount: () => repo.pendingCount(),
       syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
       audit,
@@ -514,10 +493,9 @@ function getBackupEngine(): BackupEngine {
       recoveryGenerationHealthy: createRecoveryHealthCheck(provider, () => getProviderRuntime().libraryId(), parts.keyStore),
       ...createBackupClaimDeps(parts.db, parts.blobStore),
       protectedBackup: parts.protected.backupBinding(provider, audit),
+      settleExclusions: () => coverageService?.settlePending() ?? Promise.resolve(undefined),
     });
-    const emitEphemeralState = createEmitter(events.ephemeralOriginalState, (name, payload) => {
-      broadcast((win) => win.webContents.send(name, payload));
-    });
+    const emitEphemeralState = createEmitter(events.ephemeralOriginalState, send);
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
@@ -539,6 +517,20 @@ function getBackupEngine(): BackupEngine {
     });
     offloadService = custody.offload;
     ephemeralOriginalService = custody.ephemeral;
+    // Backup coverage (#506, ADR-0033): the provider delete rides the
+    // engine's post-manifest settle hook above; everything else is local.
+    coverageService = createCoverageService(parts.db, getProviderRuntime, {
+      ledger,
+      restoreOriginals: (photoIds) => custody.offload.restoreOriginals(photoIds),
+      hasLocalOriginal: (hash) => parts.blobStore.hasOriginal(hash),
+      remoteProvider: custodyRouting.remoteProvider,
+      oweManifest: () => backupEngine?.oweManifest(),
+      runBackup: () => getBackupEngine().run(),
+      syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+      storageChanged: () => send(events.storageChanged.name, {}),
+      audit,
+    });
     purgeService = createPurgeService({
       db: parts.db,
       repo,
@@ -563,9 +555,7 @@ function getBackupEngine(): BackupEngine {
       setStatus: (photoId, status) => {
         ledger.repairStatus(photoId, status);
       },
-      libraryChanged: (photoIds) => {
-        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' });
-      },
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
       audit,
     });
     // Completion events drive the toasts (#106) and the card's bar clear
@@ -650,6 +640,7 @@ const egressRuntime = new EgressRuntime({
   harnessEnv,
   unlocked: () => ['unconfigured-unlocked', 'unlocked'].includes(appLockHost?.snapshot().state ?? ''),
   library: () => registryRuntime.resolveActive(),
+  activity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
 });
 
 async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promise<void> {
@@ -659,8 +650,7 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
-  rawRepairService?.close();
-  posterCaptureService?.close();
+  maintenance?.close();
   for (const controller of activeBackupControllers) controller.abort();
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     Promise.all([productionInterop.lockDesktop(), closeProductionInboundMoveLibrary()]),
@@ -696,10 +686,10 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   }
   providerRuntime?.renewReconnectVerificationLifecycle();
   [libraryService, libraryParts, importRuntime] = [undefined, undefined, undefined];
-  [rawRepairService, posterCaptureService, thumbService, fullService] = [undefined, undefined, undefined, undefined];
+  [maintenance, thumbService, fullService] = [undefined, undefined, undefined];
   [backupEngine, offloadService, custodyRoutingLifecycle] = [undefined, undefined, undefined];
   ephemeralOriginalService = undefined;
-  [purgeService, purgeRuntime] = [undefined, undefined];
+  [purgeService, purgeRuntime, keyringService] = [undefined, undefined, undefined];
   [consistencyChecker, embeddingRuntime] = [undefined, undefined];
   egressRuntime.reset();
   if (mode !== 'restore') restoreRuntime = undefined;
@@ -838,11 +828,18 @@ void externalOpen.whenReady().then(async () => {
     },
     getProtected: getProtectedRuntime,
     getThumbs: getThumbService,
+    getEdits: () => ensureMaintenanceServices().photoEdits,
+    getProvenance: () => ensureMaintenanceServices().provenance,
+    getVariants: () => ensureMaintenanceServices().variants,
+    getHistogram: () => ensureMaintenanceServices().histogram.service,
+    getDuplicates: () => ensureMaintenanceServices().duplicates.service,
+    getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
+    getKeyring: () => requireKeyringService(getLibraryService, () => keyringService),
     getFull: getFullService,
     getImport: getImportService,
     getEmbedding: getEmbeddingService,
     getExport: () => egressRuntime.exports(),
-    getNativeDrag: () => egressRuntime.nativeDrag(),
+    ...{ getNativeDrag: () => egressRuntime.nativeDrag(), getDisclosure: () => egressRuntime.disclosure() },
     ...{ getPhotoKit: () => egressRuntime.photoKit(), getFileProvider: () => egressRuntime.fileProvider() },
     getKeyStore: () => requireParts('key store').keyStore,
     getRestore: getRestoreRuntime,
@@ -873,7 +870,7 @@ void externalOpen.whenReady().then(async () => {
   await runDevSeeds({
     contentAvailable: lock.snapshot().state === 'unconfigured-unlocked' || lock.snapshot().state === 'unlocked',
     harnessEnv,
-    open: () => devSeedAccess(getLibraryService(), libraryParts),
+    open: () => devSeedAccess(getLibraryService(), libraryParts, () => keyringService?.reconcile()),
   });
   externalOpen.finishBootstrap();
 });

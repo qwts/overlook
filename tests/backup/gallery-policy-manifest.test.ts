@@ -28,7 +28,7 @@ const snapshot: BackupManifestSnapshotV7 = {
 
 describe('gallery policy in backup manifests (#512)', () => {
   test('schema 7 carries the policy and round-trips through the parser', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 9);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 15);
     const manifest = buildBackupManifestV7({ libraryId: '01JZZZZZZZZZZZZZZZZZZZZZZZ', generatedAt: '2026-09-01T00:00:00.000Z', snapshot });
     assert.equal(manifest.schema, 7);
     assert.deepEqual(manifest.galleryPolicy, { showUnavailable: false, minimumMegapixels: 2 });

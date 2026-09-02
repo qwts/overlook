@@ -28,6 +28,26 @@ export function restoreAlbumFolders(db: BetterSqlite3.Database, manifest: Restor
       if (folder.parentId !== null) run(db, 'UPDATE albums SET parent_id = ? WHERE id = ?', folder.parentId, folder.id);
       if (folder.tags.length > 0) setAlbumTags(db, folder.id, folder.tags, randomUUID);
     }
+    // Smart Albums (#514) slot in after their folders exist; the document is
+    // stored exactly as carried, so an unsupported one restores unchanged.
+    if ('smartAlbums' in manifest) {
+      for (const smart of manifest.smartAlbums) {
+        runNamed(
+          db,
+          `INSERT INTO albums (id, name, created_at, position, kind, parent_id, show_in_all_photos, inherits_visibility, predicate)
+           VALUES (@id, @name, @createdAt, @position, 'smart', @parentId, 1, 0, @predicate)`,
+          {
+            id: smart.id,
+            name: smart.name,
+            createdAt: smart.createdAt,
+            position: smart.position,
+            parentId: smart.parentId,
+            predicate: JSON.stringify(smart.predicate),
+          },
+        );
+        if (smart.tags.length > 0) setAlbumTags(db, smart.id, smart.tags, randomUUID);
+      }
+    }
     for (const placement of manifest.albumTree) {
       runNamed(db, 'UPDATE albums SET parent_id = @parentId, inherits_visibility = @inherits WHERE id = @albumId', {
         albumId: placement.albumId,
@@ -46,10 +66,12 @@ export function settleInheritedVisibility(db: BetterSqlite3.Database): void {
 }
 
 function expectedTree(manifest: RestorableBackupManifest): AlbumTreeSnapshot {
-  if ('folders' in manifest) return { folders: manifest.folders, albumTree: manifest.albumTree };
+  const smartAlbums = 'smartAlbums' in manifest ? manifest.smartAlbums : [];
+  if ('folders' in manifest) return { folders: manifest.folders, albumTree: manifest.albumTree, smartAlbums };
   return {
     folders: [],
     albumTree: manifest.albums.map((album) => ({ albumId: album.id, parentId: null, inheritsVisibility: false, tags: [] })),
+    smartAlbums,
   };
 }
 
@@ -58,6 +80,7 @@ export function albumFoldersMatch(db: BetterSqlite3.Database, manifest: Restorab
     JSON.stringify({
       folders: [...snapshot.folders].sort((left, right) => left.id.localeCompare(right.id)),
       albumTree: [...snapshot.albumTree].sort((left, right) => left.albumId.localeCompare(right.albumId)),
+      smartAlbums: [...snapshot.smartAlbums].sort((left, right) => left.id.localeCompare(right.id)),
     });
   return normalize(albumTreeSnapshot(db)) === normalize(expectedTree(manifest));
 }

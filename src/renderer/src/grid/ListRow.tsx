@@ -37,6 +37,7 @@ export interface ListRowProps {
 
 const messages = defineMessages({
   moreActions: { id: 'library.photo.moreActions', defaultMessage: 'More actions for {photo}' },
+  locked: { id: 'library.photo.locked', defaultMessage: 'Locked — this device lacks its encryption key' },
 });
 
 // Dense 52px row (#77) — the mock's ListRow: same selection contract as
@@ -112,13 +113,24 @@ export function ListRow({
         {selected ? <Icon name="check" size={11} strokeWidth={3} color="var(--text-on-accent)" /> : null}
       </button>
       <div className="ovl-listrow__thumb">
-        <img
-          src={src ?? thumbUrl(photo.id)}
-          alt=""
-          loading="lazy"
-          draggable={false}
-          className={`ovl-listrow__img${photo.syncState === 'offloaded' ? ' ovl-listrow__img--offloaded' : ''}`}
-        />
+        {photo.locked ? (
+          <div
+            className="ovl-listrow__img ovl-listrow__img--locked"
+            role="img"
+            aria-label={intl.formatMessage(messages.locked)}
+            title={intl.formatMessage(messages.locked)}
+          >
+            <Icon name="lock" size={16} strokeWidth={1.75} />
+          </div>
+        ) : (
+          <img
+            src={src ?? thumbUrl(photo.id)}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            className={`ovl-listrow__img${photo.syncState === 'offloaded' ? ' ovl-listrow__img--offloaded' : ''}`}
+          />
+        )}
       </div>
       <div className="ovl-listrow__main">
         <div className="ovl-listrow__name" aria-hidden="true">

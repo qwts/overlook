@@ -5,6 +5,7 @@ import { resolveHeicPreview } from './heic-preview.js';
 import { resolveRawPreview } from './raw-preview.js';
 import type { ThumbJobRequest, ThumbJobResponse } from './thumbnail-worker.js';
 import type { FileKind } from '../../shared/library/types.js';
+import type { EditTransform } from '../../shared/library/edit-revision.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
 
 // Bounded worker pool (#86): sharp runs off the main thread per ADR-0006.
@@ -30,6 +31,7 @@ export type ThumbnailPoolResult = ThumbnailDerivatives | ThumbnailFailure | null
 interface Job {
   readonly bytes: Buffer;
   readonly wipe: boolean;
+  readonly transform: EditTransform | undefined;
   readonly signal: AbortSignal | undefined;
   readonly resolve: (result: ThumbnailDerivatives | null) => void;
   readonly reject: (error: Error) => void;
@@ -70,10 +72,20 @@ export class ThumbnailPool {
    * containers resolve a validated embedded or native preview first; no usable
    * preview is a placeholder, never a failed import.
    */
-  generate(bytes: Buffer, signal?: AbortSignal, fileKind?: Exclude<FileKind, 'heic'>): Promise<ThumbnailDerivatives | null>;
-  generate(bytes: Buffer, signal: AbortSignal | undefined, fileKind: 'heic'): Promise<ThumbnailPoolResult>;
-  generate(bytes: Buffer, signal: AbortSignal | undefined, fileKind: FileKind | undefined): Promise<ThumbnailPoolResult>;
-  async generate(bytes: Buffer, signal?: AbortSignal, fileKind?: FileKind): Promise<ThumbnailPoolResult> {
+  generate(
+    bytes: Buffer,
+    signal?: AbortSignal,
+    fileKind?: Exclude<FileKind, 'heic'>,
+    transform?: EditTransform,
+  ): Promise<ThumbnailDerivatives | null>;
+  generate(bytes: Buffer, signal: AbortSignal | undefined, fileKind: 'heic', transform?: EditTransform): Promise<ThumbnailPoolResult>;
+  generate(
+    bytes: Buffer,
+    signal: AbortSignal | undefined,
+    fileKind: FileKind | undefined,
+    transform?: EditTransform,
+  ): Promise<ThumbnailPoolResult>;
+  async generate(bytes: Buffer, signal?: AbortSignal, fileKind?: FileKind, transform?: EditTransform): Promise<ThumbnailPoolResult> {
     if (this.closed) {
       throw new Error('thumbnail pool is closed');
     }
@@ -89,7 +101,7 @@ export class ThumbnailPool {
     const preview = heic?.ok === true ? heic.preview : rawPreview;
     const target = preview?.bytes ?? bytes;
     return new Promise<ThumbnailDerivatives | null>((resolve, reject) => {
-      this.queue.push({ bytes: target, wipe: preview !== null, signal, resolve, reject });
+      this.queue.push({ bytes: target, wipe: preview !== null, transform, signal, resolve, reject });
       this.pump();
     });
   }
@@ -211,6 +223,6 @@ export class ThumbnailPool {
     const removeAbort =
       onAbort === undefined || job.signal === undefined ? undefined : () => job.signal?.removeEventListener('abort', onAbort);
     this.current.set(worker, { jobId, job, abort: removeAbort });
-    worker.postMessage({ jobId, bytes: job.bytes } satisfies ThumbJobRequest);
+    worker.postMessage({ jobId, bytes: job.bytes, transform: job.transform } satisfies ThumbJobRequest);
   }
 }

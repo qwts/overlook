@@ -171,6 +171,13 @@ test('ACCEPTANCE (#484): sidecars import into encrypted custody — no plaintext
     await page.locator('.ovl-tile__img, .ovl-tile').first().waitFor();
     await page.locator('.ovl-grid__cell').first().getByRole('button', { name: 'Select' }).click();
     await page.getByTestId('selection-pill').getByRole('button', { name: 'Export' }).click();
+    // The original embeds a precise location: disclosure (#509) holds the
+    // export until the user widens it for this operation. Widen before the
+    // folder is chosen: a destination authorization is bound to the intent
+    // and is discarded when the intent changes.
+    await expect(page.getByTestId('disclosure-blocked')).toBeVisible();
+    await page.getByTestId('disclosure-widen-location').getByRole('checkbox').click();
+    await expect(page.getByTestId('disclosure-blocked')).toHaveCount(0);
     await page.getByRole('button', { name: /Choose folder/u }).click();
     await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
     await expect(page.getByText('1 photo exported and decrypted.')).toBeVisible({ timeout: 20_000 });

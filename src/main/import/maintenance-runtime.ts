@@ -6,17 +6,30 @@ import { createPosterCaptureRuntime } from './poster-capture-runtime.js';
 import type { PosterCaptureService } from './poster-capture-service.js';
 import { createRawRepairRuntime } from './raw-repair-runtime.js';
 import type { RawRepairService } from './raw-repair-service.js';
+import { createHistogramRuntime, type HistogramRuntime } from '../library/histogram-runtime.js';
+import { createDuplicateIndexRuntime, type DuplicateIndexRuntime } from '../library/duplicate-index-runtime.js';
+import type { FingerprintIndexStatus } from '../db/fingerprint-repository.js';
+import { createPhotoEditRuntime } from '../library/photo-edit-runtime.js';
+import type { PhotoEditService } from '../library/photo-edit-service.js';
+import { createProvenanceRuntime } from '../library/provenance-runtime.js';
+import type { ProvenanceService } from '../library/provenance-service.js';
+import { createVariantRuntime } from '../library/variant-runtime.js';
+import type { VariantService } from '../library/variant-service.js';
 
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
-// post-import background passes over the same library parts; this keeps their
-// wiring out of the app-bootstrap file. Renderer/library side effects are
+// post-import background passes over the same library parts, and persisted
+// edits (#493) re-bake derivatives through the same thumbnail runtime; this
+// keeps their wiring out of the app-bootstrap file. Renderer/library side effects are
 // injected as callbacks so this module stays free of window/emitter details.
 export interface MaintenanceContext {
   readonly parts: LibraryParts;
   readonly runtime: ImportRuntime;
+  readonly appVersion: string;
   readonly invalidateThumb: (id: string) => void;
   readonly invalidateFull: (id: string) => void;
   readonly emitChanged: (photoIds: readonly string[]) => void;
+  /** New rows (a Duplicate, #496): the grid refetches its page. */
+  readonly emitCreated: (photoIds: readonly string[]) => void;
   /** Derivative-only refresh (a captured poster): refresh just those tiles'
    * images without a page refetch, so a background poster completing never
    * resets scroll or drops the lightbox/selection (#744 review). */
@@ -24,9 +37,28 @@ export interface MaintenanceContext {
   readonly emitPending: (count: number) => void;
   readonly scheduleAutoBackup: () => void;
   readonly embeddingEligible: (photoIds: readonly string[]) => void;
+  /** Perceptual index progress (#650): the review dialog refreshes on it. */
+  readonly emitDuplicatesChanged: (status: FingerprintIndexStatus) => void;
+  /** Every library change (imports, trash, restore, edits) — the perceptual
+   * review is derived, so any row movement makes its cached answer stale. */
+  readonly onLibraryChanged: (listener: () => void) => () => void;
 }
 
-export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: RawRepairService; posterCapture: PosterCaptureService } {
+export interface MaintenanceServices {
+  readonly rawRepair: RawRepairService;
+  readonly posterCapture: PosterCaptureService;
+  readonly photoEdits: PhotoEditService;
+  readonly provenance: ProvenanceService;
+  readonly variants: VariantService;
+  /** Inspector histogram (#498). */
+  readonly histogram: HistogramRuntime;
+  /** Perceptual duplicate index and review (#650). */
+  readonly duplicates: DuplicateIndexRuntime;
+  /** Stops the background passes and the histogram worker with the library. */
+  readonly close: () => void;
+}
+
+export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceServices {
   const { parts, runtime } = ctx;
   const repo = new PhotosRepository(parts.db);
   const shared = {
@@ -36,12 +68,25 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: 
     currentKey: () => parts.keyStore.currentKey(),
     resolveKey: parts.keyStore.resolver(),
   };
+  // Every derivative regeneration below also drops the histogram cached for
+  // that photo (#498): a repair or re-bake changes the pixels, not the head.
+  const histogram = createHistogramRuntime({ parts });
+  // …and its perceptual fingerprint (#650): the derivative key stays, the
+  // pixels did not, so the row is dropped and the pass re-indexes it.
+  const duplicates = createDuplicateIndexRuntime({ parts, changed: ctx.emitDuplicatesChanged });
+  const unfollowLibrary = ctx.onLibraryChanged(() => duplicates.service.notifyLibraryChanged());
+  duplicates.service.schedule();
+  const invalidateThumb = (id: string): void => {
+    ctx.invalidateThumb(id);
+    histogram.service.invalidate([id]);
+    duplicates.service.notifyEligibilityChanged([id]);
+  };
   const rawRepair = createRawRepairRuntime({
     ...shared,
     repo,
     changed: (ids) => {
       for (const id of ids) {
-        ctx.invalidateThumb(id);
+        invalidateThumb(id);
         ctx.invalidateFull(id);
       }
       ctx.emitChanged(ids);
@@ -55,12 +100,47 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): { rawRepair: 
     db: parts.db,
     captureFrame: captureVideoPosterFrame,
     changed: (ids) => {
-      for (const id of ids) ctx.invalidateThumb(id);
+      for (const id of ids) invalidateThumb(id);
       // Poster capture only regenerates a derivative — refresh the tiles, never
       // refetch the page (#744 review).
       ctx.emitThumbsChanged(ids);
       ctx.embeddingEligible(ids);
     },
   });
-  return { rawRepair, posterCapture };
+  const photoEdits = createPhotoEditRuntime({
+    parts,
+    runtime,
+    appVersion: ctx.appVersion,
+    invalidateThumb: invalidateThumb,
+    emitThumbsChanged: ctx.emitThumbsChanged,
+    emitPending: ctx.emitPending,
+    scheduleAutoBackup: ctx.scheduleAutoBackup,
+  });
+  const provenance = createProvenanceRuntime({ parts, scheduleAutoBackup: ctx.scheduleAutoBackup });
+  const variants = createVariantRuntime({
+    parts,
+    runtime,
+    appVersion: ctx.appVersion,
+    invalidateThumb: invalidateThumb,
+    emitChanged: ctx.emitChanged,
+    emitCreated: ctx.emitCreated,
+    emitPending: ctx.emitPending,
+    scheduleAutoBackup: ctx.scheduleAutoBackup,
+  });
+  return {
+    rawRepair,
+    posterCapture,
+    photoEdits,
+    provenance,
+    variants,
+    histogram,
+    duplicates,
+    close: () => {
+      rawRepair.close();
+      posterCapture.close();
+      void histogram.close();
+      unfollowLibrary();
+      void duplicates.close();
+    },
+  };
 }

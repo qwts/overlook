@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import type { AlbumListing } from '../../shared/library/types.js';
+import { readSmartAlbums, smartAlbumCount } from './smart-album-queries.js';
 import { queryAll, queryGet, runNamed } from './sql.js';
 
 // Collection visibility in All Photos (#494, ADR-0030 §2/§6). The per-photo
@@ -103,7 +104,7 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
     show: number;
     n: number;
     elsewhere: number;
-    kind: 'album' | 'folder';
+    kind: 'album' | 'folder' | 'smart';
     parentId: string | null;
     inherits: number;
   }>(
@@ -141,6 +142,9 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
   )) {
     tags.set(row.albumId, [...(tags.get(row.albumId) ?? []), row.name]);
   }
+  // A Smart Album's count is its predicate evaluated now (#514, §6) — never
+  // stored membership; an unsupported one counts 0 and says why.
+  const smart = readSmartAlbums(db);
   const via = queryAll<{ albumId: string; id: string; name: string }>(
     db,
     `SELECT DISTINCT ap.album_id AS albumId, oa.id, oa.name, oa.position
@@ -160,7 +164,15 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
-    count: row.kind === 'folder' ? (folderCounts.get(row.id) ?? 0) : row.n,
+    count:
+      row.kind === 'folder'
+        ? (folderCounts.get(row.id) ?? 0)
+        : row.kind === 'smart'
+          ? (() => {
+              const predicate = smart.get(row.id)?.predicate;
+              return predicate === undefined || predicate === null ? 0 : smartAlbumCount(db, predicate);
+            })()
+          : row.n,
     showInAllPhotos: row.show === 1,
     visibleElsewhere: row.elsewhere,
     visibleVia: viaByAlbum.get(row.id) ?? [],
@@ -168,5 +180,7 @@ export function readAlbumListings(db: BetterSqlite3.Database): AlbumListing[] {
     parentId: row.parentId,
     inheritsVisibility: row.inherits === 1,
     tags: tags.get(row.id) ?? [],
+    predicate: smart.get(row.id)?.predicate ?? null,
+    unsupported: smart.get(row.id)?.unsupported ?? null,
   }));
 }

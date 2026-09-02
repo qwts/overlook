@@ -13,6 +13,7 @@ import { CustodyResolutionError } from '../../src/main/backup/custody-handle.js'
 import { PurgeService } from '../../src/main/library/purge-service.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import type { EnvelopeKey } from '../../src/main/crypto/envelope.js';
@@ -101,6 +102,7 @@ async function world(count: number, options: { contentHash?: string; retention?:
     db,
     repo,
     store,
+    key,
     provider,
     hashes,
     audits,
@@ -204,5 +206,38 @@ describe('purge (#121)', () => {
     const authorized = await w.service.deletePermanently(['P0']);
     assert.deepEqual(authorized, { purged: 1, skipped: 0, protected: 0, remoteFailures: 0 });
     assert.equal(w.repo.get('P0'), undefined);
+  });
+});
+
+// #496 / ADR-0023 §4 as amended by ADR-0031 §8: a purged variant's own
+// derivatives die with it; the shared original, its legacy derivatives, and
+// its remote copy go only when no variant — live or in Trash — references
+// the content hash any more.
+describe('purge with variants (#496)', () => {
+  test('a variant purge removes only its own previews while a sibling still references the original', async () => {
+    const w = await world(1);
+    const hash = w.hashes[0] ?? '';
+    const source = w.repo.get('P0');
+    assert.ok(source);
+    new VariantRepository(w.db).duplicate(source, 'P1', '2026-07-02T00:00:00.000Z');
+    const variant = w.repo.get('P1');
+    assert.ok(variant);
+    assert.notEqual(variant.derivativeKey, hash);
+    await w.store.putThumb(Readable.from([sampleJpeg(0)]), w.key, 'P1', variant.derivativeKey, 'thumb');
+    const thumbs = async (): Promise<string[]> => (await w.store.listThumbHashes()).map((entry) => entry.hash).sort();
+    assert.deepEqual(await thumbs(), [hash, variant.derivativeKey].sort());
+
+    w.repo.softDelete(['P1']);
+    assert.deepEqual(await w.service.purge(['P1']), { purged: 1, skipped: 0, protected: 0, remoteFailures: 0 });
+    assert.equal(w.repo.get('P1'), undefined, 'the variant row is gone');
+    assert.equal(w.store.hasOriginal(hash), true, 'the shared original stays for its sibling');
+    assert.deepEqual(await thumbs(), [hash], 'only the variant’s own previews went');
+    assert.equal((await w.provider.list('blobs')).length, 1, 'the remote copy stays');
+
+    w.repo.softDelete(['P0']);
+    assert.deepEqual(await w.service.purge(['P0']), { purged: 1, skipped: 0, protected: 0, remoteFailures: 0 });
+    assert.equal(w.store.hasOriginal(hash), false, 'the last reference takes custody with it');
+    assert.deepEqual(await thumbs(), []);
+    assert.equal((await w.provider.list('blobs')).length, 0);
   });
 });

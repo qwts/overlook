@@ -5,7 +5,7 @@
 // bounded so sidebar indentation and the recursive descendant queries stay
 // inside a stated budget rather than degrading with an unbounded tree.
 
-export type CollectionKind = 'album' | 'folder';
+export type CollectionKind = 'album' | 'folder' | 'smart';
 
 /** Root nodes sit at depth 0. Six levels keep one `--space-4` indent per
  * level inside the 216px rail with room for a name, and bound the recursive

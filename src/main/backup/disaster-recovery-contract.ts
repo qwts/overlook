@@ -17,6 +17,7 @@ import { buildBackupManifestV2, type BackupManifestPhotoV2 } from './backup-mani
 import type { StorageProvider } from './provider.js';
 import { sealRecoveryBootstrap } from './recovery-bootstrap.js';
 import { RestoreEngine } from './restore-engine.js';
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 const GENERATED_AT = '2026-07-15T02:00:00.000Z';
 const CURRENT_DATABASE_SCHEMA = Math.max(...MIGRATIONS.map((migration) => migration.version));
@@ -155,13 +156,20 @@ export async function exerciseDisasterRecoveryContract(
     assert.ok(dbKey !== undefined);
     const db = openLibraryDatabase({ path: join(targetDir, 'library.db'), dbKey });
     try {
-      assert.deepEqual(new PhotosRepository(db).manifestSnapshot(), {
+      const { keyring, ...restored } = new PhotosRepository(db).manifestSnapshot();
+      assert.deepEqual(restored, {
         databaseSchema: manifest.databaseSchema,
         keyIds: manifest.keyIds,
         totals: manifest.totals,
         photos: manifest.photos,
         albums: manifest.albums,
       });
+      // The keyring (#517) is rebuilt from the recovered custody: every key
+      // the manifest uses is registered and present.
+      assert.deepEqual(
+        keyring.map((entry) => entry.keyId),
+        manifest.keyIds,
+      );
     } finally {
       db.close();
     }
@@ -169,7 +177,7 @@ export async function exerciseDisasterRecoveryContract(
     await restoredStore.init();
     for (const photo of photos) {
       assert.deepEqual(
-        await buffer(restoredStore.getStream(photo.contentHash, restoredKeys.resolver(), photo.id)),
+        await buffer(restoredStore.getStream(photo.contentHash, restoredKeys.resolver(), assetOwnerOf(photo))),
         plaintextById.get(photo.id),
       );
       assert.equal(await restoredStore.verifyThumbs(photo.contentHash, restoredKeys.resolver(), photo.id), true);

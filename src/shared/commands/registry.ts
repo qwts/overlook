@@ -55,6 +55,7 @@ export type CommandId =
   | 'library.new'
   | 'library.import'
   | 'library.exportAll'
+  | 'library.duplicates'
   | 'library.source.all'
   | 'library.source.favorites'
   | 'library.source.recent'
@@ -78,6 +79,9 @@ export type CommandId =
   | 'album.move'
   | 'album.tags'
   | 'album.visibility.inherit'
+  | 'album.smart.new'
+  | 'album.smart.edit'
+  | 'album.duplicate'
   | 'view.inspector.toggle'
   | 'view.inspector.detach'
   | 'view.sidebar.toggle'
@@ -91,12 +95,19 @@ export type CommandId =
   | 'view.lightbox.previous'
   | 'view.lightbox.next'
   | 'photo.favorite.toggle'
+  | 'photo.edit.save'
+  | 'photo.edit.reset'
+  | 'photo.edit.crop'
+  | 'photo.edit.revert'
   | 'photo.original.mark'
   | 'photo.original.unmark'
   | 'photo.open'
   | 'photo.export'
+  | 'photo.duplicate'
   | 'photo.offload'
   | 'photo.restoreOriginal'
+  | 'photo.coverage.exclude'
+  | 'photo.coverage.include'
   | 'photo.transfer'
   | 'photo.trash'
   | 'photo.restore'
@@ -145,6 +156,7 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'library.new': { id: 'commands.library.new', defaultMessage: 'New Library…' },
   'library.import': { id: 'commands.library.import', defaultMessage: 'Import Photos…' },
   'library.exportAll': { id: 'commands.library.exportAll', defaultMessage: 'Export All Unencrypted…' },
+  'library.duplicates': { id: 'commands.library.duplicates', defaultMessage: 'Review Duplicates…' },
   'library.source.all': { id: 'commands.library.source.all', defaultMessage: 'All Photos' },
   'library.source.favorites': { id: 'commands.library.source.favorites', defaultMessage: 'Favorites' },
   'library.source.recent': { id: 'commands.library.source.recent', defaultMessage: 'Recent Imports' },
@@ -164,6 +176,9 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'album.move': { id: 'commands.album.move', defaultMessage: 'Move to folder…' },
   'album.tags': { id: 'commands.album.tags', defaultMessage: 'Tags…' },
   'album.visibility.inherit': { id: 'commands.album.visibility.inherit', defaultMessage: 'Use folder setting' },
+  'album.smart.new': { id: 'commands.album.smart.new', defaultMessage: 'Save as Smart Album…' },
+  'album.smart.edit': { id: 'commands.album.smart.edit', defaultMessage: 'Edit Smart Album' },
+  'album.duplicate': { id: 'commands.album.duplicate', defaultMessage: 'Duplicate' },
   'album.reorder.up': { id: 'commands.album.reorder.up', defaultMessage: 'Move up' },
   'album.reorder.down': { id: 'commands.album.reorder.down', defaultMessage: 'Move down' },
   'album.reorder.top': { id: 'commands.album.reorder.top', defaultMessage: 'Move to top' },
@@ -181,12 +196,19 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'view.lightbox.previous': { id: 'commands.view.lightbox.previous', defaultMessage: 'Previous photo' },
   'view.lightbox.next': { id: 'commands.view.lightbox.next', defaultMessage: 'Next photo' },
   'photo.favorite.toggle': { id: 'commands.photo.favorite.toggle', defaultMessage: 'Toggle favorite' },
+  'photo.edit.save': { id: 'commands.photo.edit.save', defaultMessage: 'Save edits' },
+  'photo.edit.reset': { id: 'commands.photo.edit.reset', defaultMessage: 'Reset edits' },
+  'photo.edit.crop': { id: 'commands.photo.edit.crop', defaultMessage: 'Crop' },
+  'photo.edit.revert': { id: 'commands.photo.edit.revert', defaultMessage: 'Revert to previous edit' },
   'photo.original.mark': { id: 'commands.photo.original.mark', defaultMessage: 'Mark as Original' },
   'photo.original.unmark': { id: 'commands.photo.original.unmark', defaultMessage: 'Remove Original protection' },
   'photo.open': { id: 'commands.photo.open', defaultMessage: 'Open' },
   'photo.export': { id: 'commands.photo.export', defaultMessage: 'Export…' },
+  'photo.duplicate': { id: 'commands.photo.duplicate', defaultMessage: 'Duplicate' },
   'photo.offload': { id: 'commands.photo.offload', defaultMessage: 'Offload original…' },
   'photo.restoreOriginal': { id: 'commands.photo.restoreOriginal', defaultMessage: 'Restore original' },
+  'photo.coverage.exclude': { id: 'commands.photo.coverage.exclude', defaultMessage: 'Keep on this device only…' },
+  'photo.coverage.include': { id: 'commands.photo.coverage.include', defaultMessage: 'Back up again' },
   'photo.transfer': { id: 'commands.photo.transfer', defaultMessage: 'Transfer & Sync…' },
   'photo.trash': { id: 'commands.photo.trash', defaultMessage: 'Move photo to Trash' },
   'photo.restore': { id: 'commands.photo.restore', defaultMessage: 'Restore photo' },
@@ -214,6 +236,14 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
 });
 
 const label = (id: CommandId, _defaultMessage: string): CommandDescriptor['label'] => commandLabels[id];
+// Grid focus movement shares one shape: grid surface, focused item, a bare key.
+const gridFocus = (id: Extract<CommandId, `grid.focus.${string}`>, text: string, key: string): CommandDescriptor => ({
+  id,
+  label: label(id, text),
+  surfaces: ['grid'],
+  target: 'focused-item',
+  key,
+});
 
 export const COMMANDS: readonly CommandDescriptor[] = [
   {
@@ -300,6 +330,20 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     surfaces: [],
     target: 'application',
     native: { menu: 'file', lockSafe: false, queueable: false },
+  },
+  {
+    // Perceptual duplicate review (#650): a library-level dialog, so it
+    // lives beside Import/Export in File; ⌥⌘D is the item's accelerator and
+    // reaches the renderer through the native command route.
+    id: 'library.duplicates',
+    label: label('library.duplicates', 'Review Duplicates…'),
+    surfaces: GLOBAL_SURFACES,
+    target: 'window',
+    key: 'd',
+    code: 'KeyD',
+    primaryModifier: true,
+    alt: true,
+    native: { menu: 'file', lockSafe: false, queueable: true },
   },
   {
     id: 'library.source.all',
@@ -389,6 +433,9 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'album.move', label: label('album.move', 'Move to folder…'), surfaces: [], target: 'focused-item' },
   { id: 'album.tags', label: label('album.tags', 'Tags…'), surfaces: [], target: 'focused-item' },
   { id: 'album.visibility.inherit', label: label('album.visibility.inherit', 'Use folder setting'), surfaces: [], target: 'focused-item' },
+  { id: 'album.smart.new', label: label('album.smart.new', 'Save as Smart Album…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.smart.edit', label: label('album.smart.edit', 'Edit Smart Album'), surfaces: [], target: 'focused-item' },
+  { id: 'album.duplicate', label: label('album.duplicate', 'Duplicate'), surfaces: [], target: 'focused-item' },
   { id: 'album.reorder.up', label: label('album.reorder.up', 'Move up'), surfaces: [], target: 'focused-item', key: 'ArrowUp', alt: true },
   {
     id: 'album.reorder.down',
@@ -507,6 +554,18 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     native: { menu: 'photo', lockSafe: false, queueable: false },
     quickAction: { icon: 'star', availability: 'anywhere', target: 'photo' },
   },
+  // Persisted edits (#493): resolved on the lightbox surface, executed by the viewport.
+  {
+    id: 'photo.edit.save',
+    label: label('photo.edit.save', 'Save edits'),
+    surfaces: ['lightbox'],
+    target: 'focused-item',
+    key: 's',
+    primaryModifier: true,
+  },
+  { id: 'photo.edit.reset', label: label('photo.edit.reset', 'Reset edits'), surfaces: ['lightbox'], target: 'focused-item' },
+  { id: 'photo.edit.crop', label: label('photo.edit.crop', 'Crop'), surfaces: ['lightbox'], target: 'focused-item', key: 'c' },
+  { id: 'photo.edit.revert', label: label('photo.edit.revert', 'Revert to previous edit'), surfaces: ['lightbox'], target: 'focused-item' },
   {
     id: 'photo.original.mark',
     label: label('photo.original.mark', 'Mark as Original'),
@@ -531,8 +590,14 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     quickAction: { icon: 'share', availability: 'anywhere', target: 'selection-if-included' },
   },
   { id: 'photo.open', label: label('photo.open', 'Open'), surfaces: [], target: 'focused-item' },
+  // Variants (#496, ADR-0031 §3): a sibling variant over the same original.
+  { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection' },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
+  // Backup coverage (#506, ADR-0033 §7): contextual like offload — the
+  // preflight ceremony belongs to the workflow, not the native menu.
+  { id: 'photo.coverage.exclude', label: label('photo.coverage.exclude', 'Keep on this device only…'), surfaces: [], target: 'selection' },
+  { id: 'photo.coverage.include', label: label('photo.coverage.include', 'Back up again'), surfaces: [], target: 'selection' },
   { id: 'photo.transfer', label: label('photo.transfer', 'Transfer & Sync…'), surfaces: [], target: 'selection' },
   {
     id: 'photo.trash',
@@ -652,44 +717,14 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     target: 'application',
     native: { menu: 'help', lockSafe: true, queueable: false },
   },
-  {
-    id: 'grid.focus.left',
-    label: label('grid.focus.left', 'Move focus left'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowLeft',
-  },
-  {
-    id: 'grid.focus.right',
-    label: label('grid.focus.right', 'Move focus right'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowRight',
-  },
-  { id: 'grid.focus.up', label: label('grid.focus.up', 'Move focus up'), surfaces: ['grid'], target: 'focused-item', key: 'ArrowUp' },
-  {
-    id: 'grid.focus.down',
-    label: label('grid.focus.down', 'Move focus down'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'ArrowDown',
-  },
-  { id: 'grid.focus.home', label: label('grid.focus.home', 'Move to row start'), surfaces: ['grid'], target: 'focused-item', key: 'Home' },
-  { id: 'grid.focus.end', label: label('grid.focus.end', 'Move to row end'), surfaces: ['grid'], target: 'focused-item', key: 'End' },
-  {
-    id: 'grid.focus.pageUp',
-    label: label('grid.focus.pageUp', 'Move up one page'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'PageUp',
-  },
-  {
-    id: 'grid.focus.pageDown',
-    label: label('grid.focus.pageDown', 'Move down one page'),
-    surfaces: ['grid'],
-    target: 'focused-item',
-    key: 'PageDown',
-  },
+  gridFocus('grid.focus.left', 'Move focus left', 'ArrowLeft'),
+  gridFocus('grid.focus.right', 'Move focus right', 'ArrowRight'),
+  gridFocus('grid.focus.up', 'Move focus up', 'ArrowUp'),
+  gridFocus('grid.focus.down', 'Move focus down', 'ArrowDown'),
+  gridFocus('grid.focus.home', 'Move to row start', 'Home'),
+  gridFocus('grid.focus.end', 'Move to row end', 'End'),
+  gridFocus('grid.focus.pageUp', 'Move up one page', 'PageUp'),
+  gridFocus('grid.focus.pageDown', 'Move down one page', 'PageDown'),
 ];
 
 function normalizedKey(key: string): string {

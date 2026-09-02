@@ -107,6 +107,7 @@ export interface OverlookApi {
     ) => Promise<Res<typeof channels.librarySetGalleryPolicy>>;
     readonly stats: () => Promise<Res<typeof channels.libraryStats>>;
     readonly albums: () => Promise<Res<typeof channels.libraryAlbums>>;
+    readonly facetValues: (request: Req<typeof channels.libraryFacetValues>) => Promise<Res<typeof channels.libraryFacetValues>>;
     readonly delete: (request: Req<typeof channels.libraryDelete>) => Promise<Res<typeof channels.libraryDelete>>;
     readonly restore: (request: Req<typeof channels.libraryRestore>) => Promise<Res<typeof channels.libraryRestore>>;
     readonly purge: (request: Req<typeof channels.libraryPurge>) => Promise<Res<typeof channels.libraryPurge>>;
@@ -164,6 +165,34 @@ export interface OverlookApi {
     readonly setVisibility: (request: Req<typeof channels.albumSetVisibility>) => Promise<Res<typeof channels.albumSetVisibility>>;
     readonly move: (request: Req<typeof channels.albumMove>) => Promise<Res<typeof channels.albumMove>>;
     readonly setTags: (request: Req<typeof channels.albumSetTags>) => Promise<Res<typeof channels.albumSetTags>>;
+    readonly setPredicate: (request: Req<typeof channels.albumSetPredicate>) => Promise<Res<typeof channels.albumSetPredicate>>;
+    readonly duplicate: (request: Req<typeof channels.albumDuplicate>) => Promise<Res<typeof channels.albumDuplicate>>;
+  };
+  readonly edits: {
+    readonly head: (request: Req<typeof channels.photoEditHead>) => Promise<Res<typeof channels.photoEditHead>>;
+    readonly save: (request: Req<typeof channels.photoEditSave>) => Promise<Res<typeof channels.photoEditSave>>;
+    readonly reset: (request: Req<typeof channels.photoEditReset>) => Promise<Res<typeof channels.photoEditReset>>;
+    readonly revert: (request: Req<typeof channels.photoEditRevert>) => Promise<Res<typeof channels.photoEditRevert>>;
+  };
+  readonly provenance: {
+    readonly get: (request: Req<typeof channels.photoProvenance>) => Promise<Res<typeof channels.photoProvenance>>;
+    readonly refresh: (request: Req<typeof channels.photoProvenanceRefresh>) => Promise<Res<typeof channels.photoProvenanceRefresh>>;
+  };
+  /** Variants over one original asset (#496, ADR-0031 §1 + §3). */
+  readonly variants: {
+    readonly duplicate: (request: Req<typeof channels.photoDuplicate>) => Promise<Res<typeof channels.photoDuplicate>>;
+    readonly family: (request: Req<typeof channels.photoVariants>) => Promise<Res<typeof channels.photoVariants>>;
+    readonly promote: (request: Req<typeof channels.photoPromoteVariant>) => Promise<Res<typeof channels.photoPromoteVariant>>;
+  };
+  /** Inspector histogram (#498): bins over the photo's own mid derivative. */
+  readonly histogram: {
+    readonly get: (request: Req<typeof channels.photoHistogram>) => Promise<Res<typeof channels.photoHistogram>>;
+  };
+  /** Perceptual duplicate review (#650): suggestions over the photos' own previews. */
+  readonly duplicates: {
+    readonly review: () => Promise<Res<typeof channels.duplicatesReview>>;
+    readonly rescan: () => Promise<Res<typeof channels.duplicatesRescan>>;
+    readonly onChanged: (listener: (payload: z.output<typeof events.duplicatesChanged.payload>) => void) => () => void;
   };
   readonly boards: {
     readonly list: () => Promise<Res<typeof channels.boardList>>;
@@ -202,6 +231,12 @@ export interface OverlookApi {
     readonly cancelExport: () => Promise<Res<typeof channels.protectedAlbumExportCancel>>;
     readonly onChanged: (listener: () => void) => () => void;
     readonly onProgress: (listener: (payload: z.output<typeof events.protectedWorkflowProgress.payload>) => void) => () => void;
+  };
+  /** Backup coverage (#506, ADR-0033): keep on this device only / back up again. */
+  readonly coverage: {
+    readonly preflight: (request: Req<typeof channels.coveragePreflight>) => Promise<Res<typeof channels.coveragePreflight>>;
+    readonly exclude: (request: Req<typeof channels.coverageExclude>) => Promise<Res<typeof channels.coverageExclude>>;
+    readonly include: (request: Req<typeof channels.coverageInclude>) => Promise<Res<typeof channels.coverageInclude>>;
   };
   readonly backup: {
     readonly run: (request: Req<typeof channels.backupRun>) => Promise<Res<typeof channels.backupRun>>;
@@ -251,6 +286,7 @@ export interface OverlookApi {
     readonly runAll: (request: Req<typeof channels.exportRunAll>) => Promise<Res<typeof channels.exportRunAll>>;
     readonly runBoard: (request: Req<typeof channels.exportRunBoard>) => Promise<Res<typeof channels.exportRunBoard>>;
     readonly cancel: (request: Req<typeof channels.exportCancel>) => Promise<Res<typeof channels.exportCancel>>;
+    readonly preflight: (request: Req<typeof channels.exportPreflight>) => Promise<Res<typeof channels.exportPreflight>>;
     readonly onProgress: (listener: (payload: z.output<typeof events.exportProgress.payload>) => void) => () => void;
   };
   readonly keys: {
@@ -258,6 +294,26 @@ export interface OverlookApi {
     readonly export: (request: Req<typeof channels.keysExport>) => Promise<Res<typeof channels.keysExport>>;
     readonly pickFile: () => Promise<Res<typeof channels.keysPickFile>>;
     readonly import: (request: Req<typeof channels.keysImport>) => Promise<Res<typeof channels.keysImport>>;
+  };
+  /** The keyring registry (#517, ADR-0032 §2). */
+  readonly keyring: {
+    readonly list: () => Promise<Res<typeof channels.keyringList>>;
+    readonly export: (request: Req<typeof channels.keyringExport>) => Promise<Res<typeof channels.keyringExport>>;
+    readonly pickFile: () => Promise<Res<typeof channels.keyringPickFile>>;
+    readonly import: (request: Req<typeof channels.keyringImport>) => Promise<Res<typeof channels.keyringImport>>;
+    readonly removePreflight: (
+      request: Req<typeof channels.keyringRemovePreflight>,
+    ) => Promise<Res<typeof channels.keyringRemovePreflight>>;
+    readonly remove: (request: Req<typeof channels.keyringRemove>) => Promise<Res<typeof channels.keyringRemove>>;
+    readonly setLabel: (request: Req<typeof channels.keyringSetLabel>) => Promise<Res<typeof channels.keyringSetLabel>>;
+  };
+  /** Disclosure classes (#509, ADR-0032 §6). */
+  readonly disclosure: {
+    readonly policy: () => Promise<Res<typeof channels.disclosurePolicy>>;
+    readonly setField: (request: Req<typeof channels.disclosureSetField>) => Promise<Res<typeof channels.disclosureSetField>>;
+    readonly overrides: (request: Req<typeof channels.disclosureOverrides>) => Promise<Res<typeof channels.disclosureOverrides>>;
+    readonly setOverride: (request: Req<typeof channels.disclosureSetOverride>) => Promise<Res<typeof channels.disclosureSetOverride>>;
+    readonly preview: (request: Req<typeof channels.disclosurePreview>) => Promise<Res<typeof channels.disclosurePreview>>;
   };
   readonly restore: {
     readonly profileStatus: () => Promise<Res<typeof channels.restoreProfileStatus>>;

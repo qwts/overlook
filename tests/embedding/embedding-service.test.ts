@@ -6,8 +6,8 @@ import { EmbeddingPoolBusyError } from '../../src/main/embedding/embedding-pool.
 import { EmbeddingService, type EmbeddingStatus } from '../../src/main/embedding/embedding-service.js';
 
 const CANDIDATES: readonly EmbeddingCandidate[] = [
-  { photoId: 'P-1', contentHash: '1'.repeat(64) },
-  { photoId: 'P-2', contentHash: '2'.repeat(64) },
+  { photoId: 'P-1', contentHash: '1'.repeat(64), derivativeKey: '1'.repeat(64) },
+  { photoId: 'P-2', contentHash: '2'.repeat(64), derivativeKey: '2'.repeat(64) },
 ];
 
 interface ServiceWorld {

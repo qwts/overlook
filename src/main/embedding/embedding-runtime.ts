@@ -47,7 +47,7 @@ export function createEmbeddingRuntime(options: EmbeddingRuntimeOptions): Embedd
     load: async (candidate, signal) => {
       if (signal.aborted) throw signal.reason;
       try {
-        const bytes = await buffer(options.blobs.getThumbStream(candidate.contentHash, 'mid', options.resolveKey, candidate.photoId));
+        const bytes = await buffer(options.blobs.getThumbStream(candidate.derivativeKey, 'mid', options.resolveKey, candidate.photoId));
         if (signal.aborted) {
           bytes.fill(0);
           throw signal.reason;

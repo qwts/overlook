@@ -166,18 +166,18 @@ test('macOS application menu is the six-menu design-system spec projected from t
       'library.import',
       'photo.export',
       'library.exportAll',
+      'library.duplicates',
       '—',
       'library.switch',
       'library.move',
       'library.new',
     ]);
 
-    // Library + sidebar entries are enabled with a library open; Moodboard is a
-    // real view (#515) while Feed has no view yet, so it stays disabled.
-    for (const id of ['library.move', 'library.new', 'library.exportAll', 'view.sidebar.toggle', 'view.mode.moodboard']) {
+    // Library + sidebar entries are enabled with a library open; Moodboard
+    // (#515) and Feed (#516) are real views.
+    for (const id of ['library.move', 'library.new', 'library.exportAll', 'view.sidebar.toggle', 'view.mode.moodboard', 'view.mode.feed']) {
       await expect.poll(() => menuState(app, id)).toMatchObject({ enabled: true });
     }
-    await expect.poll(() => menuState(app, 'view.mode.feed')).toMatchObject({ enabled: false });
     // Selection-targeted items are disabled until there is a deterministic target.
     for (const id of ['selection.clear', 'photo.export', 'album.membership.add']) {
       await expect.poll(() => menuState(app, id)).toMatchObject({ enabled: false });

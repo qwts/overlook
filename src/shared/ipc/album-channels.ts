@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ENUMERATED_FACETS, smartPredicateSchema } from '../library/smart-album.js';
+
 const defineChannel = <TRequest extends z.ZodType, TResponse extends z.ZodType>(name: string, request: TRequest, response: TResponse) => ({
   name,
   request,
@@ -16,10 +18,14 @@ export const albumListingSchema = z.object({
   showInAllPhotos: z.boolean(),
   visibleElsewhere: z.number().int().nonnegative(),
   visibleVia: z.array(z.object({ id: z.string(), name: z.string() })).readonly(),
-  kind: z.enum(['album', 'folder']),
+  kind: z.enum(['album', 'folder', 'smart']),
   parentId: z.string().nullable(),
   inheritsVisibility: z.boolean(),
   tags: z.array(z.string()).readonly(),
+  /** A Smart Album's saved query (#514); null for albums and folders, and
+   * for a Smart Album this app cannot evaluate — `unsupported` then says why. */
+  predicate: smartPredicateSchema.nullable(),
+  unsupported: z.string().nullable(),
 });
 
 /** Deleting a non-empty folder is a ceremony (#505, ADR-0023 Tier M): the
@@ -35,10 +41,23 @@ export const albumChannels = {
     'album:create',
     z.object({
       name: z.string().min(1).max(120),
-      kind: z.enum(['album', 'folder']).optional(),
+      kind: z.enum(['album', 'folder', 'smart']).optional(),
       parentId: z.string().min(1).nullable().optional(),
+      /** Required for kind 'smart'. */
+      predicate: smartPredicateSchema.optional(),
     }),
     z.object({ album: albumListingSchema }),
+  ),
+  albumSetPredicate: defineChannel(
+    'album:set-predicate',
+    z.object({ albumId: z.string().min(1), predicate: smartPredicateSchema }),
+    z.object({ album: albumListingSchema }),
+  ),
+  albumDuplicate: defineChannel('album:duplicate', z.object({ albumId: z.string().min(1) }), z.object({ album: albumListingSchema })),
+  libraryFacetValues: defineChannel(
+    'library:facet-values',
+    z.object({ facet: z.enum(ENUMERATED_FACETS) }),
+    z.object({ values: z.array(z.object({ value: z.string(), count: z.number().int().nonnegative() })).readonly() }),
   ),
   albumSetVisibility: defineChannel(
     'album:set-visibility',

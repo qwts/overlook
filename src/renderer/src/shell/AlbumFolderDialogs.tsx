@@ -34,11 +34,10 @@ const messages = defineMessages({
   deleteFolderQuestion: { id: 'album.folder.delete.question', defaultMessage: 'Delete “{name}”?' },
   deleteFolderEmpty: { id: 'album.folder.delete.empty', defaultMessage: 'The folder is empty. Nothing else is removed.' },
   deleteFolderMove: { id: 'album.folder.delete.move', defaultMessage: 'Move its contents to' },
-  deleteFolderRecursive: {
-    id: 'album.folder.delete.recursive',
-    defaultMessage:
-      'Also delete {folders, plural, =0 {} one {# folder} other {# folders}}{both, select, yes { and } other {}}{albums, plural, =0 {} one {# album} other {# albums}} inside it',
-  },
+  deleteFolderRecursive: { id: 'album.folder.delete.recursive', defaultMessage: 'Also delete {contents} inside it' },
+  deleteFolderFolders: { id: 'album.folder.delete.folders', defaultMessage: '{count, plural, one {# folder} other {# folders}}' },
+  deleteFolderAlbums: { id: 'album.folder.delete.albums', defaultMessage: '{count, plural, one {# album} other {# albums}}' },
+  deleteFolderSmart: { id: 'album.folder.delete.smart', defaultMessage: '{count, plural, one {# Smart Album} other {# Smart Albums}}' },
   deleteFolderPhotos: { id: 'album.folder.delete.photos', defaultMessage: 'Photos are never deleted here.' },
   deleting: { id: 'album.folder.deleting', defaultMessage: 'Deleting…' },
   deleteFailed: { id: 'album.folder.deleteFailed', defaultMessage: 'Could not delete this folder. Try again.' },
@@ -73,15 +72,25 @@ export function folderDestinations(albums: readonly AlbumListing[], album: Album
   return albums.filter((candidate) => candidate.kind === 'folder' && !excluded.has(candidate.id));
 }
 
-export function folderContents(albums: readonly AlbumListing[], folderId: string): { readonly folders: number; readonly albums: number } {
+export interface FolderContents {
+  readonly folders: number;
+  readonly albums: number;
+  /** Smart Albums are counted apart (#514): the ceremony names saved queries, never photos. */
+  readonly smart: number;
+}
+
+export function folderContents(albums: readonly AlbumListing[], folderId: string): FolderContents {
   const byId = new Map(albums.map((album) => [album.id, album]));
   let folders = 0;
   let count = 0;
+  let smart = 0;
   for (const id of albumDescendantIds(treeNodes(albums), folderId)) {
-    if (byId.get(id)?.kind === 'folder') folders += 1;
+    const kind = byId.get(id)?.kind;
+    if (kind === 'folder') folders += 1;
+    else if (kind === 'smart') smart += 1;
     else count += 1;
   }
-  return { folders, albums: count };
+  return { folders, albums: count, smart };
 }
 
 export function NewCollectionDialog({
@@ -234,11 +243,19 @@ export function DeleteFolderDialog({
   readonly folder: AlbumListing;
   readonly albums: readonly AlbumListing[];
   readonly onClose: () => void;
-  readonly onComplete: (removed: { readonly folders: number; readonly albums: number }) => void;
+  readonly onComplete: (removed: FolderContents) => void;
 }): ReactElement {
   const intl = useIntl();
   const contents = folderContents(albums, folder.id);
-  const empty = contents.folders === 0 && contents.albums === 0;
+  const empty = contents.folders === 0 && contents.albums === 0 && contents.smart === 0;
+  const contentsLabel = intl.formatList(
+    [
+      ...(contents.folders === 0 ? [] : [intl.formatMessage(messages.deleteFolderFolders, { count: contents.folders })]),
+      ...(contents.albums === 0 ? [] : [intl.formatMessage(messages.deleteFolderAlbums, { count: contents.albums })]),
+      ...(contents.smart === 0 ? [] : [intl.formatMessage(messages.deleteFolderSmart, { count: contents.smart })]),
+    ],
+    { type: 'conjunction' },
+  );
   const destinations = folderDestinations(albums, folder);
   const [mode, setMode] = useState<'move' | 'recursive'>('move');
   const [destination, setDestination] = useState(folder.parentId ?? '');
@@ -255,7 +272,11 @@ export function DeleteFolderDialog({
     void window.overlook.albums
       .delete(request)
       .then(() =>
-        onComplete(mode === 'recursive' && !empty ? { folders: contents.folders + 1, albums: contents.albums } : { folders: 1, albums: 0 }),
+        onComplete(
+          mode === 'recursive' && !empty
+            ? { folders: contents.folders + 1, albums: contents.albums, smart: contents.smart }
+            : { folders: 1, albums: 0, smart: 0 },
+        ),
       )
       .catch(() => {
         setDeleting(false);
@@ -313,13 +334,7 @@ export function DeleteFolderDialog({
               checked={mode === 'recursive'}
               onChange={() => setMode('recursive')}
             />
-            <span>
-              {intl.formatMessage(messages.deleteFolderRecursive, {
-                folders: contents.folders,
-                albums: contents.albums,
-                both: contents.folders > 0 && contents.albums > 0 ? 'yes' : 'no',
-              })}
-            </span>
+            <span>{intl.formatMessage(messages.deleteFolderRecursive, { contents: contentsLabel })}</span>
           </label>
         </fieldset>
       )}
