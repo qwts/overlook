@@ -70,6 +70,7 @@ existing links resolve — never add content there.
 - [Gallery Quick Actions acceptance](./acceptance/Acceptance-Test-Quick-Actions.md) — configurable Command-hover actions, targeting, cleanup, and alternative access
 - [Appearance themes acceptance](./acceptance/Acceptance-Test-Appearance-Themes.md) — Dark/Light/System live switching, first paint, native chrome, and dual-theme stories
 - [Gallery inclusion acceptance](./acceptance/Acceptance-Test-Gallery-Inclusion.md) — RAW and Unavailable sources, All Photos minimum-size and unavailable rules, disclosure, and restore fidelity
+- [Album visibility acceptance](./acceptance/Acceptance-Test-Album-Visibility.md) — #494 per-album Show in All Photos policy, inclusion-wins disclosure, and restore fidelity
 - [Theming reference](./Theming.md) — `.overlook-theme.json` format, every user-themable token with its role, the export → edit → import workflow, an LLM prompt, and example themes
 
 ## Maintenance Convention

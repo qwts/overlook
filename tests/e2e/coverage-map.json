@@ -310,6 +310,26 @@
       ]
     },
     {
+      "id": "494-album-visibility",
+      "wiki": "Acceptance-Test-Album-Visibility",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/album-visibility.spec.ts" },
+        { "type": "storybook", "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"] },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/db/album-visibility.test.ts",
+            "tests/backup/album-visibility-manifest.test.ts",
+            "tests/library/library-service.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow docs/acceptance/Acceptance-Test-Album-Visibility.md with a photo that belongs to two albums to verify the inclusion-wins disclosure, and a backup/restore that preserves which albums are hidden."
+        }
+      ]
+    },
+    {
       "id": "m04-gallery-favorite-toggle",
       "wiki": "User-Story-M04-Library-browsing",
       "coverage": [
