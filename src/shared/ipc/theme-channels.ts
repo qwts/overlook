@@ -29,11 +29,28 @@ export const applicableThemeSchema = z.object({
 export type InstalledTheme = z.output<typeof installedThemeSchema>;
 export type ApplicableTheme = z.output<typeof applicableThemeSchema>;
 export type ThemeImportResult = z.output<typeof importResultSchema>;
+export type ThemeExportResult = z.output<typeof exportResultSchema>;
 
 const importResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('cancelled') }),
   z.object({ status: z.literal('invalid'), errors: z.array(themeValidationErrorSchema).min(1).readonly() }),
   z.object({ status: z.literal('imported'), theme: installedThemeSchema }),
+]);
+
+/** ADR-0019 §6: the template carries the renderer's effective token values. */
+const exportTemplateRequestSchema = z.object({
+  base: z.enum(['dark', 'light']),
+  tokens: z.record(z.string().min(1).max(64), z.string().max(160)),
+});
+
+const exportResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('cancelled') }),
+  z.object({ status: z.literal('invalid'), errors: z.array(themeValidationErrorSchema).min(1).readonly() }),
+  z.object({
+    status: z.literal('exported'),
+    tokenCount: z.number().int().positive(),
+    warnings: z.array(themeWarningSchema).readonly(),
+  }),
 ]);
 
 export const themeChannels = {
@@ -44,6 +61,7 @@ export const themeChannels = {
   ),
   themePickImport: defineChannel('theme:pick-import', z.object({}), importResultSchema),
   themeImportPath: defineChannel('theme:import-path', z.object({ path: z.string().min(1).max(4096) }), importResultSchema),
+  themeExportTemplate: defineChannel('theme:export-template', exportTemplateRequestSchema, exportResultSchema),
   themeActive: defineChannel(
     'theme:active',
     z.object({}),

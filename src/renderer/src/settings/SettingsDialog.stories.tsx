@@ -486,6 +486,7 @@ function installStub(options?: {
       list: () => Promise.resolve({ themes: [], activeId: current.userTheme }),
       pickImport: () => Promise.resolve({ status: 'cancelled' }),
       importPath: () => Promise.resolve({ status: 'cancelled' }),
+      exportTemplate: () => Promise.resolve({ status: 'cancelled' }),
       active: () => Promise.resolve({ theme: null, notice: null }),
       preview: () => Promise.reject(new Error('No story theme installed')),
       previewHealthy: () => Promise.resolve({ accepted: false }),

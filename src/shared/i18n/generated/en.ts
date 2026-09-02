@@ -644,6 +644,8 @@ export const en: Readonly<Record<string, string>> = {
   "settings.theme.active": "Active",
   "settings.theme.dropHint": "Choose or drop one .overlook-theme.json file",
   "settings.theme.empty": "No custom themes installed.",
+  "settings.theme.exportTemplate": "Export theme template",
+  "settings.theme.exported": "Exported a template with {count, plural, one {# token} other {# tokens}}{warnings, plural, =0 {} one { and # contrast warning} other { and # contrast warnings}}.",
   "settings.theme.failed": "The theme operation failed. Try again.",
   "settings.theme.invalidDrop": "Drop exactly one .overlook-theme.json file.",
   "settings.theme.invalidNotice": "The active theme no longer validated, so Overlook restored the first-party appearance.",

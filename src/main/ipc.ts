@@ -627,6 +627,22 @@ export function registerThemeHandlers(service: ThemeService): void {
   ipcMain.handle(channels.themeImportPath.name, (_event, request: unknown) =>
     wrapHandler(channels.themeImportPath, ({ path: sourcePath }) => service.importPath(sourcePath))(request),
   );
+  ipcMain.handle(channels.themeExportTemplate.name, (event, request: unknown) =>
+    wrapHandler(channels.themeExportTemplate, async ({ base, tokens }) => {
+      const steeredPath = app.isPackaged ? undefined : process.env['OVERLOOK_THEME_EXPORT_DESTINATION'];
+      if (steeredPath !== undefined && steeredPath !== '') return service.exportTemplate(steeredPath, { base, tokens });
+      const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+      const options: Electron.SaveDialogOptions = {
+        title: 'Export theme template',
+        defaultPath: `overlook-${base}-template.overlook-theme.json`,
+        filters: [{ name: 'Overlook themes', extensions: ['json'] }],
+      };
+      const selection = owner === undefined ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(owner, options);
+      const destination = selection.filePath;
+      if (selection.canceled || destination === undefined || destination === '') return { status: 'cancelled' as const };
+      return service.exportTemplate(destination, { base, tokens });
+    })(request),
+  );
   ipcMain.handle(channels.themeActive.name, (_event, request: unknown) =>
     wrapHandler(channels.themeActive, () => service.active())(request),
   );

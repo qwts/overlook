@@ -41,6 +41,7 @@ function installStub(): void {
     list: () => Promise.resolve({ themes: [installed], activeId: null }),
     pickImport: () => Promise.resolve({ status: 'cancelled' }),
     importPath: () => Promise.resolve({ status: 'cancelled' }),
+    exportTemplate: ({ tokens }) => Promise.resolve({ status: 'exported', tokenCount: Object.keys(tokens).length, warnings: [warning] }),
     active: () => Promise.resolve({ theme: null, notice: null }),
     preview: () => Promise.resolve({ previewId: crypto.randomUUID(), expiresAt: Date.now() + 15_000, theme: applicable }),
     previewHealthy: () => Promise.resolve({ accepted: true }),
@@ -76,6 +77,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InstalledWithWarning: Story = {};
+
+export const ExportTemplate: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Export theme template' }));
+    await expect(canvas.findByRole('status')).resolves.toHaveTextContent(/Exported a template with \d+ tokens and 1 contrast warning\./);
+  },
+};
 
 export const PreviewConfirmation: Story = {
   play: async ({ canvasElement }) => {
