@@ -96,7 +96,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@3ee164e32ad2708cac124b768d5b978bdb2728b8
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked packaging dependencies
           executable: ${{ runner.os == 'Windows' && 'npm.cmd' || 'npm' }}
