@@ -167,7 +167,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked dependencies
           executable: npm
@@ -270,7 +270,7 @@ jobs:
       # The whole job is lifecycle-gated, so Storybook runs only as part of a
       # complete suite; draft events start no jobs.
       - name: Install Playwright browsers (interaction tests)
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Playwright Chromium for interaction tests
           executable: npx
@@ -330,7 +330,7 @@ jobs:
       - name: Assert native x64 runner
         run: node scripts/assert-platform.mjs win32 x64
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked Windows test dependencies
           executable: cmd.exe
@@ -397,7 +397,7 @@ jobs:
       - name: Assert native runner architecture
         run: node scripts/assert-platform.mjs win32 ${{ matrix.arch }}
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked native Windows smoke dependencies
           executable: cmd.exe
@@ -449,7 +449,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked dependencies for E2E
           executable: npm
@@ -462,7 +462,7 @@ jobs:
       # brings its own Chromium but needs the OS libraries and a display server.
       # install-deps covers the shared libraries; xvfb provides the display.
       - name: Install Electron system dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Electron Chromium system dependencies
           executable: npx
@@ -472,7 +472,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Xvfb
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@b146b85da189d188f71cda59d363eec7272e498e
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Xvfb
           executable: sudo
