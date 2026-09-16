@@ -61,7 +61,7 @@ jobs:
       release_gate_mode: ${{ steps.policy.outputs.release_gate_mode }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
+        uses: qwts/agent-sop/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
 
   merge-evidence:
     name: Verify merged commit evidence
@@ -167,7 +167,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked dependencies
           executable: npm
@@ -270,7 +270,7 @@ jobs:
       # The whole job is lifecycle-gated, so Storybook runs only as part of a
       # complete suite; draft events start no jobs.
       - name: Install Playwright browsers (interaction tests)
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Playwright Chromium for interaction tests
           executable: npx
@@ -330,7 +330,7 @@ jobs:
       - name: Assert native x64 runner
         run: node scripts/assert-platform.mjs win32 x64
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked Windows test dependencies
           executable: cmd.exe
@@ -397,7 +397,7 @@ jobs:
       - name: Assert native runner architecture
         run: node scripts/assert-platform.mjs win32 ${{ matrix.arch }}
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked native Windows smoke dependencies
           executable: cmd.exe
@@ -449,7 +449,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked dependencies for E2E
           executable: npm
@@ -462,7 +462,7 @@ jobs:
       # brings its own Chromium but needs the OS libraries and a display server.
       # install-deps covers the shared libraries; xvfb provides the display.
       - name: Install Electron system dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Electron Chromium system dependencies
           executable: npx
@@ -472,7 +472,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Xvfb
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install Xvfb
           executable: sudo
@@ -549,7 +549,7 @@ jobs:
           test "$e2e" = success
 
   # Documentation governance (ENG-0009): the shared, zero-dependency docs-gov gate,
-  # consumed from qwts/playbook-engineering per ENG-0004's reusable-workflow model so a
+  # consumed from qwts/agent-sop per ENG-0004's reusable-workflow model so a
   # governance fix propagates to every repo without per-repo edits. photos' own rules —
   # include globs, indexes, token budgets, ADR Status field, stale-path scope — live in
   # docs-gov.config.json at the repo root (the workflow's default config path). A
@@ -561,7 +561,7 @@ jobs:
       always() && needs.policy.result == 'success' &&
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
-    uses: qwts/playbook-engineering/.github/workflows/docs-governance.yml@0ab1396c527536627981b27473d38d5bbdef3138 # v1
+    uses: qwts/agent-sop/.github/workflows/docs-governance.yml@0ab1396c527536627981b27473d38d5bbdef3138 # v1
 
   codeql:
     name: Advanced CodeQL
@@ -593,7 +593,7 @@ jobs:
       - name: Checkout pinned runtime checker
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: qwts/playbook-engineering
+          repository: qwts/agent-sop
           ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85
           path: .ci-runtime-policy
           sparse-checkout: tools/ci-runtime

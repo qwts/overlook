@@ -4,7 +4,7 @@ This directory holds Overlook's canonical process, planning, and SOP
 documentation. It is the source of truth: docs are versioned with the code they
 describe, reviewed in the same pull request, and findable by GitHub code search
 (see
-[ENG-0003](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
+[ENG-0003](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
 
 The GitHub wiki is retired. Its pages are stubs pointing here, kept only so
 existing links resolve — never add content there.

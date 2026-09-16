@@ -19,13 +19,13 @@ required for E2E- and renderer-relevant changes.
 
 Every GitHub Actions job has a finite `timeout-minutes` bound. CI also runs the
 required **Workflow runtime policy** job from a reviewed, commit-pinned
-`qwts/playbook-engineering` checker; the aggregate **CI** gate fails when that
+`qwts/agent-sop` checker; the aggregate **CI** gate fails when that
 policy check fails. Direct packaging, release, versioning, performance, updater,
 approval, and issue-automation entrypoints use the same bounded contract even
 though they do not all flow through the aggregate CI job.
 
 Network-dependent setup commands use the commit-pinned
-`qwts/playbook-engineering/.github/actions/bounded-command` action. Dependency
+`qwts/agent-sop/.github/actions/bounded-command` action. Dependency
 installs and Playwright or operating-system setup have explicit per-attempt
 timeouts, at most two attempts, and a short fixed retry delay. Tests, builds,
 signing, publishing, and other non-idempotent work are not retried by that
@@ -33,13 +33,13 @@ contract; their step or job timeout remains the failure boundary. Keep the
 workflow definitions, runtime-policy pin, and tooling assertions in
 `tests/tooling/` synchronized when changing these limits.
 
-All third-party `uses:` in `.github/workflows/*.yml` are pinned to a full commit SHA with a `# vX.Y.Z` version comment, verified by `pinact run --verify` (config: `.pinact.yml`). The SHA-pinned `qwts/playbook-engineering/.github/workflows/docs-governance.yml@0ab1396… # v1` is the same policy — do not regress it to a floating `@v1`. The `qwts/playbook-engineering/.github/actions/ci-policy@40d1c46` pin is the repository's authorization boundary (#1038, #1024): it is immutable, Dependabot ignores it, and `pinact` ignores it via `.pinact.yml`. Re-verify pins with `pinact run --verify`; do not bulk-refresh governed pins. The `zizmor` `unpinned-uses` gate (`.github/zizmor.yml`, job `zizmor` in `ci.yml`) is the continuously enforced backstop that blocks any new unpinned reference; only `unpinned-uses` is merge-blocking until `qwts/playbook-engineering#6` ships the shared `security-scan.yml` reusable (see [#716](https://github.com/qwts/overlook/issues/716)).
+All third-party `uses:` in `.github/workflows/*.yml` are pinned to a full commit SHA with a `# vX.Y.Z` version comment, verified by `pinact run --verify` (config: `.pinact.yml`). The SHA-pinned `qwts/agent-sop/.github/workflows/docs-governance.yml@0ab1396… # v1` is the same policy — do not regress it to a floating `@v1`. The `qwts/agent-sop/.github/actions/ci-policy@40d1c46` pin is the repository's authorization boundary (#1038, #1024): it is immutable, Dependabot ignores it, and `pinact` ignores it via `.pinact.yml`. Re-verify pins with `pinact run --verify`; do not bulk-refresh governed pins. The `zizmor` `unpinned-uses` gate (`.github/zizmor.yml`, job `zizmor` in `ci.yml`) is the continuously enforced backstop that blocks any new unpinned reference; only `unpinned-uses` is merge-blocking until `qwts/agent-sop#6` ships the shared `security-scan.yml` reusable (see [#716](https://github.com/qwts/overlook/issues/716)).
 
 Two gates need an external checkout, both env-gated in the same shape:
 
 | Variable                   | Points at                                                             |
 | -------------------------- | --------------------------------------------------------------------- |
-| `DOCS_GOV_TOOLING_ROOT`    | a `qwts/playbook-engineering` checkout with `tools/docs-gov` at `v1`  |
+| `DOCS_GOV_TOOLING_ROOT`    | a `qwts/agent-sop` checkout with `tools/docs-gov` at `v1`             |
 | `INTEROP_IMAGE_TRAIL_ROOT` | a `qwts/image-trail` checkout pinned to the commit the manifest names |
 
 ## Documentation governance (`docs:gov`)
@@ -47,10 +47,10 @@ Two gates need an external checkout, both env-gated in the same shape:
 The deterministic docs-gov check gates `docs/` and the root agent files against
 link, orphan, stale-path, heading, token-budget, and anti-pattern rules per
 `docs-gov.config.json`
-([ENG-0009](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0009-documentation-governance-gate.md)).
+([ENG-0009](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0009-documentation-governance-gate.md)).
 
 Its implementation is **not vendored**. It lives once in
-`qwts/playbook-engineering` and both halves run it at the `v1` tag: CI via the
+`qwts/agent-sop` and both halves run it at the `v1` tag: CI via the
 reusable workflow `.github/workflows/docs-governance.yml@v1` (the required
 `Docs governance / docs-gov` status context), and locally via
 `scripts/check-docs-gov.mjs`. The local wrapper verifies the checkout's

@@ -3,15 +3,15 @@
 The guard itself is governance-owned and shared across repos. Its budget
 formula, admission rules, lane policy, owner grants, environment variables and
 refusal handling are documented once, in
-[machine memory guard](https://github.com/qwts/playbook-engineering/blob/master/docs/reference/agent-memory-guard.md)
+[machine memory guard](https://github.com/qwts/agent-sop/blob/master/docs/reference/agent-memory-guard.md)
 (decision record:
-[ENG-0138](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md)).
+[ENG-0138](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md)).
 Read that page for anything about how the guard behaves.
 
 The tooling arrives here by harness sync as `tools/agent-guard/`. **Never edit
 it in this repo** — a local edit is overwritten by the next sync and breaks the
 machine-wide protocol the copies coordinate on. Fixes go to
-`qwts/playbook-engineering`. `tools/agent-guard/tests/conformance.test.mjs` runs
+`qwts/agent-sop`. `tools/agent-guard/tests/conformance.test.mjs` runs
 as part of `npm test` here and fails if the hook wiring is ever dropped, which
 is how `e1d86f6a` silently disarmed the previous guard.
 

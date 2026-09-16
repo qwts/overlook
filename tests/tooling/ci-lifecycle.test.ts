@@ -29,7 +29,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   });
 
   test('loads actor and fork enforcement from the reviewed immutable policy commit', () => {
-    assert.match(ci, /uses: qwts\/playbook-engineering\/\.github\/actions\/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
+    assert.match(ci, /uses: qwts\/agent-sop\/\.github\/actions\/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.doesNotMatch(ci, /uses: \.\/\.github\/actions\/ci-policy/u);
     assert.match(ci, /github\.event\.pull_request\.draft == false/u);
   });
@@ -115,7 +115,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   test('enforces finite workflow runtime with the reviewed immutable contract', () => {
     const sources = [aca, autoUpdate, ci, closeLinkedIssues, codeql, packageWorkflow, perf, release, versionCut].join('\n');
     assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
-    assert.match(sources, /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1/u);
+    assert.match(sources, /uses: qwts\/agent-sop\/\.github\/actions\/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1/u);
     assert.match(ci, /name: Workflow runtime policy/u);
     assert.match(ci, /ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.match(ci, /runtime-policy\.mjs --root "\$GITHUB_WORKSPACE"/u);

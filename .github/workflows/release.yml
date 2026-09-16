@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
+      - uses: qwts/agent-sop/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
         with:
           authorization-only: 'true'
 
@@ -110,7 +110,7 @@ jobs:
           cache: npm
 
       - name: Install release verification dependencies (scripts skipped)
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install locked release verification dependencies
           executable: npm
