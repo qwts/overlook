@@ -163,10 +163,8 @@ Then push and let CI verify the heavy lanes — `test:cov`, `test:e2e`,
 authoritative lane** — its workflows invoke the `:inner` entrypoints directly, so
 no guard runs on runners; running heavy lanes locally exhausted the owner's machine. Ask first.
 
-- Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a
-  `qwts/qwts-agent-docs-gov` checkout at commit
-  `67db7dc9c20bc29222fb605b7ff9432fd58a2a3f`, the `tooling-ref` CI pins) and
-  `INTEROP_IMAGE_TRAIL_ROOT`.
+- Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a `qwts/qwts-agent-docs-gov`
+  checkout at commit `67db7dc9c20bc29222fb605b7ff9432fd58a2a3f`) and `INTEROP_IMAGE_TRAIL_ROOT`.
 - **Floors are ratchets — raise them as quality improves, never lower them to
   pass.** The a11y violation budget ratchets the other way: its counts only
   shrink, and coming in under budget fails until the entry is tightened.
