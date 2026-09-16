@@ -22,7 +22,7 @@ describe('release workflow publication', () => {
 
     assert.match(
       workflow,
-      /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@b146b85da189d188f71cda59d363eec7272e498e/u,
+      /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1/u,
     );
     assert.match(workflow, /arguments-json: '\["ci","--ignore-scripts"\]'/u);
     assert.ok(evidenceIndex >= 0 && installIndex > evidenceIndex, 'release dependencies execute only after evidence verification');
