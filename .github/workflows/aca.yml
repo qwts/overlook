@@ -137,7 +137,7 @@ jobs:
         with:
           node-version: 24
       - name: Install advisory checker dependencies
-        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@ed5c5d8f7aadba6eefa41a7fd17b076601530848
         with:
           task: Install advisory checker dependencies
           executable: npm
