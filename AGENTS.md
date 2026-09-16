@@ -6,17 +6,17 @@
 
 PR-first workflow, validation-before-push, commit and PR hygiene, and the
 untrusted-input threat model are defined once, for every repo, in the
-[org-wide agent conventions](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-conventions.md).
+[org-wide agent conventions](https://github.com/qwts/agent-sop/blob/main/docs/reference/agent-conventions.md).
 Before creating or copying a repo-local skill, consult the reviewed
-[shared agent skills](https://github.com/qwts/playbook-engineering/blob/74e775ef23d8e7d8f8e693ccc2329f430978c096/skills/README.md)
+[shared agent skills](https://github.com/qwts/agent-sop/blob/74e775ef23d8e7d8f8e693ccc2329f430978c096/skills/README.md)
 index. Reuse only the pinned version supplied by the governed harness; a skill
 genuinely specific to this repository belongs in its local context.
 This repository is governed by
-[playbook-engineering](https://github.com/qwts/playbook-engineering) — its
-[shared SOPs](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/README.md)
-and [engineering decisions](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/README.md)
+[agent-sop](https://github.com/qwts/agent-sop) — its
+[shared SOPs](https://github.com/qwts/agent-sop/blob/main/docs/sop/README.md)
+and [engineering decisions](https://github.com/qwts/agent-sop/blob/main/docs/decisions/README.md)
 apply here by default
-([ENG-0008](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0008-shared-sop-inheritance.md):
+([ENG-0008](https://github.com/qwts/agent-sop/blob/main/docs/decisions/ENG-0008-shared-sop-inheritance.md):
 inherit by default, vary by explicit delta).
 <!-- governed:shared-agent-discovery:end -->
 
@@ -139,7 +139,7 @@ Machine data (EXIF, counts, sync states) renders with the `.mono-data` utility.
   [Repo Documentation Pointer Map](docs/Repo-Documentation-Pointer-Map.md) says
   which page is canonical for a given repo path. The GitHub wiki is retired; its
   pages are stubs kept only so existing links resolve
-  ([ENG-0003](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
+  ([ENG-0003](https://github.com/qwts/agent-sop/blob/main/docs/decisions/ENG-0003-repo-is-documentation-source-of-truth.md)).
 - **ADR gate:** an issue labeled `adr` changes an architectural contract — do not
   start its implementation until the governing ADR in [`docs/adr/`](docs/adr/)
   reads `Status: Accepted` (precedent: ADR-0022 ↔ #483, ADR-0023 ↔ #534). The
@@ -180,7 +180,7 @@ no guard runs on runners; running heavy lanes locally exhausted the owner's mach
 
 Gate-by-gate detail, ratchet values, the three a11y lanes, license policy,
 dependency pins and overrides, packaging checks, and the release/signing flow:
-[Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
+[Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/agent-sop/blob/main/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
 
 ## Memory Guard
 
@@ -200,7 +200,7 @@ dependency pins and overrides, packaging checks, and the release/signing flow:
 - `node tools/agent-guard/arbiter.mjs status` shows the machine's limits and what
   is holding budget. `tools/agent-guard/` is governance-owned and synced — never
   edit it; fixes go to `qwts/playbook-engineering`. Reference:
-  [machine memory guard](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
+  [machine memory guard](https://github.com/qwts/agent-sop/blob/main/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling
 

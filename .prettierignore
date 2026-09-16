@@ -25,7 +25,7 @@ src/shared/i18n/generated/
 src/main/i18n/generated/
 
 # governed:agent-harness-format:start
-# These paths are synchronized by playbook-engineering. Their lint and syntax
+# These paths are synchronized by agent-sop. Their lint and syntax
 # contract runs at the governance source; consumer formatters must not rewrite
 # the managed bytes and start a format-versus-sync loop.
 .codex/config.toml
@@ -34,6 +34,5 @@ src/main/i18n/generated/
 .codex/hooks.json
 .claude/settings.json
 .cursor/hooks.json
-.github/hooks/agent-guard.json
 .windsurf/hooks.json
 # governed:agent-harness-format:end
