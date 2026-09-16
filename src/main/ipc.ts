@@ -1199,8 +1199,10 @@ export function registerIpcHandlers(getLanguage: () => string | null): void {
   const getLocale = validateHandler(channels.getLocale, () => ({ locale: resolveActiveLocale(getLanguage()) }));
   ipcMain.handle(channels.getLocale.name, (_event, request: unknown) => getLocale(request));
 
-  const clipboardWrite = validateHandler(channels.clipboardWrite, ({ text }) => {
-    clipboard.writeText(text);
+  const clipboardWrite = validateHandler(channels.clipboardWrite, async ({ text }) => {
+    // Electron 44 made clipboard.writeText asynchronous; surface its failure
+    // to the renderer instead of letting the promise float.
+    await clipboard.writeText(text);
     return {};
   });
   ipcMain.handle(channels.clipboardWrite.name, (_event, request: unknown) => clipboardWrite(request));
