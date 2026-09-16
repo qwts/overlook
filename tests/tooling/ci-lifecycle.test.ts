@@ -115,7 +115,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   test('enforces finite workflow runtime with the reviewed immutable contract', () => {
     const sources = [aca, autoUpdate, ci, closeLinkedIssues, codeql, packageWorkflow, perf, release, versionCut].join('\n');
     assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
-    assert.match(sources, /uses: qwts\/agent-sop\/\.github\/actions\/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1/u);
+    assert.match(sources, /uses: qwts\/agent-sop\/\.github\/actions\/bounded-command@ed5c5d8f7aadba6eefa41a7fd17b076601530848/u);
     assert.match(ci, /name: Workflow runtime policy/u);
     assert.match(ci, /ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.match(ci, /runtime-policy\.mjs --root "\$GITHUB_WORKSPACE"/u);

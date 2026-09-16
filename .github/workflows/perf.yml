@@ -39,7 +39,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@ed5c5d8f7aadba6eefa41a7fd17b076601530848
         with:
           task: Install locked performance dependencies
           executable: npm
@@ -49,7 +49,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Electron system dependencies
-        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@ed5c5d8f7aadba6eefa41a7fd17b076601530848
         with:
           task: Install Electron Chromium system dependencies
           executable: npx
@@ -59,7 +59,7 @@ jobs:
           retry-delay-seconds: '5'
 
       - name: Install Xvfb
-        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@ed5c5d8f7aadba6eefa41a7fd17b076601530848
         with:
           task: Install Xvfb
           executable: sudo
