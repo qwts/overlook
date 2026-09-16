@@ -164,7 +164,7 @@ authoritative lane** — its workflows invoke the `:inner` entrypoints directly,
 no guard runs on runners; running heavy lanes locally exhausted the owner's machine. Ask first.
 
 - Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a
-  `qwts/playbook-engineering` checkout at `v1`) and `INTEROP_IMAGE_TRAIL_ROOT`.
+  `qwts/agent-sop` checkout at `v1`) and `INTEROP_IMAGE_TRAIL_ROOT`.
 - **Floors are ratchets — raise them as quality improves, never lower them to
   pass.** The a11y violation budget ratchets the other way: its counts only
   shrink, and coming in under budget fails until the entry is tightened.
@@ -199,7 +199,7 @@ dependency pins and overrides, packaging checks, and the release/signing flow:
   escape hatch — the heavy-lane opt-in is a grant only the owner can create.
 - `node tools/agent-guard/arbiter.mjs status` shows the machine's limits and what
   is holding budget. `tools/agent-guard/` is governance-owned and synced — never
-  edit it; fixes go to `qwts/playbook-engineering`. Reference:
+  edit it; fixes go to `qwts/agent-sop`. Reference:
   [machine memory guard](https://github.com/qwts/agent-sop/blob/main/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling

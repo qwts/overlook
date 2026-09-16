@@ -1,7 +1,7 @@
 # Agent Golden Tasks
 
 The eval set for this repository's agent primitives
-([ENG-0006](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)
+([ENG-0006](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)
 item 4). A change to `AGENTS.md`, a vendor adapter, a slash command, or a skill
 that claims to improve agent behavior cites evidence from these tasks. "It reads
 better" is not evidence.
@@ -22,7 +22,7 @@ gates that fail deterministically. A task is scored on two axes:
 Tasks are run from the issue text alone, against the parent commit of the merge
 that closed them. The set stays small — three to five — so the gate is cheap
 enough to survive; ENG-0006 §5 puts the shared harness in
-`qwts/playbook-engineering` when it stabilizes, so this page defines the tasks,
+`qwts/agent-sop` when it stabilizes, so this page defines the tasks,
 not the runner.
 
 **Replacing a task** is allowed when its trap stops being reachable — for

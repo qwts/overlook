@@ -3,11 +3,11 @@
 // Local half of the documentation-governance gate (docs-gov, ENG-0009).
 //
 // CI runs docs-gov through the reusable workflow
-// `qwts/playbook-engineering/.github/workflows/docs-governance.yml@v1`, which
+// `qwts/agent-sop/.github/workflows/docs-governance.yml@v1`, which
 // fetches the check implementation fresh at the `v1` tag. There is no npm
 // dependency to vendor it, so this wrapper lets `npm run ci` / `/check` run the
 // exact same check locally: point DOCS_GOV_TOOLING_ROOT at a
-// qwts/playbook-engineering checkout and it invokes that repo's CLI against
+// qwts/agent-sop checkout and it invokes that repo's CLI against
 // photos' docs-gov.config.json. Same env-gated-external-checkout shape as
 // check-interop-acceptance.mjs (see AGENTS.md → Documentation And Validation).
 
@@ -17,7 +17,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-const PLAYBOOK_REPOSITORY = 'qwts/playbook-engineering';
+const PLAYBOOK_REPOSITORY = 'qwts/agent-sop';
 // Must match the `@v1` ref the reusable workflow is pinned to in ci.yml, so a
 // local pass proves the same thing a CI pass does.
 const TOOLING_REF = 'v1';

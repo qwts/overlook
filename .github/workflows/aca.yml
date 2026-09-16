@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: qwts/playbook-engineering/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
+      - uses: qwts/agent-sop/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
         with:
           authorization-only: 'true'
   over-budget:
@@ -137,7 +137,7 @@ jobs:
         with:
           node-version: 24
       - name: Install advisory checker dependencies
-        uses: qwts/playbook-engineering/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
+        uses: qwts/agent-sop/.github/actions/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1
         with:
           task: Install advisory checker dependencies
           executable: npm

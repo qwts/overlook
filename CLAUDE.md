@@ -5,7 +5,7 @@ and holds everything shared: communication rules, pre-edit checkpoints, the
 working agreement, architecture and design-token invariants, GitHub hygiene, the
 validation gates, and the memory guard. Do not restate any of it here — a
 shared fact in two agent files is a bug
-([ENG-0006](https://github.com/qwts/playbook-engineering/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)).
+([ENG-0006](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)).
 
 This file carries only what is specific to Claude Code.
 
@@ -19,7 +19,7 @@ This file carries only what is specific to Claude Code.
   scripts, and steering you to the guarded entrypoints. Because project settings
   are checked in, this applies to terminal, IDE, and headless runs alike.
 - **`WorktreeCreate`** mints the per-worktree bot identity from
-  `qwts/playbook-engineering`.
+  `qwts/agent-sop`.
 
 The guard itself lives in `tools/agent-guard/`, which is governance-owned and
 arrives by harness sync — never edit it from here.
