@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: qwts/agent-sop/.github/actions/ci-policy@40d1c46756ba70ef40d1b56915d1cdd45b8efa85
+      - uses: qwts/qwts-agent-ci/.github/actions/ci-policy@3a5617b287d922e37f262210a1d8750d8217b56d
         with:
           authorization-only: 'true'
 
