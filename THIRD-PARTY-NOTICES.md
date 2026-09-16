@@ -13,7 +13,7 @@ components; their full license texts ship inside the Electron distribution at
 
 | Package | Version | License |
 | ------- | ------- | ------- |
-| `@anthropic-ai/sdk` | 0.120.0 | MIT |
+| `@anthropic-ai/sdk` | 0.125.0 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
 | `@emnapi/runtime` | 1.11.3 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
@@ -68,7 +68,7 @@ components; their full license texts ship inside the Electron distribution at
 | `object-keys` | 1.1.1 | MIT |
 | `onnxruntime-common` | 1.29.0 | MIT |
 | `onnxruntime-node` | 1.29.0 | MIT |
-| `openai` | 7.5.0 | Apache-2.0 |
+| `openai` | 7.15.0 | Apache-2.0 |
 | `semver` | 7.8.5 | ISC |
 | `serialize-error` | 8.1.0 | MIT |
 | `sharp` | 0.35.4 | Apache-2.0 |
@@ -82,12 +82,13 @@ components; their full license texts ship inside the Electron distribution at
 | `ts-algebra` | 2.0.0 | MIT |
 | `tslib` | 2.8.1 | 0BSD |
 | `type-fest` | 0.20.2 | (MIT OR CC0-1.0) |
+| `undici` | 6.28.0 | MIT |
 | `ws` | 8.21.1 | MIT |
-| `zod` | 4.4.3 | MIT |
+| `zod` | 4.6.3 | MIT |
 
 ---
 
-## @anthropic-ai/sdk 0.120.0
+## @anthropic-ai/sdk 0.125.0
 
 License: MIT
 
@@ -1477,7 +1478,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## openai 7.5.0
+## openai 7.15.0
 
 License: Apache-2.0
 
@@ -2054,6 +2055,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
+## undici 6.28.0
+
+License: MIT
+
+```
+MIT License
+
+Copyright (c) Matteo Collina and Undici contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## ws 8.21.1
 
 License: MIT
@@ -2083,7 +2114,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-## zod 4.4.3
+## zod 4.6.3
 
 License: MIT
 
