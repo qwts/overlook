@@ -115,7 +115,7 @@ describe('governed CI lifecycle (ENG-0004)', () => {
   test('enforces finite workflow runtime with the reviewed immutable contract', () => {
     const sources = [aca, autoUpdate, ci, closeLinkedIssues, codeql, packageWorkflow, perf, release, versionCut].join('\n');
     assert.doesNotMatch(sources, /^\s*run: (?:npm (?:ci|install)|npm --prefix .* clean-install|npx playwright install)/gmu);
-    assert.match(sources, /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@b146b85da189d188f71cda59d363eec7272e498e/u);
+    assert.match(sources, /uses: qwts\/playbook-engineering\/\.github\/actions\/bounded-command@f9250d2c515d7b8b86834d0b7d2feef90ae3eed1/u);
     assert.match(ci, /name: Workflow runtime policy/u);
     assert.match(ci, /ref: 40d1c46756ba70ef40d1b56915d1cdd45b8efa85/u);
     assert.match(ci, /runtime-policy\.mjs --root "\$GITHUB_WORKSPACE"/u);
@@ -139,8 +139,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.doesNotMatch(codeql, /^ {2}(?:pull_request|push|workflow_dispatch|schedule):$/mu);
     assert.match(codeql, /language: \[actions, javascript-typescript\]/u);
     assert.match(codeql, /security-events: write/u);
-    assert.match(codeql, /github\/codeql-action\/init@cdf488f595d80d6e07e03d4674febd5ab45fa938/u);
-    assert.match(codeql, /github\/codeql-action\/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938/u);
+    assert.match(codeql, /github\/codeql-action\/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63/u);
+    assert.match(codeql, /github\/codeql-action\/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63/u);
   });
 
   test('keeps main on smoke-or-complete fallback while CodeQL owns default-branch alerts', () => {
