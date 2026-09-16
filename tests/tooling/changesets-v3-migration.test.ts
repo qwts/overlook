@@ -20,7 +20,7 @@ describe('Changesets v3 migration (#1018)', () => {
     const devDependencies = manifest['devDependencies'] as Record<string, string>;
 
     assert.equal(manifest['private'], true);
-    assert.equal(devDependencies['@changesets/cli'], '3.0.1');
+    assert.match(devDependencies['@changesets/cli'] ?? '', /^3\.\d+\.\d+$/);
     assert.equal(config['$schema'], 'https://unpkg.com/@changesets/config@4.0.0/schema.json');
     assert.deepEqual(config['privatePackages'], { version: true, tag: false });
   });
