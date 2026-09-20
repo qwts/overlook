@@ -174,6 +174,14 @@ export interface BackupEngineDeps {
   readonly hasLocalOriginal?: ((contentHash: string) => boolean) | undefined;
   /** ADR-0033 §2: removes the provider copies of rows excluded from backup,
    * called only once the remote's latest generation records the exclusion. */
+  readonly purgeCleanup?:
+    | {
+        readonly hasManifestDebt: () => boolean;
+        readonly snapshot: () => Promise<readonly number[]>;
+        readonly settleManifest: (ids: readonly number[], retainedPaths: readonly string[]) => void;
+        readonly retry: (signal?: AbortSignal) => Promise<unknown>;
+      }
+    | undefined;
   readonly settleExclusions?: (() => Promise<unknown>) | undefined;
   /** Durable manifest debt (#741): survives restart so an owed generation is
    * never forgotten between runs. */
@@ -374,6 +382,7 @@ export class BackupEngine {
       }
     }
 
+    if (this.deps.purgeCleanup?.hasManifestDebt() === true) this.setManifestOwed(true);
     if (signal?.aborted !== true && this.deps.protectedBackup !== undefined) {
       if (this.deps.protectedBackup.hasManifestDebt()) this.setManifestOwed(true);
       const protectedResult = await this.deps.protectedBackup.run(signal);
@@ -489,6 +498,7 @@ export class BackupEngine {
     if (signal?.aborted !== true && !this.manifestOwed && this.deps.settleExclusions !== undefined) {
       await this.deps.settleExclusions();
     }
+    if (signal?.aborted !== true && !this.manifestOwed) await this.deps.purgeCleanup?.retry(signal);
     let integrity = EMPTY_INTEGRITY;
     // publishBlocked is an integrity condition, not a transport failure —
     // the scrub still runs so remaining local-backed claims heal (bounded
@@ -824,6 +834,7 @@ export class BackupEngine {
   /** Seals and uploads the next manifest generation; prunes past N=2. */
   private async uploadManifest(): Promise<void> {
     const generatedAt = new Date(this.deps.now()).toISOString();
+    const purgeSnapshot = await this.deps.purgeCleanup?.snapshot();
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
@@ -903,6 +914,11 @@ export class BackupEngine {
       await this.deps.provider.delete(stale.path);
     }
     if (protectedSnapshot !== undefined) this.deps.protectedBackup?.settleManifest(protectedSnapshot);
+    if (purgeSnapshot !== undefined)
+      this.deps.purgeCleanup?.settleManifest(purgeSnapshot, [
+        ...blobPhotos(manifest.photos).map((photo) => photo.blobPath),
+        ...manifest.sidecars.map((sidecar) => sidecar.blobPath),
+      ]);
   }
 
   private async putBufferVerified(path: string, bytes: Buffer): Promise<void> {

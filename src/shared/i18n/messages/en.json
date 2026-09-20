@@ -2357,6 +2357,9 @@
   "purge.keptLocal.some": {
     "defaultMessage": "{count, plural, one {# of these is kept on this device only and has no cloud copy to remove.} other {# of these are kept on this device only and have no cloud copy to remove.}}"
   },
+  "purge.removalPending": {
+    "defaultMessage": "{count, plural, one {# photo may still have a cloud copy: removal is pending.} other {# photos may still have cloud copies: removal is pending.}}"
+  },
   "recoveryKey.drop.empty": {
     "defaultMessage": "Drop one Overlook recovery-key file."
   },

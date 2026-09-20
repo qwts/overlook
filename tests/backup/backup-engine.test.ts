@@ -656,3 +656,49 @@ describe('backup engine (#105)', () => {
     assert.ok(w.audits.includes('INTEGRITY-RECOVERY-REPAIRED'));
   });
 });
+
+test('purged exclusion debt forces a verified manifest before retry, including a new engine instance', async () => {
+  const w = await world(1);
+  await w.engine.run();
+  const events: string[] = [];
+  let retained: readonly string[] = [];
+  const deps: BackupEngineDeps = {
+    ...w.deps,
+    manifestSnapshot: () => {
+      events.push('ordinary-snapshot');
+      return w.deps.manifestSnapshot();
+    },
+    purgeCleanup: {
+      hasManifestDebt: () => true,
+      snapshot: () => {
+        events.push('cleanup-snapshot');
+        return Promise.resolve([17]);
+      },
+      settleManifest: (ids, paths) => {
+        assert.deepEqual(ids, [17]);
+        retained = paths;
+        events.push('published');
+      },
+      retry: () => {
+        events.push('retry');
+        return Promise.resolve();
+      },
+    },
+  };
+  w.faulty.arm('put');
+  const failed = await new BackupEngine(deps).run();
+  assert.equal(failed.manifestUploaded, false);
+  assert.ok(!events.includes('published'));
+  assert.ok(!events.includes('retry'));
+  events.length = 0;
+  w.faulty.disarm('put');
+  const result = await new BackupEngine(deps).run();
+  assert.equal(result.uploaded, 0);
+  assert.equal(result.manifestUploaded, true);
+  assert.deepEqual(events, ['cleanup-snapshot', 'ordinary-snapshot', 'published', 'retry']);
+  const blobs = await w.provider.list('blobs');
+  assert.deepEqual(
+    retained,
+    blobs.map((blob) => blob.path),
+  );
+});

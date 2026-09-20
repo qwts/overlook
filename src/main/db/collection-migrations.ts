@@ -10,6 +10,7 @@ import { migrateVariants } from './variant-migration.js';
 import { migratePerceptualFingerprints } from './fingerprint-migration.js';
 import { migrateBackupCoverage } from './coverage-migration.js';
 import { migrateLibraryKeyring } from './keyring-migration.js';
+import { migratePurgeCleanup } from './purge-cleanup-migration.js';
 import { migrateProtectedVariantSources } from './protected-variant-migration.js';
 import { migrateDisclosurePolicy } from './disclosure-migration.js';
 
@@ -43,4 +44,5 @@ export const COLLECTION_MIGRATIONS: readonly {
   // collection/photo overrides (ADR-0032 §6).
   { version: 37, name: 'disclosure-policy', up: migrateDisclosurePolicy },
   { version: 38, name: 'protected-variant-sources', up: migrateProtectedVariantSources },
+  { version: 39, name: 'purge-remote-cleanup', up: migratePurgeCleanup },
 ];

@@ -37,6 +37,8 @@ export interface PurgeDeps {
      * sidecar rows away (#484). */
     readonly sidecarHashesForPhoto: (photoId: string) => readonly string[];
   };
+  /** Persists exclusion cleanup and removes the row in one transaction. */
+  readonly purgeExcluding?: ((photoId: string, authorized: boolean) => Promise<number>) | undefined;
   readonly blobs: {
     readonly deleteOriginal: (contentHash: string) => Promise<void>;
     readonly deleteThumbs: (contentHash: string) => Promise<void>;
@@ -99,13 +101,19 @@ export class PurgeService {
       const sidecarHashes = this.deps.repo.sidecarHashesForPhoto(photoId);
       let remoteProvider: StorageProvider | undefined;
       let remoteFailureReason: string | null = null;
-      try {
-        remoteProvider = await this.deps.remoteProvider(photoId);
-      } catch (error) {
-        remoteFailureReason = error instanceof CustodyResolutionError ? error.reason : 'custody-unavailable';
+      const pendingExclusion = photo.coverage === 'excluding';
+      if (pendingExclusion) {
+        if (this.deps.purgeExcluding === undefined) throw new Error('durable exclusion cleanup is unavailable');
+        remoteFailures += await this.deps.purgeExcluding(photoId, authorized);
+      } else {
+        try {
+          remoteProvider = await this.deps.remoteProvider(photoId);
+        } catch (error) {
+          remoteFailureReason = error instanceof CustodyResolutionError ? error.reason : 'custody-unavailable';
+        }
+        if (authorized) this.deps.repo.purgeRowAuthorized(photoId);
+        else this.deps.repo.purgeRow(photoId);
       }
-      if (authorized) this.deps.repo.purgeRowAuthorized(photoId);
-      else this.deps.repo.purgeRow(photoId);
       // The variant's own derivatives die with it (#496, ADR-0031 §8)…
       await this.deps.blobs.deleteThumbs(photo.derivativeKey);
       // …but the original asset may back other variants (trashed siblings
@@ -114,16 +122,17 @@ export class PurgeService {
       if (this.deps.repo.countAnyByContentHash(photo.contentHash) === 0) {
         await this.deps.blobs.deleteOriginal(photo.contentHash);
         if (photo.derivativeKey !== photo.contentHash) await this.deps.blobs.deleteThumbs(photo.contentHash);
-        remoteFailures += await this.deleteRemote(
-          photoId,
-          photo.contentHash,
-          blobPath(photo.contentHash),
-          remoteProvider,
-          remoteFailureReason,
-        );
+        if (!pendingExclusion && photo.coverage !== 'excluded')
+          remoteFailures += await this.deleteRemote(
+            photoId,
+            photo.contentHash,
+            blobPath(photo.contentHash),
+            remoteProvider,
+            remoteFailureReason,
+          );
       }
       await this.deps.blobs.deleteSidecars(photoId);
-      for (const hash of sidecarHashes) {
+      for (const hash of pendingExclusion || photo.coverage === 'excluded' ? [] : sidecarHashes) {
         remoteFailures += await this.deleteRemote(photoId, hash, `sidecars/${photoId}/${hash}`, remoteProvider, remoteFailureReason);
       }
       this.deps.audit(`PURGE photo=${photoId} bytes=${String(photo.bytes)}`);
