@@ -223,9 +223,17 @@ export class CustodyAuthorityRepository {
    * dependent authority for this provider becomes unavailable until the
    * exact account and namespace have been proven again. */
   stageReconnectVerification(providerId: string): readonly CustodyAuthority[] {
-    const candidates = this.soleCustodyCounts()
-      .map(({ authority }) => authority)
-      .filter((authority) => authority.providerId === providerId);
+    const queued = queryAll<{ id: number }>(this.db, 'SELECT DISTINCT authority_id AS id FROM purge_remote_cleanup').flatMap(({ id }) => {
+      const authority = this.get(id);
+      return authority === undefined ? [] : [authority];
+    });
+    const candidates = [
+      ...new Map(
+        [...this.soleCustodyCounts().map(({ authority }) => authority), ...queued]
+          .filter((authority) => authority.providerId === providerId)
+          .map((authority) => [authority.id, authority]),
+      ).values(),
+    ];
     if (candidates.length === 0) return [];
     run(
       this.db,
@@ -235,6 +243,7 @@ export class CustodyAuthorityRepository {
           AND id IN (
             SELECT custody_authority_id FROM sync_ledger
              WHERE custody_authority_id IS NOT NULL AND status IN ('offloaded', 'error')
+            UNION SELECT authority_id FROM purge_remote_cleanup
           )`,
       providerId,
     );

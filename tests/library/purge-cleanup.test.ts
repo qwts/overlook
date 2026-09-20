@@ -136,6 +136,15 @@ test('purge transfers exclusion debt before CASCADE, survives failed deletion an
     assert.equal(b.photos.getDeleted('photo'), undefined);
     assert.equal(new SyncLedger(w.db()).status('photo'), undefined);
     assert.equal(b.queue.pending().length, 1);
+    const source = b.queue.pending()[0]!;
+    const authority = b.authorities.get(source.authorityId)!;
+    b.authorities.deleteUnreferenced(authority.providerId, authority.accountId);
+    assert.ok(b.authorities.get(authority.id), 'cleanup retains its source authority');
+    assert.deepEqual(
+      b.authorities.stageReconnectVerification(authority.providerId).map((item) => item.id),
+      [authority.id],
+    );
+    b.authorities.markVerified([authority.id], AT);
     assert.equal(w.store.hasOriginal(w.hash), false);
     assert.equal(w.provider.deletes, 0, 'no provider delete before manifest publication');
     await b.cleanup.retry();
