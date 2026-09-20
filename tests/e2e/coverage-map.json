@@ -426,6 +426,14 @@
       ]
     },
     {
+      "id": "1114-repeated-edit-revert",
+      "wiki": "Acceptance-Test-Persisted-Edits",
+      "coverage": [
+        { "type": "playwright-e2e", "path": "tests/e2e/photo-edits.spec.ts" },
+        { "type": "unit-dom", "paths": ["tests/library/photo-edit-service.test.ts", "tests/library/edit-revision.test.ts"] }
+      ]
+    },
+    {
       "id": "493-persisted-edits",
       "wiki": "Acceptance-Test-Persisted-Edits",
       "coverage": [

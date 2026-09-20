@@ -1,3 +1,4 @@
+import { previousEditState } from '../../src/shared/library/edit-revert.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ import { EditRevisionRepository } from '../../src/main/db/edit-revision-reposito
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { PhotoEditService, type PhotoEditServiceDeps } from '../../src/main/library/photo-edit-service.js';
-import type { EditOperation, EditTransform } from '../../src/shared/library/edit-revision.js';
+import { type EditOperation, type EditTransform } from '../../src/shared/library/edit-revision.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 // #493 / ADR-0031 §2: Save appends a revision whose parent is the head and
@@ -140,6 +141,52 @@ describe('photo edit service (#493)', () => {
     assert.notEqual(reverted.head?.id, firstId, 'revert never rewrites or re-points to the old row');
     await assert.rejects(h.service.revert('P2', firstId), /does not belong/u);
     h.close();
+  });
+
+  test('three automatic reverts reach the empty root without losing any revision (#1114)', async () => {
+    const h = harness();
+    try {
+      const a = await h.service.save('P1', [ROTATE]);
+      const b = await h.service.save('P1', [FLIP]);
+      const c = await h.service.save('P1', [ROTATE, FLIP]);
+      for (const [index, operations] of [[FLIP], [ROTATE], []].entries()) {
+        const before = h.service.head('P1');
+        // Resolving a fresh payload, even in a different listing order, uses
+        // parent links rather than a renderer-local cursor or timestamps.
+        assert.deepEqual(previousEditState(before.head, [...before.history].reverse())?.operations, operations);
+        const result = await h.service.revert('P1');
+        assert.deepEqual(result.head?.operations, operations);
+        assert.equal(result.head?.parentId, before.head?.id);
+        assert.equal(result.history.length, 4 + index);
+        assert.equal(result.history[0]?.id, result.head?.id, 'newest first');
+      }
+      const root = h.service.head('P1');
+      assert.equal(previousEditState(root.head, root.history), null);
+      await assert.rejects(h.service.revert('P1'), /no supported earlier edit state/u);
+      assert.equal(h.service.head('P1').history.length, 6);
+      for (const saved of [a, b, c]) {
+        assert.deepEqual(root.history.find((row) => row.id === saved.head?.id)?.operations, saved.head?.operations);
+      }
+    } finally {
+      h.close();
+    }
+  });
+
+  test('a duplicate saved stack resumes at its earlier position; Reset stops at empty', async () => {
+    const h = harness();
+    try {
+      await h.service.save('P1', [ROTATE]);
+      await h.service.save('P1', [FLIP]);
+      await h.service.save('P1', [ROTATE]);
+      const reverted = await h.service.revert('P1');
+      assert.deepEqual(reverted.head?.operations, []);
+      await h.service.save('P1', [FLIP]);
+      const reset = await h.service.reset('P1');
+      assert.equal(previousEditState(reset.head, reset.history), null);
+      await assert.rejects(h.service.revert('P1'), /no supported earlier edit state/u);
+    } finally {
+      h.close();
+    }
   });
 
   test('an offloaded original defers the bake; a failed bake reports failure but keeps the head', async () => {

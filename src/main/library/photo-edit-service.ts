@@ -1,3 +1,4 @@
+import { previousEditState } from '../../shared/library/edit-revert.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
@@ -64,7 +65,13 @@ export class PhotoEditService {
     return this.advance(photoId, []);
   }
 
-  async revert(photoId: string, revisionId: string): Promise<EditMutationResult> {
+  async revert(photoId: string, revisionId?: string): Promise<EditMutationResult> {
+    if (revisionId === undefined) {
+      const current = this.revisions.head(photoId);
+      const target = previousEditState(current.head, current.history);
+      if (target === null) throw new Error('no supported earlier edit state');
+      return this.advance(photoId, target.operations);
+    }
     const row = this.revisions.get(revisionId);
     if (row === null || row.photoId !== photoId) throw new Error(`revision ${revisionId} does not belong to photo ${photoId}`);
     const head = this.revisions.head(photoId);

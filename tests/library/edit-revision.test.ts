@@ -1,3 +1,4 @@
+import { previousEditState } from '../../src/shared/library/edit-revert.js';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -133,4 +134,14 @@ describe('edit revision documents (#493)', () => {
     assert.ok(isIdentityTransform(foldOperations([])));
     assert.ok(!isIdentityTransform(transform));
   });
+});
+
+test('revert traversal refuses missing, cyclic, or unsupported ancestry (#1114)', () => {
+  const head = { id: ID, parentId: PARENT, operations: [rotate(1)], unsupported: null };
+  const parent = { id: PARENT, parentId: null, operations: [rotate(2)], unsupported: null };
+  assert.equal(previousEditState(head, [head]), null);
+  assert.equal(previousEditState(head, [head, { ...parent, parentId: ID }]), null);
+  assert.equal(previousEditState(head, [head, { ...parent, unsupported: 'newer format' }]), null);
+  assert.equal(previousEditState({ ...head, unsupported: 'newer format' }, [head, parent]), null);
+  assert.deepEqual(previousEditState({ ...head, parentId: null }, [head]), { revisionId: null, operations: [] });
 });
