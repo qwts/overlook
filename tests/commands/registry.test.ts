@@ -75,6 +75,18 @@ test('shortcut help is generated from the active registry projection (#399)', ()
   );
 });
 
+test('folder-scoped creation commands stay out of native menus and global shortcuts (#1109)', () => {
+  for (const id of ['album.folder.newInside', 'album.folder.newAlbumInside'] as const) {
+    const command = commandById(id);
+    assert.equal(command.target, 'focused-item');
+    assert.equal(command.native, undefined);
+    assert.equal(command.quickAction, undefined);
+    assert.equal(command.key, undefined);
+    assert.deepEqual(command.surfaces, []);
+    assert.ok(!nativeCommands().some((native) => native.id === id));
+  }
+});
+
 test('native menu exposure is typed, unique, and queues only idempotent commands (#531)', () => {
   const native = nativeCommands();
   assert.ok(native.some(({ id }) => id === 'app.settings.open.privacy'));

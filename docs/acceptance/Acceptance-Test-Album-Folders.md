@@ -18,6 +18,10 @@ below.
 2. Open the folder's actions menu and choose **New album inside…**. Confirm
    the album appears indented one step under the folder, and that the folder's
    count is the number of distinct photos across every album inside it.
+   Also choose **New folder inside…** and confirm the dialog names the selected
+   parent folder. Both labels project the contextual commands in the shared
+   registry (`album.folder.newAlbumInside`, `album.folder.newInside`); neither
+   action appears on an ordinary album or becomes a global shortcut (#1109).
 3. Open an existing album's actions menu, choose **Move to folder…**, and pick
    the folder. Confirm the album lands last among the folder's children and the
    toast names the destination. Move it back to **Top level** and confirm it

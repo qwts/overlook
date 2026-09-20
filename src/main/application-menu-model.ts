@@ -116,6 +116,8 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'album.hide':
     case 'album.show':
     case 'album.folder.new':
+    case 'album.folder.newInside':
+    case 'album.folder.newAlbumInside':
     case 'album.move':
     case 'album.tags':
     case 'album.visibility.inherit':

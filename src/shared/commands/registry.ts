@@ -1,3 +1,5 @@
+export type CommandId = keyof typeof commandLabels;
+
 export type CommandSurface = 'global' | 'grid' | 'lightbox' | 'dialog';
 export type CommandPlatform = 'darwin' | 'win32' | 'linux';
 export type CommandTarget = 'application' | 'window' | 'route' | 'focused-item' | 'selection';
@@ -43,96 +45,6 @@ export interface CommandDescriptor {
   readonly quickAction?: QuickActionExposure | undefined;
 }
 
-export type CommandId =
-  | 'app.settings.open'
-  | 'app.settings.open.storage'
-  | 'app.settings.open.transfer'
-  | 'app.settings.open.privacy'
-  | 'app.lock.now'
-  | 'app.search.focus'
-  | 'library.switch'
-  | 'library.move'
-  | 'library.new'
-  | 'library.import'
-  | 'library.exportAll'
-  | 'library.duplicates'
-  | 'library.source.all'
-  | 'library.source.favorites'
-  | 'library.source.recent'
-  | 'library.source.trash'
-  | 'selection.selectAll'
-  | 'selection.clear'
-  | 'history.undo'
-  | 'history.redo'
-  | 'album.membership.add'
-  | 'album.membership.remove'
-  | 'album.rename'
-  | 'album.delete'
-  | 'album.transfer'
-  | 'album.hide'
-  | 'album.show'
-  | 'album.reorder.up'
-  | 'album.reorder.down'
-  | 'album.reorder.top'
-  | 'album.reorder.bottom'
-  | 'album.folder.new'
-  | 'album.move'
-  | 'album.tags'
-  | 'album.visibility.inherit'
-  | 'album.smart.new'
-  | 'album.smart.edit'
-  | 'album.duplicate'
-  | 'view.inspector.toggle'
-  | 'view.inspector.detach'
-  | 'view.sidebar.toggle'
-  | 'view.appearance.reset'
-  | 'view.mode.grid'
-  | 'view.mode.list'
-  | 'view.mode.feed'
-  | 'view.mode.moodboard'
-  | 'board.layout'
-  | 'view.lightbox.close'
-  | 'view.lightbox.previous'
-  | 'view.lightbox.next'
-  | 'photo.favorite.toggle'
-  | 'photo.edit.save'
-  | 'photo.edit.reset'
-  | 'photo.edit.crop'
-  | 'photo.edit.revert'
-  | 'photo.original.mark'
-  | 'photo.original.unmark'
-  | 'photo.open'
-  | 'photo.export'
-  | 'photo.duplicate'
-  | 'photo.offload'
-  | 'photo.restoreOriginal'
-  | 'photo.coverage.exclude'
-  | 'photo.coverage.include'
-  | 'photo.transfer'
-  | 'photo.trash'
-  | 'photo.restore'
-  | 'photo.purge'
-  | 'trash.empty'
-  | 'view.lightbox.zoomIn'
-  | 'view.lightbox.zoomOut'
-  | 'view.lightbox.zoomReset'
-  | 'view.lightbox.rotateLeft'
-  | 'view.lightbox.rotateRight'
-  | 'view.lightbox.flipHorizontal'
-  | 'view.lightbox.flipVertical'
-  | 'view.lightbox.orientationReset'
-  | 'help.shortcuts'
-  | 'help.activity'
-  | 'help.open'
-  | 'grid.focus.left'
-  | 'grid.focus.right'
-  | 'grid.focus.up'
-  | 'grid.focus.down'
-  | 'grid.focus.home'
-  | 'grid.focus.end'
-  | 'grid.focus.pageUp'
-  | 'grid.focus.pageDown';
-
 export interface KeyboardLike {
   readonly key: string;
   readonly code?: string | undefined;
@@ -143,8 +55,8 @@ export interface KeyboardLike {
 }
 
 const GLOBAL_SURFACES: readonly CommandSurface[] = ['global', 'grid', 'lightbox'];
-const defineMessages = <T extends Record<string, CommandDescriptor['label']>>(messages: T): T => messages;
-const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessages({
+const defineMessages = <T extends Record<string, { readonly id: string; readonly defaultMessage: string }>>(messages: T): T => messages;
+const commandLabels = defineMessages({
   'app.settings.open': { id: 'commands.app.settings.open', defaultMessage: 'Settings…' },
   'app.settings.open.storage': { id: 'commands.app.settings.open.storage', defaultMessage: 'Storage & Backup' },
   'app.settings.open.transfer': { id: 'commands.app.settings.open.transfer', defaultMessage: 'Transfer & Sync' },
@@ -173,6 +85,8 @@ const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessa
   'album.hide': { id: 'commands.album.hide', defaultMessage: 'Hide from All Photos' },
   'album.show': { id: 'commands.album.show', defaultMessage: 'Show in All Photos' },
   'album.folder.new': { id: 'commands.album.folder.new', defaultMessage: 'New folder…' },
+  'album.folder.newInside': { id: 'commands.album.folder.newInside', defaultMessage: 'New folder inside…' },
+  'album.folder.newAlbumInside': { id: 'commands.album.folder.newAlbumInside', defaultMessage: 'New album inside…' },
   'album.move': { id: 'commands.album.move', defaultMessage: 'Move to folder…' },
   'album.tags': { id: 'commands.album.tags', defaultMessage: 'Tags…' },
   'album.visibility.inherit': { id: 'commands.album.visibility.inherit', defaultMessage: 'Use folder setting' },
@@ -430,6 +344,13 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'album.hide', label: label('album.hide', 'Hide from All Photos'), surfaces: [], target: 'focused-item' },
   { id: 'album.show', label: label('album.show', 'Show in All Photos'), surfaces: [], target: 'focused-item' },
   { id: 'album.folder.new', label: label('album.folder.new', 'New folder…'), surfaces: [], target: 'focused-item' },
+  { id: 'album.folder.newInside', label: label('album.folder.newInside', 'New folder inside…'), surfaces: [], target: 'focused-item' },
+  {
+    id: 'album.folder.newAlbumInside',
+    label: label('album.folder.newAlbumInside', 'New album inside…'),
+    surfaces: [],
+    target: 'focused-item',
+  },
   { id: 'album.move', label: label('album.move', 'Move to folder…'), surfaces: [], target: 'focused-item' },
   { id: 'album.tags', label: label('album.tags', 'Tags…'), surfaces: [], target: 'focused-item' },
   { id: 'album.visibility.inherit', label: label('album.visibility.inherit', 'Use folder setting'), surfaces: [], target: 'focused-item' },

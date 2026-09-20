@@ -136,8 +136,8 @@ export function AlbumActionMenu({
     ...(folder && onNewAlbumInside !== undefined
       ? [
           {
-            id: 'album.folder.newAlbum',
-            label: intl.formatMessage({ id: 'album.folder.newAlbum', defaultMessage: 'New album inside…' }),
+            id: 'album.folder.newAlbumInside',
+            label: intl.formatMessage(commandById('album.folder.newAlbumInside').label),
             icon: 'album' as const,
             action: onNewAlbumInside,
             separatorBefore: true,
@@ -147,8 +147,8 @@ export function AlbumActionMenu({
     ...(folder && onNewFolderInside !== undefined
       ? [
           {
-            id: 'album.folder.new',
-            label: intl.formatMessage({ id: 'album.folder.newInside', defaultMessage: 'New folder inside…' }),
+            id: 'album.folder.newInside',
+            label: intl.formatMessage(commandById('album.folder.newInside').label),
             icon: 'folder' as const,
             action: onNewFolderInside,
             separatorBefore: onNewAlbumInside === undefined,

@@ -349,7 +349,7 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/db/album-folders.test.ts", "tests/backup/album-folders-manifest.test.ts"]
+          "paths": ["tests/db/album-folders.test.ts", "tests/backup/album-folders-manifest.test.ts", "tests/commands/registry.test.ts"]
         },
         {
           "type": "manual",
