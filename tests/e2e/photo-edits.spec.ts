@@ -73,21 +73,37 @@ test('persisted edits: save, re-baked tile, reopen, inspector, reset, revert', a
   await expect(edits).toContainText('1');
   await page.keyboard.press('i');
 
-  // Reset writes a new empty revision; Revert steps back to the rotated one.
+  // A is the cropped quarter-turn. Save B and C, then walk back to B, A,
+  // and the implicit empty root without bouncing to an appended revert.
+  const revert = page.getByTestId('lightbox-edit-revert');
+  for (const turns of [2, 3]) {
+    await page.getByRole('button', { name: /^Rotate clockwise/u }).click();
+    await save.click();
+    await expect(viewport).toHaveAttribute('data-edit-busy', 'false');
+    await expect(viewport).toHaveAttribute('data-edit-dirty', 'false');
+    await expect(viewport).toHaveAttribute('data-orientation-turns', String(turns));
+  }
+  for (const turns of [2, 1, 0]) {
+    await expect(revert).toBeEnabled();
+    await revert.click();
+    await expect(viewport).toHaveAttribute('data-edit-busy', 'false');
+    await expect(viewport).toHaveAttribute('data-orientation-turns', String(turns));
+    // Reopen between steps: no session-local undo cursor may be required.
+    await page.keyboard.press('Escape');
+    await tile.click();
+    await expect(viewport).toHaveAttribute('data-load-state', 'decoded');
+    await expect(viewport).toHaveAttribute('data-orientation-turns', String(turns));
+  }
+  await expect(revert).toBeDisabled();
+  await expect(viewport).toHaveAttribute('data-edit-crop', 'none');
+  await page.keyboard.press('i');
+  await expect(edits).toContainText('6');
+  await page.keyboard.press('i');
+  // Reset also reaches an empty state without deleting retained history.
+  await page.getByRole('button', { name: /^Rotate clockwise/u }).click();
+  await save.click();
+  await expect(viewport).toHaveAttribute('data-edit-dirty', 'false');
   await page.getByTestId('lightbox-edit-reset').click();
   await expect(viewport).toHaveAttribute('data-orientation-turns', '0');
-  await expect(viewport).toHaveAttribute('data-edit-crop', 'none');
-  await expect(viewport).toHaveAttribute('data-edit-busy', 'false');
-  await page.keyboard.press('Escape');
-  await tile.click();
-  await expect(viewport).toHaveAttribute('data-load-state', 'decoded');
-  await expect(viewport).toHaveAttribute('data-orientation-turns', '0');
-  const revert = page.getByTestId('lightbox-edit-revert');
-  await expect(revert).toBeEnabled();
-  await revert.click();
-  await expect(viewport).toHaveAttribute('data-orientation-turns', '1');
-  await expect(viewport).not.toHaveAttribute('data-edit-crop', 'none');
-  await page.keyboard.press('i');
-  await expect(edits).toContainText('3');
-  await expect(edits).toContainText('Rotated 90°');
+  await expect(revert).toBeDisabled();
 });

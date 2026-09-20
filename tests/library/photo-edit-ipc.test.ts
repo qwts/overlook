@@ -30,11 +30,15 @@ describe('photo edit IPC adapters (#493)', () => {
         return value;
       },
     } as unknown as ActivityFacade;
+    const revertRequests: (string | undefined)[] = [];
     const service = {
       head: () => EMPTY,
       save: (_photoId: string, operations: readonly unknown[]) => Promise.resolve(result(operations.length > 0, 'regenerated')),
       reset: () => Promise.resolve(result(true, 'failed')),
-      revert: () => Promise.resolve(result(true, 'deferred')),
+      revert: (_photoId: string, revisionId?: string) => {
+        revertRequests.push(revisionId);
+        return Promise.resolve(result(true, 'deferred'));
+      },
     } as unknown as PhotoEditService;
     registerPhotoEditHandlersWith(
       () => service,
@@ -73,8 +77,11 @@ describe('photo edit IPC adapters (#493)', () => {
     assert.equal(drafts[1]?.payload?.['kind'], 'reset');
     await invoke(channels.photoEditRevert.name, { photoId: 'P1', revisionId: 'R1' });
     assert.equal(drafts[2]?.payload?.['kind'], 'revert');
-    assert.equal(manifestChanged, 3);
-    assert.equal(admitted, 5);
+    await invoke(channels.photoEditRevert.name, { photoId: 'P1' });
+    assert.deepEqual(revertRequests, ['R1', undefined], 'omitted target delegates the history walk to the service');
+    assert.equal(drafts[3]?.payload?.['kind'], 'revert');
+    assert.equal(manifestChanged, 4);
+    assert.equal(admitted, 6);
   });
 
   test('runs without activity or manifest hooks and refuses an unknown operation before admitting', async () => {
