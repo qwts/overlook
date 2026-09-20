@@ -336,6 +336,16 @@
       ]
     },
     {
+      "id": "1108-folder-deletion-selection",
+      "wiki": "Acceptance-Test-Album-Folders",
+      "coverage": [
+        {
+          "type": "storybook",
+          "paths": ["src/renderer/src/shell/Sidebar.stories.tsx"]
+        }
+      ]
+    },
+    {
       "id": "505-album-folders",
       "wiki": "Acceptance-Test-Album-Folders",
       "coverage": [
