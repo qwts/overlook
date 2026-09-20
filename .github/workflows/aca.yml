@@ -62,7 +62,7 @@ jobs:
     # Draft guard (ci.yml's); a `labeled` event judges only when the label is
     # `aca` (any other label application is noise, not intent); and a diff
     # budget: a PR past 25 changed files is not judged at all — per-file
-    # reasoning calls across ten checks on a sweeping refactor is the exact
+    # reasoning calls across eight checks on a sweeping refactor is the exact
     # multi-million-token burn measured on 2026-08-19, and "this PR is too
     # large to judge economically" is itself the first review finding. The
     # skip is loud (see the over-budget job), never a silent partial:
@@ -95,7 +95,7 @@ jobs:
             echo "## aca: not judged"
             echo ""
             echo "This PR changes ${CHANGED} files — past the 25-file judgment budget."
-            echo "Per-file reasoning across ten checks on a diff this size costs a"
+            echo "Per-file reasoning across eight checks on a diff this size costs a"
             echo "meaningful fraction of the weekly judge quota, and the size itself"
             echo "is the first review finding. Split the PR, or accept that this"
             echo "change ships without semantic advisory coverage."
