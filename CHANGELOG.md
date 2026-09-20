@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.3
+
+### Patch Changes
+
+- a738249: Preserve an album's folder, sibling order, inherited visibility, and tags through protection, with an activity note when its original folder is unavailable on return.
+
 ## 0.76.2
 
 ### Patch Changes
