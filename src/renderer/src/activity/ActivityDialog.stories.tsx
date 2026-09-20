@@ -5,6 +5,21 @@ import { ActivityDialog } from './ActivityDialog';
 
 const events = [
   {
+    sequence: 3,
+    eventId: 'event-3',
+    operationId: 'operation-3',
+    eventType: 'album.moved' as const,
+    schemaVersion: 1 as const,
+    occurredAt: '2026-07-20T19:30:00.000Z',
+    actorClass: 'system' as const,
+    rootCorrelationId: 'operation-3',
+    causationEventId: null,
+    entityIds: ['album-restored'],
+    outcome: 'partial' as const,
+    payload: { reason: 'protected-parent-unavailable' },
+    supersedesEventId: null,
+  },
+  {
     sequence: 2,
     eventId: 'event-2',
     operationId: 'operation-2',
@@ -81,12 +96,13 @@ export const Populated: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('Moved 2 photos to Trash')).toBeVisible();
     await expect(canvas.getByText('Imported 12 photos')).toBeVisible();
-    await expect(canvas.getByText('Completed with some items unresolved')).toBeVisible();
+    await expect(canvas.getAllByText('Completed with some items unresolved')).toHaveLength(2);
+    await expect(canvas.getByText('Restored an album at the top level because its original folder is no longer available')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Undo' })).toBeEnabled();
     await expect(canvas.getByRole('button', { name: 'Redo' })).toBeDisabled();
     await expect(canvas.getByText('No action available')).toBeVisible();
-    await expect(canvas.getAllByRole('button', { name: 'Copy activity event ID' })).toHaveLength(2);
-    await expect(canvas.getAllByRole('button', { name: 'Copy activity timestamp' })).toHaveLength(2);
+    await expect(canvas.getAllByRole('button', { name: 'Copy activity event ID' })).toHaveLength(3);
+    await expect(canvas.getAllByRole('button', { name: 'Copy activity timestamp' })).toHaveLength(3);
     await expect(canvas.getByText('2026-07-20T18:30:00.000Z')).toBeVisible();
     await expect(canvas.getByText('2026-07-20T17:00:00.000Z')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Undo' }));

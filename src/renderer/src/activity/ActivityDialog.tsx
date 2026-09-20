@@ -194,7 +194,14 @@ export function ActivityDialog({ open, onClose }: { readonly open: boolean; read
                   <span className="ovl-activity__marker" aria-hidden="true" />
                   <div className="ovl-activity__content">
                     <span className="ovl-activity__summary">
-                      <FormattedMessage {...eventMessages[event.eventType]} values={{ count: countOf(event) }} />
+                      {event.eventType === 'album.moved' && event.payload['reason'] === 'protected-parent-unavailable' ? (
+                        <FormattedMessage
+                          id="activity.event.protectedParentUnavailable"
+                          defaultMessage="Restored an album at the top level because its original folder is no longer available"
+                        />
+                      ) : (
+                        <FormattedMessage {...eventMessages[event.eventType]} values={{ count: countOf(event) }} />
+                      )}
                     </span>
                     <div className="ovl-activity__machineData">
                       <time className="ovl-activity__time" dateTime={event.occurredAt}>

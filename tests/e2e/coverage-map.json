@@ -429,8 +429,14 @@
       "id": "1114-repeated-edit-revert",
       "wiki": "Acceptance-Test-Persisted-Edits",
       "coverage": [
-        { "type": "playwright-e2e", "path": "tests/e2e/photo-edits.spec.ts" },
-        { "type": "unit-dom", "paths": ["tests/library/photo-edit-service.test.ts", "tests/library/edit-revision.test.ts"] }
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/photo-edits.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/photo-edit-service.test.ts", "tests/library/edit-revision.test.ts"]
+        }
       ]
     },
     {
@@ -2802,6 +2808,20 @@
         {
           "type": "manual",
           "reason": "Owner-verified on the packaged build against the real pre-Jul-20 iCloud backup (GEN 59): the verified partial restore completes, the NOT FOUND report lists the excluded objects, and the error panel's Copy error button places the reason and message on the system clipboard."
+        }
+      ]
+    },
+    {
+      "id": "1107-protected-album-organization",
+      "wiki": "Acceptance-Test-Protected-Albums",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/protected-workflow-service.test.ts"]
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/activity/ActivityDialog.stories.tsx"
         }
       ]
     }

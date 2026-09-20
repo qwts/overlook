@@ -101,7 +101,7 @@ const protectedMemberSchema = z
     }
   });
 
-export const protectedAlbumMetadataSchema = z
+const legacyProtectedAlbumMetadataSchema = z
   .object({
     version: z.literal(VERSION),
     name: z.string().min(1).max(120),
@@ -110,7 +110,23 @@ export const protectedAlbumMetadataSchema = z
     ordinaryAlbum: ordinaryAlbumSchema.optional(),
     members: z.array(protectedMemberSchema).readonly(),
   })
-  .strict()
+  .strict();
+
+const albumOrganizationSchema = z.strictObject({
+  parentId: idSchema.nullable(),
+  inheritsVisibility: z.boolean(),
+  siblingPosition: z.number().int().nonnegative(),
+  tags: z.array(z.string().min(1)).readonly(),
+});
+
+export const protectedAlbumMetadataSchema = z
+  .union([
+    legacyProtectedAlbumMetadataSchema,
+    legacyProtectedAlbumMetadataSchema.extend({
+      version: z.literal(2),
+      ordinaryAlbum: ordinaryAlbumSchema.extend({ organization: albumOrganizationSchema }).optional(),
+    }),
+  ])
   .superRefine((metadata, context) => {
     const ids = new Set<string>();
     const positions = new Set<number>();

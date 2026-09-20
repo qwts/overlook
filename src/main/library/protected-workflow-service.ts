@@ -122,11 +122,17 @@ export class ProtectedWorkflowService {
         password,
         masterKey,
         metadata: {
-          version: 1,
+          version: 2,
           name: source.name,
           createdAt: source.createdAt,
           position: source.position,
-          ordinaryAlbum: { id: source.id, createdAt: source.createdAt, position: source.position, showInAllPhotos: source.showInAllPhotos },
+          ordinaryAlbum: {
+            id: source.id,
+            createdAt: source.createdAt,
+            position: source.position,
+            showInAllPhotos: source.showInAllPhotos,
+            organization: source.organization,
+          },
           members: source.photoIds.map((photoId, position) => ({ photoId, position, ordinaryMemberships: [] })),
         },
       });

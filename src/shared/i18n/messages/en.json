@@ -8,6 +8,9 @@
   "activity.empty": {
     "defaultMessage": "Library activity will appear here."
   },
+  "activity.event.protectedParentUnavailable": {
+    "defaultMessage": "Restored an album at the top level because its original folder is no longer available"
+  },
   "activity.failed": {
     "defaultMessage": "Activity could not be loaded."
   },
