@@ -209,6 +209,13 @@ Each completed installer is then installed on a matching native x64 or ARM64
 host. A matching, checksum-verified Electron harness loads that installed archive
 and its native modules for the import smoke; cross-compilation is not treated as
 runtime evidence.
+
+Release-import unit tests reject result markers in another isolated profile on
+every filesystem. The additional case-distinct-directory assertion probes the
+actual temporary filesystem and skips only when both spellings resolve to the
+same directory; it does not assume case sensitivity from the operating system.
+Both fixtures remove their temporary directories after the assertion (#1171).
+
 `prune-foreign-binaries.mjs` runs inside electron-builder before that gate and
 keeps only the target payload from packages that bundle multiple platforms:
 onnxruntime-node's nested directories and better-sqlite3-multiple-ciphers v13's

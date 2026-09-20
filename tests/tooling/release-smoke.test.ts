@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -116,12 +116,38 @@ describe('packaged release launch smoke (#357)', () => {
     );
   });
 
-  test('does not conflate case-distinct directories when filesystem identity is available', { skip: process.platform === 'win32' }, () => {
-    const suffix = `${process.pid}-${Date.now()}`;
-    const profile = join(tmpdir(), `overlook-release-import-smoke-Case-${suffix}`);
-    const otherProfile = join(tmpdir(), `overlook-release-import-smoke-case-${suffix}`);
-    mkdirSync(profile);
-    mkdirSync(otherProfile);
+  test('rejects a result marker in another isolated profile on every filesystem', (t) => {
+    const profile = mkdtempSync(join(tmpdir(), 'overlook-release-import-smoke-profile-'));
+    t.after(() => rmSync(profile, { recursive: true, force: true }));
+    const otherProfile = mkdtempSync(join(tmpdir(), 'overlook-release-import-smoke-other-'));
+    t.after(() => rmSync(otherProfile, { recursive: true, force: true }));
+
+    assert.throws(
+      () =>
+        releaseImportSmokeProfileIfRequested({ isPackaged: true }, [
+          'Overlook',
+          RELEASE_IMPORT_SMOKE_ARGUMENT,
+          `--overlook-release-import-profile=${profile}`,
+          `--overlook-release-import-result=${join(otherProfile, 'release-import-result.txt')}`,
+        ]),
+      /release import result must be the dedicated marker file/u,
+    );
+  });
+
+  test('does not conflate case-distinct directories when the filesystem supports them', (t) => {
+    const profile = mkdtempSync(join(tmpdir(), 'overlook-release-import-smoke-Case-'));
+    t.after(() => rmSync(profile, { recursive: true, force: true }));
+    const otherProfile = profile.replace('smoke-Case-', 'smoke-case-');
+    try {
+      mkdirSync(otherProfile);
+    } catch (error) {
+      // An existing alias is the only unsupported case; other I/O errors must fail.
+      if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') throw error;
+      assert.equal(realpathSync.native(otherProfile), realpathSync.native(profile));
+      t.skip('The temporary filesystem aliases case-distinct directory names');
+      return;
+    }
+    t.after(() => rmSync(otherProfile, { recursive: true, force: true }));
 
     assert.throws(
       () =>
