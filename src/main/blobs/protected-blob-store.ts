@@ -49,9 +49,15 @@ export class ProtectedBlobStore {
   }
 
   /** HMAC hides the ordinary plaintext content hash and scopes equality to A. */
-  opaqueRef(albumKey: Buffer, contentHash: string): string {
+  opaqueRef(albumKey: Buffer, contentHash: string, variantId?: string): string {
     assertAlbumKey(albumKey);
     if (!REF_PATTERN.test(contentHash)) throw new ProtectedBlobStoreError('content hash must be 64 lowercase hex characters');
+    if (variantId !== undefined) {
+      if (variantId.length === 0 || variantId.length > 256) throw new ProtectedBlobStoreError('variant id is invalid');
+      return createHmac('sha256', albumKey)
+        .update(JSON.stringify(['overlook-protected-variant-v2', contentHash, variantId]), 'utf8')
+        .digest('hex');
+    }
     return createHmac('sha256', albumKey).update('overlook-protected-blob-v1\0', 'utf8').update(contentHash, 'ascii').digest('hex');
   }
 
@@ -59,9 +65,10 @@ export class ProtectedBlobStore {
     readonly albumId: string;
     readonly albumKey: Buffer;
     readonly contentHash: string;
+    readonly variantId?: string;
     readonly plaintext: Readable;
   }): Promise<string> {
-    const blobRef = this.opaqueRef(input.albumKey, input.contentHash);
+    const blobRef = this.opaqueRef(input.albumKey, input.contentHash, input.variantId);
     await this.put(input.albumId, blobRef, 'original', input.albumKey, input.plaintext, input.contentHash);
     return blobRef;
   }

@@ -15,9 +15,11 @@ import {
   type ProtectedMigrationAuthority,
 } from '../../src/main/crypto/protected-photo-migration-service.js';
 import { openProtectedPhotoMetadata } from '../../src/main/crypto/protected-photo-metadata.js';
+import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { ProtectedPhotoMigrationRepository } from '../../src/main/db/protected-photo-migration-repository.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
 import { run, runNamed } from '../../src/main/db/sql.js';
 
 const LIBRARY_ID = 'library-a';
@@ -198,6 +200,137 @@ describe('ProtectedPhotoMigrationService', () => {
         assert.equal(w.photos.get(PHOTO_ID)?.id, PHOTO_ID);
         assert.equal(w.ordinary.hasOriginal(w.contentHash), true);
       }
+      w.db.close();
+    }
+  });
+
+  for (const keepSibling of [false, true]) {
+    test(`protects a duplicate with importing sibling ${keepSibling ? 'present' : 'removed'} (#1118)`, async () => {
+      const w = await world();
+      try {
+        const duplicateId = 'duplicate-a';
+        new VariantRepository(w.db).duplicate(w.photos.get(PHOTO_ID)!, duplicateId, '2026-09-20T12:00:00.000Z');
+        const duplicate = w.photos.get(duplicateId)!;
+        const revisions = new EditRevisionRepository(w.db);
+        const firstRevisionId = '01J8ED00000000000000000001';
+        revisions.append(duplicateId, {
+          version: 1,
+          id: firstRevisionId,
+          parentId: null,
+          operations: [{ type: 'rotate', version: 1, quarterTurns: 1 }],
+          author: { product: 'overlook', version: 'test' },
+          createdAt: '2026-09-20T12:00:01.000Z',
+          importedFrom: null,
+        });
+        revisions.append(duplicateId, {
+          version: 1,
+          id: '01J8ED00000000000000000002',
+          parentId: firstRevisionId,
+          operations: [{ type: 'rotate', version: 1, quarterTurns: 2 }],
+          author: { product: 'overlook', version: 'test' },
+          createdAt: '2026-09-20T12:00:02.000Z',
+          importedFrom: null,
+        });
+        const savedHistory = revisions.snapshot(new Set([duplicateId]));
+        for (const kind of ['thumb', 'mid'] as const) {
+          await w.ordinary.putThumb(
+            Readable.from(`duplicate ${kind}`),
+            { id: 1, key: w.libraryKey },
+            duplicateId,
+            duplicate.derivativeKey,
+            kind,
+          );
+        }
+        if (!keepSibling) run(w.db, 'DELETE FROM photos WHERE id = ?', PHOTO_ID);
+        const migrationId = w.service.prepareProtect({ albumId: 'protected-a', albumKey: w.albumKeyA, photoIds: [duplicateId] });
+        const item = w.migrations.get(migrationId)!.items[0]!;
+        assert.equal(item.sourceAssetOwnerId, PHOTO_ID);
+        assert.equal(item.sourceDerivativeRef, duplicate.derivativeKey);
+        for (let step = 0; step < 3; step += 1) await w.service.advance(migrationId, w.protectAuthority);
+        assert.equal(w.service.migrationPhase(migrationId), 'commit');
+        assert.equal(w.migrations.countOrdinaryBlobOwners(w.contentHash), keepSibling ? 1 : 0);
+        assert.deepEqual((await w.service.repairStartup()).awaitingAuthority, [migrationId]);
+        assert.equal(w.ordinary.hasThumbs(duplicate.derivativeKey), true, 'source survives until authorized recovery');
+        await w.service.runToCompletion(migrationId, w.protectAuthority);
+        const protectedRow = w.migrations.getProtected(duplicateId)!;
+        const sealed = openProtectedPhotoMetadata(
+          { libraryId: LIBRARY_ID, albumId: 'protected-a', photoId: duplicateId },
+          w.albumKeyA,
+          protectedRow.sealedMetadata,
+        );
+        assert.equal(sealed.version, 2);
+        assert.deepEqual(sealed.version === 2 ? sealed.editRevisions : [], savedHistory);
+        assert.equal(revisions.list(duplicateId).length, 0, 'edit history leaves ordinary storage');
+        assert.equal(
+          (await bytes(w.protected.getStream('protected-a', protectedRow.blobRef, 'original', w.albumKeyA))).toString(),
+          'original secret bytes',
+        );
+        assert.equal(
+          (await bytes(w.protected.getStream('protected-a', protectedRow.blobRef, 'thumb', w.albumKeyA))).toString(),
+          'duplicate thumb',
+        );
+        assert.equal(w.ordinary.hasThumbs(duplicate.derivativeKey), false, 'committed variant derivatives are purged');
+        if (keepSibling) {
+          assert.equal(
+            (await bytes(w.ordinary.getStream(w.contentHash, w.protectAuthority.libraryResolver!, PHOTO_ID))).toString(),
+            'original secret bytes',
+          );
+          assert.equal(
+            (await bytes(w.ordinary.getThumbStream(w.contentHash, 'thumb', w.protectAuthority.libraryResolver!, PHOTO_ID))).toString(),
+            'thumb bytes',
+          );
+          assert.throws(
+            () => w.service.prepareUnprotect({ albumId: 'protected-a', albumKey: w.albumKeyA, photoIds: [duplicateId] }),
+            /already contains content hash/u,
+          );
+        } else {
+          const unprotectId = w.service.prepareUnprotect({ albumId: 'protected-a', albumKey: w.albumKeyA, photoIds: [duplicateId] });
+          await w.service.runToCompletion(unprotectId, { sourceAlbumKey: w.albumKeyA, targetLibraryKey: { id: 1, key: w.libraryKey } });
+          const restored = w.photos.get(duplicateId)!;
+          assert.deepEqual(revisions.snapshot(new Set([duplicateId])), savedHistory, 'every revision and head returns unchanged');
+          assert.equal(restored.assetOwnerId, null, 'returned independent root owns its new envelope');
+          assert.equal(await w.ordinary.verifyOriginal(w.contentHash, w.protectAuthority.libraryResolver!, duplicateId), true);
+          assert.equal(
+            (
+              await bytes(w.ordinary.getThumbStream(restored.derivativeKey, 'mid', w.protectAuthority.libraryResolver!, duplicateId))
+            ).toString(),
+            'duplicate mid',
+          );
+        }
+      } finally {
+        w.db.close();
+      }
+    });
+  }
+
+  test('equal originals retain independent protected previews and can move between albums', async () => {
+    const w = await world();
+    try {
+      const id = 'duplicate-b';
+      new VariantRepository(w.db).duplicate(w.photos.get(PHOTO_ID)!, id, '2026-09-20T12:00:00.000Z');
+      const duplicate = w.photos.get(id)!;
+      for (const kind of ['thumb', 'mid'] as const) {
+        await w.ordinary.putThumb(Readable.from(`second ${kind}`), { id: 1, key: w.libraryKey }, id, duplicate.derivativeKey, kind);
+      }
+      const migration = w.service.prepareProtect({ albumId: 'protected-a', albumKey: w.albumKeyA, photoIds: [PHOTO_ID, id] });
+      await w.service.runToCompletion(migration, w.protectAuthority);
+      const root = w.migrations.getProtected(PHOTO_ID)!;
+      const variant = w.migrations.getProtected(id)!;
+      assert.notEqual(root.blobRef, variant.blobRef);
+      assert.equal((await bytes(w.protected.getStream('protected-a', root.blobRef, 'thumb', w.albumKeyA))).toString(), 'thumb bytes');
+      assert.equal((await bytes(w.protected.getStream('protected-a', variant.blobRef, 'thumb', w.albumKeyA))).toString(), 'second thumb');
+      const move = w.service.prepareMove({
+        sourceAlbumId: 'protected-a',
+        sourceAlbumKey: w.albumKeyA,
+        targetAlbumId: 'protected-b',
+        targetAlbumKey: w.albumKeyB,
+        photoIds: [id],
+      });
+      await w.service.runToCompletion(move, { sourceAlbumKey: w.albumKeyA, targetAlbumKey: w.albumKeyB });
+      const moved = w.migrations.getProtected(id)!;
+      assert.equal((await bytes(w.protected.getStream('protected-b', moved.blobRef, 'mid', w.albumKeyB))).toString(), 'second mid');
+      assert.equal((await bytes(w.protected.getStream('protected-a', root.blobRef, 'thumb', w.albumKeyA))).toString(), 'thumb bytes');
+    } finally {
       w.db.close();
     }
   });

@@ -1,5 +1,8 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { EditRevisionRepository } from './edit-revision-repository.js';
+import type { BackupManifestEditRevisionV11 } from '../backup/backup-manifest-edit-revisions.js';
+
 import type { ProtectedPhotoMetadata } from '../crypto/protected-photo-metadata.js';
 import type { PhotoInsert } from '../../shared/library/types.js';
 import { refreshInAllPhotos } from './album-visibility-repository.js';
@@ -11,6 +14,8 @@ export type ProtectedMigrationPhase = 'prepare' | 'copy' | 'verify' | 'commit' |
 export interface ProtectedMigrationItem {
   readonly photoId: string;
   readonly sourceBlobRef: string;
+  readonly sourceAssetOwnerId?: string;
+  readonly sourceDerivativeRef?: string;
   readonly targetBlobRef: string;
   readonly sealedTargetMetadata: Buffer;
   readonly hasThumb: boolean;
@@ -56,6 +61,8 @@ interface JournalRow {
 interface ItemRow {
   readonly photoId: string;
   readonly sourceBlobRef: string;
+  readonly sourceAssetOwnerId: string | null;
+  readonly sourceDerivativeRef: string | null;
   readonly targetBlobRef: string;
   readonly sealedTargetMetadata: Buffer;
   readonly hasThumb: number;
@@ -156,6 +163,10 @@ export class ProtectedPhotoMigrationRepository {
     );
   }
 
+  ordinaryEditRevisions(photoId: string): readonly BackupManifestEditRevisionV11[] {
+    return new EditRevisionRepository(this.db).snapshot(new Set([photoId]));
+  }
+
   countOrdinaryBlobOwners(contentHash: string): number {
     return queryGet<{ count: number }>(this.db, 'SELECT count(*) AS count FROM photos WHERE content_hash = ?', contentHash)?.count ?? 0;
   }
@@ -189,15 +200,17 @@ export class ProtectedPhotoMigrationRepository {
         runNamed(
           this.db,
           `INSERT INTO protected_photo_migration_items (
-             migration_id, photo_id, source_blob_ref, target_blob_ref, sealed_target_metadata,
+             migration_id, photo_id, source_blob_ref, source_asset_owner_id, source_derivative_ref, target_blob_ref, sealed_target_metadata,
              has_thumb, has_mid, item_phase
            ) VALUES (
-             @migrationId, @photoId, @sourceBlobRef, @targetBlobRef, @sealedTargetMetadata,
+             @migrationId, @photoId, @sourceBlobRef, @sourceAssetOwnerId, @sourceDerivativeRef, @targetBlobRef, @sealedTargetMetadata,
              @hasThumb, @hasMid, 'prepare'
            )`,
           {
             migrationId: input.migrationId,
             ...item,
+            sourceAssetOwnerId: item.sourceAssetOwnerId ?? null,
+            sourceDerivativeRef: item.sourceDerivativeRef ?? null,
             hasThumb: item.hasThumb ? 1 : 0,
             hasMid: item.hasMid ? 1 : 0,
           },
@@ -224,13 +237,16 @@ export class ProtectedPhotoMigrationRepository {
     if (row === undefined) return undefined;
     const items = queryAll<ItemRow>(
       this.db,
-      `SELECT photo_id AS photoId, source_blob_ref AS sourceBlobRef, target_blob_ref AS targetBlobRef,
+      `SELECT photo_id AS photoId, source_blob_ref AS sourceBlobRef,
+              source_asset_owner_id AS sourceAssetOwnerId, source_derivative_ref AS sourceDerivativeRef, target_blob_ref AS targetBlobRef,
               sealed_target_metadata AS sealedTargetMetadata, has_thumb AS hasThumb,
               has_mid AS hasMid, item_phase AS phase
          FROM protected_photo_migration_items WHERE migration_id = @migrationId ORDER BY photo_id`,
       { migrationId },
-    ).map((item): ProtectedMigrationItem => ({
+    ).map(({ sourceAssetOwnerId, sourceDerivativeRef, ...item }): ProtectedMigrationItem => ({
       ...item,
+      ...(sourceAssetOwnerId === null ? {} : { sourceAssetOwnerId }),
+      ...(sourceDerivativeRef === null ? {} : { sourceDerivativeRef }),
       sealedTargetMetadata: Buffer.from(item.sealedTargetMetadata),
       hasThumb: item.hasThumb === 1,
       hasMid: item.hasMid === 1,
@@ -310,7 +326,14 @@ export class ProtectedPhotoMigrationRepository {
 
   commitUnprotect(
     migrationId: string,
-    restorations: ReadonlyMap<string, { readonly photo: PhotoInsert; readonly memberships: ProtectedPhotoMetadata['ordinaryMemberships'] }>,
+    restorations: ReadonlyMap<
+      string,
+      {
+        readonly photo: PhotoInsert;
+        readonly memberships: ProtectedPhotoMetadata['ordinaryMemberships'];
+        readonly editRevisions?: readonly BackupManifestEditRevisionV11[];
+      }
+    >,
     ordinaryAlbum?: OrdinaryAlbumRestoration,
     now = new Date().toISOString(),
   ): void {
@@ -334,6 +357,7 @@ export class ProtectedPhotoMigrationRepository {
           throw new ProtectedPhotoMigrationRepositoryError('unprotect restoration does not match verified target');
         }
         this.insertOrdinary(restoration.photo);
+        if (restoration.editRevisions !== undefined) new EditRevisionRepository(this.db).restore(restoration.editRevisions);
         for (const membership of restoration.memberships) {
           runNamed(
             this.db,

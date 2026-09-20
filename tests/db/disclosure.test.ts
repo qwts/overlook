@@ -79,9 +79,9 @@ function open() {
 }
 
 describe('disclosure policy storage (#509, migration 37)', () => {
-  test('migration 37 heads the chain and seeds the §6 defaults; an unparseable row falls back to them instead of widening', () => {
+  test('migration 37 remains registered and seeds the §6 defaults; an unparseable row falls back to them instead of widening', () => {
     assert.deepEqual(
-      MIGRATIONS.slice(-1).map((migration) => ({ version: migration.version, name: migration.name })),
+      MIGRATIONS.filter((migration) => migration.version === 37).map((migration) => ({ version: migration.version, name: migration.name })),
       [{ version: 37, name: 'disclosure-policy' }],
     );
     const { db, repo } = open();

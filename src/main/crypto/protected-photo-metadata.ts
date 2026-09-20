@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
+import { backupManifestEditRevisionV11Schema, checkEditRevisionLinks } from '../backup/backup-manifest-edit-revisions.js';
 import { backupManifestPhotoV2Schema } from '../backup/backup-manifest.js';
 
 const MAGIC = Buffer.from('OVPP', 'ascii');
@@ -20,7 +21,7 @@ const canonicalBase64 = z.string().refine((value) => {
 
 const ordinaryPhotoSchema = backupManifestPhotoV2Schema.omit({ blobPath: true, keyId: true });
 
-export const protectedPhotoMetadataSchema = z.strictObject({
+const legacyProtectedPhotoMetadataSchema = z.strictObject({
   version: z.literal(VERSION),
   photo: ordinaryPhotoSchema,
   ordinaryMemberships: z
@@ -32,6 +33,20 @@ export const protectedPhotoMetadataSchema = z.strictObject({
     )
     .readonly(),
 });
+
+// Payload v2 preserves append-only edit documents inside album-key custody.
+// The envelope format and its AAD stay v1; old payloads remain readable.
+export const protectedPhotoMetadataSchema = z.union([
+  legacyProtectedPhotoMetadataSchema,
+  legacyProtectedPhotoMetadataSchema
+    .extend({
+      version: z.literal(2),
+      editRevisions: z.array(backupManifestEditRevisionV11Schema).readonly(),
+    })
+    .superRefine((metadata, context) => {
+      checkEditRevisionLinks({ photos: [metadata.photo], editRevisions: metadata.editRevisions }, context);
+    }),
+]);
 
 const sealedSchema = z.strictObject({
   version: z.literal(VERSION),
