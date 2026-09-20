@@ -42,6 +42,18 @@ Two gates need an external checkout, both env-gated in the same shape:
 | `DOCS_GOV_TOOLING_ROOT`    | a `qwts/qwts-agent-docs-gov` checkout with `tools/docs-gov` at commit `67db7dc9c20bc29222fb605b7ff9432fd58a2a3f` |
 | `INTEROP_IMAGE_TRAIL_ROOT` | a `qwts/image-trail` checkout pinned to the commit the manifest names                                            |
 
+## Advisory semantic checks
+
+The ACA workflow runs eight informational checks. `doc-drift` and
+`agent-rule-conflict` are temporarily disabled after repeated stalled judge
+steps; their absence is missing advisory coverage, not a passing verdict.
+[Issue #1176](https://github.com/qwts/overlook/issues/1176) owns diagnosis and
+restoration. Before re-enabling either check, enforce a 120-second deadline
+for its entire execution, including requests and retries, abort expired work,
+report timeouts distinctly from clean results, and demonstrate useful results
+within that limit on representative Overlook changes. Dependency setup may
+have a separate bound. The other eight ACA checks remain enabled.
+
 ## Documentation governance (`docs:gov`)
 
 The deterministic docs-gov check gates `docs/` and the root agent files against
