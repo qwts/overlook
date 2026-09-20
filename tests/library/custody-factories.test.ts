@@ -81,6 +81,7 @@ describe('custody composition factories (#484)', () => {
     const w = await world();
     const audits: string[] = [];
     const service = createPurgeService({
+      cleanup: { transfer: () => Promise.reject(new Error('unexpected pending exclusion')) },
       db: w.db,
       repo: w.repo,
       blobStore: w.store,

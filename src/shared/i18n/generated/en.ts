@@ -790,6 +790,7 @@ export const en: Readonly<Record<string, string>> = {
   "preview.unavailable.unsupportedCodec": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED",
   "purge.keptLocal.all": "{count, plural, one {This photo is kept on this device only: there is no cloud copy to remove.} other {These photos are kept on this device only: there are no cloud copies to remove.}}",
   "purge.keptLocal.some": "{count, plural, one {# of these is kept on this device only and has no cloud copy to remove.} other {# of these are kept on this device only and have no cloud copy to remove.}}",
+  "purge.removalPending": "{count, plural, one {# photo may still have a cloud copy: removal is pending.} other {# photos may still have cloud copies: removal is pending.}}",
   "recoveryKey.drop.empty": "Drop one Overlook recovery-key file.",
   "recoveryKey.drop.multiple": "Choose or drop one recovery-key file at a time.",
   "recoveryKey.drop.unavailable": "This dropped file has no readable local path. Use the file picker instead.",

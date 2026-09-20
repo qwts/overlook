@@ -2824,6 +2824,20 @@
           "path": "src/renderer/src/activity/ActivityDialog.stories.tsx"
         }
       ]
+    },
+    {
+      "id": "1136-purge-pending-exclusion",
+      "wiki": "Acceptance-Test-Backup-Coverage",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/grid/PurgeConfirm.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/purge-cleanup.test.ts", "tests/backup/backup-engine.test.ts"]
+        }
+      ]
     }
   ]
 }

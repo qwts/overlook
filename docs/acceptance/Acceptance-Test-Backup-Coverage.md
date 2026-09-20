@@ -83,3 +83,28 @@ RemovesCloudCopy / KeepsOnThisDevice`.
 14. Open a library backed up before this version. **Expected:** every photo
     is included; migration 35 adds the column with its default and the
     manifest's next generation is schema 14.
+
+## Pending removal followed by purge (#1136)
+
+- Repeat the refused-delete scenario, move that photo to Trash, and open
+  Purge. The dialog says its cloud copy may still exist because removal is
+  pending. A mixed selection counts settled exclusions separately.
+- Confirm purge. The photo and its local original disappear (unless a sibling
+  still needs the original); migration 39 retains remote cleanup outside the
+  photo and sync-ledger cascades. If source custody cannot be captured or the
+  queue cannot be persisted, purge fails before removing the photo.
+- Restart, restore provider access, and press **Back up**. A fresh verified
+  manifest on the recorded source account must omit the queued paths before
+  deletion is retried. A failed publication or delete retains the queue for
+  the next backup; retry can therefore cost another manifest generation.
+  Audit records use `PURGE-REMOTE-PENDING` and `PURGE-REMOTE-SETTLED`.
+- Switch to another account and repeat backup: it must not delete the original
+  account's queued objects. Reconnect the source account to complete cleanup.
+- Keep an included duplicate while purging its pending-removal sibling. The
+  shared original remains; removing that final included claim requires another
+  verified publication before its queued deletion can run.
+
+Automated coverage: `tests/library/purge-cleanup.test.ts` (atomic persistence,
+restart, sharing, account mismatch and late queue entries),
+`tests/backup/backup-engine.test.ts` (publication failure and retry ordering),
+and `PurgeConfirm.stories.tsx` (pending, settled and mixed counts).

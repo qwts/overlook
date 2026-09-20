@@ -781,7 +781,8 @@ export function LibraryGridView({
       {purgeIds !== null && purgeIds.length > 0 ? (
         <PurgeConfirm
           count={purgeIds.length}
-          excludedCount={purgeIds.filter((id) => state.photos.find((photo) => photo.id === id)?.coverage !== 'included').length}
+          excludedCount={purgeIds.filter((id) => state.photos.find((photo) => photo.id === id)?.coverage === 'excluded').length}
+          excludingCount={purgeIds.filter((id) => state.photos.find((photo) => photo.id === id)?.coverage === 'excluding').length}
           onCancel={() => {
             setPurgeIds(null);
           }}

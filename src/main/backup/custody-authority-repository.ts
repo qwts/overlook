@@ -331,6 +331,8 @@ export class CustodyAuthorityRepository {
         WHERE provider_id = ? AND account_id = ?
           AND NOT EXISTS (
             SELECT 1 FROM sync_ledger l WHERE l.custody_authority_id = custody_authorities.id
+          ) AND NOT EXISTS (
+            SELECT 1 FROM purge_remote_cleanup q WHERE q.authority_id = custody_authorities.id
           )`,
       providerId,
       accountId,

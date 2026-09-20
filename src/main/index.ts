@@ -44,7 +44,7 @@ import { createRecoveryBootstrapSealer } from './backup/recovery-bootstrap.js';
 import type { ConsistencyChecker } from './library/consistency.js';
 import { createConsistencyChecker } from './library/consistency-factory.js';
 import type { PurgeService } from './library/purge-service.js';
-import { createPurgeService } from './library/purge-factory.js';
+import { createPurgeService, createRoutedPurgeCleanup } from './library/purge-factory.js';
 import type { CoverageService } from './backup/coverage-service.js';
 import { createCoverageService, requireCoverageService } from './backup/coverage-factory.js';
 import { createPurgeRuntime, type DrainablePurgeFacade } from './library/purge-runtime.js';
@@ -451,6 +451,7 @@ function getBackupEngine(): BackupEngine {
       audit,
     });
     custodyRoutingLifecycle = custodyRouting;
+    const purgeCleanup = createRoutedPurgeCleanup(parts.db, custodyRouting, audit);
     const emitSyncStateChanged = createEmitter(events.photoSyncStateChanged, send);
     const integrityScrubber = createBackupIntegrityRuntime({
       db: parts.db,
@@ -493,6 +494,7 @@ function getBackupEngine(): BackupEngine {
       recoveryGenerationHealthy: createRecoveryHealthCheck(provider, () => getProviderRuntime().libraryId(), parts.keyStore),
       ...createBackupClaimDeps(parts.db, parts.blobStore),
       protectedBackup: parts.protected.backupBinding(provider, audit),
+      purgeCleanup,
       settleExclusions: () => coverageService?.settlePending() ?? Promise.resolve(undefined),
     });
     const emitEphemeralState = createEmitter(events.ephemeralOriginalState, send);
@@ -532,6 +534,7 @@ function getBackupEngine(): BackupEngine {
       audit,
     });
     purgeService = createPurgeService({
+      cleanup: purgeCleanup,
       db: parts.db,
       repo,
       blobStore: parts.blobStore,
@@ -540,9 +543,7 @@ function getBackupEngine(): BackupEngine {
       // Purging changes manifestSnapshot() — same owed-generation rule (and
       // quiet push) as soft delete (PR #218 review).
       oweManifest: () => manifestSyncTrigger?.(),
-      libraryChanged: (photoIds) => {
-        applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
-      },
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
       audit,
       retention: () => getSettingsStore().get().trashRetention,
     });
@@ -552,9 +553,7 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobStore: parts.blobStore,
       provider,
-      setStatus: (photoId, status) => {
-        ledger.repairStatus(photoId, status);
-      },
+      setStatus: (photoId, status) => ledger.repairStatus(photoId, status),
       libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
       audit,
     });

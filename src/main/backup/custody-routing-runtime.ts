@@ -247,9 +247,31 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return null;
     }
   };
+  const targetAuthority = async (): Promise<CustodyAuthority> => {
+    if (!deps.backupTargetConnected()) throw new CustodyResolutionError('custody-disconnected');
+    const providerId = deps.backupTarget.id;
+    const root = remoteRoot();
+    const identity = await deps.backupTarget.accountIdentity();
+    if (!deps.backupTargetConnected() || deps.backupTarget.id !== providerId || remoteRoot() !== root)
+      throw new CustodyResolutionError('custody-unavailable');
+    return authorities.create({
+      providerId,
+      accountId: identity.accountId,
+      accountLabel: identity.accountLabel,
+      remoteRoot: root,
+      createdAt: deps.now(),
+    });
+  };
   return {
     authorities,
     resolver,
+    targetAuthority,
+    captureAuthority: async (photoId: string): Promise<CustodyAuthority> => {
+      const bound = authorities.forPhoto(photoId);
+      if (bound !== undefined) return bound;
+      if (deps.status(photoId) === 'offloaded') throw new CustodyResolutionError('custody-unavailable');
+      return targetAuthority();
+    },
     offloadAuthority: async (bytes: number): Promise<number> => {
       const identity = await deps.backupTarget.accountIdentity();
       const authority = authorities.create({
