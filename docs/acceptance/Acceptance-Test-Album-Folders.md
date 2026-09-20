@@ -70,6 +70,12 @@ below.
    destination with the same order. Take the recursive path on another folder
    and confirm every photo is still in the library, hidden albums' photos
    return to All Photos, and the toast repeats the counts.
+4. While viewing a child album, delete its parent using **Move its contents
+   to**. Confirm the surviving album stays selected. Repeat with an album
+   nested two folders deep.
+5. While viewing a nested album, recursively delete its ancestor folder.
+   Confirm selection resets to **All Photos**. Repeat with a nested Smart
+   Album; an unrelated selected album must stay selected (#1108).
 
 ## Persistence
 

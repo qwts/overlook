@@ -562,7 +562,7 @@ export function Sidebar({
           folder={dialog.album}
           albums={albums}
           onClose={closeDialog}
-          onComplete={(removed) => {
+          onComplete={(removed, removedIds) => {
             const folder = dialog.album;
             toast(
               intl.formatMessage(messages.deletedFolder, {
@@ -573,7 +573,7 @@ export function Sidebar({
               }),
               'neutral',
             );
-            completeRemoval(albums.filter((album) => album.id === folder.id || album.parentId === folder.id).map((album) => album.id));
+            completeRemoval(removedIds);
           }}
         />
       ) : null}

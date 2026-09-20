@@ -243,7 +243,7 @@ export function DeleteFolderDialog({
   readonly folder: AlbumListing;
   readonly albums: readonly AlbumListing[];
   readonly onClose: () => void;
-  readonly onComplete: (removed: FolderContents) => void;
+  readonly onComplete: (removed: FolderContents, removedIds: readonly string[]) => void;
 }): ReactElement {
   const intl = useIntl();
   const contents = folderContents(albums, folder.id);
@@ -276,6 +276,7 @@ export function DeleteFolderDialog({
           mode === 'recursive' && !empty
             ? { folders: contents.folders + 1, albums: contents.albums, smart: contents.smart }
             : { folders: 1, albums: 0, smart: 0 },
+          [folder.id, ...(mode === 'recursive' ? albumDescendantIds(treeNodes(albums), folder.id) : [])],
         ),
       )
       .catch(() => {

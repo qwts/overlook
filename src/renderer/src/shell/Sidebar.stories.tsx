@@ -562,6 +562,62 @@ export const AlbumFolders: Story = {
   },
 };
 
+// #1108: the fixed listing snapshot lets each deletion mode exercise the
+// selection transition independently; database deletion is covered separately.
+export const FolderDeletionSelection: Story = {
+  args: {
+    albums: [
+      listing({ id: 'f1', name: 'Trips', count: 2, kind: 'folder' }),
+      listing({ id: 'a1', name: 'Iceland', count: 1, parentId: 'f1' }),
+      listing({ id: 'f2', name: 'Europe', count: 1, kind: 'folder', parentId: 'f1' }),
+      listing({ id: 'a2', name: 'Paris', count: 1, parentId: 'f2' }),
+      listing({ id: 's1', name: 'Travel query', count: 1, kind: 'smart', parentId: 'f2' }),
+      listing({ id: 'a3', name: 'Studio', count: 1 }),
+    ],
+  },
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      window.localStorage.removeItem('overlook.albumFoldersCollapsed');
+      deleteFolder.mockClear();
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    for (const [name, recursive, survives] of [
+      ['Iceland', false, true],
+      ['Paris', false, true],
+      ['Paris', true, false],
+      ['Travel query', true, false],
+      ['Studio', true, true],
+    ] as const) {
+      deleteFolder.mockClear();
+      const selected = canvas.getByRole('button', { name: new RegExp(`^${name}\\b`, 'u') });
+      await userEvent.click(selected);
+      await expect(selected).toHaveClass('ovl-siderow--active');
+      await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
+      await userEvent.click(body.getByRole('menuitem', { name: 'Delete folder…' }));
+      const remove = within(canvas.getByRole('dialog', { name: 'Delete folder' }));
+      if (recursive) await userEvent.click(remove.getByRole('radio', { name: /^Also delete/u }));
+      await userEvent.click(remove.getByRole('button', { name: 'Delete folder' }));
+      await waitFor(() =>
+        expect(deleteFolder).toHaveBeenCalledWith({
+          albumId: 'f1',
+          folder: recursive ? { mode: 'recursive' } : { mode: 'move', destinationId: null },
+        }),
+      );
+      await waitFor(() => expect(canvas.queryByRole('dialog', { name: 'Delete folder' })).not.toBeInTheDocument());
+      if (survives) await expect(selected).toHaveClass('ovl-siderow--active');
+      else {
+        await expect(selected).not.toHaveClass('ovl-siderow--active');
+        await expect(canvas.getByRole('button', { name: /^All Photos/u })).toHaveClass('ovl-siderow--active');
+      }
+    }
+  },
+};
+
 export const AlbumDropStates: Story = {
   tags: ['album-drop'],
   loaders: [
