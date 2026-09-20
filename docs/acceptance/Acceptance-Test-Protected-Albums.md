@@ -65,3 +65,34 @@ npm run test:stories:ci
 
 The protected journey is included in the full Electron lane and the repo
 acceptance ledger entry is `m20-protected-album-workflows`.
+
+## Duplicate source custody (#1118)
+
+Protecting a duplicate reads the shared original with its importing asset
+owner's authentication identity, and reads the selected variant's own
+thumbnail and mid preview. Both source identities are recorded in the durable
+migration journal before the ordinary row is hidden. Version-2 sealed photo
+metadata retains every edit revision and the head under album-key custody;
+legacy version-1 records remain readable. Unprotect restores the retained
+revision documents transactionally with the returned photo. New protected
+copies become independent roots with album-keyed, photo-scoped blob references.
+This spends an encrypted original copy per variant so their independent
+presentations cannot alias; old references and payloads remain readable.
+Recovery can therefore
+finish cleanup even after commit removes that row.
+
+1. Duplicate a photo, then protect the duplicate. Confirm its protected
+   original and previews remain readable and the ordinary sibling still opens
+   with its own previews.
+2. In a separate fixture, remove the importing row while retaining its
+   duplicate and original blob. Protect and then unprotect the duplicate.
+   Use an edited duplicate and confirm its full history and head return
+   unchanged. Confirm both domains can read the bytes and that the returned photo owns
+   the newly encrypted ordinary envelope under its own ID.
+3. Cancel before commit or interrupt after commit. Confirm rollback preserves
+   the source, or authorized recovery verifies the protected target before
+   deleting the selected variant's derivatives.
+
+The existing unprotect conflict remains: an ordinary sibling with the same
+content hash prevents return, rather than replacing its shared ciphertext.
+Shared-original return is tracked in [#1183](https://github.com/qwts/overlook/issues/1183).

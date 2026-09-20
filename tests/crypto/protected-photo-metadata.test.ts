@@ -72,3 +72,21 @@ describe('pre-0026 sealed metadata (no mediaInfo key)', () => {
     assert.equal(opened.photo.fileName, 'secret.jpg');
   });
 });
+
+test('v2 seals edit history and rejects revisions owned by a different photo', () => {
+  const albumKey = randomBytes(32);
+  const revision = {
+    id: 'r1',
+    photoId: context.photoId,
+    parentId: null,
+    createdAt: '2026-09-20T12:00:00.000Z',
+    document: { version: 1 },
+    current: true,
+  };
+  const edited: ProtectedPhotoMetadata = { ...metadata, version: 2, editRevisions: [revision] };
+  assert.deepEqual(openProtectedPhotoMetadata(context, albumKey, sealProtectedPhotoMetadata(context, albumKey, edited)), edited);
+  assert.throws(
+    () => sealProtectedPhotoMetadata(context, albumKey, { ...edited, editRevisions: [{ ...revision, photoId: 'other' }] }),
+    /photo the manifest does not carry/u,
+  );
+});

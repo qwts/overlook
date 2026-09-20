@@ -2,7 +2,9 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { backupManifestPhotoV2Schema } from '../backup/backup-manifest.js';
+import { protectedPhotoMetadataSchema, type ProtectedPhotoMetadata } from './protected-photo-metadata-schema.js';
+
+export type { ProtectedPhotoMetadata } from './protected-photo-metadata-schema.js';
 
 const MAGIC = Buffer.from('OVPP', 'ascii');
 const VERSION = 1;
@@ -18,21 +20,6 @@ const canonicalBase64 = z.string().refine((value) => {
   }
 }, 'must be canonical base64');
 
-const ordinaryPhotoSchema = backupManifestPhotoV2Schema.omit({ blobPath: true, keyId: true });
-
-export const protectedPhotoMetadataSchema = z.strictObject({
-  version: z.literal(VERSION),
-  photo: ordinaryPhotoSchema,
-  ordinaryMemberships: z
-    .array(
-      z.strictObject({
-        albumId: z.string().min(1).max(256),
-        position: z.number().int().nonnegative(),
-      }),
-    )
-    .readonly(),
-});
-
 const sealedSchema = z.strictObject({
   version: z.literal(VERSION),
   algorithm: z.literal('AES-256-GCM'),
@@ -42,8 +29,6 @@ const sealedSchema = z.strictObject({
     return bytes >= TAG_BYTES && bytes <= MAX_RECORD_BYTES;
   }),
 });
-
-export type ProtectedPhotoMetadata = z.output<typeof protectedPhotoMetadataSchema>;
 
 export class ProtectedPhotoMetadataError extends Error {
   override readonly name = 'ProtectedPhotoMetadataError';

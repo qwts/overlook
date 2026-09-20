@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
+
+import type { BackupManifestEditRevisionV11 } from '../backup/backup-manifest-edit-revisions.js';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { ProtectedBlobStore } from '../blobs/protected-blob-store.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
@@ -90,23 +93,27 @@ export class ProtectedPhotoMigrationService {
   prepareProtect(input: { readonly albumId: string; readonly albumKey: Buffer; readonly photoIds: readonly string[] }): string {
     const albumKey = requireAlbumKey(input.albumKey, 'target album');
     const migrationId = this.options.createMigrationId?.() ?? randomUUID();
+    const editHistories = this.options.migrations.ordinaryEditRevisions(input.photoIds);
     const items = input.photoIds.map((photoId) => {
       const photo = this.options.photos.get(photoId);
       if (photo === undefined || photo.deletedAt !== null) {
         throw new ProtectedPhotoMigrationServiceError(`ordinary photo ${photoId} is unavailable`);
       }
-      if (!this.options.ordinaryBlobs.hasOriginal(photo.contentHash) || !this.options.ordinaryBlobs.hasThumbs(photo.contentHash)) {
+      if (!this.options.ordinaryBlobs.hasOriginal(photo.contentHash) || !this.options.ordinaryBlobs.hasThumbs(photo.derivativeKey)) {
         throw new ProtectedPhotoMigrationServiceError(`ordinary photo ${photoId} requires a local original and both derivatives`);
       }
       const metadata: ProtectedPhotoMetadata = {
-        version: 1,
+        version: 2,
+        editRevisions: editHistories.get(photoId) ?? [],
         photo: photoMetadata(photo),
         ordinaryMemberships: this.options.migrations.ordinaryMemberships(photoId),
       };
       return {
         photoId,
         sourceBlobRef: photo.contentHash,
-        targetBlobRef: this.options.protectedBlobs.opaqueRef(albumKey, photo.contentHash),
+        sourceAssetOwnerId: assetOwnerOf(photo),
+        sourceDerivativeRef: photo.derivativeKey,
+        targetBlobRef: this.options.protectedBlobs.opaqueRef(albumKey, photo.contentHash, photoId),
         sealedTargetMetadata: sealProtectedPhotoMetadata(
           { libraryId: this.options.libraryId, albumId: input.albumId, photoId },
           albumKey,
@@ -184,7 +191,11 @@ export class ProtectedPhotoMigrationService {
         sourceKey,
         source.sealedMetadata,
       );
-      const targetBlobRef = this.options.protectedBlobs.opaqueRef(targetKey, metadata.photo.contentHash);
+      const targetBlobRef = this.options.protectedBlobs.opaqueRef(
+        targetKey,
+        metadata.photo.contentHash,
+        metadata.version === 2 ? photoId : undefined,
+      );
       return {
         photoId,
         sourceBlobRef: source.blobRef,
@@ -287,7 +298,8 @@ export class ProtectedPhotoMigrationService {
       albumId,
       albumKey,
       contentHash: item.sourceBlobRef,
-      plaintext: this.options.ordinaryBlobs.getStream(item.sourceBlobRef, resolver, item.photoId),
+      ...(this.metadata(journal, item, authority).version === 2 ? { variantId: item.photoId } : {}),
+      plaintext: this.options.ordinaryBlobs.getStream(item.sourceBlobRef, resolver, item.sourceAssetOwnerId ?? item.photoId),
     });
     if (ref !== item.targetBlobRef) throw new ProtectedPhotoMigrationServiceError('protected target reference changed');
     await this.options.protectedBlobs.putDerivative({
@@ -295,14 +307,14 @@ export class ProtectedPhotoMigrationService {
       albumKey,
       blobRef: ref,
       kind: 'thumb',
-      plaintext: this.options.ordinaryBlobs.getThumbStream(item.sourceBlobRef, 'thumb', resolver, item.photoId),
+      plaintext: this.options.ordinaryBlobs.getThumbStream(item.sourceDerivativeRef ?? item.sourceBlobRef, 'thumb', resolver, item.photoId),
     });
     await this.options.protectedBlobs.putDerivative({
       albumId,
       albumKey,
       blobRef: ref,
       kind: 'mid',
-      plaintext: this.options.ordinaryBlobs.getThumbStream(item.sourceBlobRef, 'mid', resolver, item.photoId),
+      plaintext: this.options.ordinaryBlobs.getThumbStream(item.sourceDerivativeRef ?? item.sourceBlobRef, 'mid', resolver, item.photoId),
     });
   }
 
@@ -352,6 +364,7 @@ export class ProtectedPhotoMigrationService {
       albumId: targetId,
       albumKey: targetKey,
       contentHash: this.metadata(journal, item, authority).photo.contentHash,
+      ...(this.metadata(journal, item, authority).version === 2 ? { variantId: item.photoId } : {}),
       plaintext: this.options.protectedBlobs.getStream(sourceId, item.sourceBlobRef, 'original', sourceKey),
     });
     if (ref !== item.targetBlobRef) throw new ProtectedPhotoMigrationServiceError('protected move target reference changed');
@@ -407,12 +420,23 @@ export class ProtectedPhotoMigrationService {
     }
     const targetKey = authority.targetLibraryKey;
     if (targetKey === undefined) throw new ProtectedPhotoMigrationServiceError('ordinary library write authority is required');
-    const restorations = new Map<string, { photo: PhotoInsert; memberships: ProtectedPhotoMetadata['ordinaryMemberships'] }>();
+    const restorations = new Map<
+      string,
+      {
+        photo: PhotoInsert;
+        memberships: ProtectedPhotoMetadata['ordinaryMemberships'];
+        editRevisions?: readonly BackupManifestEditRevisionV11[];
+      }
+    >();
     for (const item of journal.items) {
       const metadata = this.metadata(journal, item, authority);
       if (metadata.photo.deletedAt !== null) throw new ProtectedPhotoMigrationServiceError('deleted photos cannot be unprotected');
       const { deletedAt: _deletedAt, ...photo } = metadata.photo;
-      restorations.set(item.photoId, { photo: { ...photo, keyId: targetKey.id }, memberships: metadata.ordinaryMemberships });
+      restorations.set(item.photoId, {
+        photo: { ...photo, keyId: targetKey.id },
+        memberships: metadata.ordinaryMemberships,
+        ...(metadata.version === 2 ? { editRevisions: metadata.editRevisions } : {}),
+      });
     }
     this.options.migrations.commitUnprotect(journal.migrationId, restorations, authority.ordinaryAlbum);
   }
@@ -440,6 +464,9 @@ export class ProtectedPhotoMigrationService {
         if (this.options.migrations.countOrdinaryBlobOwners(item.sourceBlobRef) === 0) {
           await this.options.ordinaryBlobs.deleteOriginal(item.sourceBlobRef);
           await this.options.ordinaryBlobs.deleteThumbs(item.sourceBlobRef);
+        }
+        if (item.sourceDerivativeRef !== undefined && item.sourceDerivativeRef !== item.sourceBlobRef) {
+          await this.options.ordinaryBlobs.deleteThumbs(item.sourceDerivativeRef);
         }
         continue;
       }

@@ -137,6 +137,20 @@
       ]
     },
     {
+      "id": "1118-protected-variant-custody",
+      "wiki": "Acceptance-Test-Protected-Albums",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/crypto/protected-photo-migration-service.test.ts",
+            "tests/crypto/protected-photo-metadata.test.ts",
+            "tests/db/protected-variant-migration.test.ts"
+          ]
+        }
+      ]
+    },
+    {
       "id": "m20-protected-album-workflows",
       "wiki": "Acceptance-Test-Protected-Albums",
       "coverage": [
