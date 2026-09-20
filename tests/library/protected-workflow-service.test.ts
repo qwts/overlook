@@ -9,7 +9,13 @@ import { describe, test } from 'node:test';
 import { ActivityRepository } from '../../src/main/activity/activity-repository.js';
 import { backupManifestV3Schema } from '../../src/main/backup/backup-manifest.js';
 import { ProtectedRecoveryRepository } from '../../src/main/db/protected-recovery-repository.js';
-import { moveCollection, setAlbumTags, setCollectionVisibility, readAlbumTree } from '../../src/main/db/album-tree-repository.js';
+import {
+  moveCollection,
+  setAlbumTags,
+  setCollectionVisibility,
+  readAlbumTree,
+  deleteFolder,
+} from '../../src/main/db/album-tree-repository.js';
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { ProtectedBlobStore } from '../../src/main/blobs/protected-blob-store.js';
 import { ProtectedAlbumAuthorityRegistry } from '../../src/main/crypto/protected-album-authority.js';
@@ -162,7 +168,10 @@ describe('ProtectedWorkflowService (#329)', () => {
           albums: [],
           ...snapshot,
         });
-        const restoredDb = openLibraryDatabase({ path: ':memory:', dbKey: randomBytes(32) });
+        const restoredDb = openLibraryDatabase({
+          path: join(mkdtempSync(join(tmpdir(), 'overlook-protected-restored-')), 'library.db'),
+          dbKey: randomBytes(32),
+        });
         const restoredAuthorities = new ProtectedAlbumAuthorityRegistry();
         try {
           new ProtectedRecoveryRepository(restoredDb).restore(manifest);
@@ -181,9 +190,19 @@ describe('ProtectedWorkflowService (#329)', () => {
           restoredDb.close();
         }
 
-        if (parentState === 'deleted') run(value.db, 'DELETE FROM albums WHERE id = ?', 'folder');
+        if (parentState === 'deleted') deleteFolder(value.db, 'folder', { mode: 'move', destinationId: null });
         if (parentState === 'not-folder') run(value.db, "UPDATE albums SET kind = 'album' WHERE id = ?", 'folder');
         if (parentState === 'present') setCollectionVisibility(value.db, 'folder', true);
+        if (parentState === 'deleted') {
+          run(
+            value.db,
+            "CREATE TRIGGER reject_restoration BEFORE INSERT ON photos BEGIN SELECT RAISE(ABORT, 'injected restoration failure'); END",
+          );
+          assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: false, reason: 'failed' });
+          assert.equal(value.photos.albumForProtection('ordinary-private'), undefined, 'album insertion rolls back with photos');
+          assert.equal(new ActivityRepository(value.db).page(20).events.length, 0, 'fallback note cannot outlive failed custody commit');
+          run(value.db, 'DROP TRIGGER reject_restoration');
+        }
         assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
         const album = value.photos.albumForProtection('ordinary-private')!;
         assert.deepEqual(album.organization.tags, ['Family', 'Travel']);
