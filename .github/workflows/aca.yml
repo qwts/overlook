@@ -20,6 +20,11 @@
 # qwts/agentic-code-analysis#80). Re-shop before changing a model here: a
 # route swap without a passing exam publishes verdicts nothing vouches for.
 #
+# doc-drift and agent-rule-conflict are temporarily disabled after repeated
+# stalled judge steps (qwts/overlook#1176). Restore them only after useful
+# evaluations and timeout handling fit a hard 120-second execution budget,
+# including requests and retries. The other eight checks remain enabled.
+#
 # The checks fan out as a matrix, one runner each: a sequential loop measured
 # over an hour of wall-clock on a real PR (each judged file is a reasoning
 # call), which is useless as review-time feedback. Parallel jobs cost only
@@ -57,7 +62,7 @@ jobs:
     # Draft guard (ci.yml's); a `labeled` event judges only when the label is
     # `aca` (any other label application is noise, not intent); and a diff
     # budget: a PR past 25 changed files is not judged at all — per-file
-    # reasoning calls across ten checks on a sweeping refactor is the exact
+    # reasoning calls across eight checks on a sweeping refactor is the exact
     # multi-million-token burn measured on 2026-08-19, and "this PR is too
     # large to judge economically" is itself the first review finding. The
     # skip is loud (see the over-budget job), never a silent partial:
@@ -90,7 +95,7 @@ jobs:
             echo "## aca: not judged"
             echo ""
             echo "This PR changes ${CHANGED} files — past the 25-file judgment budget."
-            echo "Per-file reasoning across ten checks on a diff this size costs a"
+            echo "Per-file reasoning across eight checks on a diff this size costs a"
             echo "meaningful fraction of the weekly judge quota, and the size itself"
             echo "is the first review finding. Split the PR, or accept that this"
             echo "change ships without semantic advisory coverage."
@@ -119,8 +124,6 @@ jobs:
           - { check: test-honesty, model: qwen3.7-max }
           - { check: naming-truth, model: qwen3.7-max }
           - { check: commit-coherence, model: qwen3.8-max }
-          - { check: doc-drift, model: qwen3.8-max }
-          - { check: agent-rule-conflict, model: deepseek-v4-pro }
           - { check: single-responsibility, model: deepseek-v4-pro }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
