@@ -1,6 +1,4 @@
-import type { CommandId } from './command-id.js';
-
-export type { CommandId } from './command-id.js';
+export type CommandId = keyof typeof commandLabels;
 
 export type CommandSurface = 'global' | 'grid' | 'lightbox' | 'dialog';
 export type CommandPlatform = 'darwin' | 'win32' | 'linux';
@@ -57,8 +55,8 @@ export interface KeyboardLike {
 }
 
 const GLOBAL_SURFACES: readonly CommandSurface[] = ['global', 'grid', 'lightbox'];
-const defineMessages = <T extends Record<string, CommandDescriptor['label']>>(messages: T): T => messages;
-const commandLabels: Record<CommandId, CommandDescriptor['label']> = defineMessages({
+const defineMessages = <T extends Record<string, { readonly id: string; readonly defaultMessage: string }>>(messages: T): T => messages;
+const commandLabels = defineMessages({
   'app.settings.open': { id: 'commands.app.settings.open', defaultMessage: 'Settings…' },
   'app.settings.open.storage': { id: 'commands.app.settings.open.storage', defaultMessage: 'Storage & Backup' },
   'app.settings.open.transfer': { id: 'commands.app.settings.open.transfer', defaultMessage: 'Transfer & Sync' },
