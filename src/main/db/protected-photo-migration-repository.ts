@@ -95,7 +95,11 @@ function stored(row: StoredRow): ProtectedPhotoStoredRecord {
 }
 
 export class ProtectedPhotoMigrationRepository {
-  constructor(private readonly db: BetterSqlite3.Database) {}
+  constructor(
+    private readonly db: BetterSqlite3.Database,
+    /** A supplied collaborator must use this connection so restoration shares the custody transaction. */
+    private readonly revisions: Pick<EditRevisionRepository, 'snapshot' | 'restore'> = new EditRevisionRepository(db),
+  ) {}
 
   ordinaryMemberships(photoId: string): ProtectedPhotoMetadata['ordinaryMemberships'] {
     return queryAll<{ albumId: string; position: number }>(
@@ -163,8 +167,14 @@ export class ProtectedPhotoMigrationRepository {
     );
   }
 
-  ordinaryEditRevisions(photoId: string): readonly BackupManifestEditRevisionV11[] {
-    return new EditRevisionRepository(this.db).snapshot(new Set([photoId]));
+  ordinaryEditRevisions(photoIds: readonly string[]): ReadonlyMap<string, readonly BackupManifestEditRevisionV11[]> {
+    const histories = new Map<string, BackupManifestEditRevisionV11[]>();
+    for (const revision of this.revisions.snapshot(new Set(photoIds))) {
+      const history = histories.get(revision.photoId) ?? [];
+      history.push(revision);
+      histories.set(revision.photoId, history);
+    }
+    return histories;
   }
 
   countOrdinaryBlobOwners(contentHash: string): number {
@@ -357,7 +367,7 @@ export class ProtectedPhotoMigrationRepository {
           throw new ProtectedPhotoMigrationRepositoryError('unprotect restoration does not match verified target');
         }
         this.insertOrdinary(restoration.photo);
-        if (restoration.editRevisions !== undefined) new EditRevisionRepository(this.db).restore(restoration.editRevisions);
+        if (restoration.editRevisions !== undefined) this.revisions.restore(restoration.editRevisions);
         for (const membership of restoration.memberships) {
           runNamed(
             this.db,

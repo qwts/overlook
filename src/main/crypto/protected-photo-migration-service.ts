@@ -93,6 +93,7 @@ export class ProtectedPhotoMigrationService {
   prepareProtect(input: { readonly albumId: string; readonly albumKey: Buffer; readonly photoIds: readonly string[] }): string {
     const albumKey = requireAlbumKey(input.albumKey, 'target album');
     const migrationId = this.options.createMigrationId?.() ?? randomUUID();
+    const editHistories = this.options.migrations.ordinaryEditRevisions(input.photoIds);
     const items = input.photoIds.map((photoId) => {
       const photo = this.options.photos.get(photoId);
       if (photo === undefined || photo.deletedAt !== null) {
@@ -103,7 +104,7 @@ export class ProtectedPhotoMigrationService {
       }
       const metadata: ProtectedPhotoMetadata = {
         version: 2,
-        editRevisions: this.options.migrations.ordinaryEditRevisions(photoId),
+        editRevisions: editHistories.get(photoId) ?? [],
         photo: photoMetadata(photo),
         ordinaryMemberships: this.options.migrations.ordinaryMemberships(photoId),
       };

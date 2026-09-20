@@ -42,7 +42,7 @@ interface World {
   readonly revokedOrdinary: string[][];
 }
 
-async function world(): Promise<World> {
+async function world(onSnapshot?: (photoIds: ReadonlySet<string>) => void): Promise<World> {
   const dataDir = mkdtempSync(join(tmpdir(), 'overlook-protected-migration-'));
   const db = openLibraryDatabase({ path: join(dataDir, 'library.db'), dbKey: randomBytes(32) });
   const ordinary = new BlobStore({ dataDir });
@@ -96,7 +96,14 @@ async function world(): Promise<World> {
     keyId: 1,
   });
   photos.addToAlbum('ordinary-a', [PHOTO_ID]);
-  const migrations = new ProtectedPhotoMigrationRepository(db);
+  const editRevisions = new EditRevisionRepository(db);
+  const migrations = new ProtectedPhotoMigrationRepository(db, {
+    snapshot: (photoIds) => {
+      onSnapshot?.(photoIds);
+      return editRevisions.snapshot(photoIds);
+    },
+    restore: (revisions) => editRevisions.restore(revisions),
+  });
   const manifestDebts = { count: 0 };
   const revokedOrdinary: string[][] = [];
   let sequence = 0;
@@ -304,19 +311,53 @@ describe('ProtectedPhotoMigrationService', () => {
   }
 
   test('equal originals retain independent protected previews and can move between albums', async () => {
-    const w = await world();
+    const snapshots: string[][] = [];
+    const w = await world((photoIds) => snapshots.push([...photoIds]));
     try {
       const id = 'duplicate-b';
       new VariantRepository(w.db).duplicate(w.photos.get(PHOTO_ID)!, id, '2026-09-20T12:00:00.000Z');
       const duplicate = w.photos.get(id)!;
+      const revisions = new EditRevisionRepository(w.db);
+      for (const [photoId, revisionId, turns] of [
+        [PHOTO_ID, '01J8ED00000000000000000003', 1],
+        [id, '01J8ED00000000000000000004', 2],
+      ] as const) {
+        revisions.append(photoId, {
+          version: 1,
+          id: revisionId,
+          parentId: null,
+          operations: [{ type: 'rotate', version: 1, quarterTurns: turns }],
+          author: { product: 'overlook', version: 'test' },
+          createdAt: '2026-09-20T12:00:00.000Z',
+          importedFrom: null,
+        });
+      }
+      const expectedRootHistory = revisions.snapshot(new Set([PHOTO_ID]));
+      const expectedVariantHistory = revisions.snapshot(new Set([id]));
       for (const kind of ['thumb', 'mid'] as const) {
         await w.ordinary.putThumb(Readable.from(`second ${kind}`), { id: 1, key: w.libraryKey }, id, duplicate.derivativeKey, kind);
       }
       const migration = w.service.prepareProtect({ albumId: 'protected-a', albumKey: w.albumKeyA, photoIds: [PHOTO_ID, id] });
+      assert.deepEqual(snapshots, [[PHOTO_ID, id]], 'one history snapshot for the complete selection');
       await w.service.runToCompletion(migration, w.protectAuthority);
       const root = w.migrations.getProtected(PHOTO_ID)!;
       const variant = w.migrations.getProtected(id)!;
       assert.notEqual(root.blobRef, variant.blobRef);
+      for (const [photoId, row, expected] of [
+        [PHOTO_ID, root, expectedRootHistory],
+        [id, variant, expectedVariantHistory],
+      ] as const) {
+        const metadata = openProtectedPhotoMetadata(
+          { libraryId: LIBRARY_ID, albumId: 'protected-a', photoId },
+          w.albumKeyA,
+          row.sealedMetadata,
+        );
+        assert.deepEqual(
+          metadata.version === 2 ? metadata.editRevisions : [],
+          expected,
+          'batched snapshot keeps each history with its owner',
+        );
+      }
       assert.equal((await bytes(w.protected.getStream('protected-a', root.blobRef, 'thumb', w.albumKeyA))).toString(), 'thumb bytes');
       assert.equal((await bytes(w.protected.getStream('protected-a', variant.blobRef, 'thumb', w.albumKeyA))).toString(), 'second thumb');
       const move = w.service.prepareMove({
