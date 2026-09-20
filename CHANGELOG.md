@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.4
+
+### Patch Changes
+
+- 9357e3c: Keep a restored protected album in its saved folder when deleting its ordinary row left a gap in collection positions.
+
 ## 0.76.3
 
 ### Patch Changes
