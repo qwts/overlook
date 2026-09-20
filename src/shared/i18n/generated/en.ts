@@ -7,6 +7,7 @@ export const en: Readonly<Record<string, string>> = {
   "activity.copy.eventId": "activity event ID",
   "activity.copy.timestamp": "activity timestamp",
   "activity.empty": "Library activity will appear here.",
+  "activity.event.protectedParentUnavailable": "Restored an album at the top level because its original folder is no longer available",
   "activity.failed": "Activity could not be loaded.",
   "activity.history": "History controls",
   "activity.loadMore": "Load more",

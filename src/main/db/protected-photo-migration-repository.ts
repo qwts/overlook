@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { ActivityRepository } from '../activity/activity-repository.js';
+import { restoreProtectedAlbum, type OrdinaryAlbumRestoration, type AlbumRestorationPorts } from './protected-album-restoration.js';
+export type { OrdinaryAlbumRestoration } from './protected-album-restoration.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { EditRevisionRepository } from './edit-revision-repository.js';
@@ -39,15 +43,6 @@ export interface ProtectedPhotoStoredRecord {
   readonly sealedMetadata: Buffer;
   readonly hasThumb: boolean;
   readonly hasMid: boolean;
-}
-
-export interface OrdinaryAlbumRestoration {
-  readonly id: string;
-  readonly name: string;
-  readonly createdAt: string;
-  readonly position: number;
-  /** #494: carried through protection so unprotect restores the policy; absent = visible. */
-  readonly showInAllPhotos?: boolean | undefined;
 }
 
 interface JournalRow {
@@ -99,6 +94,10 @@ export class ProtectedPhotoMigrationRepository {
     private readonly db: BetterSqlite3.Database,
     /** A supplied collaborator must use this connection so restoration shares the custody transaction. */
     private readonly revisions: Pick<EditRevisionRepository, 'snapshot' | 'restore'> = new EditRevisionRepository(db),
+    private readonly albumRestoration: AlbumRestorationPorts = {
+      createId: randomUUID,
+      activity: new ActivityRepository(db),
+    },
   ) {}
 
   ordinaryMemberships(photoId: string): ProtectedPhotoMetadata['ordinaryMemberships'] {
@@ -350,16 +349,7 @@ export class ProtectedPhotoMigrationRepository {
     this.db.transaction(() => {
       const journal = this.require(migrationId, 'unprotect', 'verify');
       if (ordinaryAlbum !== undefined) {
-        if (queryGet<{ id: string }>(this.db, 'SELECT id FROM albums WHERE id = ?', ordinaryAlbum.id) !== undefined) {
-          throw new ProtectedPhotoMigrationRepositoryError('ordinary album already exists');
-        }
-        run(this.db, 'UPDATE albums SET position = position + 1 WHERE position >= ?', ordinaryAlbum.position);
-        runNamed(
-          this.db,
-          `INSERT INTO albums (id, name, created_at, position, show_in_all_photos)
-           VALUES (@id, @name, @createdAt, @position, @showInAllPhotos)`,
-          { ...ordinaryAlbum, showInAllPhotos: ordinaryAlbum.showInAllPhotos === false ? 0 : 1 },
-        );
+        restoreProtectedAlbum(this.db, ordinaryAlbum, migrationId, now, this.albumRestoration);
       }
       for (const item of journal.items) {
         const restoration = restorations.get(item.photoId);

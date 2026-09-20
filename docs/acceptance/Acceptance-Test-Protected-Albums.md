@@ -96,3 +96,27 @@ finish cleanup even after commit removes that row.
 The existing unprotect conflict remains: an ordinary sibling with the same
 content hash prevents return, rather than replacing its shared ciphertext.
 Shared-original return is tracked in [#1183](https://github.com/qwts/overlook/issues/1183).
+
+## Album organization round trip (#1107)
+
+Protect a tagged album between two siblings in a folder, using inherited
+visibility. While protected it must be absent from the ordinary folder tree.
+Remove protection: its parent, sibling slot, inheritance setting, and tags must
+return together with its photos. Inherited visibility follows the folder's
+current setting; explicit visibility retains the saved setting. Unrelated
+folders keep their sibling order.
+
+If the original parent has been deleted, is no longer a folder, or has moved
+too deep to accept another child, removal of protection restores the album at the end of the top level. Activity must explain
+that the original folder is unavailable. Tags and the saved visibility setting
+survive that fallback. Top-level albums cannot inherit visibility, so fallback
+clears inheritance while retaining the saved effective visibility; the activity note commits with restoration and carries no
+album name or tag text.
+
+New sealed album metadata uses payload version 2 to preserve organization.
+Legacy version 1 records remain readable and restore with their original
+top-level/no-tags behavior. The credential/envelope format and opaque outer
+backup manifest records are unchanged. Verify that a manifest snapshot restored
+into a fresh database unlocks with the same saved organization. Older clients
+that do not understand payload version 2 reject it rather than silently losing
+organization.

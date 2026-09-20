@@ -14,7 +14,7 @@ import { readExportablePhotoIds } from './exportable-photo-ids.js';
 import { setOriginalClassification, softDeleteOrdinary } from './photo-original-policy-repository.js';
 import { toggleFavorite as toggleFavoritePhoto, toggleFavorites as toggleFavoritePhotos } from './photo-favorite-repository.js';
 import { moveAlbum, readAlbumOrder, replaceAlbumOrder, type AlbumOrderResult } from './album-order-repository.js';
-import { createCollection } from './album-tree-repository.js';
+import { createCollection, readAlbumTree, readAlbumTags } from './album-tree-repository.js';
 import { readAlbumListings, readHiddenAlbumIds, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
 export { verifyInAllPhotosAsync } from './album-visibility-repository.js';
 import {
@@ -518,6 +518,12 @@ export class PhotosRepository {
         readonly position: number;
         readonly showInAllPhotos: boolean;
         readonly photoIds: readonly string[];
+        readonly organization: {
+          readonly parentId: string | null;
+          readonly inheritsVisibility: boolean;
+          readonly siblingPosition: number;
+          readonly tags: readonly string[];
+        };
       }
     | undefined {
     const album = queryGet<{ id: string; name: string; createdAt: string; position: number; showInAllPhotos: number }>(
@@ -525,9 +531,20 @@ export class PhotosRepository {
       `SELECT id, name, created_at AS createdAt, position, show_in_all_photos AS showInAllPhotos FROM albums WHERE id = ? AND kind = 'album'`,
       albumId,
     );
-    return album === undefined
-      ? undefined
-      : { ...album, showInAllPhotos: album.showInAllPhotos === 1, photoIds: this.albumMembers(albumId) };
+    if (album === undefined) return undefined;
+    const tree = readAlbumTree(this.db);
+    const node = tree.find((row) => row.id === albumId)!;
+    return {
+      ...album,
+      showInAllPhotos: album.showInAllPhotos === 1,
+      photoIds: this.albumMembers(albumId),
+      organization: {
+        parentId: node.parentId,
+        inheritsVisibility: node.inheritsVisibility,
+        siblingPosition: tree.filter((row) => row.parentId === node.parentId).findIndex((row) => row.id === albumId),
+        tags: readAlbumTags(this.db).get(albumId) ?? [],
+      },
+    };
   }
 
   /** Albums CRUD (#117). Deleting an album NEVER deletes photos — the
