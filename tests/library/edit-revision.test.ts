@@ -1,3 +1,4 @@
+import { previousEditState } from '../../src/shared/library/edit-revert.js';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -11,7 +12,6 @@ import {
   isIdentityTransform,
   operationsFromTransform,
   parseEditRevision,
-  previousEditState,
   transformsEqual,
   type EditOperation,
   type EditTransform,

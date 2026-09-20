@@ -1,3 +1,4 @@
+import { previousEditState } from '../../shared/library/edit-revert.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
@@ -10,7 +11,6 @@ import {
   canonicalJson,
   editOperationSchema,
   foldOperations,
-  previousEditState,
   type EditOperation,
   type EditRevisionDocument,
   type EditTransform,

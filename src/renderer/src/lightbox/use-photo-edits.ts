@@ -1,13 +1,9 @@
+import { previousEditState } from '../../../shared/library/edit-revert.js';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { EditHeadPayload, EditMutationResult } from '../../../shared/ipc/photo-edit-channels.js';
-import {
-  IDENTITY_TRANSFORM,
-  operationsFromTransform,
-  previousEditState,
-  type EditTransform,
-} from '../../../shared/library/edit-revision.js';
+import { IDENTITY_TRANSFORM, operationsFromTransform, type EditTransform } from '../../../shared/library/edit-revision.js';
 
 // The persisted edit head for the lightbox photo (#493, ADR-0031 §2). The
 // head loads when the photo changes and again whenever main reports a

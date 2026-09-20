@@ -1,3 +1,4 @@
+import { previousEditState } from '../../src/shared/library/edit-revert.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ import { EditRevisionRepository } from '../../src/main/db/edit-revision-reposito
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { PhotoEditService, type PhotoEditServiceDeps } from '../../src/main/library/photo-edit-service.js';
-import { previousEditState, type EditOperation, type EditTransform } from '../../src/shared/library/edit-revision.js';
+import { type EditOperation, type EditTransform } from '../../src/shared/library/edit-revision.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 // #493 / ADR-0031 §2: Save appends a revision whose parent is the head and
