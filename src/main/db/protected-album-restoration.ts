@@ -38,12 +38,14 @@ export function restoreProtectedAlbum(
 ): void {
   const tree = readAlbumTree(db);
   if (tree.some((row) => row.id === album.id)) throw new Error('ordinary album already exists');
+  // Deleting the protected source can leave sparse global positions.
+  const appendPosition = tree.reduce((maximum, row) => Math.max(maximum, row.position), -1) + 1;
   const organization = album.organization;
   const savedParent = organization?.parentId ?? null;
   const candidate = tree.find((row) => row.id === savedParent && row.kind === 'folder');
   const parent =
     candidate !== undefined &&
-    albumTreeIssues([...tree, { id: album.id, kind: 'album', parentId: savedParent, position: tree.length }]).length === 0
+    albumTreeIssues([...tree, { id: album.id, kind: 'album', parentId: savedParent, position: appendPosition }]).length === 0
       ? candidate
       : undefined;
   const parentId = parent?.id ?? null;
@@ -64,7 +66,7 @@ export function restoreProtectedAlbum(
       id: album.id,
       name: album.name,
       createdAt: album.createdAt,
-      position: tree.length,
+      position: appendPosition,
       parentId,
       inherits: inherits ? 1 : 0,
       show: show ? 1 : 0,
