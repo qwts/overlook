@@ -139,6 +139,40 @@ async function world() {
 }
 
 describe('ProtectedWorkflowService (#329)', () => {
+  test('a sparse position after protection does not disqualify the saved folder', async () => {
+    const value = await world();
+    try {
+      value.photos.createAlbum('folder', 'Folder', { kind: 'folder' });
+      moveCollection(value.db, 'ordinary-private', 'folder');
+      value.photos.createAlbum('after', 'After', { parentId: 'folder' });
+      assert.deepEqual(await value.workflow.protect('ordinary-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+      assert.deepEqual(
+        readAlbumTree(value.db).map(({ id, position }) => ({ id, position })),
+        [
+          { id: 'folder', position: 0 },
+          { id: 'after', position: 2 },
+        ],
+        'the deleted source leaves the last sibling at the row count',
+      );
+      assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
+      const album = value.photos.albumForProtection('ordinary-private')!;
+      assert.equal(album.organization.parentId, 'folder');
+      assert.equal(album.organization.inheritsVisibility, true);
+      assert.equal(album.organization.siblingPosition, 0);
+      assert.deepEqual(
+        readAlbumTree(value.db).map(({ id, position }) => ({ id, position })),
+        [
+          { id: 'folder', position: 0 },
+          { id: 'ordinary-private', position: 1 },
+          { id: 'after', position: 2 },
+        ],
+      );
+      assert.equal(new ActivityRepository(value.db).page(20).events.length, 0, 'no false fallback activity');
+    } finally {
+      value.db.close();
+    }
+  });
+
   for (const parentState of ['present', 'deleted', 'not-folder', 'too-deep'] as const) {
     test(`restores organization with parent ${parentState} and preserves sealed backup metadata`, async () => {
       const value = await world();
