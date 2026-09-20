@@ -1,8 +1,7 @@
-import { randomUUID } from 'node:crypto';
-
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { ActivityRepository } from '../activity/activity-repository.js';
+import type { ActivityAppend } from '../../shared/activity/types.js';
+import { albumTreeIssues } from '../../shared/library/album-tree.js';
 import { depthFirstOrder, readAlbumTree, setAlbumTags } from './album-tree-repository.js';
 import { run, runNamed } from './sql.js';
 
@@ -22,17 +21,34 @@ export interface OrdinaryAlbumRestoration {
     | undefined;
 }
 
+export interface AlbumRestorationPorts {
+  readonly createId: () => string;
+  /** Must append on the same database connection as the custody transaction. */
+  readonly activity: { readonly append: (event: ActivityAppend) => unknown };
+}
+
 /** Called inside the photo-custody transaction: placement, tags and fallback
  * evidence must either commit with the restored photos or all roll back. */
-export function restoreProtectedAlbum(db: BetterSqlite3.Database, album: OrdinaryAlbumRestoration, migrationId: string, now: string): void {
+export function restoreProtectedAlbum(
+  db: BetterSqlite3.Database,
+  album: OrdinaryAlbumRestoration,
+  migrationId: string,
+  now: string,
+  ports: AlbumRestorationPorts,
+): void {
   const tree = readAlbumTree(db);
   if (tree.some((row) => row.id === album.id)) throw new Error('ordinary album already exists');
   const organization = album.organization;
   const savedParent = organization?.parentId ?? null;
-  const parent = tree.find((row) => row.id === savedParent && row.kind === 'folder');
+  const candidate = tree.find((row) => row.id === savedParent && row.kind === 'folder');
+  const parent =
+    candidate !== undefined &&
+    albumTreeIssues([...tree, { id: album.id, kind: 'album', parentId: savedParent, position: tree.length }]).length === 0
+      ? candidate
+      : undefined;
   const parentId = parent?.id ?? null;
   const fallback = savedParent !== null && parent === undefined;
-  const inherits = organization?.inheritsVisibility ?? false;
+  const inherits = parentId !== null && (organization?.inheritsVisibility ?? false);
   const show = inherits && parent !== undefined ? parent.showInAllPhotos : album.showInAllPhotos !== false;
   const siblings = tree.filter((row) => row.parentId === parentId);
   // Legacy metadata has only a global index; preserve its relative top-level
@@ -59,10 +75,10 @@ export function restoreProtectedAlbum(db: BetterSqlite3.Database, album: Ordinar
   for (const [position, id] of depthFirstOrder(readAlbumTree(db), { parentId, order }).entries()) {
     run(db, 'UPDATE albums SET position = ? WHERE id = ?', position, id);
   }
-  setAlbumTags(db, album.id, organization?.tags ?? [], randomUUID);
+  setAlbumTags(db, album.id, organization?.tags ?? [], ports.createId);
   if (fallback) {
-    new ActivityRepository(db).append({
-      eventId: randomUUID(),
+    ports.activity.append({
+      eventId: ports.createId(),
       operationId: migrationId,
       eventType: 'album.moved',
       occurredAt: now,

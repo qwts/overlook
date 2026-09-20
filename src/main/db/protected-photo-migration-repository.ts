@@ -1,4 +1,6 @@
-import { restoreProtectedAlbum, type OrdinaryAlbumRestoration } from './protected-album-restoration.js';
+import { randomUUID } from 'node:crypto';
+import { ActivityRepository } from '../activity/activity-repository.js';
+import { restoreProtectedAlbum, type OrdinaryAlbumRestoration, type AlbumRestorationPorts } from './protected-album-restoration.js';
 export type { OrdinaryAlbumRestoration } from './protected-album-restoration.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
@@ -92,6 +94,10 @@ export class ProtectedPhotoMigrationRepository {
     private readonly db: BetterSqlite3.Database,
     /** A supplied collaborator must use this connection so restoration shares the custody transaction. */
     private readonly revisions: Pick<EditRevisionRepository, 'snapshot' | 'restore'> = new EditRevisionRepository(db),
+    private readonly albumRestoration: AlbumRestorationPorts = {
+      createId: randomUUID,
+      activity: new ActivityRepository(db),
+    },
   ) {}
 
   ordinaryMemberships(photoId: string): ProtectedPhotoMetadata['ordinaryMemberships'] {
@@ -343,7 +349,7 @@ export class ProtectedPhotoMigrationRepository {
     this.db.transaction(() => {
       const journal = this.require(migrationId, 'unprotect', 'verify');
       if (ordinaryAlbum !== undefined) {
-        restoreProtectedAlbum(this.db, ordinaryAlbum, migrationId, now);
+        restoreProtectedAlbum(this.db, ordinaryAlbum, migrationId, now, this.albumRestoration);
       }
       for (const item of journal.items) {
         const restoration = restorations.get(item.photoId);

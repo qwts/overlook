@@ -106,10 +106,11 @@ return together with its photos. Inherited visibility follows the folder's
 current setting; explicit visibility retains the saved setting. Unrelated
 folders keep their sibling order.
 
-If the original parent has been deleted or is no longer a folder, removal of
-protection restores the album at the end of the top level. Activity must explain
+If the original parent has been deleted, is no longer a folder, or has moved
+too deep to accept another child, removal of protection restores the album at the end of the top level. Activity must explain
 that the original folder is unavailable. Tags and the saved visibility setting
-survive that fallback; the activity note commits with restoration and carries no
+survive that fallback. Top-level albums cannot inherit visibility, so fallback
+clears inheritance while retaining the saved effective visibility; the activity note commits with restoration and carries no
 album name or tag text.
 
 New sealed album metadata uses payload version 2 to preserve organization.

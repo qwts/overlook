@@ -6,8 +6,9 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, test } from 'node:test';
 
+import { DEFAULT_GALLERY_POLICY } from '../../src/shared/library/gallery-policy.js';
 import { ActivityRepository } from '../../src/main/activity/activity-repository.js';
-import { backupManifestV3Schema } from '../../src/main/backup/backup-manifest.js';
+import { backupManifestV3Schema, buildBackupManifestV15 } from '../../src/main/backup/backup-manifest.js';
 import { ProtectedRecoveryRepository } from '../../src/main/db/protected-recovery-repository.js';
 import {
   moveCollection,
@@ -15,6 +16,7 @@ import {
   setCollectionVisibility,
   readAlbumTree,
   deleteFolder,
+  albumTreeSnapshot,
 } from '../../src/main/db/album-tree-repository.js';
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { ProtectedBlobStore } from '../../src/main/blobs/protected-blob-store.js';
@@ -76,12 +78,16 @@ async function world() {
   const authorities = new ProtectedAlbumAuthorityRegistry();
   const albumRecords = new ProtectedAlbumRepository(db, LIBRARY_ID);
   const albums = new ProtectedAlbumService({ libraryId: LIBRARY_ID, repository: albumRecords, authorities });
+  let restorationIds = 0;
   const migrations = new ProtectedPhotoMigrationService({
     libraryId: LIBRARY_ID,
     ordinaryBlobs: ordinary,
     protectedBlobs,
     photos,
-    migrations: new ProtectedPhotoMigrationRepository(db),
+    migrations: new ProtectedPhotoMigrationRepository(db, undefined, {
+      createId: () => `restoration-${++restorationIds}`,
+      activity: new ActivityRepository(db),
+    }),
     oweManifest: () => undefined,
   });
   const progress: ProtectedWorkflowProgress[] = [];
@@ -133,7 +139,7 @@ async function world() {
 }
 
 describe('ProtectedWorkflowService (#329)', () => {
-  for (const parentState of ['present', 'deleted', 'not-folder'] as const) {
+  for (const parentState of ['present', 'deleted', 'not-folder', 'too-deep'] as const) {
     test(`restores organization with parent ${parentState} and preserves sealed backup metadata`, async () => {
       const value = await world();
       try {
@@ -191,7 +197,21 @@ describe('ProtectedWorkflowService (#329)', () => {
         }
 
         if (parentState === 'deleted') deleteFolder(value.db, 'folder', { mode: 'move', destinationId: null });
-        if (parentState === 'not-folder') run(value.db, "UPDATE albums SET kind = 'album' WHERE id = ?", 'folder');
+        if (parentState === 'not-folder') {
+          deleteFolder(value.db, 'folder', { mode: 'move', destinationId: null });
+          value.photos.createAlbum('folder', 'Replacement album');
+        }
+        if (parentState === 'too-deep') {
+          moveCollection(value.db, 'before', null);
+          moveCollection(value.db, 'after', null);
+          for (let depth = 0; depth < 6; depth += 1) {
+            value.photos.createAlbum(`depth-${depth}`, `Depth ${depth}`, {
+              kind: 'folder',
+              parentId: depth === 0 ? null : `depth-${depth - 1}`,
+            });
+          }
+          moveCollection(value.db, 'folder', 'depth-5');
+        }
         if (parentState === 'present') setCollectionVisibility(value.db, 'folder', true);
         if (parentState === 'deleted') {
           run(
@@ -206,7 +226,7 @@ describe('ProtectedWorkflowService (#329)', () => {
         assert.deepEqual(await value.workflow.unprotect('protected-private', PASSWORD), { ok: true, albumId: 'protected-private' });
         const album = value.photos.albumForProtection('ordinary-private')!;
         assert.deepEqual(album.organization.tags, ['Family', 'Travel']);
-        assert.equal(album.organization.inheritsVisibility, true);
+        assert.equal(album.organization.inheritsVisibility, parentState === 'present');
         assert.equal(album.organization.parentId, parentState === 'present' ? 'folder' : null);
         assert.equal(album.showInAllPhotos, parentState === 'present');
         if (parentState === 'present') {
@@ -225,7 +245,32 @@ describe('ProtectedWorkflowService (#329)', () => {
         );
         const notes = new ActivityRepository(value.db).page(20).events;
         assert.equal(notes.length, parentState === 'present' ? 0 : 1);
-        if (parentState !== 'present') assert.equal(notes[0]!.payload['reason'], 'protected-parent-unavailable');
+        if (parentState !== 'present') {
+          assert.equal(notes[0]!.payload['reason'], 'protected-parent-unavailable');
+          assert.match(notes[0]!.eventId, /^restoration-/u, 'uses the supplied ID generator');
+        }
+        assert.doesNotThrow(
+          () =>
+            buildBackupManifestV15({
+              libraryId: LIBRARY_ID,
+              generatedAt: new Date().toISOString(),
+              snapshot: {
+                ...value.photos.manifestSnapshot(),
+                ...albumTreeSnapshot(value.db),
+                protectedAlbums: [],
+                protectedPhotos: [],
+                activity: notes,
+                boards: [],
+                sidecars: [],
+                galleryPolicy: DEFAULT_GALLERY_POLICY,
+                hiddenAlbumIds: [],
+                editRevisions: [],
+                provenance: [],
+                variantFamilies: [],
+              },
+            }),
+          'restored tree must remain publishable by the current backup manifest',
+        );
       } finally {
         value.db.close();
       }
