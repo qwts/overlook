@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.1
+
+### Patch Changes
+
+- d68a1d5: Project folder-scoped album and folder creation labels from the shared command registry.
+- 72e02cf: Keep surviving albums selected when moving folder contents, and clear selection for recursively deleted descendants.
+
 ## 0.76.0
 
 ### Minor Changes
