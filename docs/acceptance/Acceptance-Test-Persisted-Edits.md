@@ -59,10 +59,16 @@ provider configured for the steps below.
 11. Click **Reset edits**. Confirm the photo returns to the original
     orientation and framing, the tile repaints, and the Inspector's
     **Revisions** count grows by one (Reset is a revision, not a deletion).
-12. Click **Revert**. Confirm the photo returns to the state before the reset
-    and the count grows by one again. Click **Revert** repeatedly: confirm each
-    step returns to the previous revision and the button disables at the
-    empty root.
+12. At the empty state, confirm **Revert** is disabled. Save three distinct
+    edit stacks A, B, and C. Click **Revert** three times: confirm B, then A,
+    then the empty root, where the button disables. Reopen the photo between
+    clicks and confirm the same walk. Every step appends a revision; history
+    remains complete and newest first (#1114).
+    Revert follows parent links and resumes from the earliest identical
+    canonical stack before an empty or unsupported state. A manually saved
+    duplicate stack is treated like restoration of that earlier state. Reset
+    ends this walk at empty; explicit revision restoration retains history.
+    Missing or unsupported ancestry cannot be traversed as a supported edit.
 13. With a local, unsaved draft (rotate without saving), click **Reset edits**.
     Confirm only the draft is discarded when the head is already the original
     (no new revision), and a revision is written when it is not.

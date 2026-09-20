@@ -149,7 +149,7 @@ export function Lightbox({
         persisted: edits.persisted,
         unsupported: editHead?.unsupported ?? null,
         busy: edits.state.busy,
-        canRevert: (editHead?.parentId ?? null) !== null,
+        canRevert: edits.canRevert,
         onSave: (transform) => runEdit(() => edits.save(transform)),
         onReset: () => runEdit(edits.reset),
         onRevert: () => runEdit(edits.revert),

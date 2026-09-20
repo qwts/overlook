@@ -10,6 +10,7 @@ import {
   canonicalJson,
   editOperationSchema,
   foldOperations,
+  previousEditState,
   type EditOperation,
   type EditRevisionDocument,
   type EditTransform,
@@ -64,7 +65,13 @@ export class PhotoEditService {
     return this.advance(photoId, []);
   }
 
-  async revert(photoId: string, revisionId: string): Promise<EditMutationResult> {
+  async revert(photoId: string, revisionId?: string): Promise<EditMutationResult> {
+    if (revisionId === undefined) {
+      const current = this.revisions.head(photoId);
+      const target = previousEditState(current.head, current.history);
+      if (target === null) throw new Error('no supported earlier edit state');
+      return this.advance(photoId, target.operations);
+    }
     const row = this.revisions.get(revisionId);
     if (row === null || row.photoId !== photoId) throw new Error(`revision ${revisionId} does not belong to photo ${photoId}`);
     const head = this.revisions.head(photoId);

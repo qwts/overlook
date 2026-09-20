@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { EditHeadPayload, EditMutationResult } from '../../../shared/ipc/photo-edit-channels.js';
-import { IDENTITY_TRANSFORM, operationsFromTransform, type EditTransform } from '../../../shared/library/edit-revision.js';
+import {
+  IDENTITY_TRANSFORM,
+  operationsFromTransform,
+  previousEditState,
+  type EditTransform,
+} from '../../../shared/library/edit-revision.js';
 
 // The persisted edit head for the lightbox photo (#493, ADR-0031 §2). The
 // head loads when the photo changes and again whenever main reports a
@@ -26,7 +31,8 @@ export interface PhotoEdits {
   readonly available: boolean;
   readonly save: (transform: EditTransform) => Promise<EditMutationResult>;
   readonly reset: () => Promise<EditMutationResult>;
-  /** Reverts to the head's parent revision (a new revision, history append-only). */
+  readonly canRevert: boolean;
+  /** Steps to the preceding effective state, keeping history append-only. */
   readonly revert: () => Promise<EditMutationResult | null>;
 }
 
@@ -107,12 +113,12 @@ export function usePhotoEdits(photoId: string, api?: PhotoEditApi): PhotoEdits {
   );
   const reset = useCallback(() => mutate((current) => current.reset({ photoId })), [mutate, photoId]);
   const revert = useCallback(async () => {
-    const parentId = state.head?.head?.parentId ?? null;
-    if (parentId === null) return null;
-    return mutate((current) => current.revert({ photoId, revisionId: parentId }));
+    if (state.head === null || previousEditState(state.head.head, state.head.history) === null) return null;
+    return mutate((current) => current.revert({ photoId }));
   }, [mutate, photoId, state.head]);
 
   const head = state.head?.head ?? null;
   const persisted = head === null || head.unsupported !== null ? IDENTITY_TRANSFORM : head.transform;
-  return { state, persisted, available: resolvedApi !== undefined, save, reset, revert };
+  const canRevert = state.head !== null && previousEditState(state.head.head, state.head.history) !== null;
+  return { state, persisted, available: resolvedApi !== undefined, canRevert, save, reset, revert };
 }

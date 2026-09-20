@@ -52,7 +52,7 @@ export const photoEditChannels = {
   photoEditReset: defineChannel('photo:edit-reset', z.object({ photoId: z.string().min(1) }), editMutationResultSchema),
   photoEditRevert: defineChannel(
     'photo:edit-revert',
-    z.object({ photoId: z.string().min(1), revisionId: z.string().min(1) }),
+    z.object({ photoId: z.string().min(1), revisionId: z.string().min(1).optional() }),
     editMutationResultSchema,
   ),
 };
