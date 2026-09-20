@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.2
+
+### Patch Changes
+
+- 31d3a84: Read protected-migration originals with the shared asset owner and preserve variant-specific derivative custody through recovery.
+- a26ee5c: Walk repeated edit reverts back through restored states to the empty root while preserving every revision.
+
 ## 0.76.1
 
 ### Patch Changes
