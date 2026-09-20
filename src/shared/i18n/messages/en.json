@@ -92,14 +92,8 @@
   "album.folder.new.titleIn": {
     "defaultMessage": "New folder in {folder}"
   },
-  "album.folder.newAlbum": {
-    "defaultMessage": "New album inside…"
-  },
   "album.folder.newAlbum.titleIn": {
     "defaultMessage": "New album in {folder}"
-  },
-  "album.folder.newInside": {
-    "defaultMessage": "New folder inside…"
   },
   "album.folder.positionSuffix": {
     "defaultMessage": "folder {position} of {total}"
@@ -244,6 +238,12 @@
   },
   "commands.album.folder.new": {
     "defaultMessage": "New folder…"
+  },
+  "commands.album.folder.newAlbumInside": {
+    "defaultMessage": "New album inside…"
+  },
+  "commands.album.folder.newInside": {
+    "defaultMessage": "New folder inside…"
   },
   "commands.album.hide": {
     "defaultMessage": "Hide from All Photos"

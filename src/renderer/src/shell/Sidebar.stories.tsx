@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
+import { commandById } from '../../../shared/commands/registry.js';
 import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { beginPhotoDrag } from '../grid/photo-drag-session';
 
@@ -518,6 +519,12 @@ export const AlbumFolders: Story = {
     await expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toBeDisabled();
 
     await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
+    await expect(
+      body.queryByRole('menuitem', { name: commandById('album.folder.newInside').label.defaultMessage }),
+    ).not.toBeInTheDocument();
+    await expect(
+      body.queryByRole('menuitem', { name: commandById('album.folder.newAlbumInside').label.defaultMessage }),
+    ).not.toBeInTheDocument();
     await expect(body.getByRole('menuitem', { name: /Show in All Photos.*Follows the folder setting/u })).toBeVisible();
     await expect(body.queryByRole('menuitem', { name: 'Use folder setting' })).not.toBeInTheDocument();
     await userEvent.click(body.getByRole('menuitem', { name: 'Move to folder…' }));
@@ -531,6 +538,18 @@ export const AlbumFolders: Story = {
     await expect(canvas.queryByText('Iceland')).not.toBeInTheDocument();
     await userEvent.click(trips);
     await expect(canvas.getByText('Iceland')).toBeVisible();
+
+    await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
+    await userEvent.click(body.getByRole('menuitem', { name: commandById('album.folder.newAlbumInside').label.defaultMessage }));
+    const newAlbum = within(canvas.getByRole('dialog', { name: 'New album in Trips' }));
+    await expect(newAlbum.getByRole('textbox', { name: 'Album name' })).toBeVisible();
+    await userEvent.click(newAlbum.getByRole('button', { name: 'Cancel' }));
+
+    await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
+    await userEvent.click(body.getByRole('menuitem', { name: commandById('album.folder.newInside').label.defaultMessage }));
+    const newFolder = within(canvas.getByRole('dialog', { name: 'New folder in Trips' }));
+    await expect(newFolder.getByRole('textbox', { name: 'Folder name' })).toBeVisible();
+    await userEvent.click(newFolder.getByRole('button', { name: 'Cancel' }));
 
     await openActions(canvas.getByRole('button', { name: 'Actions for Trips' }));
     await expect(body.getByRole('menuitem', { name: /Tags….*travel/u })).toBeVisible();

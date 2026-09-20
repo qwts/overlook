@@ -7,6 +7,8 @@ export const en: Readonly<Record<string, string>> = {
   "commands.album.delete": "Delete album…",
   "commands.album.duplicate": "Duplicate",
   "commands.album.folder.new": "New folder…",
+  "commands.album.folder.newAlbumInside": "New album inside…",
+  "commands.album.folder.newInside": "New folder inside…",
   "commands.album.hide": "Hide from All Photos",
   "commands.album.membership.add": "Add to album",
   "commands.album.membership.remove": "Remove from album",

@@ -268,6 +268,8 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         case 'album.hide':
         case 'album.show':
         case 'album.folder.new':
+        case 'album.folder.newInside':
+        case 'album.folder.newAlbumInside':
         case 'album.move':
         case 'album.tags':
         case 'album.visibility.inherit':
