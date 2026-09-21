@@ -34,6 +34,10 @@ export class PurgeCleanupRepository {
   transferAndPurge(photoId: string, authorityId: number | undefined, removeRow: () => void): number {
     return this.db.transaction(() => {
       const row = this.exclusion(photoId);
+      // Capture may await account identity while integrity changes the row.
+      // Revalidate remote-only legacy custody at the irreversible boundary.
+      if (row.authorityId === null && (row.status === 'offloaded' || (row.status === 'error' && row.dirty === 0)))
+        throw new Error('pending removal has an unverified source authority');
       let pending = 0;
       if (this.needsAuthority(photoId)) {
         if (authorityId === undefined) throw new Error('pending removal has no source authority');
