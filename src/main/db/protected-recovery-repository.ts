@@ -15,6 +15,7 @@ import type {
   BackupManifestV13,
   BackupManifestV14,
   BackupManifestV15,
+  BackupManifestV16,
   ProtectedBackupAlbumV3,
   ProtectedBackupObjectV3,
   ProtectedBackupPhotoV3,
@@ -251,7 +252,8 @@ export class ProtectedRecoveryRepository {
       | BackupManifestV12
       | BackupManifestV13
       | BackupManifestV14
-      | BackupManifestV15,
+      | BackupManifestV15
+      | BackupManifestV16,
   ): void {
     this.db.transaction(() => {
       for (const album of manifest.protectedAlbums) {

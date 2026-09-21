@@ -1,3 +1,5 @@
+import type { BackupManifestSidecarV16 } from './backup-manifest-sidecars.js';
+import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -5,10 +7,9 @@ import { pipeline } from 'node:stream/promises';
 import { ProviderError, type StorageProvider } from './provider.js';
 import type { SyncLedger } from './sync-ledger.js';
 import {
-  buildBackupManifestV15,
+  buildBackupManifestV16,
   type BackupManifestBoardV5,
   type BackupManifestSnapshot,
-  type BackupManifestSidecarV6,
   type BackupManifestSnapshotV10,
   type BackupManifestSnapshotV15,
   type ProtectedBackupAlbumV3,
@@ -97,6 +98,7 @@ export function sidecarBackupDeps(
 }
 
 export interface SidecarBackupObject {
+  readonly ownerId?: string | undefined;
   readonly photoId: string;
   readonly role: 'xmp' | 'aae';
   readonly fileName: string;
@@ -494,7 +496,7 @@ export class BackupEngine {
             if (aborted()) break;
             if (!this.canBackUp({ id: sidecar.photoId, keyId: sidecar.keyId })) continue;
             try {
-              const remotePath = sidecarPath(sidecar.photoId, sidecar.contentHash);
+              const remotePath = sidecarPath(sidecarOwnerOf(sidecar), sidecar.contentHash);
               const owner = { id: sidecar.photoId, keyId: sidecar.keyId };
               await this.uploadWithRetry(
                 remotePath,
@@ -676,7 +678,7 @@ export class BackupEngine {
       // ciphertext-verify each sidecar before the row may go synced — a
       // photo is not backed up while its companions are not.
       for (const sidecar of this.deps.sidecarsForPhoto?.(item.id) ?? []) {
-        const sidecarRemote = sidecarPath(sidecar.photoId, sidecar.contentHash);
+        const sidecarRemote = sidecarPath(sidecarOwnerOf(sidecar), sidecar.contentHash);
         const alreadyPresent = this.presenceFor().verified.has(sidecarRemote) || (await this.listedPaths('sidecars')).has(sidecarRemote);
         requireCustody();
         if (!alreadyPresent) {
@@ -770,7 +772,7 @@ export class BackupEngine {
     const sidecarUploadNow: SidecarBackupObject[] = [];
     const sidecarMissing = missing.filter((path) => path.startsWith('sidecars/'));
     if (sidecarMissing.length > 0) {
-      const rows = new Map((this.deps.allSidecars?.() ?? []).map((row) => [sidecarPath(row.photoId, row.contentHash), row]));
+      const rows = new Map((this.deps.allSidecars?.() ?? []).map((row) => [sidecarPath(sidecarOwnerOf(row), row.contentHash), row]));
       for (const path of sidecarMissing) {
         const row = rows.get(path);
         if (row === undefined || !this.canBackUp({ id: row.photoId, keyId: row.keyId })) blocked += 1;
@@ -812,7 +814,7 @@ export class BackupEngine {
   private encryptedSidecar(sidecar: SidecarBackupObject): Readable {
     const open = this.deps.encryptedSidecarStream;
     if (open === undefined) throw new ProviderError('sidecar ciphertext source is not wired', 'corrupt');
-    return open(sidecar.photoId, sidecar.contentHash);
+    return open(sidecarOwnerOf(sidecar), sidecar.contentHash);
   }
 
   private async hashStream(stream: Readable): Promise<{ sha256: string; bytes: number }> {
@@ -890,19 +892,20 @@ export class BackupEngine {
    * byte-for-byte before it publishes. Rows whose photo the snapshot omits
    * (soft-deleted, never backed up) stay out — schema 6 rejects a sidecar
    * referencing a photo absent from the manifest (PR #849 review). */
-  private async sidecarManifestObjects(photoIds: ReadonlySet<string>): Promise<readonly BackupManifestSidecarV6[]> {
+  private async sidecarManifestObjects(photoIds: ReadonlySet<string>): Promise<readonly BackupManifestSidecarV16[]> {
     const rows = (this.deps.allSidecars?.() ?? []).filter((row) => photoIds.has(row.photoId));
-    const objects: BackupManifestSidecarV6[] = [];
+    const objects: BackupManifestSidecarV16[] = [];
     for (const row of rows) {
       const ciphertext = await this.hashStream(this.encryptedSidecar(row));
       objects.push({
         photoId: row.photoId,
+        ownerId: sidecarOwnerOf(row),
         role: row.role,
         fileName: row.fileName,
         hash: row.contentHash,
         bytes: row.bytes,
         keyId: row.keyId,
-        blobPath: sidecarPath(row.photoId, row.contentHash),
+        blobPath: sidecarPath(sidecarOwnerOf(row), row.contentHash),
         ciphertext,
       });
     }
@@ -921,7 +924,7 @@ export class BackupEngine {
     // generation lands, so the generation must not point at them
     // (PR #1124 review).
     const blobPhotoIds = new Set(blobPhotos(snapshot.photos).map((photo) => photo.id));
-    const manifest = buildBackupManifestV15({
+    const manifest = buildBackupManifestV16({
       libraryId: this.deps.libraryId(),
       generatedAt,
       snapshot: {

@@ -82,3 +82,27 @@ or rewrites it.
 12. Offload the original of a photo, then duplicate it. **Expected:** the
     variant exists immediately and the toast reads "1 awaiting its original
     for previews"; when the original returns, its previews bake.
+
+## Shared companion custody (#1120)
+
+Import a photo with XMP/AAE companions, duplicate it, then duplicate the duplicate.
+Purge the importing row and the intermediate duplicate. Export the survivor in
+**Original plus sidecars** mode with original metadata retained: the original and
+imported companions must remain byte-identical. A consistency scan must not list
+those companions as orphaned. Trashed variants still retain custody until purge.
+Purge the last variant: its companion objects are now eligible for local and
+remote deletion.
+
+Back up before and after root purge, then restore the latter generation into a
+fresh library. The surviving variant must still export its companions. Schema 16
+records each reference's variant ID separately from the immutable ciphertext
+owner ID; owner IDs can outlive their importing row. Schemas 2–15 remain readable
+with their original per-photo companion identities. Migration 40 adds owner IDs
+without rewriting blobs and fills existing same-owner variant references where
+source companions still exist; previously deleted bytes cannot be recovered by
+migration.
+
+Also exclude a backed-up root from backup, purge it while removal is pending,
+and retain an included duplicate. Publishing the exclusion and retrying cleanup
+must not delete the duplicate's shared companion. Deleting the final reference
+requires a fresh manifest barrier before queued remote cleanup proceeds.

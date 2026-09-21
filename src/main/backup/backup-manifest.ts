@@ -1,3 +1,6 @@
+import type { BackupManifestSidecarV16 } from './backup-manifest-sidecars.js';
+import { backupManifestSidecarV6Schema, backupManifestSidecarV16Schema, checkSharedSidecars } from './backup-manifest-sidecars.js';
+export { backupManifestSidecarV6Schema } from './backup-manifest-sidecars.js';
 import { z } from 'zod';
 
 import {
@@ -28,7 +31,7 @@ import { albumTreeIssues } from '../../shared/library/album-tree.js';
 
 import { backupManifestKeyringEntryV15Schema, checkKeyringLinks, type BackupManifestKeyringEntryV15 } from './backup-manifest-keyring.js';
 
-export const BACKUP_MANIFEST_SCHEMA_VERSION = 15 as const;
+export const BACKUP_MANIFEST_SCHEMA_VERSION = 16 as const;
 
 import {
   backupManifestAlbumV2Schema,
@@ -318,16 +321,6 @@ export const backupManifestV5Schema = z
 // at sidecars/<photoId>/<hash>; sha256/bytes describe the CIPHERTEXT (like
 // protected objects — verify-after-upload has no plaintext catalog hash for
 // the envelope itself; the plaintext hash IS `hash`).
-export const backupManifestSidecarV6Schema = z.strictObject({
-  photoId: z.string().min(1),
-  role: z.enum(['xmp', 'aae']),
-  fileName: z.string().min(1),
-  hash: z.string().regex(/^[0-9a-f]{64}$/u),
-  bytes: z.number().int().nonnegative(),
-  keyId: z.number().int().positive(),
-  blobPath: z.string().min(1),
-  ciphertext: z.strictObject({ sha256: z.string().regex(/^[0-9a-f]{64}$/u), bytes: z.number().int().positive() }),
-});
 
 export const backupManifestV6Schema = z
   .strictObject({
@@ -620,7 +613,7 @@ export const backupManifestV14Schema = z
 export const backupManifestV15Schema = z
   .strictObject({
     ...backupManifestV14Schema.shape,
-    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    schema: z.literal(15),
     keyring: z.array(backupManifestKeyringEntryV15Schema).readonly(),
   })
   .superRefine((manifest, context) => {
@@ -630,6 +623,28 @@ export const backupManifestV15Schema = z
       context.addIssue({ code: 'custom', message: `schema-14 records are inconsistent: ${z.prettifyError(previous.error)}` });
     }
     checkKeyringLinks(manifest, context);
+  });
+
+// Schema 16 retains a companion's immutable ciphertext owner independently
+// of the variant reference. Earlier schemas still enforce per-photo paths.
+export const backupManifestV16Schema = z
+  .strictObject({
+    ...backupManifestV15Schema.shape,
+    schema: z.literal(BACKUP_MANIFEST_SCHEMA_VERSION),
+    sidecars: z.array(backupManifestSidecarV16Schema).readonly(),
+  })
+  .superRefine((manifest, context) => {
+    const previous = backupManifestV15Schema.safeParse({
+      ...manifest,
+      schema: 15,
+      sidecars: manifest.sidecars.map(({ ownerId: _owner, ...sidecar }) => ({
+        ...sidecar,
+        blobPath: `sidecars/${sidecar.photoId}/${sidecar.hash}`,
+      })),
+    });
+    if (!previous.success)
+      context.addIssue({ code: 'custom', message: `schema-15 records are inconsistent: ${z.prettifyError(previous.error)}` });
+    checkSharedSidecars(manifest, context);
   });
 
 export type BackupManifestV1 = z.infer<typeof backupManifestV1Schema>;
@@ -658,6 +673,7 @@ export type BackupManifestPhotoV13 = z.infer<typeof backupManifestPhotoV13Schema
 export type BackupManifestV13 = z.infer<typeof backupManifestV13Schema>;
 export type BackupManifestV14 = z.infer<typeof backupManifestV14Schema>;
 export type BackupManifestV15 = z.infer<typeof backupManifestV15Schema>;
+export type BackupManifestV16 = z.infer<typeof backupManifestV16Schema>;
 export type RestorableBackupManifest =
   | BackupManifestV2
   | BackupManifestV3
@@ -672,7 +688,8 @@ export type RestorableBackupManifest =
   | BackupManifestV12
   | BackupManifestV13
   | BackupManifestV14
-  | BackupManifestV15;
+  | BackupManifestV15
+  | BackupManifestV16;
 
 export interface BackupManifestSnapshot {
   readonly databaseSchema: number;
@@ -793,10 +810,22 @@ export function buildBackupManifestV14(input: BuildInput<BackupManifestSnapshotV
 
 export function buildBackupManifestV15(input: BuildInput<BackupManifestSnapshotV15>): BackupManifestV15 {
   return backupManifestV15Schema.parse({
-    schema: BACKUP_MANIFEST_SCHEMA_VERSION,
+    schema: 15,
     libraryId: input.libraryId,
     generatedAt: input.generatedAt,
     ...input.snapshot,
+    coverage: coverageTotals(input.snapshot.photos),
+  });
+}
+
+export function buildBackupManifestV16(
+  input: BuildInput<Omit<BackupManifestSnapshotV15, 'sidecars'> & { readonly sidecars: readonly BackupManifestSidecarV16[] }>,
+): BackupManifestV16 {
+  return backupManifestV16Schema.parse({
+    ...input.snapshot,
+    schema: BACKUP_MANIFEST_SCHEMA_VERSION,
+    libraryId: input.libraryId,
+    generatedAt: input.generatedAt,
     coverage: coverageTotals(input.snapshot.photos),
   });
 }
@@ -836,7 +865,8 @@ const RESTORABLE_SCHEMAS: ReadonlyMap<number, z.ZodType<RestorableBackupManifest
   [12, backupManifestV12Schema],
   [13, backupManifestV13Schema],
   [14, backupManifestV14Schema],
-  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV15Schema],
+  [15, backupManifestV15Schema],
+  [BACKUP_MANIFEST_SCHEMA_VERSION, backupManifestV16Schema],
 ]);
 
 export function parseBackupManifest(input: unknown): ParsedBackupManifest {

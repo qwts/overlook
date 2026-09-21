@@ -1,3 +1,8 @@
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
+import { PurgeService, createPurgeRepository } from '../../src/main/library/purge-service.js';
+import { ExportEngine } from '../../src/main/export/export-engine.js';
+import { createConsistencyChecker } from '../../src/main/library/consistency-factory.js';
+import { parseBackupManifest } from '../../src/main/backup/backup-manifest.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -119,7 +124,7 @@ async function world(separateSidecarKey = false) {
     return JSON.parse(sealed.toString('utf8')) as { sidecars: { photoId: string; blobPath: string }[]; photos: { id: string }[] };
   }
 
-  return { keys, deps, repo, store, ledger, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
+  return { db, key, sidecars, keys, deps, repo, store, ledger, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
 }
 
 describe('sidecar backup round trip (#484)', () => {
@@ -270,4 +275,91 @@ describe('sidecar backup round trip (#484)', () => {
       [`sidecars/P0/${hash ?? ''}`],
     );
   });
+});
+
+test('shared companions survive root purge, export byte-exactly, and remain in backup (#1120)', async () => {
+  const w = await world();
+  const hash = await w.addPhoto('root', 1, true);
+  assert.ok(hash);
+  const root = w.repo.get('root');
+  assert.ok(root);
+  new VariantRepository(w.db).duplicate(root, 'variant', '2026-09-21T00:00:00.000Z');
+  assert.equal((await w.engine.run()).manifestUploaded, true);
+  assert.equal((await w.provider.list('sidecars')).length, 1, 'one physical object, multiple references');
+  const shared = await w.latestManifest();
+  assert.throws(
+    () => parseBackupManifest({ ...shared, sidecars: shared.sidecars.map((entry) => ({ ...entry, ownerId: '../root' })) }),
+    /invalid schema-16/u,
+  );
+  assert.throws(
+    () =>
+      parseBackupManifest({
+        ...shared,
+        sidecars: shared.sidecars.map((entry, index) =>
+          index === 0 ? entry : { ...entry, ciphertext: { sha256: 'f'.repeat(64), bytes: 999 } },
+        ),
+      }),
+    /shared companion references disagree/u,
+  );
+
+  const purge = new PurgeService({
+    repo: createPurgeRepository(w.repo, w.sidecars),
+    blobs: w.store,
+    remoteProvider: () => Promise.resolve(w.provider),
+    custodyChanged: () => undefined,
+    oweManifest: () => w.engine.oweManifest(),
+    libraryChanged: () => undefined,
+    audit: () => undefined,
+    retention: () => '30',
+    now: () => Date.now(),
+    sleep: () => Promise.resolve(),
+  });
+  w.repo.softDelete(['root']);
+  assert.equal((await purge.purge(['root'])).purged, 1);
+  assert.equal(await w.store.verifySidecar('root', hash, () => w.key.key), true);
+  const written = new Map<string, Buffer>();
+  const exporter = new ExportEngine({
+    repo: w.repo,
+    blobs: w.store,
+    resolveKey: () => w.key.key,
+    sidecarsFor: (id) => w.sidecars.listForPhoto(id),
+    sidecarStream: (id, contentHash) => w.store.getSidecarStream(id, contentHash, () => w.key.key),
+    writeFile: async (path, stream) => {
+      written.set(path, await buffer(stream));
+    },
+    exists: () => Promise.resolve(false),
+    freeBytes: () => Promise.resolve(Number.MAX_SAFE_INTEGER),
+    joinPath: join,
+    transcodeJpeg: () => Promise.reject(new Error('unused')),
+    bufferStream: buffer,
+    events: { progress: () => undefined },
+  });
+  const exported = await exporter.exportPhotos(['variant'], '/export');
+  assert.equal(exported.sidecarsExported, 1);
+  assert.deepEqual(written.get('/export/root.xmp'), XMP);
+  const listEntries = w.store.listSidecarEntries.bind(w.store);
+  w.store.listSidecarEntries = async () => (await listEntries()).map((entry) => ({ ...entry, ageMs: 86_400_000 }));
+  const checker = createConsistencyChecker({
+    db: w.db,
+    repo: w.repo,
+    blobStore: w.store,
+    provider: w.provider,
+    setStatus: () => undefined,
+    libraryChanged: () => undefined,
+    audit: () => undefined,
+  });
+  assert.deepEqual((await checker.scan()).orphanSidecars, []);
+  assert.equal((await w.engine.run()).manifestUploaded, true);
+  const manifest = await w.latestManifest();
+  assert.deepEqual(
+    manifest.photos.map((photo) => photo.id),
+    ['variant'],
+  );
+  assert.equal(manifest.sidecars[0]?.blobPath, `sidecars/root/${hash}`);
+  assert.equal(parseBackupManifest(manifest).restorable, true);
+  w.repo.softDelete(['variant']);
+  assert.equal((await purge.purge(['variant'])).purged, 1);
+  assert.equal(w.store.hasSidecar('root', hash), false);
+  assert.equal((await w.provider.list('sidecars')).length, 0);
+  w.db.close();
 });

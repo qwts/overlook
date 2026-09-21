@@ -105,7 +105,7 @@ function snapshotOf(photos: PhotosRepository): BackupManifestSnapshotV15 {
 
 describe('the keyring in the manifest (#517, schema 15)', () => {
   test('the snapshot carries every registry row and the manifest parses as schema 15', () => {
-    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 15);
+    assert.equal(BACKUP_MANIFEST_SCHEMA_VERSION, 16);
     const { photos } = open(true);
     const manifest = buildBackupManifestV15({ libraryId: LIBRARY, generatedAt: AT, snapshot: snapshotOf(photos) });
     assert.equal(manifest.schema, 15);
