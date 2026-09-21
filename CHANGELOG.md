@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.10
+
+### Patch Changes
+
+- a641508: Remember deferred variant previews and regenerate them with their saved edits when the shared original is restored locally.
+
 ## 0.76.9
 
 ### Patch Changes
