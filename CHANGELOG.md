@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.7
+
+### Patch Changes
+
+- 9d91db9: Update electron-builder to 26.16.1 to fix macOS signing using the certificate password to unlock its temporary keychain.
+
 ## 0.76.6
 
 ### Patch Changes
