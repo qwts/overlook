@@ -141,12 +141,17 @@ describe('sidecar backup round trip (#484)', () => {
     w.keys.setPresent(2, false);
     assert.deepEqual(w.repo.integrityItems({ afterId: null, limit: 10 }), []);
     await w.provider.delete(`sidecars/P0/${hash}`);
-    const reconciler = new BackupEngine(w.deps);
+    const audits: string[] = [];
+    const reconciler = new BackupEngine({ ...w.deps, audit: (line) => audits.push(line) });
     reconciler.oweManifest();
     const blocked = await reconciler.run();
     assert.equal(blocked.failed, 0);
     assert.equal(blocked.uploaded, 0);
     assert.equal(blocked.manifestUploaded, false);
+    assert.deepEqual(
+      audits.filter((line) => line.startsWith('BACKUP-SKIP-LOCKED')),
+      ['BACKUP-SKIP-LOCKED skips=1 key=2'],
+    );
     assert.equal((await w.provider.list('sidecars')).length, 0);
     assert.equal(w.ledger.isDirty('P0'), true);
     w.keys.setPresent(2, true);

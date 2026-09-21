@@ -118,7 +118,7 @@ export interface BackupEngineDeps {
   readonly ledger: SyncLedger;
   /** SQL-selected eligible rows; excludes absent original/companion keys. */
   readonly dirtyPhotos: () => readonly DirtyBackupPhoto[];
-  readonly lockedDirtySummary?: (() => { readonly count: number; readonly keyIds: readonly number[] }) | undefined;
+  readonly lockedDirtySnapshot?: (() => { readonly photoIds: readonly string[]; readonly keyIds: readonly number[] }) | undefined;
   /** Device-local key custody; absent only for older/test compositions. */
   readonly unavailableKeyIdsForPhoto?: ((photoId: string) => readonly number[]) | undefined;
   /** RAW ciphertext for `contentHash` — uploaded as-is. */
@@ -294,7 +294,7 @@ export class BackupEngine {
   /** A failed manifest upload owes the remote a generation. */
   private manifestOwed = false;
   private presence: RemotePresence | null = null;
-  private lockedSkips = 0;
+  private readonly lockedPhotoIds = new Set<string>();
   private readonly lockedKeys = new Set<number>();
 
   constructor(private readonly deps: BackupEngineDeps) {}
@@ -304,9 +304,9 @@ export class BackupEngine {
   run(signal?: AbortSignal): Promise<BackupRunResult> {
     this.current ??= this.execute(signal).finally(() => {
       this.current = null;
-      const skips = this.lockedSkips;
+      const skips = this.lockedPhotoIds.size;
       const keys = [...this.lockedKeys].sort((a, b) => a - b).join(',');
-      this.lockedSkips = 0;
+      this.lockedPhotoIds.clear();
       this.lockedKeys.clear();
       if (skips > 0) this.deps.audit(`BACKUP-SKIP-LOCKED skips=${String(skips)} key=${keys}`);
     });
@@ -351,8 +351,8 @@ export class BackupEngine {
     // the upload loop, settled after the manifest generation lands
     // (PR #274 review — before this they crashed the whole run).
     const dirty = this.deps.dirtyPhotos();
-    const locked = this.deps.lockedDirtySummary?.();
-    this.lockedSkips += locked?.count ?? 0;
+    const locked = this.deps.lockedDirtySnapshot?.();
+    for (const id of locked?.photoIds ?? []) this.lockedPhotoIds.add(id);
     for (const keyId of locked?.keyIds ?? []) this.lockedKeys.add(keyId);
     const manifestOnly = dirty.filter((item) => item.status === 'offloaded');
     if (manifestOnly.length > 0) {
@@ -620,7 +620,7 @@ export class BackupEngine {
   private canBackUp(item: { readonly id: string; readonly keyId: number }): boolean {
     const missing = this.deps.unavailableKeyIdsForPhoto?.(item.id) ?? [];
     if (missing.length === 0) return true;
-    this.lockedSkips += 1;
+    this.lockedPhotoIds.add(item.id);
     for (const keyId of missing) this.lockedKeys.add(keyId);
     return false;
   }

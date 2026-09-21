@@ -139,7 +139,10 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
 describe('backup engine (#105)', () => {
   test('large locked queues emit one bounded audit record per run (#1134)', async () => {
     const w = await world(0);
-    const engine = new BackupEngine({ ...w.deps, lockedDirtySummary: () => ({ count: 94_000, keyIds: [2, 3] }) });
+    const engine = new BackupEngine({
+      ...w.deps,
+      lockedDirtySnapshot: () => ({ photoIds: Array.from({ length: 94_000 }, (_, index) => `P${String(index)}`), keyIds: [2, 3] }),
+    });
     await engine.run();
     await engine.run();
     assert.deepEqual(w.audits, ['BACKUP-SKIP-LOCKED skips=94000 key=2,3', 'BACKUP-SKIP-LOCKED skips=94000 key=2,3']);
@@ -279,6 +282,10 @@ describe('backup engine (#105)', () => {
     assert.equal(w.ledger.status('P0'), 'synced');
     assert.equal(w.ledger.isDirty('P0'), true);
     assert.equal((await w.provider.list('blobs')).length, 0);
+    assert.deepEqual(
+      w.audits.filter((line) => line.startsWith('BACKUP-SKIP-LOCKED')),
+      ['BACKUP-SKIP-LOCKED skips=1 key=1'],
+    );
   });
 
   test('EXIT CRITERIA: a full backup clears pendingCount, uploads ciphertext as-is + a manifest', async () => {

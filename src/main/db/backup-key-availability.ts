@@ -19,9 +19,10 @@ export function unavailableKeyIdsForPhoto(db: BetterSqlite3.Database, photoId: s
   ).map((row) => row.id);
 }
 
-/** Count skips and distinct keys in SQL; never materialize every locked row. */
-export function lockedDirtySummary(db: BetterSqlite3.Database): { count: number; keyIds: readonly number[] } {
-  const row = queryAll<{ count: number; keyIds: string | null }>(
+/** Bulk audit membership: compact IDs let race/reconciliation skips deduplicate
+ * without per-photo queries or materializing full photo records. */
+export function lockedDirtySnapshot(db: BetterSqlite3.Database): { photoIds: readonly string[]; keyIds: readonly number[] } {
+  const row = queryAll<{ photoIds: string; keyIds: string | null }>(
     db,
     `WITH dirty AS (
     SELECT p.id, p.key_id FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
@@ -31,7 +32,7 @@ export function lockedDirtySummary(db: BetterSqlite3.Database): { count: number;
     UNION
     SELECT d.id AS photoId, k.id AS keyId FROM dirty d JOIN photo_sidecars s ON s.photo_id = d.id
       JOIN keys k ON k.id = s.key_id WHERE k.material_present = 0
-  ) SELECT count(DISTINCT photoId) AS count, group_concat(DISTINCT keyId) AS keyIds FROM locked`,
+  ) SELECT json_group_array(DISTINCT photoId) AS photoIds, group_concat(DISTINCT keyId) AS keyIds FROM locked`,
   )[0];
-  return { count: row?.count ?? 0, keyIds: row?.keyIds?.split(',').map(Number) ?? [] };
+  return { photoIds: JSON.parse(row?.photoIds ?? '[]') as string[], keyIds: row?.keyIds?.split(',').map(Number) ?? [] };
 }
