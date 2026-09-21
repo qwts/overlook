@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.8
+
+### Patch Changes
+
+- 25b83d8: Skip backup work for photos whose encryption key is absent, preserve their dirty state and manifest records, and restore their pending count when the key is imported.
+
 ## 0.76.7
 
 ### Patch Changes
