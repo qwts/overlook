@@ -10,6 +10,6 @@ export function migratePreviewRepairDebt(db: BetterSqlite3.Database): void {
     -- Older duplicates may already lack previews. The repair pass authenticates
     -- existing derivatives before deciding whether a bake is necessary.
     UPDATE photos SET preview_repair_pending = 1
-      WHERE derivative_key <> content_hash AND file_kind IN ('jpeg', 'png', 'raw', 'heic');
+      WHERE derivative_key <> content_hash AND file_kind IN ('jpeg', 'png', 'raw', 'heic', 'gif', 'webp');
   `);
 }

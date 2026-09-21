@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import Database from 'better-sqlite3-multiple-ciphers';
 
@@ -58,6 +59,15 @@ test('schema 41 backfills older variants without dirtying originals or depending
     assert.equal(repo.clearPreviewRepairDebt('sibling'), true);
     assert.equal(repo.get('sibling')?.previewFailure, null);
     assert.equal(queryGet<{ n: number }>(db, 'SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1')?.n, 0);
+    for (const fileKind of ['gif', 'webp', 'video', 'audio'] as const) {
+      const id = `source-${fileKind}`;
+      const hash = createHash('sha256').update(fileKind).digest('hex');
+      repo.insert({ ...root, id, fileKind, contentHash: hash, derivativeKey: hash });
+      const source = repo.get(id);
+      assert.ok(source);
+      variants.duplicate(source, `copy-${fileKind}`, '2026-09-21');
+      assert.equal(repo.get(`copy-${fileKind}`)?.previewFailure, fileKind === 'gif' || fileKind === 'webp' ? 'deferred-original' : null);
+    }
   } finally {
     db.close();
   }
