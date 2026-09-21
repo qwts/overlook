@@ -124,8 +124,7 @@ upgrade; valid authenticated derivatives satisfy that debt without decoding an
 original. This local state does not change the backup manifest schema.
 
 Pending variants appear in Unavailable and availability smart-album filters, and
-are hidden by the hide-unavailable policy until repaired. A local codec/decode
-failure shows its actual diagnostic instead of asking to restore the original.
+are hidden by the hide-unavailable policy until repaired.
 
 Schema 42 distinguishes confirmed missing previews from schema 41's verification
 queue. Upgrading an existing variant does not hide it merely because its previews

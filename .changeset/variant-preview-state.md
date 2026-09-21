@@ -2,4 +2,4 @@
 'overlook': patch
 ---
 
-Include deferred variants in availability filters and show actual local preview bake failures.
+Keep deferred variant availability accurate during upgrades and refresh filtered galleries after preview repair.
