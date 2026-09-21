@@ -54,7 +54,7 @@ export function createPurgeCleanup(db: BetterSqlite3.Database, deps: Omit<PurgeC
 
 export function createRoutedPurgeCleanup(
   db: BetterSqlite3.Database,
-  routing: Pick<PurgeCleanupDeps, 'authorities' | 'captureAuthority' | 'targetAuthority'> & {
+  routing: Pick<PurgeCleanupDeps, 'authorities' | 'captureAuthority' | 'ensureTargetAuthority'> & {
     readonly resolver: PurgeCleanupDeps['custody'];
   },
   audit: PurgeCleanupDeps['audit'],

@@ -91,7 +91,7 @@ async function world() {
         assert.ok(value);
         return Promise.resolve(value);
       },
-      targetAuthority: () => Promise.resolve(target),
+      ensureTargetAuthority: () => Promise.resolve(target),
       audit: () => undefined,
     });
     const purge = createPurgeService({

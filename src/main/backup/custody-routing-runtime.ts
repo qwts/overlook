@@ -247,7 +247,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return null;
     }
   };
-  const targetAuthority = async (): Promise<CustodyAuthority> => {
+  const ensureTargetAuthority = async (): Promise<CustodyAuthority> => {
     if (!deps.backupTargetConnected()) throw new CustodyResolutionError('custody-disconnected');
     const providerId = deps.backupTarget.id;
     const root = remoteRoot();
@@ -267,12 +267,12 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
   return {
     authorities,
     resolver,
-    targetAuthority,
+    ensureTargetAuthority,
     captureAuthority: async (photoId: string): Promise<CustodyAuthority> => {
       const bound = authorities.forPhoto(photoId);
       if (bound !== undefined) return bound;
       if (authorities.isLegacyUnbound(photoId)) throw new CustodyResolutionError('custody-unavailable');
-      return targetAuthority();
+      return ensureTargetAuthority();
     },
     offloadAuthority: async (bytes: number): Promise<number> => {
       const identity = await deps.backupTarget.accountIdentity();
