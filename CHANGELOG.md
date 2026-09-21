@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.9
+
+### Patch Changes
+
+- 5c2319c: Preserve imported companions across variant duplication and root purge, including export, backup and restore, and shared-object cleanup.
+
 ## 0.76.8
 
 ### Patch Changes
