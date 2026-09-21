@@ -20,7 +20,7 @@ export interface PhotoEditRuntimeContext {
   readonly invalidateThumb: (photoId: string) => void;
   /** Derivative-only refresh: the tiles reload, the page never refetches. */
   readonly emitThumbsChanged: (photoIds: readonly string[]) => void;
-  readonly emitChanged: (photoIds: readonly string[], membership: 'library') => void;
+  readonly emitChanged: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   readonly emitPending: (count: number) => void;
   readonly scheduleAutoBackup: () => void;
 }
@@ -52,10 +52,10 @@ export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditS
     appVersion: ctx.appVersion,
     newId: () => ulid(),
     now: () => new Date().toISOString(),
-    changed: (photoId, derivatives, membership) => {
+    changed: (photoId, derivatives, membership, previewStateChanged) => {
       if (derivatives === 'regenerated') {
         ctx.invalidateThumb(photoId);
-        if (membership === 'library') ctx.emitChanged([photoId], membership);
+        if (previewStateChanged) ctx.emitChanged([photoId], membership);
         else ctx.emitThumbsChanged([photoId]);
       }
       ctx.emitPending(repo.pendingCount());

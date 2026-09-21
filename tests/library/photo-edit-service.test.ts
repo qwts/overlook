@@ -232,6 +232,25 @@ describe('photo edit service (#493)', () => {
     }
   });
 
+  test('clearing preview failure preserves membership when dimensions remain unavailable', async () => {
+    const events: { membership: string; previewStateChanged: boolean }[] = [];
+    const h = harness({
+      changed: (_id, _derivatives, membership, previewStateChanged) => events.push({ membership, previewStateChanged }),
+    });
+    try {
+      h.repo.setPreviewMissing('P1', true);
+      h.repo.setPreviewFailure('P1', 'decode-failed');
+      h.repo.setDimensionStatus('P1', 'unavailable');
+      const result = await h.service.save('P1', [ROTATE]);
+      assert.equal(result.derivatives, 'regenerated');
+      assert.equal(h.repo.get('P1')?.previewFailure, null);
+      assert.equal(h.repo.get('P1')?.dimensionStatus, 'unavailable');
+      assert.deepEqual(events, [{ membership: 'none', previewStateChanged: true }]);
+    } finally {
+      h.close();
+    }
+  });
+
   test('an offloaded original defers the bake; a failed bake reports failure but keeps the head', async () => {
     const deferred = harness({ loadOriginal: () => Promise.resolve(null) });
     deferred.repo.setPreviewMissing('P1', true);

@@ -38,7 +38,12 @@ export interface PhotoEditServiceDeps {
   readonly newId: () => string;
   readonly now: () => string;
   /** The head advanced: invalidate caches, refresh tiles, owe a manifest. */
-  readonly changed: (photoId: string, derivatives: EditMutationResult['derivatives'], membership: 'none' | 'library') => void;
+  readonly changed: (
+    photoId: string,
+    derivatives: EditMutationResult['derivatives'],
+    membership: 'none' | 'library',
+    previewStateChanged: boolean,
+  ) => void;
 }
 
 export type EditMutationKind = 'save' | 'reset' | 'revert';
@@ -107,13 +112,15 @@ export class PhotoEditService {
     })();
     const derivatives = await this.bake(photo, foldOperations(operations));
     let availabilityChanged = false;
+    let previewStateChanged = false;
     if (derivatives === 'regenerated') {
       const currentPhoto = this.deps.repo.get(photoId);
-      availabilityChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
+      previewStateChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
+      availabilityChanged = previewStateChanged && currentPhoto?.dimensionStatus !== 'unavailable';
       this.deps.repo.clearPreviewRepairDebt(photoId);
       this.deps.repo.setPreviewFailure(photoId, null);
     }
-    this.deps.changed(photoId, derivatives, availabilityChanged ? 'library' : 'none');
+    this.deps.changed(photoId, derivatives, availabilityChanged ? 'library' : 'none', previewStateChanged);
     return { ...this.revisions.head(photoId), changed: true, derivatives, pendingCount: this.deps.repo.pendingCount() };
   }
 
