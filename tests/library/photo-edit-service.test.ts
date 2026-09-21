@@ -9,7 +9,7 @@ import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { run, queryGet } from '../../src/main/db/sql.js';
 import { PhotoEditService, type PhotoEditServiceDeps } from '../../src/main/library/photo-edit-service.js';
 import { type EditOperation, type EditTransform } from '../../src/shared/library/edit-revision.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
@@ -49,6 +49,7 @@ const ROTATE: EditOperation = { type: 'rotate', version: 1, quarterTurns: 1 };
 const FLIP: EditOperation = { type: 'flip', version: 1, axis: 'horizontal' };
 
 interface Harness {
+  readonly db: ReturnType<typeof openLibraryDatabase>;
   readonly ledger: SyncLedger;
   readonly service: PhotoEditService;
   readonly repo: PhotosRepository;
@@ -89,7 +90,16 @@ function harness(overrides: Partial<PhotoEditServiceDeps> = {}): Harness {
     },
     ...overrides,
   });
-  return { ledger: new SyncLedger(db), service, repo, revisions: new EditRevisionRepository(db), baked, changes, close: () => db.close() };
+  return {
+    db,
+    ledger: new SyncLedger(db),
+    service,
+    repo,
+    revisions: new EditRevisionRepository(db),
+    baked,
+    changes,
+    close: () => db.close(),
+  };
 }
 
 describe('photo edit service (#493)', () => {
@@ -205,6 +215,22 @@ describe('photo edit service (#493)', () => {
       }
     });
   }
+
+  test('edit clears verification-only debt without refreshing gallery membership', async () => {
+    const h = harness();
+    try {
+      run(h.db, "UPDATE photos SET preview_repair_pending = 1 WHERE id = 'P1'");
+      h.repo.setDimensionStatus('P1', 'verified');
+      assert.equal(h.repo.get('P1')?.previewFailure, null);
+      const result = await h.service.save('P1', [ROTATE]);
+      assert.equal(result.derivatives, 'regenerated');
+      assert.equal(h.repo.get('P1')?.previewFailure, null);
+      assert.equal(queryGet<{ pending: number }>(h.db, "SELECT preview_repair_pending AS pending FROM photos WHERE id = 'P1'")?.pending, 0);
+      assert.equal(h.changes.at(-1)?.membership, 'none');
+    } finally {
+      h.close();
+    }
+  });
 
   test('an offloaded original defers the bake; a failed bake reports failure but keeps the head', async () => {
     const deferred = harness({ loadOriginal: () => Promise.resolve(null) });

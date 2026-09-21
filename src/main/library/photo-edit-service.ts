@@ -108,9 +108,10 @@ export class PhotoEditService {
     const derivatives = await this.bake(photo, foldOperations(operations));
     let availabilityChanged = false;
     if (derivatives === 'regenerated') {
-      const debtCleared = this.deps.repo.clearPreviewRepairDebt(photoId);
-      const failureCleared = this.deps.repo.setPreviewFailure(photoId, null);
-      availabilityChanged = debtCleared || failureCleared;
+      const currentPhoto = this.deps.repo.get(photoId);
+      availabilityChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
+      this.deps.repo.clearPreviewRepairDebt(photoId);
+      this.deps.repo.setPreviewFailure(photoId, null);
     }
     this.deps.changed(photoId, derivatives, availabilityChanged ? 'library' : 'none');
     return { ...this.revisions.head(photoId), changed: true, derivatives, pendingCount: this.deps.repo.pendingCount() };
