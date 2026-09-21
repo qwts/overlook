@@ -138,6 +138,7 @@ function getLibraryService(): LibraryService {
       ...{ db, keyStore, blobStore: store, harnessEnv, libraryChanged: applicationEvents.libraryChanged },
       invalidate: (id) => [thumbService, fullService].forEach((service) => service?.invalidate(id)),
       pendingCountChanged: (count) => emitPendingCount({ count }),
+      schedulePreviewRepair: (hashes) => ensureMaintenanceServices().rawRepair.schedule(hashes),
     });
     const libraryId = getProviderRuntime().libraryId();
     const protectedRuntime = new ProtectedRuntime({
@@ -194,9 +195,7 @@ function getLibraryService(): LibraryService {
         // Dirtying edits (favorite, album membership, restore) behave like
         // imports (#267): the debounced trigger runs under the same policy
         // gates (auto-backup setting, connected provider).
-        if (count > 0) {
-          scheduleAutoBackup();
-        }
+        if (count > 0) scheduleAutoBackup();
       },
     });
     registryRuntime.followDocumentSummary(() => new PhotosRepository(db).stats().photos, applicationEvents.onLibraryChanged);
@@ -255,7 +254,7 @@ function ensureMaintenanceServices(): MaintenanceServices {
     appVersion: app.getVersion(),
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
-    emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitChanged: (photoIds, membership = 'none') => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership }),
     emitCreated: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
     emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPendingCount({ count }),

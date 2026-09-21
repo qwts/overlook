@@ -15,6 +15,7 @@ export interface KeyringFactoryOptions {
   readonly keyStore: KeyStore;
   readonly blobStore: BlobStore;
   readonly harnessEnv: (name: string) => string | undefined;
+  readonly schedulePreviewRepair: (contentHashes: readonly string[]) => void;
   readonly pendingCountChanged: (count: number) => void;
   /** Drops one photo's decrypted derivatives when its custody changes. */
   readonly invalidate: (photoId: string) => void;
@@ -29,6 +30,7 @@ export interface KeyringFactoryOptions {
  * locked from the first query. */
 export function createKeyringService(options: KeyringFactoryOptions): KeyringService {
   const repo = new KeyringRepository(options.db);
+  const photos = new PhotosRepository(options.db);
   const service = new KeyringService({
     keyStore: () => options.keyStore,
     repo: () => repo,
@@ -45,7 +47,13 @@ export function createKeyringService(options: KeyringFactoryOptions): KeyringSer
     custodyChanged: (photoIds) => {
       for (const id of photoIds) options.invalidate(id);
       options.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
-      options.pendingCountChanged(new PhotosRepository(options.db).pendingCount());
+      options.pendingCountChanged(photos.pendingCount());
+      const hashes = new Set<string>();
+      for (const id of photoIds) {
+        const photo = photos.get(id);
+        if (photo !== undefined && !photo.locked) hashes.add(photo.contentHash);
+      }
+      if (hashes.size > 0) options.schedulePreviewRepair([...hashes]);
     },
     audit: (line) => console.info(`[overlook] ${line}`),
   });

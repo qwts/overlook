@@ -122,3 +122,26 @@ requires a fresh manifest barrier before queued remote cleanup proceeds.
 Schema 41 adds local preview repair debt. Older variants are checked once on
 upgrade; valid authenticated derivatives satisfy that debt without decoding an
 original. This local state does not change the backup manifest schema.
+
+Pending variants appear in Unavailable and availability smart-album filters, and
+are hidden by the hide-unavailable policy until repaired.
+
+Schema 42 distinguishes confirmed missing previews from schema 41's verification
+queue. Upgrading an existing variant does not hide it merely because its previews
+await authentication. Verification-only cleanup and metadata-only repair must
+preserve the current page, scroll, and selection. Repair completion that changes
+availability refreshes query membership: a repaired
+variant appears immediately when unavailable rows are hidden and leaves an open
+Unavailable source without a restart.
+
+Repeat after an initially failed duplicate bake: successfully Save, Reset, or
+Revert an edit once the original is local. The new previews clear the missing
+state and refresh both filtered views immediately. A failed or deferred edit bake
+must keep the variant unavailable and retain its repair debt.
+
+With valid variant previews awaiting verification, remove their decryption key
+and run repair. The locked rows retain verification debt and must not be marked
+missing. Restore the key: those previews remain available immediately, and key import schedules
+verification without a restart. Existing previews clear debt without changing
+membership; genuinely missing previews are detected and repaired once their
+original is available.

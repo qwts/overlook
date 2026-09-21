@@ -28,7 +28,7 @@ export interface MaintenanceContext {
   readonly appVersion: string;
   readonly invalidateThumb: (id: string) => void;
   readonly invalidateFull: (id: string) => void;
-  readonly emitChanged: (photoIds: readonly string[]) => void;
+  readonly emitChanged: (photoIds: readonly string[], membership?: 'none' | 'library') => void;
   /** New rows (a Duplicate, #496): the grid refetches its page. */
   readonly emitCreated: (photoIds: readonly string[]) => void;
   /** Derivative-only refresh (a captured poster): refresh just those tiles'
@@ -86,12 +86,12 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     ...shared,
     repo,
     revisions: new EditRevisionRepository(parts.db),
-    changed: (ids) => {
+    changed: (ids, membership) => {
       for (const id of ids) {
         invalidateThumb(id);
         ctx.invalidateFull(id);
       }
-      ctx.emitChanged(ids);
+      ctx.emitChanged(ids, membership);
       ctx.emitPending(repo.stats().pending);
       ctx.scheduleAutoBackup();
       ctx.embeddingEligible(ids);
@@ -115,6 +115,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     appVersion: ctx.appVersion,
     invalidateThumb: invalidateThumb,
     emitThumbsChanged: ctx.emitThumbsChanged,
+    emitChanged: ctx.emitChanged,
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });

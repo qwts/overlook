@@ -11,6 +11,7 @@ export interface RawRepairSummary {
 
 export interface RawRepairServiceOptions {
   readonly candidates: (contentHashes?: readonly string[]) => readonly PhotoRecord[];
+  readonly isUnavailable: (photoId: string) => boolean;
   readonly validThumbs: (photo: PhotoRecord) => Promise<boolean>;
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
   readonly extractMetadata: (bytes: Buffer, fileKind: PhotoRecord['fileKind']) => Promise<ExtractedMetadata>;
@@ -20,7 +21,8 @@ export interface RawRepairServiceOptions {
   readonly setDimensionStatus: (photoId: string, status: PhotoRecord['dimensionStatus']) => boolean;
   readonly setPreviewFailure: (photoId: string, failure: PhotoRecord['previewFailure']) => boolean;
   readonly clearPreviewRepairDebt?: ((photoId: string) => boolean) | undefined;
-  readonly changed: (photoIds: readonly string[]) => void;
+  readonly setPreviewMissing?: ((photoId: string, missing: boolean) => boolean) | undefined;
+  readonly changed: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
 
@@ -77,20 +79,30 @@ export class RawRepairService {
     let repaired = 0;
     let failed = 0;
     let skipped = 0;
-    const changed: string[] = [];
+    const changed = new Set<string>();
+    let membershipChanged = false;
     for (const photo of this.options.candidates(contentHashes)) {
       if (this.controller.signal.aborted) break;
       scanned += 1;
+      if (photo.locked) {
+        skipped += 1;
+        continue;
+      }
+      const wasUnavailable = this.options.isUnavailable(photo.id);
       let bytes: Buffer | null = null;
       try {
         const thumbsReady = await this.options.validThumbs(photo);
         if (this.controller.signal.aborted) break;
+        if (this.options.setPreviewMissing?.(photo.id, !thumbsReady) === true) {
+          changed.add(photo.id);
+          if (wasUnavailable !== this.options.isUnavailable(photo.id)) membershipChanged = true;
+        }
         if (thumbsReady && photo.width > 0 && photo.height > 0 && photo.dimensionStatus !== 'legacy') {
           const failureChanged = this.options.setPreviewFailure(photo.id, null);
           const debtCleared = this.options.clearPreviewRepairDebt?.(photo.id) ?? false;
           if (failureChanged || debtCleared) {
             repaired += 1;
-            changed.push(photo.id);
+            changed.add(photo.id);
           } else {
             skipped += 1;
           }
@@ -122,7 +134,7 @@ export class RawRepairService {
           repaired += 1;
         }
         if (repairedMetadata || repairedDimensions || repairedThumbs || failureChanged || debtCleared) {
-          changed.push(photo.id);
+          changed.add(photo.id);
         }
         if (!thumbsReady && outcome?.generated !== true) failed += 1;
       } catch (error) {
@@ -130,10 +142,14 @@ export class RawRepairService {
         console.error(`[overlook] preview repair failed for ${photo.id}`, error);
       } finally {
         bytes?.fill(0);
+        if (wasUnavailable !== this.options.isUnavailable(photo.id)) {
+          membershipChanged = true;
+          changed.add(photo.id);
+        }
       }
       await (this.options.yieldTurn ?? yieldTurn)();
     }
-    if (changed.length > 0) this.options.changed(changed);
+    if (changed.size > 0) this.options.changed([...changed], membershipChanged ? 'library' : 'none');
     return { scanned, repaired, failed, skipped };
   }
 }

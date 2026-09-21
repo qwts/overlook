@@ -71,6 +71,7 @@ describe('RAW repair service (#368)', () => {
     let repairedDimensions: readonly [number, number] | undefined;
     const changed: string[][] = [];
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw()],
       validThumbs: () => Promise.resolve(false),
       loadOriginal: () => Promise.resolve(bytes),
@@ -86,7 +87,10 @@ describe('RAW repair service (#368)', () => {
       },
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
-      changed: (ids) => changed.push([...ids]),
+      changed: (ids, membership) => {
+        assert.equal(membership, 'none', 'metadata-only repair must preserve query membership');
+        changed.push([...ids]);
+      },
       yieldTurn: () => Promise.resolve(),
     });
 
@@ -100,6 +104,7 @@ describe('RAW repair service (#368)', () => {
   test('complete records with authenticated derivatives do not decrypt originals', async () => {
     let loads = 0;
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw({ width: 700, height: 525, dimensionStatus: 'verified' })],
       validThumbs: () => Promise.resolve(true),
       loadOriginal: () => {
@@ -121,6 +126,7 @@ describe('RAW repair service (#368)', () => {
   test('a repaired batch publishes one library change instead of one refresh per photo', async () => {
     const changed: string[][] = [];
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw(), raw({ id: 'RAW2', contentHash: 'b'.repeat(64) })],
       validThumbs: () => Promise.resolve(false),
       loadOriginal: () => Promise.resolve(Buffer.from('raw')),
@@ -130,7 +136,10 @@ describe('RAW repair service (#368)', () => {
       repairGeneratedDimensions: () => true,
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
-      changed: (ids) => changed.push([...ids]),
+      changed: (ids, membership) => {
+        assert.equal(membership, 'none', 'metadata-only repair must preserve query membership');
+        changed.push([...ids]);
+      },
       yieldTurn: () => Promise.resolve(),
     });
 
@@ -141,6 +150,7 @@ describe('RAW repair service (#368)', () => {
   test('unsupported/corrupt RAW records failure without deleting the original', async () => {
     const bytes = Buffer.from('retained original');
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw()],
       validThumbs: () => Promise.resolve(false),
       loadOriginal: () => Promise.resolve(bytes),
@@ -162,6 +172,7 @@ describe('RAW repair service (#368)', () => {
     let valid = false;
     const makeService = (): RawRepairService =>
       new RawRepairService({
+        isUnavailable: () => false,
         candidates: () => [
           raw({
             fileKind: 'heic',
@@ -197,6 +208,7 @@ describe('RAW repair service (#368)', () => {
 
   test('close cancels an unstarted batch', async () => {
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw(), raw({ id: 'RAW2' })],
       validThumbs: () => Promise.resolve(false),
       loadOriginal: () => Promise.resolve(Buffer.alloc(1)),
@@ -222,6 +234,7 @@ test('rehydration requests coalesce into a sequential follow-up pass (#1121)', a
   let active = 0;
   let peak = 0;
   const service = new RawRepairService({
+    isUnavailable: () => false,
     candidates: (hashes) => {
       batches.push(hashes);
       return [raw({ dimensionStatus: 'verified', width: 1, height: 1 })];
@@ -255,6 +268,7 @@ for (const cancel of [false, true]) {
   test(`unsuccessful deferred repair retains its debt (cancel=${String(cancel)})`, async () => {
     let cleared = false;
     const service = new RawRepairService({
+      isUnavailable: () => false,
       candidates: () => [raw({ previewFailure: 'deferred-original', fileKind: 'jpeg' })],
       validThumbs: () => Promise.resolve(false),
       loadOriginal: () => Promise.resolve(Buffer.from('original')),
@@ -277,3 +291,91 @@ for (const cancel of [false, true]) {
     assert.equal(cleared, false);
   });
 }
+
+for (const previewsPresent of [false, true]) {
+  test(`verification publishes confirmed absence only when previews are missing (${String(previewsPresent)})`, async () => {
+    let missing = false;
+    const memberships: string[] = [];
+    const service = new RawRepairService({
+      isUnavailable: () => missing,
+      candidates: () => [raw({ width: 60, height: 40, dimensionStatus: 'verified' })],
+      validThumbs: () => Promise.resolve(previewsPresent),
+      loadOriginal: () => Promise.resolve(null),
+      extractMetadata: () => Promise.resolve(EMPTY),
+      regenerate: () => Promise.reject(new Error('original is not local')),
+      repairMetadata: () => false,
+      repairGeneratedDimensions: () => false,
+      setDimensionStatus: () => false,
+      setPreviewFailure: () => false,
+      setPreviewMissing: (_id, next) => {
+        const changed = missing !== next;
+        missing = next;
+        return changed;
+      },
+      changed: (_ids, membership) => memberships.push(membership),
+    });
+    await service.repair();
+    assert.equal(missing, !previewsPresent);
+    assert.deepEqual(memberships, previewsPresent ? [] : ['library']);
+  });
+}
+
+for (const initiallyUnavailable of [false, true]) {
+  test(`verified-preview cleanup refreshes membership only on availability change (${String(initiallyUnavailable)})`, async () => {
+    let unavailable = initiallyUnavailable;
+    const memberships: string[] = [];
+    const service = new RawRepairService({
+      candidates: () => [raw({ width: 60, height: 40, dimensionStatus: 'verified' })],
+      isUnavailable: () => unavailable,
+      validThumbs: () => Promise.resolve(true),
+      loadOriginal: () => Promise.reject(new Error('verified previews need no original')),
+      extractMetadata: () => Promise.resolve(EMPTY),
+      regenerate: () => Promise.reject(new Error('verified previews need no regeneration')),
+      repairMetadata: () => false,
+      repairGeneratedDimensions: () => false,
+      setDimensionStatus: () => false,
+      setPreviewFailure: () => {
+        const changed = unavailable;
+        unavailable = false;
+        return changed;
+      },
+      clearPreviewRepairDebt: () => true,
+      changed: (_ids, membership) => memberships.push(membership),
+    });
+    await service.repair();
+    assert.deepEqual(memberships, [initiallyUnavailable ? 'library' : 'none']);
+  });
+}
+
+test('repair refreshes queries that observed a transient missing-preview state', async () => {
+  let missing = false;
+  const memberships: string[] = [];
+  const service = new RawRepairService({
+    candidates: () => [raw({ width: 60, height: 40, dimensionStatus: 'verified' })],
+    isUnavailable: () => missing,
+    validThumbs: () => Promise.resolve(false),
+    setPreviewMissing: (_id, next) => {
+      const changed = missing !== next;
+      missing = next;
+      return changed;
+    },
+    loadOriginal: () => {
+      assert.equal(missing, true, 'queries during the awaited repair can observe missing previews');
+      return Promise.resolve(Buffer.from('original'));
+    },
+    extractMetadata: () => Promise.resolve(EMPTY),
+    regenerate: () => Promise.resolve({ generated: true, width: 60, height: 40 }),
+    repairMetadata: () => false,
+    repairGeneratedDimensions: () => false,
+    setDimensionStatus: () => false,
+    setPreviewFailure: () => false,
+    clearPreviewRepairDebt: () => {
+      missing = false;
+      return true;
+    },
+    changed: (_ids, membership) => memberships.push(membership),
+  });
+  await service.repair();
+  assert.equal(missing, false);
+  assert.deepEqual(memberships, ['library']);
+});

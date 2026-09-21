@@ -125,13 +125,14 @@ async function world() {
 }
 
 describe('keyring service (#517)', () => {
-  test('production custody notifications refresh pending counts after remove and import (#1134)', async () => {
+  test('production custody notifications refresh pending counts and schedule unlocked preview repair', async () => {
     const w = await world();
     await w.seal('P1', w.keyStore().currentKey());
     const key2 = w.keyStore().rotate();
     await w.seal('P2', key2);
     w.keyStore().rotate();
     const pending: number[] = [];
+    const repairs: string[][] = [];
     const service = createKeyringService({
       db: w.db,
       keyStore: w.keyStore(),
@@ -140,14 +141,19 @@ describe('keyring service (#517)', () => {
       invalidate: () => undefined,
       libraryChanged: () => undefined,
       pendingCountChanged: (count) => pending.push(count),
+      schedulePreviewRepair: (hashes) => repairs.push([...hashes]),
     });
     await service.exportKey(2, PASSWORD);
     assert.equal(w.photos.pendingCount(), 2);
     assert.equal(service.remove(2, REMOVE_KEY_AUTHORIZATION).removed, true);
     assert.equal(w.photos.pendingCount(), 1);
+    assert.deepEqual(repairs, [], 'key removal must not schedule locked previews');
+    assert.equal((await service.importKey(w.exportPath, 'wrong password')).outcome, 'refused');
+    assert.deepEqual(repairs, [], 'rejected import must not schedule preview repair');
     assert.equal((await service.importKey(w.exportPath, PASSWORD)).outcome, 'imported');
     assert.equal(w.photos.pendingCount(), 2);
     assert.deepEqual(pending, [1, 2]);
+    assert.deepEqual(repairs, [[w.photos.get('P2')?.contentHash]], 'restored custody schedules targeted preview verification');
   });
 
   test('reconcile registers custody with references and fingerprints, and legacy custody adopts the row it already has', async () => {

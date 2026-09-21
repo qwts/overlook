@@ -338,8 +338,21 @@ export class PhotosRepository {
     return (
       queryGet<{ id: string }>(
         this.db,
-        'UPDATE photos SET preview_repair_pending = 0 WHERE id = ? AND preview_repair_pending = 1 RETURNING id',
+        `UPDATE photos SET preview_repair_pending = 0, preview_missing = 0
+         WHERE id = ? AND (preview_repair_pending = 1 OR preview_missing = 1) RETURNING id`,
         photoId,
+      ) !== undefined
+    );
+  }
+
+  /** Authentication, not the upgrade scan queue, establishes availability. */
+  setPreviewMissing(photoId: string, missing: boolean): boolean {
+    return (
+      queryGet<{ id: string }>(
+        this.db,
+        `UPDATE photos SET preview_missing = @missing
+       WHERE id = @id AND preview_missing <> @missing RETURNING id`,
+        { id: photoId, missing: missing ? 1 : 0 },
       ) !== undefined
     );
   }

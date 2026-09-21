@@ -96,6 +96,8 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     );
     const pool = new ThumbnailPool({ workerUrl: new URL('../../src/main/import/thumbnail-worker.js', import.meta.url), size: 1 });
     const changed: string[][] = [];
+    const memberships: string[] = [];
+    let keyPresent = true;
     const repair = createRawRepairRuntime({
       repo,
       revisions,
@@ -103,8 +105,14 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       blobsReady: Promise.resolve(),
       thumbnails: new ThumbnailService(pool, blobs),
       currentKey: () => key,
-      resolveKey: () => key.key,
-      changed: (ids) => changed.push([...ids]),
+      resolveKey: () => {
+        assert.ok(keyPresent, 'locked candidates must not attempt decryption');
+        return key.key;
+      },
+      changed: (ids, membership) => {
+        changed.push([...ids]);
+        memberships.push(membership);
+      },
     });
     try {
       await repair.repair([original.contentHash]);
@@ -119,6 +127,23 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       assert.equal(repo.get(id)?.previewFailure, null);
       assert.equal(queryGet<{ pending: number }>(db, 'SELECT preview_repair_pending AS pending FROM photos WHERE id = ?', id)?.pending, 0);
       assert.equal(changed.flat().includes(id), true);
+      assert.equal(memberships.at(-1), 'library');
+      run(db, 'UPDATE photos SET preview_repair_pending = 1 WHERE id = ?', id);
+      run(db, 'UPDATE keys SET material_present = 0 WHERE id = ?', key.id);
+      keyPresent = false;
+      assert.equal(repo.get(id)?.locked, true);
+      const eventsBeforeLock = changed.length;
+      await repair.repair([original.contentHash]);
+      assert.equal(repo.get(id)?.previewFailure, null, 'locked verification cannot prove previews missing');
+      assert.equal(queryGet<{ pending: number }>(db, 'SELECT preview_repair_pending AS pending FROM photos WHERE id = ?', id)?.pending, 1);
+      assert.equal(changed.length, eventsBeforeLock);
+      run(db, 'UPDATE keys SET material_present = 1 WHERE id = ?', key.id);
+      keyPresent = true;
+      assert.equal(repo.get(id)?.locked, false);
+      assert.equal(repo.get(id)?.previewFailure, null, 'unlock needs no repair to undo a false missing state');
+      await repair.repair([original.contentHash]);
+      assert.equal(queryGet<{ pending: number }>(db, 'SELECT preview_repair_pending AS pending FROM photos WHERE id = ?', id)?.pending, 0);
+      assert.equal(memberships.at(-1), 'none', 'later verification only clears debt');
       assert.equal(
         await blobs.verifyThumbs(original.contentHash, () => key.key, 'root'),
         false,
