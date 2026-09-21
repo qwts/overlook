@@ -1,3 +1,4 @@
+import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import { CoverageRepository } from '../db/coverage-repository.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import { CoverageService, type CoverageDeps } from './coverage-service.js';
@@ -23,6 +24,8 @@ export function createCoverageService(
       rows: (photoIds) => coverageRepo.rows(photoIds),
       excluding: () => coverageRepo.excluding(),
       includedReferences: (hash) => coverageRepo.includedReferences(hash),
+      sidecarPathsForPhoto: (photoId) =>
+        sidecarRepo.listForPhoto(photoId).map((row) => `sidecars/${sidecarOwnerOf(row)}/${row.contentHash}`),
       sidecarHashesForPhoto: (photoId) => sidecarRepo.listForPhoto(photoId).map((row) => row.contentHash),
     },
     providerConnected: () => runtime().activeId() !== null,

@@ -173,7 +173,13 @@ export interface ExportEngineDeps {
    * 'original' format exports companions — a transcode is a baked export
    * whose recipe no longer applies (ADR-0031 §6). */
   readonly sidecarsFor?:
-    ((photoId: string) => readonly { readonly fileName: string; readonly contentHash: string; readonly bytes: number }[]) | undefined;
+    | ((photoId: string) => readonly {
+        readonly fileName: string;
+        readonly contentHash: string;
+        readonly bytes: number;
+        readonly ownerId?: string | undefined;
+      }[])
+    | undefined;
   readonly sidecarStream?: ((photoId: string, contentHash: string) => Readable) | undefined;
   readonly resolveKey: KeyResolver;
   /** The head edit revision (#493); absent = no edits anywhere (#497). */
@@ -446,7 +452,10 @@ export class ExportEngine {
       const sidecarDot = sidecar.fileName.lastIndexOf('.');
       const extension = sidecarDot <= 0 ? '' : sidecar.fileName.slice(sidecarDot);
       const target = await this.resolveCollision(destination, `${stem}${extension}`);
-      await this.deps.writeFile(this.deps.joinPath(destination, target), this.deps.sidecarStream(photo.id, sidecar.contentHash));
+      await this.deps.writeFile(
+        this.deps.joinPath(destination, target),
+        this.deps.sidecarStream(sidecar.ownerId ?? photo.id, sidecar.contentHash),
+      );
       written.push(target);
     }
     return written;

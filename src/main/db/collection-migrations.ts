@@ -13,6 +13,7 @@ import { migrateLibraryKeyring } from './keyring-migration.js';
 import { migratePurgeCleanup } from './purge-cleanup-migration.js';
 import { migrateProtectedVariantSources } from './protected-variant-migration.js';
 import { migrateDisclosurePolicy } from './disclosure-migration.js';
+import { migrateSidecarOwners } from './sidecar-owner-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
 // stays a ledger: gallery inclusion rules (#512), collection visibility
@@ -45,4 +46,5 @@ export const COLLECTION_MIGRATIONS: readonly {
   { version: 37, name: 'disclosure-policy', up: migrateDisclosurePolicy },
   { version: 38, name: 'protected-variant-sources', up: migrateProtectedVariantSources },
   { version: 39, name: 'purge-remote-cleanup', up: migratePurgeCleanup },
+  { version: 40, name: 'shared-sidecar-custody', up: migrateSidecarOwners },
 ];

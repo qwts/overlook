@@ -38,7 +38,13 @@ export interface ExportRuntimeOptions {
   readonly custodyStatus?: ((photoId: string, error: unknown) => Promise<PhotoCustodyStatus | undefined>) | undefined;
   /** Encrypted companion custody (#484); absent = no sidecar export. */
   readonly sidecarsFor?:
-    ((photoId: string) => readonly { readonly fileName: string; readonly contentHash: string; readonly bytes: number }[]) | undefined;
+    | ((photoId: string) => readonly {
+        readonly fileName: string;
+        readonly contentHash: string;
+        readonly bytes: number;
+        readonly ownerId?: string | undefined;
+      }[])
+    | undefined;
   readonly sidecarStream?: ((photoId: string, contentHash: string) => Readable) | undefined;
   readonly progress: (done: number, total: number) => void;
   readonly pickDestination: () => Promise<string | null>;

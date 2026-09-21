@@ -91,6 +91,7 @@ export interface CoverageDeps {
     readonly includedReferences: (contentHash: string) => number;
     /** Companion custody hashes whose remote objects go with the original (#484). */
     readonly sidecarHashesForPhoto: (photoId: string) => readonly string[];
+    readonly sidecarPathsForPhoto?: ((photoId: string) => readonly string[]) | undefined;
   };
   /** Keep downloaded / restoreOriginals: the verified download that proves local custody. */
   readonly restoreOriginals: (
@@ -264,7 +265,8 @@ export class CoverageService {
       }
       const paths = [
         manifestBlobPath(row.contentHash),
-        ...this.deps.repo.sidecarHashesForPhoto(row.id).map((hash) => `sidecars/${row.id}/${hash}`),
+        ...(this.deps.repo.sidecarPathsForPhoto?.(row.id) ??
+          this.deps.repo.sidecarHashesForPhoto(row.id).map((hash) => `sidecars/${row.id}/${hash}`)),
       ];
       let failures = 0;
       for (const path of paths) {
