@@ -84,6 +84,10 @@ export class RawRepairService {
     for (const photo of this.options.candidates(contentHashes)) {
       if (this.controller.signal.aborted) break;
       scanned += 1;
+      if (photo.locked) {
+        skipped += 1;
+        continue;
+      }
       const wasUnavailable = this.options.isUnavailable(photo.id);
       let bytes: Buffer | null = null;
       try {

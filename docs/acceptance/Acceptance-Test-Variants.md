@@ -138,3 +138,8 @@ Repeat after an initially failed duplicate bake: successfully Save, Reset, or
 Revert an edit once the original is local. The new previews clear the missing
 state and refresh both filtered views immediately. A failed or deferred edit bake
 must keep the variant unavailable and retain its repair debt.
+
+With valid variant previews awaiting verification, remove their decryption key
+and run repair. The locked rows retain verification debt and must not be marked
+missing. Restore the key: those previews remain available immediately; a later
+verification pass clears the debt without changing gallery membership.
