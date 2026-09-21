@@ -73,3 +73,36 @@ ImportCeremony`.
 11. Open a library created before this release. **Expected:** every existing
     key row gains a reference and fingerprint at first open; nothing reads
     as locked; the backup manifest publishes at schema 15.
+
+## Locked backup work (#1134)
+
+Remove a retired key while one of its photos has upload or manifest-only debt,
+then run backup. Expect one `BACKUP-SKIP-LOCKED` summary with skip count and
+key ids per run, no original
+read or upload for that photo, and no upload failure attributed to the skip.
+Pending counts exclude the photo immediately; its dirty flag and status survive.
+Reimport the key: the count returns and the next backup resumes the work.
+
+Schema 15 continues carrying the photo and its keyring reference. Existing remote
+blobs allow a manifest to publish while the key is absent. Skipped rows alone do
+not trigger a new publication. If other work requires publication and a
+never-uploaded locked photo has no remote blob, publication remains incomplete
+with durable debt;
+the completeness barrier must not publish a false remote-copy claim. Reimporting
+the key allows the upload and publication to complete. Reconciliation must not
+bypass the locked-row skip. Integrity sweeps also exclude locked rows and recheck
+custody after asynchronous verification, so an absent key is never treated as
+corrupt ciphertext or permission to repair a remote original.
+
+Automated coverage: `tests/backup/backup-engine.test.ts`,
+`tests/backup/integrity-scrubber.test.ts`, and the production keyring
+factory notification test in `tests/crypto/keyring-service.test.ts`.
+
+A companion can use a different key from its original. Removing either key locks
+the owning photo's backup work and count. Remove a key while its original upload
+or verification is in flight: the row must regain its previous status and remain
+dirty, with no subsequent companion upload or ledger settlement. A request already
+sent to the provider may finish; it does not count as completed backup while
+custody is absent. Reimport resumes the whole photo/companion transaction.
+
+Automated race and companion-key coverage: `tests/backup/sidecar-backup.test.ts`.

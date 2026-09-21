@@ -10,6 +10,7 @@ import { Readable } from 'node:stream';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { KEY_FILE_LENGTH, readKeyFileFacts, sealKeyFile } from '../../src/main/crypto/key-file.js';
+import { createKeyringService } from '../../src/main/crypto/keyring-factory.js';
 import { probeKeyAgainstStore, readKeyFile } from '../../src/main/crypto/keyring-probe.js';
 import { KeyringAuthorizationError, KeyringService } from '../../src/main/crypto/keyring-service.js';
 import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
@@ -104,6 +105,7 @@ async function world() {
   };
   return {
     dataDir,
+    blobStore,
     db,
     photos,
     repo,
@@ -123,6 +125,31 @@ async function world() {
 }
 
 describe('keyring service (#517)', () => {
+  test('production custody notifications refresh pending counts after remove and import (#1134)', async () => {
+    const w = await world();
+    await w.seal('P1', w.keyStore().currentKey());
+    const key2 = w.keyStore().rotate();
+    await w.seal('P2', key2);
+    w.keyStore().rotate();
+    const pending: number[] = [];
+    const service = createKeyringService({
+      db: w.db,
+      keyStore: w.keyStore(),
+      blobStore: w.blobStore,
+      harnessEnv: () => w.exportPath,
+      invalidate: () => undefined,
+      libraryChanged: () => undefined,
+      pendingCountChanged: (count) => pending.push(count),
+    });
+    await service.exportKey(2, PASSWORD);
+    assert.equal(w.photos.pendingCount(), 2);
+    assert.equal(service.remove(2, REMOVE_KEY_AUTHORIZATION).removed, true);
+    assert.equal(w.photos.pendingCount(), 1);
+    assert.equal((await service.importKey(w.exportPath, PASSWORD)).outcome, 'imported');
+    assert.equal(w.photos.pendingCount(), 2);
+    assert.deepEqual(pending, [1, 2]);
+  });
+
   test('reconcile registers custody with references and fingerprints, and legacy custody adopts the row it already has', async () => {
     const w = await world();
     await w.seal('P1', w.keyStore().currentKey());

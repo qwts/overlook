@@ -10,13 +10,13 @@ import { buffer } from 'node:stream/consumers';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, type BackupEngineDeps, type BackupSettings, type NetworkKind } from '../../src/main/backup/backup-engine.js';
-import { createManifestDebtStore } from '../../src/main/backup/manifest-debt.js';
 import { FaultInjectingProvider, MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import type { RecoveryBootstrapPublication } from '../../src/main/backup/recovery-bootstrap.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
-import { claimsForContentHashes } from '../../src/main/db/backup-claims.js';
+import { createBackupClaimDeps } from '../../src/main/db/backup-claims.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
+import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
@@ -115,12 +115,11 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     recoveryGenerationHealthy: () => Promise.resolve(true),
     // #741 production wiring: preflight claim lookup, local presence, and
     // durable manifest debt all resolve against the same library DB.
-    claimsForContentHashes: (hashes) => claimsForContentHashes(db, hashes),
-    hasLocalOriginal: (hash) => store.hasOriginal(hash),
-    manifestDebt: createManifestDebtStore(db),
+    ...createBackupClaimDeps(db, store),
   };
   return {
     deps,
+    keys: new KeyringRepository(db),
     repo,
     ledger,
     store,
@@ -138,6 +137,157 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
 }
 
 describe('backup engine (#105)', () => {
+  test('large locked queues emit one bounded audit record per run (#1134)', async () => {
+    const w = await world(0);
+    const engine = new BackupEngine({
+      ...w.deps,
+      lockedDirtySnapshot: () => ({ photoIds: Array.from({ length: 94_000 }, (_, index) => `P${String(index)}`), keyIds: [2, 3] }),
+    });
+    await engine.run();
+    await engine.run();
+    assert.deepEqual(w.audits, ['BACKUP-SKIP-LOCKED skips=94000 key=2,3', 'BACKUP-SKIP-LOCKED skips=94000 key=2,3']);
+  });
+
+  test('queue setup uses bulk custody selection before the first progress event (#1134)', async () => {
+    const w = await world(12);
+    let started = false;
+    const engine = new BackupEngine({
+      ...w.deps,
+      unavailableKeyIdsForPhoto: (id) => {
+        assert.equal(started, true, 'initial queue setup must not perform per-photo custody lookups');
+        return w.deps.unavailableKeyIdsForPhoto?.(id) ?? [];
+      },
+      events: {
+        progress: () => {
+          started = true;
+        },
+      },
+    });
+    assert.equal((await engine.run()).uploaded, 12);
+  });
+
+  test('locked dirty originals stay pending only after key reimport (#1134)', async () => {
+    const w = await world(1);
+    w.keys.setPresent(1, false);
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: () => {
+        throw new Error('locked original must not open');
+      },
+    });
+    assert.equal(w.repo.pendingCount(), 0);
+    assert.equal(w.ledger.pendingCount(), 0);
+    assert.deepEqual(w.repo.dirtyPhotos(), []);
+    const skipped = await engine.run();
+    assert.equal(skipped.uploaded, 0);
+    assert.equal(skipped.failed, 0);
+    assert.equal(skipped.manifestUploaded, true, 'skipped work creates no new publication attempt');
+    assert.equal((await w.provider.list('manifest')).length, 0);
+    engine.oweManifest();
+    assert.equal((await engine.run()).manifestUploaded, false, 'independent publication debt cannot claim an absent remote blob');
+    assert.equal(w.ledger.isDirty('P0'), true);
+    assert.equal(w.ledger.status('P0'), 'local');
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED skips=1 key=1'));
+    assert.equal(w.repo.manifestSnapshot().photos.length, 1);
+    assert.equal(w.repo.manifestSnapshot().keyring.length, 1);
+    w.keys.setPresent(1, true);
+    assert.equal(w.repo.pendingCount(), 1);
+    assert.equal(w.ledger.pendingCount(), 1);
+    const resumed = await w.engine.run();
+    assert.equal(resumed.uploaded, 1);
+    assert.equal(resumed.manifestUploaded, true);
+    assert.equal(w.repo.pendingCount(), 0);
+  });
+
+  test('locked manifest-only debt keeps its row and key in a published manifest (#1134)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    w.ledger.setStatus('P0', 'offloaded');
+    w.ledger.markDirty('P0');
+    w.keys.setPresent(1, false);
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: () => {
+        throw new Error('locked original must not open');
+      },
+    });
+    engine.oweManifest();
+    const result = await engine.run();
+    assert.equal(result.failed, 0);
+    assert.equal(result.uploaded, 0);
+    assert.equal(result.manifestUploaded, true);
+    const published = JSON.parse((await buffer(await w.provider.getStream('manifest/gen-2.ovlk'))).toString('utf8')) as {
+      schema: number;
+      photos: { id: string; keyId: number }[];
+      keyring: { keyId: number }[];
+    };
+    assert.equal(published.schema, 15);
+    assert.deepEqual(
+      published.photos.map(({ id, keyId }) => ({ id, keyId })),
+      [{ id: 'P0', keyId: 1 }],
+    );
+    assert.deepEqual(
+      published.keyring.map(({ keyId }) => keyId),
+      [1],
+    );
+    assert.equal(w.ledger.isDirty('P0'), true, 'skipping must preserve manifest-only dirt');
+    assert.equal(w.repo.pendingCount(), 0);
+    w.keys.setPresent(1, true);
+    assert.equal(w.repo.pendingCount(), 1);
+    await engine.run();
+    assert.equal(w.ledger.isDirty('P0'), false);
+  });
+
+  test('key removal while a run awaits skips subsequent originals without upload errors (#1134)', async () => {
+    const w = await world(2);
+    const opened: string[] = [];
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: (hash) => {
+        opened.push(hash);
+        return w.store.getEncryptedStream(hash);
+      },
+      pendingCountChanged: () => w.keys.setPresent(1, false),
+    });
+    const result = await engine.run();
+    assert.equal(result.uploaded, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(w.ledger.isDirty('P1'), true);
+    assert.equal(w.ledger.status('P1'), 'local');
+    assert.equal(w.repo.pendingCount(), 0);
+    assert.equal(new Set(opened).size, 1);
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED skips=1 key=1'));
+  });
+
+  test('manifest reconciliation cannot reupload a locked synced original (#1134)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    const blob = (await w.provider.list('blobs'))[0];
+    assert.ok(blob);
+    await w.provider.delete(blob.path);
+    w.ledger.markDirty('P0');
+    w.keys.setPresent(1, false);
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: () => {
+        throw new Error('reconciliation must not open locked original');
+      },
+    });
+    engine.oweManifest();
+    const result = await engine.run();
+    assert.equal(result.failed, 0);
+    assert.equal(result.uploaded, 0);
+    assert.equal(result.manifestUploaded, false);
+    assert.equal(result.blockedRemoteOnly, 1);
+    assert.equal(w.ledger.status('P0'), 'synced');
+    assert.equal(w.ledger.isDirty('P0'), true);
+    assert.equal((await w.provider.list('blobs')).length, 0);
+    assert.deepEqual(
+      w.audits.filter((line) => line.startsWith('BACKUP-SKIP-LOCKED')),
+      ['BACKUP-SKIP-LOCKED skips=1 key=1'],
+    );
+  });
+
   test('EXIT CRITERIA: a full backup clears pendingCount, uploads ciphertext as-is + a manifest', async () => {
     const w = await world(3);
     assert.equal(w.ledger.pendingCount(), 3);

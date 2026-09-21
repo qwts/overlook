@@ -1,3 +1,4 @@
+import { PHOTO_HAS_ABSENT_KEY_SQL } from './backup-key-availability.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
@@ -810,7 +811,7 @@ export class PhotosRepository {
   }
 
   /** The backup queue's input (#105): dirty, not-deleted, included photos.
-   * Excluded rows (ADR-0033 §1) never enter the queue, dirty or not. */
+   * Excluded and locked rows never enter the queue, dirty or not. */
   dirtyPhotos(): readonly { id: string; contentHash: string; bytes: number; fileName: string; keyId: number; status: SyncStatus }[] {
     // status rides along so the engine never re-queries the ledger per item
     // (two status lookups × 94K dirty rows stalled the 113K-import sweep).
@@ -819,6 +820,7 @@ export class PhotosRepository {
       `SELECT p.id, p.content_hash AS contentHash, p.bytes, p.file_name AS fileName, p.key_id AS keyId, l.status AS status
          FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
         WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
+          AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})
         ORDER BY p.imported_at, p.id`,
     );
   }
@@ -844,6 +846,7 @@ export class PhotosRepository {
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
           AND l.coverage = 'included'
+          AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
@@ -865,7 +868,8 @@ export class PhotosRepository {
       queryAll<{ n: number }>(
         this.db,
         `SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id
-          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL`,
+          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
+            AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})`,
       )[0]?.n ?? 0
     );
   }

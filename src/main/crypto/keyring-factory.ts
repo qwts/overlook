@@ -8,12 +8,14 @@ import type { KeyStore } from './keystore.js';
 import { pickKeyFileDestination, pickRecoveryKeyPath } from './recovery-key-picker.js';
 import type { BlobStore } from '../blobs/blob-store.js';
 import { KeyringRepository } from '../db/keyring-repository.js';
+import { PhotosRepository } from '../db/photos-repository.js';
 
 export interface KeyringFactoryOptions {
   readonly db: BetterSqlite3.Database;
   readonly keyStore: KeyStore;
   readonly blobStore: BlobStore;
   readonly harnessEnv: (name: string) => string | undefined;
+  readonly pendingCountChanged: (count: number) => void;
   /** Drops one photo's decrypted derivatives when its custody changes. */
   readonly invalidate: (photoId: string) => void;
   /** Tells the renderer which rows to refetch as locked or unlocked. */
@@ -43,6 +45,7 @@ export function createKeyringService(options: KeyringFactoryOptions): KeyringSer
     custodyChanged: (photoIds) => {
       for (const id of photoIds) options.invalidate(id);
       options.libraryChanged({ photoIds: [...photoIds], membership: 'library' });
+      options.pendingCountChanged(new PhotosRepository(options.db).pendingCount());
     },
     audit: (line) => console.info(`[overlook] ${line}`),
   });

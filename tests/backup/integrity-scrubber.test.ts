@@ -15,9 +15,11 @@ import {
 } from '../../src/main/backup/integrity-scrubber.js';
 import { BackupIntegrityCursorStore } from '../../src/main/backup/integrity-cursor.js';
 import { createBackupIntegrityRuntime } from '../../src/main/backup/integrity-runtime.js';
+import { ProviderError } from '../../src/main/backup/provider.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { createEncryptStream, type EnvelopeKey } from '../../src/main/crypto/envelope.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
+import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
@@ -430,4 +432,200 @@ test('a custody identity failure neither reads the backup target nor marks the b
   assert.deepEqual(marked, []);
   assert.ok(audits.includes('INTEGRITY-CUSTODY-SKIP authority=8 reason=custody-wrong-account'));
   db.close();
+});
+
+test('production integrity skips locked synced, bound and legacy custody, then resumes after import (#1134)', async () => {
+  const db = openLibraryDatabase({
+    path: join(mkdtempSync(join(tmpdir(), 'overlook-integrity-locked-')), 'library.db'),
+    dbKey: randomBytes(32),
+  });
+  run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-09-20T00:00:00.000Z')`);
+  const repo = new PhotosRepository(db);
+  const ledger = new SyncLedger(db);
+  const keys = new KeyringRepository(db);
+  const key: EnvelopeKey = { id: 1, key: randomBytes(32) };
+  const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-locked-remote-')) });
+  const authorities = new CustodyAuthorityRepository(db);
+  const authority = authorities.create({
+    providerId: provider.id,
+    accountId: 'account',
+    accountLabel: 'Account',
+    remoteRoot: '/Overlook/library/',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    lastVerifiedAt: '2026-09-20T00:00:00.000Z',
+  });
+  const plaintext = Buffer.from('synced local original');
+  const ciphertext = await buffer(Readable.from([plaintext]).pipe(createEncryptStream(key, { photoId: 'synced' })));
+  const hash = createHash('sha256').update(plaintext).digest('hex');
+  for (const id of ['synced', 'bound', 'legacy']) {
+    await insertLegacyItem({
+      repo,
+      ledger,
+      provider,
+      key,
+      id,
+      plaintext: id === 'synced' ? plaintext : Buffer.from(id),
+      remote: id !== 'synced',
+    });
+    ledger.markDirty(id);
+  }
+  ledger.setStatus('synced', 'synced');
+  assert.equal(authorities.bindLegacyPhoto('bound', authority.id), true);
+  keys.setPresent(1, false);
+  let opened = 0;
+  const runtime = createBackupIntegrityRuntime({
+    db,
+    provider,
+    authorities,
+    repo,
+    custody: { resolveAuthority: () => Promise.resolve({ authority, provider }) },
+    legacyAuthority: () => Promise.resolve({ authority, provider }),
+    bindLegacyPhoto: (id, authorityId) => authorities.bindLegacyPhoto(id, authorityId),
+    blobs: {
+      hasOriginal: (contentHash) => contentHash === hash,
+      getEncryptedStream: () => {
+        opened += 1;
+        return Readable.from([ciphertext]);
+      },
+    },
+    resolveKey: () => (keys.get(1)?.present === true ? key.key : undefined),
+    markUnrecoverable: (id) => ledger.repairStatus(id, 'error'),
+    audit: () => undefined,
+  });
+  const skipped = await runtime.scrub();
+  assert.deepEqual(skipped, { checked: 0, repaired: 0, unrecoverable: 0, cycleComplete: true });
+  assert.equal(opened, 0);
+  assert.equal(ledger.status('synced'), 'synced');
+  assert.equal(ledger.status('bound'), 'offloaded');
+  assert.equal(ledger.status('legacy'), 'offloaded');
+  assert.equal((await provider.list('blobs')).length, 2);
+  keys.setPresent(1, true);
+  const resumed = await runtime.scrub();
+  assert.equal(resumed.checked, 3);
+  assert.equal(resumed.repaired, 1);
+  assert.equal(resumed.unrecoverable, 0);
+  db.close();
+});
+
+test('removal during integrity IO cannot mark a locked row corrupt or repair its remote blob (#1134)', async () => {
+  for (const local of [false, true]) {
+    const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-removal-')) });
+    let available = true;
+    let marked = false;
+    let puts = 0;
+    const audits: string[] = [];
+    provider.put = () => {
+      puts += 1;
+      return Promise.resolve({ bytes: 0 });
+    };
+    provider.verify = () => {
+      available = false;
+      return Promise.reject(new ProviderError('missing', 'not-found'));
+    };
+    provider.getStream = () => {
+      available = false;
+      return Promise.resolve(Readable.from([Buffer.from('invalid')]));
+    };
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: local ? 'synced' : 'offloaded' }],
+      isAvailable: () => available,
+      hasLocal: () => local,
+      encryptedStream: () => Readable.from([Buffer.from('local')]),
+      verifyRemoteCiphertext: async (_item, ciphertext) => {
+        await buffer(ciphertext);
+        return false;
+      },
+      markUnrecoverable: () => {
+        marked = true;
+      },
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: (line) => audits.push(line),
+      now: () => new Date(),
+    });
+    const result = await scrubber.scrub();
+    assert.equal(result.repaired, 0);
+    assert.equal(result.unrecoverable, 0);
+    assert.equal(marked, false);
+    assert.equal(puts, 0);
+    assert.ok(audits.includes('INTEGRITY-SKIP-LOCKED photo=locked'));
+  }
+});
+
+test('key removal during repair suppresses its result or error and starts no later verification (#1134)', async () => {
+  for (const phase of ['put', 'put-error', 'verify-error']) {
+    const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-repair-lock-')) });
+    let available = true;
+    let verifies = 0;
+    let marked = false;
+    provider.put = () => {
+      if (phase !== 'verify-error') available = false;
+      return phase === 'put-error' ? Promise.reject(new Error('repair transport failed')) : Promise.resolve({ bytes: 5 });
+    };
+    provider.verify = () => {
+      verifies += 1;
+      if (verifies === 1) return Promise.reject(new ProviderError('missing', 'not-found'));
+      available = false;
+      return Promise.reject(new Error('verification transport failed'));
+    };
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      isAvailable: () => available,
+      hasLocal: () => true,
+      encryptedStream: () => Readable.from([Buffer.from('local')]),
+      verifyRemoteCiphertext: () => Promise.resolve(false),
+      markUnrecoverable: () => {
+        marked = true;
+      },
+      markVerified: () => {
+        marked = true;
+      },
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: () => undefined,
+      now: () => new Date(),
+    });
+    const result = await scrubber.scrub();
+    assert.equal(result.repaired, 0);
+    assert.equal(result.unrecoverable, 0);
+    assert.equal(marked, false);
+    assert.equal(verifies, phase === 'verify-error' ? 2 : 1);
+  }
+});
+
+test('key removal during local hashing stops before any remote request (#1134)', async () => {
+  for (const broken of [false, true]) {
+    const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-hash-lock-')) });
+    let available = true;
+    let verifies = 0;
+    provider.verify = () => {
+      verifies += 1;
+      return Promise.reject(new Error('remote must not be contacted'));
+    };
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      isAvailable: () => available,
+      hasLocal: () => true,
+      encryptedStream: () =>
+        Readable.from(
+          (async function* () {
+            yield Buffer.from('local');
+            await Promise.resolve();
+            available = false;
+            if (broken) throw new Error('local stream failed');
+          })(),
+        ),
+      verifyRemoteCiphertext: () => Promise.resolve(false),
+      markUnrecoverable: () => assert.fail('locked row must stay unchanged'),
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: () => undefined,
+      now: () => new Date(),
+    });
+    assert.equal((await scrubber.scrub()).repaired, 0);
+    assert.equal(verifies, 0);
+  }
 });

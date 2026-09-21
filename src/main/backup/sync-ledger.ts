@@ -1,3 +1,4 @@
+import { PHOTO_HAS_ABSENT_KEY_SQL } from '../db/backup-key-availability.js';
 import { queryAll, run } from '../db/sql.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import type { BackupCoverage, BackupCoverageOrigin, SyncStatus } from '../../shared/library/types.js';
@@ -142,7 +143,14 @@ export class SyncLedger {
   }
 
   pendingCount(): number {
-    return queryAll<{ n: number }>(this.db, "SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1 AND coverage = 'included'")[0]?.n ?? 0;
+    return (
+      queryAll<{ n: number }>(
+        this.db,
+        `SELECT count(*) AS n FROM sync_ledger l JOIN photos p ON p.id = l.photo_id
+      WHERE l.dirty = 1 AND l.coverage = 'included'
+        AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})`,
+      )[0]?.n ?? 0
+    );
   }
 
   // ---- Backup coverage (ADR-0033). Coverage is orthogonal to the upload
