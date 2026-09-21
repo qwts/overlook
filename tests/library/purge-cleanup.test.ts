@@ -91,7 +91,7 @@ async function world() {
         assert.ok(value);
         return Promise.resolve(value);
       },
-      targetAuthority: () => Promise.resolve(target),
+      ensureTargetAuthority: () => Promise.resolve(target),
       audit: () => undefined,
     });
     const purge = createPurgeService({
@@ -232,6 +232,38 @@ test('a different publication account and rows queued after its snapshot cannot 
     await w.provider.delete(w.remotePath);
     await certify(b.cleanup);
     assert.deepEqual(await b.cleanup.retry(), { settled: 1, pending: 0 }, 'already absent objects settle idempotently');
+  } finally {
+    w.close();
+  }
+});
+
+test('a clean-error transition during identity capture preserves the photo and retry ledger', async () => {
+  const w = await world();
+  try {
+    const b = w.bind();
+    const captured = b.authorities.forPhoto('photo')!;
+    b.photos.softDelete(['photo']);
+    run(w.db(), "UPDATE sync_ledger SET custody_authority_id = NULL WHERE photo_id = 'photo'");
+    const cleanup = createPurgeCleanup(w.db(), {
+      authorities: b.authorities,
+      custody: { resolveAuthority: () => Promise.reject(new Error('unexpected remote resolution')) },
+      captureAuthority: async () => {
+        await Promise.resolve();
+        run(w.db(), "UPDATE sync_ledger SET status = 'error', dirty = 0 WHERE photo_id = 'photo'");
+        return captured;
+      },
+      ensureTargetAuthority: () => Promise.resolve(captured),
+      audit: () => undefined,
+    });
+    await assert.rejects(
+      cleanup.transfer('photo', () => b.photos.purgeRow('photo')),
+      /unverified source authority/u,
+    );
+    assert.ok(b.photos.getDeleted('photo'));
+    assert.equal(new SyncLedger(w.db()).coverage('photo')?.coverage, 'excluding');
+    assert.equal(b.queue.pending().length, 0);
+    assert.equal(w.store.hasOriginal(w.hash), true);
+    assert.equal(w.provider.deletes, 0);
   } finally {
     w.close();
   }

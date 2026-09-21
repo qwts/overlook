@@ -8,7 +8,7 @@ export interface PurgeCleanupDeps {
   readonly authorities: Pick<CustodyAuthorityRepository, 'get'>;
   readonly custody: Pick<CustodyHandleResolver, 'resolveAuthority'>;
   readonly captureAuthority: (photoId: string) => Promise<CustodyAuthority>;
-  readonly targetAuthority: () => Promise<CustodyAuthority>;
+  readonly ensureTargetAuthority: () => Promise<CustodyAuthority>;
   readonly audit: (line: string) => void;
 }
 
@@ -33,7 +33,7 @@ export class PurgeCleanupService {
     this.eligible.clear();
     const pending = this.deps.repo.pending();
     if (pending.length === 0) return [];
-    const target = await this.deps.targetAuthority();
+    const target = await this.deps.ensureTargetAuthority();
     return pending.filter((item) => item.authorityId === target.id).map((item) => item.id);
   }
 

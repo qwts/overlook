@@ -2,10 +2,10 @@ import { useId, useRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
 import './overlays.css';
-import { Icon, type IconName } from './Icon';
-import { IconButton } from './IconButton';
-import { useDialogKeyboard } from './use-dialog-keyboard';
-import { useDialogPresence } from './use-dialog-presence';
+import { Icon, type IconName } from './Icon.js';
+import { IconButton } from './IconButton.js';
+import { useDialogKeyboard } from './use-dialog-keyboard.js';
+import { useDialogPresence } from './use-dialog-presence.js';
 
 export interface DialogProps {
   readonly open: boolean;

@@ -477,3 +477,47 @@ test('a persisted bound authority is re-proven before its first custody handle a
   assert.ok(bootstrapReads >= 2, 'custody recovery re-proves the bootstrap after provider unavailability');
   w.db.close();
 });
+
+test('purge source capture refuses unbound clean-error custody and bounds an unresponsive identity provider', async () => {
+  const w = world();
+  run(w.db, "UPDATE sync_ledger SET status = 'synced', custody_authority_id = NULL, dirty = 0 WHERE photo_id = 'P1'");
+  let calls = 0;
+  let providerSignal: AbortSignal | undefined;
+  w.provider.accountIdentity = (signal?: AbortSignal) => {
+    calls += 1;
+    providerSignal = signal;
+    return new Promise<ProviderAccountIdentity>(() => undefined);
+  };
+  const timeout = new AbortController();
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: () => w.provider,
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    timeoutSignal: (milliseconds) => {
+      assert.equal(milliseconds, 10_000);
+      return timeout.signal;
+    },
+    masterKey: () => Buffer.from(w.masterKey),
+  });
+  try {
+    run(w.db, "UPDATE sync_ledger SET status = 'error', dirty = 0 WHERE photo_id = 'P1'");
+    await assert.rejects(routing.captureAuthority('P1'), /custody-unavailable/u);
+    assert.equal(calls, 0, 'a selected account cannot claim an unknown legacy source');
+    run(w.db, "UPDATE sync_ledger SET status = 'synced' WHERE photo_id = 'P1'");
+    const capture = routing.captureAuthority('P1');
+    assert.equal(calls, 1);
+    assert.equal(providerSignal, timeout.signal);
+    timeout.abort(new Error('identity timed out'));
+    await assert.rejects(capture, /custody-unavailable/u);
+    assert.equal(providerSignal?.aborted, true);
+    assert.equal(w.authorities.forPhoto('P1'), undefined);
+    assert.ok(w.photos.get('P1'), 'failed capture does not remove the photo');
+  } finally {
+    await routing.close();
+    w.db.close();
+  }
+});

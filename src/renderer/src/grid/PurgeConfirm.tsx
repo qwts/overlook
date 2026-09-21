@@ -3,8 +3,8 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import './pill.css';
 import { useFormats } from '../i18n/use-formats.js';
-import { Button } from '../components/Button';
-import { Dialog } from '../components/Dialog';
+import { Button } from '../components/Button.js';
+import { Dialog } from '../components/Dialog.js';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 
 const messages = defineMessages({
