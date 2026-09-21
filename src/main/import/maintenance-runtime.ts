@@ -1,3 +1,4 @@
+import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import type { ImportRuntime } from './import-runtime.js';
 import type { LibraryParts } from '../library/library-parts.js';
@@ -84,6 +85,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
   const rawRepair = createRawRepairRuntime({
     ...shared,
     repo,
+    revisions: new EditRevisionRepository(parts.db),
     changed: (ids) => {
       for (const id of ids) {
         invalidateThumb(id);

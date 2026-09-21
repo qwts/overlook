@@ -89,6 +89,7 @@ async function world(count: number, providerConnected = true) {
     write: (hints) => custodyHints.push(hints),
   });
   const audits: string[] = [];
+  const restoredHashes: string[][] = [];
   const engineDeps: BackupEngineDeps = {
     provider,
     ledger,
@@ -143,6 +144,7 @@ async function world(count: number, providerConnected = true) {
     },
     syncStateChanged: (updates) => changed.push([...updates]),
     storageChanged: () => (storageChanges += 1),
+    originalsRestored: (hashes) => restoredHashes.push([...hashes]),
     audit: (line) => audits.push(line),
   });
   return {
@@ -158,6 +160,7 @@ async function world(count: number, providerConnected = true) {
     audits,
     changed,
     storageChanges: () => storageChanges,
+    restoredHashes,
     service,
     engine: new BackupEngine(engineDeps),
   };
@@ -322,6 +325,7 @@ describe('offload + rehydrate (#107)', () => {
     assert.equal(w.store.hasOriginal(photo?.contentHash ?? ''), false);
 
     await w.service.rehydrate('P0');
+    assert.deepEqual(w.restoredHashes, [[w.repo.get('P0')?.contentHash]], 'verified rehydration schedules asset preview repair');
     assert.equal(w.ledger.status('P0'), 'synced');
     const restored = await buffer(w.store.getStream(photo?.contentHash ?? '', () => w.key.key, 'P0'));
     assert.deepEqual(restored, w.plaintexts.get('P0'), 'plaintext round-trips through the cloud');

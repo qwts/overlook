@@ -116,6 +116,8 @@ export interface OffloadDeps {
   };
   readonly syncStateChanged: (updates: readonly { readonly id: string; readonly syncState: SyncStatus }[]) => void;
   readonly storageChanged: () => void;
+  /** Verified permanent local custody can satisfy deferred variant previews. */
+  readonly originalsRestored?: ((contentHashes: readonly string[]) => void) | undefined;
   readonly audit: (line: string) => void;
 }
 
@@ -375,5 +377,11 @@ export class OffloadService {
     if (photoIds.length === 0) return;
     this.deps.syncStateChanged(photoIds.map((id) => ({ id, syncState: 'synced' })));
     this.deps.storageChanged();
+    const hashes = new Set<string>();
+    for (const id of photoIds) {
+      const photo = this.deps.repo.get(id);
+      if (photo !== undefined) hashes.add(photo.contentHash);
+    }
+    if (hashes.size > 0) this.deps.originalsRestored?.([...hashes]);
   }
 }

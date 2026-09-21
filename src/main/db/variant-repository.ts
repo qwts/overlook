@@ -44,6 +44,8 @@ const OVERRIDDEN_COLUMNS: Readonly<Record<string, string>> = {
   id: '@id',
   imported_at: '@now',
   favorite: '0',
+  preview_repair_pending: '1',
+  preview_failure: 'NULL',
   is_original: '0',
   deleted_at: 'NULL',
   edit_head: 'NULL',

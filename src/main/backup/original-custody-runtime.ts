@@ -26,6 +26,7 @@ export interface OriginalCustodyRuntimeOptions {
   readonly workChanged: (delta: 1 | -1) => void;
   readonly syncStateChanged: (updates: readonly { readonly id: string; readonly syncState: SyncStatus }[]) => void;
   readonly storageChanged: () => void;
+  readonly originalsRestored?: ((contentHashes: readonly string[]) => void) | undefined;
   readonly stateChanged: (state: { readonly photoId: string; readonly stage: EphemeralStage }) => void;
   readonly invalidateFull: (photoId: string) => void;
   readonly audit: (line: string) => void;
@@ -61,6 +62,7 @@ export function createOriginalCustodyRuntime(options: OriginalCustodyRuntimeOpti
     },
     syncStateChanged,
     storageChanged: options.storageChanged,
+    originalsRestored: options.originalsRestored,
     audit: options.audit,
   });
   const ephemeral = createEphemeralRuntime({

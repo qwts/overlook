@@ -212,3 +212,68 @@ describe('RAW repair service (#368)', () => {
     assert.deepEqual(await service.repair(), { scanned: 0, repaired: 0, failed: 0, skipped: 0 });
   });
 });
+
+test('rehydration requests coalesce into a sequential follow-up pass (#1121)', async () => {
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const batches: (readonly string[] | undefined)[] = [];
+  let active = 0;
+  let peak = 0;
+  const service = new RawRepairService({
+    candidates: (hashes) => {
+      batches.push(hashes);
+      return [raw({ dimensionStatus: 'verified', width: 1, height: 1 })];
+    },
+    validThumbs: async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await gate;
+      active -= 1;
+      return true;
+    },
+    loadOriginal: () => Promise.resolve(null),
+    extractMetadata: () => Promise.resolve(EMPTY),
+    regenerate: () => Promise.resolve({ generated: false, width: null, height: null }),
+    repairMetadata: () => false,
+    repairGeneratedDimensions: () => false,
+    setDimensionStatus: () => false,
+    setPreviewFailure: () => false,
+    changed: () => undefined,
+  });
+  const first = service.repair(['a']);
+  const second = service.repair(['b']);
+  const third = service.repair(['c', 'b']);
+  release?.();
+  await Promise.all([first, second, third]);
+  assert.equal(peak, 1);
+  assert.deepEqual(batches, [['a'], ['b', 'c']]);
+});
+
+for (const cancel of [false, true]) {
+  test(`unsuccessful deferred repair retains its debt (cancel=${String(cancel)})`, async () => {
+    let cleared = false;
+    const service = new RawRepairService({
+      candidates: () => [raw({ previewFailure: 'deferred-original', fileKind: 'jpeg' })],
+      validThumbs: () => Promise.resolve(false),
+      loadOriginal: () => Promise.resolve(Buffer.from('original')),
+      extractMetadata: () => Promise.resolve(EMPTY),
+      regenerate: () => {
+        if (cancel) service.close();
+        return Promise.resolve({ generated: cancel, width: null, height: null });
+      },
+      repairMetadata: () => false,
+      repairGeneratedDimensions: () => false,
+      setDimensionStatus: () => false,
+      setPreviewFailure: () => false,
+      clearPreviewRepairDebt: () => {
+        cleared = true;
+        return true;
+      },
+      changed: () => undefined,
+    });
+    await service.repair();
+    assert.equal(cleared, false);
+  });
+}

@@ -497,7 +497,6 @@ function getBackupEngine(): BackupEngine {
       purgeCleanup,
       settleExclusions: () => coverageService?.settlePending() ?? Promise.resolve(undefined),
     });
-    const emitEphemeralState = createEmitter(events.ephemeralOriginalState, send);
     const custody = createOriginalCustodyRuntime({
       provider,
       connected: () => getProviderRuntime().activeId() !== null,
@@ -513,7 +512,8 @@ function getBackupEngine(): BackupEngine {
       workChanged: changeProviderWork,
       syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
       storageChanged: () => broadcast((win) => win.webContents.send(events.storageChanged.name, {})),
-      stateChanged: emitEphemeralState,
+      originalsRestored: (hashes) => ensureMaintenanceServices().rawRepair.schedule(hashes),
+      stateChanged: createEmitter(events.ephemeralOriginalState, send),
       invalidateFull: (photoId) => fullService?.invalidate(photoId),
       audit,
     });

@@ -319,15 +319,29 @@ export class PhotosRepository {
 
   /** Live, locally readable rows needing one format-neutral dimension check,
    * plus RAW/HEIC rows eligible for background preview repair. */
-  previewRepairCandidates(): readonly PhotoRecord[] {
+  previewRepairCandidates(contentHashes?: readonly string[]): readonly PhotoRecord[] {
     return queryAll<PhotoRow>(
       this.db,
       `${SELECT}
        WHERE p.deleted_at IS NULL
-         AND (p.dimension_status = 'legacy' AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic') OR p.file_kind IN ('raw', 'heic'))
-         AND COALESCE(l.status, 'local') <> 'offloaded'
+         AND (p.preview_repair_pending = 1 OR
+           ((p.dimension_status = 'legacy' AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic') OR p.file_kind IN ('raw', 'heic'))
+             AND COALESCE(l.status, 'local') <> 'offloaded'))
+         AND (@hashes IS NULL OR p.content_hash IN (SELECT value FROM json_each(@hashes)))
        ORDER BY p.imported_at, p.id`,
+      { hashes: contentHashes === undefined ? null : JSON.stringify(contentHashes) },
     ).map(toRecord);
+  }
+
+  /** Cleared only after authenticated existing previews or a successful bake. */
+  clearPreviewRepairDebt(photoId: string): boolean {
+    return (
+      queryGet<{ id: string }>(
+        this.db,
+        'UPDATE photos SET preview_repair_pending = 0 WHERE id = ? AND preview_repair_pending = 1 RETURNING id',
+        photoId,
+      ) !== undefined
+    );
   }
 
   /** Fills only unknown previewable metadata. Trusted existing values are immutable;
@@ -379,6 +393,7 @@ export class PhotosRepository {
 
   /** Records only local derivative/display state; backup metadata stays clean. */
   setPreviewFailure(photoId: string, failure: PreviewFailureReason | null): boolean {
+    if (failure === 'deferred-original') throw new Error('deferred preview state is owned by preview repair debt');
     const changed = queryGet<{ id: string }>(
       this.db,
       `UPDATE photos SET preview_failure = @failure
