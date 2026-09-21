@@ -18,17 +18,14 @@ export interface RawRepairRuntimeOptions {
   readonly thumbnails: ThumbnailService;
   readonly currentKey: () => EnvelopeKey;
   readonly resolveKey: KeyResolver;
-  readonly changed: (photoIds: readonly string[]) => void;
+  readonly changed: (photoIds: readonly string[], membership: 'library') => void;
 }
 
 export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRepairService {
   return new RawRepairService({
     candidates: (hashes) => options.repo.previewRepairCandidates(hashes),
-    validThumbs: async (photo) => {
-      const head = options.revisions.head(photo.id).head;
-      if (head !== null && head.unsupported !== null) return false;
-      return options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id);
-    },
+    validThumbs: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
+    setPreviewMissing: (photoId, missing) => options.repo.setPreviewMissing(photoId, missing),
     loadOriginal: async (photo) => {
       await options.blobsReady;
       const head = options.revisions.head(photo.id).head;

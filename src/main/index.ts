@@ -255,7 +255,7 @@ function ensureMaintenanceServices(): MaintenanceServices {
     appVersion: app.getVersion(),
     invalidateThumb: (id) => thumbService?.invalidate(id),
     invalidateFull: (id) => fullService?.invalidate(id),
-    emitChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+    emitChanged: (photoIds, membership = 'none') => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership }),
     emitCreated: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
     emitThumbsChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], derivativeOnly: true }),
     emitPending: (count) => emitPendingCount({ count }),

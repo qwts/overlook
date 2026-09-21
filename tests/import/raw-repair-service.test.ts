@@ -86,7 +86,10 @@ describe('RAW repair service (#368)', () => {
       },
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
-      changed: (ids) => changed.push([...ids]),
+      changed: (ids, membership) => {
+        assert.equal(membership, 'library', 'availability repair must refetch query membership');
+        changed.push([...ids]);
+      },
       yieldTurn: () => Promise.resolve(),
     });
 
@@ -130,7 +133,10 @@ describe('RAW repair service (#368)', () => {
       repairGeneratedDimensions: () => true,
       setDimensionStatus: () => false,
       setPreviewFailure: () => false,
-      changed: (ids) => changed.push([...ids]),
+      changed: (ids, membership) => {
+        assert.equal(membership, 'library', 'availability repair must refetch query membership');
+        changed.push([...ids]);
+      },
       yieldTurn: () => Promise.resolve(),
     });
 
@@ -275,5 +281,32 @@ for (const cancel of [false, true]) {
     });
     await service.repair();
     assert.equal(cleared, false);
+  });
+}
+
+for (const previewsPresent of [false, true]) {
+  test(`verification publishes confirmed absence only when previews are missing (${String(previewsPresent)})`, async () => {
+    let missing = false;
+    const memberships: string[] = [];
+    const service = new RawRepairService({
+      candidates: () => [raw({ width: 60, height: 40, dimensionStatus: 'verified' })],
+      validThumbs: () => Promise.resolve(previewsPresent),
+      loadOriginal: () => Promise.resolve(null),
+      extractMetadata: () => Promise.resolve(EMPTY),
+      regenerate: () => Promise.reject(new Error('original is not local')),
+      repairMetadata: () => false,
+      repairGeneratedDimensions: () => false,
+      setDimensionStatus: () => false,
+      setPreviewFailure: () => false,
+      setPreviewMissing: (_id, next) => {
+        const changed = missing !== next;
+        missing = next;
+        return changed;
+      },
+      changed: (_ids, membership) => memberships.push(membership),
+    });
+    await service.repair();
+    assert.equal(missing, !previewsPresent);
+    assert.deepEqual(memberships, previewsPresent ? [] : ['library']);
   });
 }

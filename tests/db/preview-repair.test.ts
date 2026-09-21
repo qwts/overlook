@@ -8,7 +8,7 @@ import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { VariantRepository } from '../../src/main/db/variant-repository.js';
 import { run, queryGet } from '../../src/main/db/sql.js';
 
-test('schema 41 backfills older variants without dirtying originals or depending on source visibility', () => {
+test('schemas 41/42 queue older variants without declaring them unavailable before verification', () => {
   const db = new Database(':memory:');
   try {
     migrate(
@@ -47,10 +47,19 @@ test('schema 41 backfills older variants without dirtying originals or depending
     variants.duplicate(root, 'trashed', '2026-09-21');
     repo.softDelete(['root', 'trashed']);
     run(db, "UPDATE sync_ledger SET dirty = 0, status = 'offloaded'");
-    assert.equal(migrate(db), 1);
+    assert.equal(migrate(db), 2);
     assert.equal(migrate(db), 0);
     assert.equal(repo.get('root')?.previewFailure, null);
+    assert.equal(repo.get('sibling')?.previewFailure, null, 'verification debt alone is not missing previews');
+    assert.equal(repo.page({ source: 'unavailable', limit: 20 }).photos.length, 0);
+    repo.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    assert.deepEqual(
+      repo.page({ source: 'all', limit: 20 }).photos.map((row) => row.id),
+      ['sibling'],
+    );
+    repo.setPreviewMissing('sibling', true);
     assert.equal(repo.get('sibling')?.previewFailure, 'deferred-original');
+    assert.equal(repo.page({ source: 'all', limit: 20 }).photos.length, 0);
     assert.deepEqual(
       repo.previewRepairCandidates(['a'.repeat(64)]).map((photo) => photo.id),
       ['sibling'],
@@ -58,6 +67,7 @@ test('schema 41 backfills older variants without dirtying originals or depending
     assert.deepEqual(repo.previewRepairCandidates(['b'.repeat(64)]), []);
     assert.equal(repo.clearPreviewRepairDebt('sibling'), true);
     assert.equal(repo.get('sibling')?.previewFailure, null);
+    assert.equal(repo.page({ source: 'all', limit: 20 }).photos.length, 1);
     assert.equal(queryGet<{ n: number }>(db, 'SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1')?.n, 0);
     for (const fileKind of ['gif', 'webp', 'video', 'audio'] as const) {
       const id = `source-${fileKind}`;

@@ -13,7 +13,7 @@ import { migrateLibraryKeyring } from './keyring-migration.js';
 import { migratePurgeCleanup } from './purge-cleanup-migration.js';
 import { migrateProtectedVariantSources } from './protected-variant-migration.js';
 import { migrateDisclosurePolicy } from './disclosure-migration.js';
-import { migratePreviewRepairDebt } from './preview-repair-migration.js';
+import { migrateConfirmedPreviewAbsence, migratePreviewRepairDebt } from './preview-repair-migration.js';
 import { migrateSidecarOwners } from './sidecar-owner-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
@@ -49,4 +49,5 @@ export const COLLECTION_MIGRATIONS: readonly {
   { version: 39, name: 'purge-remote-cleanup', up: migratePurgeCleanup },
   { version: 40, name: 'shared-sidecar-custody', up: migrateSidecarOwners },
   { version: 41, name: 'deferred-variant-previews', up: migratePreviewRepairDebt },
+  { version: 42, name: 'confirmed-preview-absence', up: migrateConfirmedPreviewAbsence },
 ];

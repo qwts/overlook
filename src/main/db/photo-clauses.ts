@@ -8,9 +8,9 @@
 export const RAW_WHERE = `p.file_kind = 'raw'`;
 
 /** Unavailable is derived from the row's typed renderability reasons: a
- * recorded preview failure, deferred preview debt, or unknown decoded dimensions.
- * Repairing either moves the row out of the source with no restart. */
-export const UNAVAILABLE_WHERE = `(p.preview_failure IS NOT NULL OR p.preview_repair_pending = 1 OR p.dimension_status = 'unavailable')`;
+ * recorded preview failure, confirmed missing previews, or unknown decoded dimensions.
+ * Clearing these conditions moves the row out of the source with no restart. */
+export const UNAVAILABLE_WHERE = `(p.preview_failure IS NOT NULL OR p.preview_missing = 1 OR p.dimension_status = 'unavailable')`;
 
 /** Rows whose dimensions are not known. They are never treated as zero
  * megapixels (ADR-0030 §4) and pass every size threshold. */

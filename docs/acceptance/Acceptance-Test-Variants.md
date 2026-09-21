@@ -126,3 +126,9 @@ original. This local state does not change the backup manifest schema.
 Pending variants appear in Unavailable and availability smart-album filters, and
 are hidden by the hide-unavailable policy until repaired. A local codec/decode
 failure shows its actual diagnostic instead of asking to restore the original.
+
+Schema 42 distinguishes confirmed missing previews from schema 41's verification
+queue. Upgrading an existing variant does not hide it merely because its previews
+await authentication. Repair completion refreshes query membership: a repaired
+variant appears immediately when unavailable rows are hidden and leaves an open
+Unavailable source without a restart.
