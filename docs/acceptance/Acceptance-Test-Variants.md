@@ -145,3 +145,8 @@ missing. Restore the key: those previews remain available immediately, and key i
 verification without a restart. Existing previews clear debt without changing
 membership; genuinely missing previews are detected and repaired once their
 original is available.
+
+If a local duplicate bake fails decoding or reports an unsupported codec, its
+preview state must show that failure instead of asking to restore a non-local
+original. Retry debt remains queued; a genuinely non-local original still shows
+the pending-original state.

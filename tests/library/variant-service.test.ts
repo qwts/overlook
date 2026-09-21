@@ -212,11 +212,32 @@ describe('VariantService (#496)', () => {
     const [entry] = result.created;
     assert.ok(entry);
     assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'decode-failed');
     assert.equal(
       h.repo.previewRepairCandidates().some((row) => row.id === entry.photoId),
       true,
     );
     assert.ok(h.repo.get(entry.photoId));
+  });
+
+  test('local codec failures preserve the diagnostic and retry debt', async () => {
+    const h = harness({ regenerate: () => Promise.resolve({ generated: false, width: null, height: null, failure: 'unsupported-codec' }) });
+    const [entry] = (await h.service.duplicate(['P1'])).created;
+    assert.ok(entry);
+    assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'unsupported-codec');
+    assert.equal(
+      h.repo.previewRepairCandidates().some((row) => row.id === entry.photoId),
+      true,
+    );
+  });
+
+  test('unreadable originals report a failure rather than a restoration instruction', async () => {
+    const h = harness({ loadOriginal: () => Promise.reject(new Error('read failed')) });
+    const [entry] = (await h.service.duplicate(['P1'])).created;
+    assert.ok(entry);
+    assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'decode-failed');
   });
 
   test('Promote is reversible metadata that reports the family', async () => {
