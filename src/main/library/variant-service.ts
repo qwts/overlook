@@ -117,6 +117,7 @@ export class VariantService {
     if (bytes === null) return 'deferred';
     try {
       const outcome = await this.deps.regenerate(variant, bytes, transform);
+      if (outcome.generated) this.deps.repo.clearPreviewRepairDebt(variant.id);
       return outcome.generated ? 'regenerated' : 'failed';
     } catch {
       return 'failed';

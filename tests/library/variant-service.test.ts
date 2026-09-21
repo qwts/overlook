@@ -131,6 +131,7 @@ describe('VariantService (#496)', () => {
     assert.ok(entry);
     assert.equal(entry.sourceId, 'P1');
     assert.equal(entry.derivatives, 'regenerated');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, null);
     const variant = h.repo.get(entry.photoId);
     assert.ok(variant);
     assert.equal(variant.contentHash, HASH);
@@ -199,6 +200,7 @@ describe('VariantService (#496)', () => {
     const [entry] = result.created;
     assert.ok(entry);
     assert.equal(entry.derivatives, 'deferred');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'deferred-original');
     assert.ok(h.repo.get(entry.photoId));
     assert.deepEqual(h.baked, []);
     assert.deepEqual(h.created, [[entry.photoId]]);
@@ -210,6 +212,10 @@ describe('VariantService (#496)', () => {
     const [entry] = result.created;
     assert.ok(entry);
     assert.equal(entry.derivatives, 'failed');
+    assert.equal(
+      h.repo.previewRepairCandidates().some((row) => row.id === entry.photoId),
+      true,
+    );
     assert.ok(h.repo.get(entry.photoId));
   });
 

@@ -6,10 +6,13 @@ import type { PhotosRepository } from '../db/photos-repository.js';
 import { extractMetadata } from './exif.js';
 import { RawRepairService } from './raw-repair-service.js';
 import type { ThumbnailService } from './thumbnail-service.js';
+import type { EditRevisionRepository } from '../db/edit-revision-repository.js';
+import { IDENTITY_TRANSFORM } from '../../shared/library/edit-revision.js';
 import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 export interface RawRepairRuntimeOptions {
   readonly repo: PhotosRepository;
+  readonly revisions: Pick<EditRevisionRepository, 'head'>;
   readonly blobs: BlobStore;
   readonly blobsReady: Promise<void>;
   readonly thumbnails: ThumbnailService;
@@ -20,10 +23,16 @@ export interface RawRepairRuntimeOptions {
 
 export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRepairService {
   return new RawRepairService({
-    candidates: () => options.repo.previewRepairCandidates(),
-    validThumbs: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
+    candidates: (hashes) => options.repo.previewRepairCandidates(hashes),
+    validThumbs: async (photo) => {
+      const head = options.revisions.head(photo.id).head;
+      if (head !== null && head.unsupported !== null) return false;
+      return options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id);
+    },
     loadOriginal: async (photo) => {
       await options.blobsReady;
+      const head = options.revisions.head(photo.id).head;
+      if (head !== null && head.unsupported !== null) return null;
       try {
         return await buffer(options.blobs.getStream(photo.contentHash, options.resolveKey, assetOwnerOf(photo)));
       } catch (error) {
@@ -32,8 +41,10 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
       }
     },
     extractMetadata: async (bytes, fileKind) => extractMetadata(bytes, fileKind),
-    regenerate: async (photo, bytes, signal) =>
-      options.thumbnails.regenerateFor({
+    regenerate: async (photo, bytes, signal) => {
+      const head = options.revisions.head(photo.id).head;
+      if (head !== null && head.unsupported !== null) throw new Error('unsupported edit head');
+      return options.thumbnails.regenerateFor({
         photoId: photo.id,
         bytes,
         contentHash: photo.contentHash,
@@ -42,8 +53,11 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
         derivativeKey: photo.derivativeKey,
         key: options.currentKey(),
         fileKind: photo.fileKind,
+        transform: head?.transform ?? IDENTITY_TRANSFORM,
         signal,
-      }),
+      });
+    },
+    clearPreviewRepairDebt: (photoId) => options.repo.clearPreviewRepairDebt(photoId),
     repairMetadata: (photoId, metadata) => options.repo.repairPreviewMetadata(photoId, metadata),
     repairGeneratedDimensions: (photoId, width, height) => options.repo.repairGeneratedDimensions(photoId, width, height),
     setDimensionStatus: (photoId, status) => options.repo.setDimensionStatus(photoId, status),

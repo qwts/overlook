@@ -106,3 +106,19 @@ Also exclude a backed-up root from backup, purge it while removal is pending,
 and retain an included duplicate. Publishing the exclusion and retrying cleanup
 must not delete the duplicate's shared companion. Deleting the final reference
 requires a fresh manifest barrier before queued remote cleanup proceeds.
+
+## Deferred preview repair (#1121)
+
+1. Back up a JPEG or PNG with a visible rotation/crop, then offload its original.
+2. Duplicate it. Confirm the new row retains its edits and shows pending previews
+   in the grid and Inspector, without replacing the source's thumbnails.
+3. Restart while the original remains offloaded. The pending state must survive.
+4. Restore the original to this device. Without another restart, the variant's
+   previews must appear with its own saved transform. Its source stays unchanged.
+5. Repeat with several siblings and a failed/cancelled repair. Debt must remain
+   until authenticated previews exist or regeneration succeeds; retry after
+   restoration must repair all siblings under their own derivative keys.
+
+Schema 41 adds local preview repair debt. Older variants are checked once on
+upgrade; valid authenticated derivatives satisfy that debt without decoding an
+original. This local state does not change the backup manifest schema.

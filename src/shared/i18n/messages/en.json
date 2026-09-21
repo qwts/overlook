@@ -2339,6 +2339,9 @@
   "photo.context.actions": {
     "defaultMessage": "Actions for {target}"
   },
+  "preview.pending.original": {
+    "defaultMessage": "PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE"
+  },
   "preview.unavailable": {
     "defaultMessage": "PREVIEW UNAVAILABLE"
   },

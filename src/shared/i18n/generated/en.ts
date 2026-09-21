@@ -784,6 +784,7 @@ export const en: Readonly<Record<string, string>> = {
   "originalDelete.title.authenticate": "Authenticate Original deletion",
   "originalDelete.title.confirm": "Delete {target} permanently?",
   "photo.context.actions": "Actions for {target}",
+  "preview.pending.original": "PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE",
   "preview.unavailable": "PREVIEW UNAVAILABLE",
   "preview.unavailable.corrupt": "PREVIEW UNAVAILABLE — FILE IS CORRUPT",
   "preview.unavailable.decodeFailed": "PREVIEW UNAVAILABLE — IMAGE DECODE FAILED",

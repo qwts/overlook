@@ -10,7 +10,7 @@ export interface RawRepairSummary {
 }
 
 export interface RawRepairServiceOptions {
-  readonly candidates: () => readonly PhotoRecord[];
+  readonly candidates: (contentHashes?: readonly string[]) => readonly PhotoRecord[];
   readonly validThumbs: (photo: PhotoRecord) => Promise<boolean>;
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
   readonly extractMetadata: (bytes: Buffer, fileKind: PhotoRecord['fileKind']) => Promise<ExtractedMetadata>;
@@ -19,6 +19,7 @@ export interface RawRepairServiceOptions {
   readonly repairGeneratedDimensions: (photoId: string, width: number, height: number) => boolean;
   readonly setDimensionStatus: (photoId: string, status: PhotoRecord['dimensionStatus']) => boolean;
   readonly setPreviewFailure: (photoId: string, failure: PhotoRecord['previewFailure']) => boolean;
+  readonly clearPreviewRepairDebt?: ((photoId: string) => boolean) | undefined;
   readonly changed: (photoIds: readonly string[]) => void;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
@@ -29,6 +30,9 @@ const yieldTurn = async (): Promise<void> => new Promise((resolve) => setImmedia
  * plaintext bounded to one original plus the thumbnail pool's two outputs. */
 export class RawRepairService {
   private readonly controller = new AbortController();
+  private running: Promise<RawRepairSummary> | undefined;
+  // null means a full startup scan; targeted rehydrations coalesce by asset.
+  private queued: Set<string> | null | undefined;
 
   constructor(private readonly options: RawRepairServiceOptions) {}
 
@@ -36,20 +40,55 @@ export class RawRepairService {
     this.controller.abort();
   }
 
-  async repair(): Promise<RawRepairSummary> {
+  schedule(contentHashes: readonly string[]): void {
+    void this.repair(contentHashes).catch((error: unknown) => {
+      console.error('[overlook] rehydrated preview repair failed', error);
+    });
+  }
+
+  repair(contentHashes?: readonly string[]): Promise<RawRepairSummary> {
+    if (contentHashes === undefined) this.queued = null;
+    else if (this.queued !== null) {
+      this.queued ??= new Set();
+      for (const hash of contentHashes) this.queued.add(hash);
+    }
+    this.running ??= this.drain().finally(() => {
+      this.running = undefined;
+    });
+    return this.running;
+  }
+
+  private async drain(): Promise<RawRepairSummary> {
+    const total = { scanned: 0, repaired: 0, failed: 0, skipped: 0 };
+    while (this.queued !== undefined && !this.controller.signal.aborted) {
+      const hashes = this.queued;
+      this.queued = undefined;
+      const pass = await this.repairPass(hashes === null ? undefined : [...hashes]);
+      total.scanned += pass.scanned;
+      total.repaired += pass.repaired;
+      total.failed += pass.failed;
+      total.skipped += pass.skipped;
+    }
+    return total;
+  }
+
+  private async repairPass(contentHashes?: readonly string[]): Promise<RawRepairSummary> {
     let scanned = 0;
     let repaired = 0;
     let failed = 0;
     let skipped = 0;
     const changed: string[] = [];
-    for (const photo of this.options.candidates()) {
+    for (const photo of this.options.candidates(contentHashes)) {
       if (this.controller.signal.aborted) break;
       scanned += 1;
       let bytes: Buffer | null = null;
       try {
         const thumbsReady = await this.options.validThumbs(photo);
+        if (this.controller.signal.aborted) break;
         if (thumbsReady && photo.width > 0 && photo.height > 0 && photo.dimensionStatus !== 'legacy') {
-          if (this.options.setPreviewFailure(photo.id, null)) {
+          const failureChanged = this.options.setPreviewFailure(photo.id, null);
+          const debtCleared = this.options.clearPreviewRepairDebt?.(photo.id) ?? false;
+          if (failureChanged || debtCleared) {
             repaired += 1;
             changed.push(photo.id);
           } else {
@@ -76,13 +115,13 @@ export class RawRepairService {
             ? this.options.repairGeneratedDimensions(photo.id, outcome.width, outcome.height)
             : this.options.setDimensionStatus(photo.id, 'unavailable');
         const repairedThumbs = (!thumbsReady || needsDimensionRepair) && outcome?.generated === true;
-        const failure =
-          photo.fileKind === 'heic' && !thumbsReady && outcome?.generated !== true ? (outcome?.failure ?? 'decode-failed') : null;
+        const failure = !thumbsReady && outcome?.generated !== true ? (outcome?.failure ?? 'decode-failed') : null;
+        const debtCleared = outcome?.generated === true ? (this.options.clearPreviewRepairDebt?.(photo.id) ?? false) : false;
         const failureChanged = this.options.setPreviewFailure(photo.id, failure);
-        if (repairedMetadata || repairedDimensions || repairedThumbs) {
+        if (repairedMetadata || repairedDimensions || repairedThumbs || debtCleared) {
           repaired += 1;
         }
-        if (repairedMetadata || repairedDimensions || repairedThumbs || failureChanged) {
+        if (repairedMetadata || repairedDimensions || repairedThumbs || failureChanged || debtCleared) {
           changed.push(photo.id);
         }
         if (!thumbsReady && outcome?.generated !== true) failed += 1;

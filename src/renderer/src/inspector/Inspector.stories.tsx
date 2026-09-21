@@ -546,3 +546,11 @@ export const HistogramUnavailable: Story = {
     await expect(canvas.queryByRole('img', { name: /^Histogram of/u })).toBeNull();
   },
 };
+
+export const DeferredVariantPreviews: Story = {
+  args: { photo: { ...PHOTO, previewFailure: 'deferred-original' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE')).toBeVisible();
+  },
+};
