@@ -175,13 +175,8 @@ describe('backup engine (#105)', () => {
     w.ledger.setStatus('P0', 'offloaded');
     w.ledger.markDirty('P0');
     w.keys.setPresent(1, false);
-    let carried = '';
     const engine = new BackupEngine({
       ...w.deps,
-      sealManifest: (json) => {
-        carried = json;
-        return Promise.resolve(Buffer.from(json));
-      },
       encryptedStream: () => {
         throw new Error('locked original must not open');
       },
@@ -191,8 +186,20 @@ describe('backup engine (#105)', () => {
     assert.equal(result.failed, 0);
     assert.equal(result.uploaded, 0);
     assert.equal(result.manifestUploaded, true);
-    assert.match(carried, /"id":"P0"/);
-    assert.match(carried, /"keyring":\[/);
+    const published = JSON.parse((await buffer(await w.provider.getStream('manifest/gen-2.ovlk'))).toString('utf8')) as {
+      schema: number;
+      photos: { id: string; keyId: number }[];
+      keyring: { keyId: number }[];
+    };
+    assert.equal(published.schema, 15);
+    assert.deepEqual(
+      published.photos.map(({ id, keyId }) => ({ id, keyId })),
+      [{ id: 'P0', keyId: 1 }],
+    );
+    assert.deepEqual(
+      published.keyring.map(({ keyId }) => keyId),
+      [1],
+    );
     assert.equal(w.ledger.isDirty('P0'), true, 'skipping must preserve manifest-only dirt');
     assert.equal(w.repo.pendingCount(), 0);
     w.keys.setPresent(1, true);
