@@ -11,6 +11,7 @@ export interface RawRepairSummary {
 
 export interface RawRepairServiceOptions {
   readonly candidates: (contentHashes?: readonly string[]) => readonly PhotoRecord[];
+  readonly isUnavailable: (photoId: string) => boolean;
   readonly validThumbs: (photo: PhotoRecord) => Promise<boolean>;
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
   readonly extractMetadata: (bytes: Buffer, fileKind: PhotoRecord['fileKind']) => Promise<ExtractedMetadata>;
@@ -21,7 +22,7 @@ export interface RawRepairServiceOptions {
   readonly setPreviewFailure: (photoId: string, failure: PhotoRecord['previewFailure']) => boolean;
   readonly clearPreviewRepairDebt?: ((photoId: string) => boolean) | undefined;
   readonly setPreviewMissing?: ((photoId: string, missing: boolean) => boolean) | undefined;
-  readonly changed: (photoIds: readonly string[], membership: 'library') => void;
+  readonly changed: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
 
@@ -79,9 +80,11 @@ export class RawRepairService {
     let failed = 0;
     let skipped = 0;
     const changed = new Set<string>();
+    let membershipChanged = false;
     for (const photo of this.options.candidates(contentHashes)) {
       if (this.controller.signal.aborted) break;
       scanned += 1;
+      const wasUnavailable = this.options.isUnavailable(photo.id);
       let bytes: Buffer | null = null;
       try {
         const thumbsReady = await this.options.validThumbs(photo);
@@ -132,10 +135,14 @@ export class RawRepairService {
         console.error(`[overlook] preview repair failed for ${photo.id}`, error);
       } finally {
         bytes?.fill(0);
+        if (wasUnavailable !== this.options.isUnavailable(photo.id)) {
+          membershipChanged = true;
+          changed.add(photo.id);
+        }
       }
       await (this.options.yieldTurn ?? yieldTurn)();
     }
-    if (changed.size > 0) this.options.changed([...changed], 'library');
+    if (changed.size > 0) this.options.changed([...changed], membershipChanged ? 'library' : 'none');
     return { scanned, repaired, failed, skipped };
   }
 }

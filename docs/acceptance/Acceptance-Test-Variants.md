@@ -128,7 +128,9 @@ are hidden by the hide-unavailable policy until repaired.
 
 Schema 42 distinguishes confirmed missing previews from schema 41's verification
 queue. Upgrading an existing variant does not hide it merely because its previews
-await authentication. Repair completion refreshes query membership: a repaired
+await authentication. Verification-only cleanup and metadata-only repair must
+preserve the current page, scroll, and selection. Repair completion that changes
+availability refreshes query membership: a repaired
 variant appears immediately when unavailable rows are hidden and leaves an open
 Unavailable source without a restart.
 
