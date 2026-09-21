@@ -93,7 +93,10 @@ export class RawRepairService {
       try {
         const thumbsReady = await this.options.validThumbs(photo);
         if (this.controller.signal.aborted) break;
-        if (this.options.setPreviewMissing?.(photo.id, !thumbsReady) === true) changed.add(photo.id);
+        if (this.options.setPreviewMissing?.(photo.id, !thumbsReady) === true) {
+          changed.add(photo.id);
+          if (wasUnavailable !== this.options.isUnavailable(photo.id)) membershipChanged = true;
+        }
         if (thumbsReady && photo.width > 0 && photo.height > 0 && photo.dimensionStatus !== 'legacy') {
           const failureChanged = this.options.setPreviewFailure(photo.id, null);
           const debtCleared = this.options.clearPreviewRepairDebt?.(photo.id) ?? false;

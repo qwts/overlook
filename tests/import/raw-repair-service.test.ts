@@ -346,3 +346,36 @@ for (const initiallyUnavailable of [false, true]) {
     assert.deepEqual(memberships, [initiallyUnavailable ? 'library' : 'none']);
   });
 }
+
+test('repair refreshes queries that observed a transient missing-preview state', async () => {
+  let missing = false;
+  const memberships: string[] = [];
+  const service = new RawRepairService({
+    candidates: () => [raw({ width: 60, height: 40, dimensionStatus: 'verified' })],
+    isUnavailable: () => missing,
+    validThumbs: () => Promise.resolve(false),
+    setPreviewMissing: (_id, next) => {
+      const changed = missing !== next;
+      missing = next;
+      return changed;
+    },
+    loadOriginal: () => {
+      assert.equal(missing, true, 'queries during the awaited repair can observe missing previews');
+      return Promise.resolve(Buffer.from('original'));
+    },
+    extractMetadata: () => Promise.resolve(EMPTY),
+    regenerate: () => Promise.resolve({ generated: true, width: 60, height: 40 }),
+    repairMetadata: () => false,
+    repairGeneratedDimensions: () => false,
+    setDimensionStatus: () => false,
+    setPreviewFailure: () => false,
+    clearPreviewRepairDebt: () => {
+      missing = false;
+      return true;
+    },
+    changed: (_ids, membership) => memberships.push(membership),
+  });
+  await service.repair();
+  assert.equal(missing, false);
+  assert.deepEqual(memberships, ['library']);
+});
