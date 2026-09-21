@@ -339,10 +339,7 @@ export class BackupEngine {
     // offloaded → syncing, so they are manifest-only debt: excluded from
     // the upload loop, settled after the manifest generation lands
     // (PR #274 review — before this they crashed the whole run).
-    const candidates = this.deps.dirtyPhotos();
-    const dirty = candidates.filter((item) => this.canBackUp(item));
-    // Locked records remain in schema 15; never erase their publication debt.
-    if (dirty.length !== candidates.length) this.setManifestOwed(true);
+    const dirty = this.deps.dirtyPhotos().filter((item) => this.canBackUp(item));
     const manifestOnly = dirty.filter((item) => item.status === 'offloaded');
     if (manifestOnly.length > 0) {
       this.setManifestOwed(true);

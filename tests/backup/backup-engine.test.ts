@@ -151,7 +151,10 @@ describe('backup engine (#105)', () => {
     const skipped = await engine.run();
     assert.equal(skipped.uploaded, 0);
     assert.equal(skipped.failed, 0);
-    assert.equal(skipped.manifestUploaded, false, 'an absent remote blob still blocks a truthful publication');
+    assert.equal(skipped.manifestUploaded, true, 'skipped work creates no new publication attempt');
+    assert.equal((await w.provider.list('manifest')).length, 0);
+    engine.oweManifest();
+    assert.equal((await engine.run()).manifestUploaded, false, 'independent publication debt cannot claim an absent remote blob');
     assert.equal(w.ledger.isDirty('P0'), true);
     assert.equal(w.ledger.status('P0'), 'local');
     assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED photo=P0 key=1'));
@@ -183,6 +186,7 @@ describe('backup engine (#105)', () => {
         throw new Error('locked original must not open');
       },
     });
+    engine.oweManifest();
     const result = await engine.run();
     assert.equal(result.failed, 0);
     assert.equal(result.uploaded, 0);
@@ -232,6 +236,7 @@ describe('backup engine (#105)', () => {
         throw new Error('reconciliation must not open locked original');
       },
     });
+    engine.oweManifest();
     const result = await engine.run();
     assert.equal(result.failed, 0);
     assert.equal(result.uploaded, 0);

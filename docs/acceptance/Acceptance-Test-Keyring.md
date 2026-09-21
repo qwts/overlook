@@ -83,8 +83,10 @@ Pending counts exclude the photo immediately; its dirty flag and status survive.
 Reimport the key: the count returns and the next backup resumes the work.
 
 Schema 15 continues carrying the photo and its keyring reference. Existing remote
-blobs allow a manifest to publish while the key is absent. If a never-uploaded
-locked photo has no remote blob, publication remains incomplete with durable debt;
+blobs allow a manifest to publish while the key is absent. Skipped rows alone do
+not trigger a new publication. If other work requires publication and a
+never-uploaded locked photo has no remote blob, publication remains incomplete
+with durable debt;
 the completeness barrier must not publish a false remote-copy claim. Reimporting
 the key allows the upload and publication to complete. Reconciliation must not
 bypass the locked-row skip.
