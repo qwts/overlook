@@ -2835,7 +2835,7 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/library/purge-cleanup.test.ts", "tests/backup/backup-engine.test.ts"]
+          "paths": ["tests/library/purge-cleanup.test.ts", "tests/backup/backup-engine.test.ts", "tests/backup/custody-reconnect.test.ts"]
         }
       ]
     }

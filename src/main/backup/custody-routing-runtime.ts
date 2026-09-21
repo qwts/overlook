@@ -251,7 +251,9 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     if (!deps.backupTargetConnected()) throw new CustodyResolutionError('custody-disconnected');
     const providerId = deps.backupTarget.id;
     const root = remoteRoot();
-    const identity = await deps.backupTarget.accountIdentity();
+    // Bound the provider even if it ignores cancellation; no identity means no purge.
+    const identity = await accountIdentity(deps.backupTarget, AbortSignal.timeout(10_000));
+    if (identity === null) throw new CustodyResolutionError('custody-unavailable');
     if (!deps.backupTargetConnected() || deps.backupTarget.id !== providerId || remoteRoot() !== root)
       throw new CustodyResolutionError('custody-unavailable');
     return authorities.create({
@@ -269,7 +271,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     captureAuthority: async (photoId: string): Promise<CustodyAuthority> => {
       const bound = authorities.forPhoto(photoId);
       if (bound !== undefined) return bound;
-      if (deps.status(photoId) === 'offloaded') throw new CustodyResolutionError('custody-unavailable');
+      if (authorities.isLegacyUnbound(photoId)) throw new CustodyResolutionError('custody-unavailable');
       return targetAuthority();
     },
     offloadAuthority: async (bytes: number): Promise<number> => {
