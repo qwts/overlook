@@ -17,5 +17,8 @@ export function migratePreviewRepairDebt(db: BetterSqlite3.Database): void {
 /** Verification debt alone does not prove existing previews are unavailable. */
 export function migrateConfirmedPreviewAbsence(db: BetterSqlite3.Database): void {
   db.exec(`ALTER TABLE photos ADD COLUMN preview_missing INTEGER NOT NULL DEFAULT 0
-    CHECK (preview_missing IN (0, 1))`);
+    CHECK (preview_missing IN (0, 1));
+    DROP INDEX idx_photos_unavailable;
+    CREATE INDEX idx_photos_unavailable ON photos (id)
+      WHERE preview_failure IS NOT NULL OR preview_missing = 1 OR dimension_status = 'unavailable';`);
 }
