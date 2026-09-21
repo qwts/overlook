@@ -3,6 +3,8 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 /** References belong to variants; encrypted bytes retain their import owner.
  * A purged root must not change either the path or the authenticated identity.
  * Existing families gain references only where the retained source proves them.
+ * Use durable rows: startup may roll back a journal that currently hides a
+ * photo from ordinary_visible_photos after schema migrations have completed.
  */
 export function migrateSidecarOwners(db: BetterSqlite3.Database): void {
   db.exec(`
@@ -13,8 +15,8 @@ export function migrateSidecarOwners(db: BetterSqlite3.Database): void {
       (photo_id, role, file_name, content_hash, bytes, key_id, imported_at, owner_id)
     SELECT sibling.id, s.role, s.file_name, s.content_hash, s.bytes, s.key_id, s.imported_at, s.owner_id
     FROM photo_sidecars s
-    JOIN ordinary_visible_photos source ON source.id = s.photo_id
-    JOIN ordinary_visible_photos sibling ON sibling.content_hash = source.content_hash
+    JOIN photos source ON source.id = s.photo_id
+    JOIN photos sibling ON sibling.content_hash = source.content_hash
       AND coalesce(sibling.asset_owner_id, sibling.id) = coalesce(source.asset_owner_id, source.id)
     WHERE sibling.id != source.id;
     UPDATE sync_ledger SET dirty = 1 WHERE photo_id IN (

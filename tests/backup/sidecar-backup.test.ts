@@ -336,7 +336,7 @@ test('shared companions survive root purge, export byte-exactly, and remain in b
   });
   const exported = await exporter.exportPhotos(['variant'], '/export');
   assert.equal(exported.sidecarsExported, 1);
-  assert.deepEqual(written.get('/export/root.xmp'), XMP);
+  assert.deepEqual(written.get(join('/export', 'root.xmp')), XMP);
   const listEntries = w.store.listSidecarEntries.bind(w.store);
   w.store.listSidecarEntries = async () => (await listEntries()).map((entry) => ({ ...entry, ageMs: 86_400_000 }));
   const checker = createConsistencyChecker({
