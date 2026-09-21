@@ -141,5 +141,7 @@ must keep the variant unavailable and retain its repair debt.
 
 With valid variant previews awaiting verification, remove their decryption key
 and run repair. The locked rows retain verification debt and must not be marked
-missing. Restore the key: those previews remain available immediately; a later
-verification pass clears the debt without changing gallery membership.
+missing. Restore the key: those previews remain available immediately, and key import schedules
+verification without a restart. Existing previews clear debt without changing
+membership; genuinely missing previews are detected and repaired once their
+original is available.
