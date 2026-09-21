@@ -114,7 +114,7 @@
     "c8": "12.0.0",
     "concurrently": "10.0.5",
     "electron": "44.4.1",
-    "electron-builder": "26.15.3",
+    "electron-builder": "26.16.1",
     "electron-vite": "5.0.0",
     "eslint": "10.10.0",
     "eslint-plugin-formatjs": "6.6.3",
