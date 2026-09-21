@@ -131,3 +131,8 @@ queue. Upgrading an existing variant does not hide it merely because its preview
 await authentication. Repair completion refreshes query membership: a repaired
 variant appears immediately when unavailable rows are hidden and leaves an open
 Unavailable source without a restart.
+
+Repeat after an initially failed duplicate bake: successfully Save, Reset, or
+Revert an edit once the original is local. The new previews clear the missing
+state and refresh both filtered views immediately. A failed or deferred edit bake
+must keep the variant unavailable and retain its repair debt.

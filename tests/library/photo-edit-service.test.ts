@@ -54,7 +54,7 @@ interface Harness {
   readonly repo: PhotosRepository;
   readonly revisions: EditRevisionRepository;
   readonly baked: EditTransform[];
-  readonly changes: { photoId: string; derivatives: string }[];
+  readonly changes: { photoId: string; derivatives: string; membership: string }[];
   close(): void;
 }
 
@@ -68,7 +68,7 @@ function harness(overrides: Partial<PhotoEditServiceDeps> = {}): Harness {
   repo.insert(photo('P1'));
   repo.insert(photo('P2'));
   const baked: EditTransform[] = [];
-  const changes: { photoId: string; derivatives: string }[] = [];
+  const changes: { photoId: string; derivatives: string; membership: string }[] = [];
   let seq = 0;
   const service = new PhotoEditService({
     db,
@@ -84,8 +84,8 @@ function harness(overrides: Partial<PhotoEditServiceDeps> = {}): Harness {
       return `01J8ED${String(seq).padStart(20, '0')}`;
     },
     now: () => `2026-09-01T10:00:${String(seq).padStart(2, '0')}.000Z`,
-    changed: (photoId, derivatives) => {
-      changes.push({ photoId, derivatives });
+    changed: (photoId, derivatives, membership) => {
+      changes.push({ photoId, derivatives, membership });
     },
     ...overrides,
   });
@@ -105,7 +105,7 @@ describe('photo edit service (#493)', () => {
     assert.equal(result.head?.parentId, null);
     assert.deepEqual(result.head?.transform, { quarterTurns: 1, flipped: false, crop: null });
     assert.deepEqual(h.baked, [{ quarterTurns: 1, flipped: false, crop: null }]);
-    assert.deepEqual(h.changes, [{ photoId: 'P1', derivatives: 'regenerated' }]);
+    assert.deepEqual(h.changes, [{ photoId: 'P1', derivatives: 'regenerated', membership: 'none' }]);
     assert.equal(result.pendingCount, pendingBefore + 1, 'the photo is dirty for the next backup');
     assert.deepEqual(h.service.head('P1'), { photoId: 'P1', head: result.head, history: result.history });
     h.close();
@@ -189,19 +189,41 @@ describe('photo edit service (#493)', () => {
     }
   });
 
+  for (const action of ['save', 'reset', 'revert'] as const) {
+    test(`${action} clears confirmed missing previews and refreshes gallery membership after regeneration`, async () => {
+      const h = harness();
+      try {
+        await h.service.save('P1', [ROTATE]);
+        h.repo.setPreviewMissing('P1', true);
+        h.repo.setPreviewFailure('P1', 'decode-failed');
+        const result = action === 'save' ? await h.service.save('P1', [FLIP]) : await h.service[action]('P1');
+        assert.equal(result.derivatives, 'regenerated');
+        assert.equal(h.repo.get('P1')?.previewFailure, null);
+        assert.deepEqual(h.changes.at(-1), { photoId: 'P1', derivatives: 'regenerated', membership: 'library' });
+      } finally {
+        h.close();
+      }
+    });
+  }
+
   test('an offloaded original defers the bake; a failed bake reports failure but keeps the head', async () => {
     const deferred = harness({ loadOriginal: () => Promise.resolve(null) });
+    deferred.repo.setPreviewMissing('P1', true);
     const deferredResult = await deferred.service.save('P1', [ROTATE]);
     assert.equal(deferredResult.derivatives, 'deferred');
     assert.equal(deferred.service.head('P1').head?.id, deferredResult.head?.id);
+    assert.equal(deferred.repo.get('P1')?.previewFailure, 'deferred-original');
+    assert.equal(deferred.changes.at(-1)?.membership, 'none');
     deferred.close();
 
     const failing = harness({ regenerate: () => Promise.reject(new Error('worker crashed')) });
+    failing.repo.setPreviewMissing('P1', true);
     const failedResult = await failing.service.save('P1', [ROTATE]);
     assert.equal(failedResult.derivatives, 'failed');
     assert.equal(failedResult.changed, true);
     assert.equal(failing.service.head('P1').head?.id, failedResult.head?.id, 'the revision stays authoritative');
-    assert.deepEqual(failing.changes, [{ photoId: 'P1', derivatives: 'failed' }]);
+    assert.deepEqual(failing.changes, [{ photoId: 'P1', derivatives: 'failed', membership: 'none' }]);
+    assert.equal(failing.repo.get('P1')?.previewFailure, 'deferred-original');
     failing.close();
   });
 

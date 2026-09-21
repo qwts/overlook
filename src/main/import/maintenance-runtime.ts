@@ -115,6 +115,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     appVersion: ctx.appVersion,
     invalidateThumb: invalidateThumb,
     emitThumbsChanged: ctx.emitThumbsChanged,
+    emitChanged: ctx.emitChanged,
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });
