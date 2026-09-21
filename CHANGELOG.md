@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.11
+
+### Patch Changes
+
+- a670df5: Keep deferred variant availability accurate during upgrades and refresh filtered galleries after preview repair.
+
 ## 0.76.10
 
 ### Patch Changes
