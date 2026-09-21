@@ -2,8 +2,8 @@ import { useState, type ReactElement } from 'react';
 
 import type { PageCursor } from '../../../shared/library/types.js';
 import { useFormats } from '../i18n/use-formats.js';
-import { useAppDispatch } from '../state/app-state-context';
-import { PurgeConfirm } from './PurgeConfirm';
+import { useAppDispatch } from '../state/app-state-context.js';
+import { PurgeConfirm } from './PurgeConfirm.js';
 
 export function useEmptyTrash(): { readonly open: () => void; readonly dialog: ReactElement | null } {
   const { formatCount } = useFormats();
