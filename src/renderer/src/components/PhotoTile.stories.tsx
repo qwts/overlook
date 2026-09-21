@@ -249,3 +249,12 @@ export const SourceChangeClearsUnavailable: Story = {
     await expect(canvas.queryByRole('status')).not.toBeInTheDocument();
   },
 };
+
+export const DeferredVariantPreviews: Story = {
+  ...UnsupportedHeicCodecIsExplicit,
+  args: { src: 'data:image/jpeg;base64,AA==', alt: 'deferred variant', previewFailure: 'deferred-original' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE'));
+  },
+};

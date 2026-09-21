@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { useFormats } from '../i18n/use-formats.js';
 import { thumbUrl } from '../../../shared/library/thumb-url.js';
 import { mediaInfoRows } from '../../../shared/library/media-info-format.js';
+import { previewFailureLabel } from '../components/previewFailureLabel.js';
 import { Badge } from '../components/Badge';
 import { MetadataRow } from '../components/MetadataRow';
 import { StatusGlyph, glyphStateOf } from '../components/StatusGlyph';
@@ -154,6 +155,11 @@ export function Inspector({
           <IconButton icon="chevron-right" label={intl.formatMessage(messages.nextSelected)} onClick={onNext} />
         </nav>
       )}
+      {photo.previewFailure === 'deferred-original' ? (
+        <p className="mono-data" role="status">
+          {previewFailureLabel(intl, photo.previewFailure)}
+        </p>
+      ) : null}
       <div className="ovl-inspector__header">
         {photo.locked ? (
           <div
