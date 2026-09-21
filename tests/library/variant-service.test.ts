@@ -212,11 +212,61 @@ describe('VariantService (#496)', () => {
     const [entry] = result.created;
     assert.ok(entry);
     assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'decode-failed');
     assert.equal(
       h.repo.previewRepairCandidates().some((row) => row.id === entry.photoId),
       true,
     );
     assert.ok(h.repo.get(entry.photoId));
+  });
+
+  test('local codec failures preserve the diagnostic and retry debt', async () => {
+    const h = harness({ regenerate: () => Promise.resolve({ generated: false, width: null, height: null, failure: 'unsupported-codec' }) });
+    const [entry] = (await h.service.duplicate(['P1'])).created;
+    assert.ok(entry);
+    assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'unsupported-codec');
+    assert.equal(
+      h.repo.previewRepairCandidates().some((row) => row.id === entry.photoId),
+      true,
+    );
+  });
+
+  test('unreadable originals report a failure rather than a restoration instruction', async () => {
+    const h = harness({ loadOriginal: () => Promise.reject(new Error('read failed')) });
+    const [entry] = (await h.service.duplicate(['P1'])).created;
+    assert.ok(entry);
+    assert.equal(entry.derivatives, 'failed');
+    assert.equal(h.repo.get(entry.photoId)?.previewFailure, 'decode-failed');
+  });
+
+  test('deferred variants follow all availability filters until their debt clears', async () => {
+    const h = harness({ loadOriginal: () => Promise.resolve(null) });
+    h.repo.setDimensionStatus('P1', 'verified');
+    const [entry] = (await h.service.duplicate(['P1'])).created;
+    assert.ok(entry);
+    const unavailable = (): string[] => h.repo.page({ source: 'unavailable', limit: 20 }).photos.map((row) => row.id);
+    const facet = (value: 'available' | 'unavailable'): string[] =>
+      h.repo
+        .page({
+          source: 'all',
+          limit: 20,
+          predicate: { version: 1, composition: 'and', groups: [{ facet: 'availability', values: [value] }] },
+        })
+        .photos.map((row) => row.id);
+    assert.deepEqual(unavailable(), [entry.photoId]);
+    assert.deepEqual(facet('unavailable'), [entry.photoId]);
+    assert.deepEqual(facet('available'), ['P1']);
+    h.repo.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    assert.deepEqual(
+      h.repo.page({ source: 'all', limit: 20 }).photos.map((row) => row.id),
+      ['P1'],
+    );
+    h.repo.clearPreviewRepairDebt(entry.photoId);
+    assert.deepEqual(unavailable(), []);
+    assert.deepEqual(facet('unavailable'), []);
+    assert.equal(facet('available').length, 2);
+    assert.equal(h.repo.page({ source: 'all', limit: 20 }).photos.length, 2);
   });
 
   test('Promote is reversible metadata that reports the family', async () => {

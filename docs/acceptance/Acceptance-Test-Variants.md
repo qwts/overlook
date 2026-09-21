@@ -122,3 +122,7 @@ requires a fresh manifest barrier before queued remote cleanup proceeds.
 Schema 41 adds local preview repair debt. Older variants are checked once on
 upgrade; valid authenticated derivatives satisfy that debt without decoding an
 original. This local state does not change the backup manifest schema.
+
+Pending variants appear in Unavailable and availability smart-album filters, and
+are hidden by the hide-unavailable policy until repaired. A local codec/decode
+failure shows its actual diagnostic instead of asking to restore the original.

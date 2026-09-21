@@ -112,14 +112,21 @@ export class VariantService {
     try {
       bytes = await this.deps.loadOriginal(variant);
     } catch {
+      this.deps.repo.setPreviewFailure(variant.id, 'decode-failed');
       return 'failed';
     }
     if (bytes === null) return 'deferred';
     try {
       const outcome = await this.deps.regenerate(variant, bytes, transform);
-      if (outcome.generated) this.deps.repo.clearPreviewRepairDebt(variant.id);
+      if (outcome.generated) {
+        this.deps.repo.setPreviewFailure(variant.id, null);
+        this.deps.repo.clearPreviewRepairDebt(variant.id);
+      } else {
+        this.deps.repo.setPreviewFailure(variant.id, outcome.failure ?? 'decode-failed');
+      }
       return outcome.generated ? 'regenerated' : 'failed';
     } catch {
+      this.deps.repo.setPreviewFailure(variant.id, 'decode-failed');
       return 'failed';
     } finally {
       bytes.fill(0);
