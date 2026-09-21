@@ -137,6 +137,24 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
 }
 
 describe('backup engine (#105)', () => {
+  test('queue setup uses bulk custody selection before the first progress event (#1134)', async () => {
+    const w = await world(12);
+    let started = false;
+    const engine = new BackupEngine({
+      ...w.deps,
+      unavailableKeyIdsForPhoto: (id) => {
+        assert.equal(started, true, 'initial queue setup must not perform per-photo custody lookups');
+        return w.deps.unavailableKeyIdsForPhoto?.(id) ?? [];
+      },
+      events: {
+        progress: () => {
+          started = true;
+        },
+      },
+    });
+    assert.equal((await engine.run()).uploaded, 12);
+  });
+
   test('locked dirty originals stay pending only after key reimport (#1134)', async () => {
     const w = await world(1);
     w.keys.setPresent(1, false);
@@ -148,6 +166,7 @@ describe('backup engine (#105)', () => {
     });
     assert.equal(w.repo.pendingCount(), 0);
     assert.equal(w.ledger.pendingCount(), 0);
+    assert.deepEqual(w.repo.dirtyPhotos(), []);
     const skipped = await engine.run();
     assert.equal(skipped.uploaded, 0);
     assert.equal(skipped.failed, 0);

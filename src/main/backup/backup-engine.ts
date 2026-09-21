@@ -116,7 +116,9 @@ export interface BackupRunIntegrity {
 export interface BackupEngineDeps {
   readonly provider: StorageProvider;
   readonly ledger: SyncLedger;
+  /** SQL-selected eligible rows; excludes absent original/companion keys. */
   readonly dirtyPhotos: () => readonly DirtyBackupPhoto[];
+  readonly lockedDirtyPhotos?: (() => readonly { readonly id: string; readonly keyIds: readonly number[] }[]) | undefined;
   /** Device-local key custody; absent only for older/test compositions. */
   readonly unavailableKeyIdsForPhoto?: ((photoId: string) => readonly number[]) | undefined;
   /** RAW ciphertext for `contentHash` — uploaded as-is. */
@@ -341,7 +343,10 @@ export class BackupEngine {
     // offloaded → syncing, so they are manifest-only debt: excluded from
     // the upload loop, settled after the manifest generation lands
     // (PR #274 review — before this they crashed the whole run).
-    const dirty = this.deps.dirtyPhotos().filter((item) => this.canBackUp(item));
+    const dirty = this.deps.dirtyPhotos();
+    for (const item of this.deps.lockedDirtyPhotos?.() ?? []) {
+      this.deps.audit(`BACKUP-SKIP-LOCKED photo=${item.id} key=${item.keyIds.join(',')}`);
+    }
     const manifestOnly = dirty.filter((item) => item.status === 'offloaded');
     if (manifestOnly.length > 0) {
       this.setManifestOwed(true);
@@ -598,9 +603,7 @@ export class BackupEngine {
     // later per-item emission overwrites them with this run's snapshot-
     // derived value (PR #831 review). One authoritative count — a count(*),
     // never a materialized set — reconciles at run end.
-    const livePending =
-      this.deps.pendingCount?.() ??
-      this.deps.dirtyPhotos().filter((item) => (this.deps.unavailableKeyIdsForPhoto?.(item.id).length ?? 0) === 0).length;
+    const livePending = this.deps.pendingCount?.() ?? this.deps.dirtyPhotos().length;
     if (livePending !== pending) {
       this.deps.pendingCountChanged(livePending);
     }
