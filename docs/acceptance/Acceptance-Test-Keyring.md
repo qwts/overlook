@@ -89,7 +89,10 @@ never-uploaded locked photo has no remote blob, publication remains incomplete
 with durable debt;
 the completeness barrier must not publish a false remote-copy claim. Reimporting
 the key allows the upload and publication to complete. Reconciliation must not
-bypass the locked-row skip.
+bypass the locked-row skip. Integrity sweeps also exclude locked rows and recheck
+custody after asynchronous verification, so an absent key is never treated as
+corrupt ciphertext or permission to repair a remote original.
 
-Automated coverage: `tests/backup/backup-engine.test.ts` and the production keyring
+Automated coverage: `tests/backup/backup-engine.test.ts`,
+`tests/backup/integrity-scrubber.test.ts`, and the production keyring
 factory notification test in `tests/crypto/keyring-service.test.ts`.

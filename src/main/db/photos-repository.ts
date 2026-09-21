@@ -844,6 +844,7 @@ export class PhotosRepository {
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
           AND l.coverage = 'included'
+          AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.id = p.key_id AND k.material_present = 0)
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
