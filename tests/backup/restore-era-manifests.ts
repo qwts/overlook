@@ -1,5 +1,9 @@
+import type { KeyStore } from '../../src/main/crypto/keystore.js';
 import {
   backupManifestV3Schema,
+  buildBackupManifestV16,
+  type BackupManifestSnapshotV7,
+  type BackupManifestV16,
   backupManifestV4Schema,
   backupManifestV5Schema,
   backupManifestV6Schema,
@@ -54,4 +58,40 @@ export function makeEraManifest(schema: 2 | 3 | 4 | 5 | 6, v2: BackupManifestV2)
   const v5 = { ...v4, schema: 5, boards: [] };
   if (schema === 5) return backupManifestV5Schema.parse(v5);
   return backupManifestV6Schema.parse({ ...v5, schema: 6, sidecars: [] });
+}
+
+/** Current companion custody over a legacy fixture, with explicit defaults
+ * for sections introduced between the two schema eras. */
+export function sharedOwnerManifest(
+  input: {
+    libraryId: string;
+    generatedAt: string;
+    snapshot: BackupManifestSnapshotV7;
+  },
+  ownerId: string,
+  keys: KeyStore,
+): BackupManifestV16 {
+  return buildBackupManifestV16({
+    ...input,
+    snapshot: {
+      ...input.snapshot,
+      sidecars: input.snapshot.sidecars.map((sidecar) => ({ ...sidecar, ownerId })),
+      hiddenAlbumIds: [],
+      folders: [],
+      albumTree: input.snapshot.albums.map((album) => ({ albumId: album.id, parentId: null, inheritsVisibility: false, tags: [] })),
+      smartAlbums: [],
+      editRevisions: [],
+      provenance: [],
+      variantFamilies: [],
+      keyring: keys.listKeys().map((key) => ({
+        keyId: key.id,
+        keyRef: key.keyRef ?? '',
+        version: key.version ?? 1,
+        kind: key.kind ?? 'library',
+        origin: key.origin ?? 'local',
+        fingerprint: null,
+        label: null,
+      })),
+    },
+  });
 }

@@ -1,3 +1,4 @@
+import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import { isDeepStrictEqual } from 'node:util';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, rm, statfs, writeFile } from 'node:fs/promises';
@@ -261,7 +262,7 @@ export class RestoreEngine {
         const stream = await this.deps.provider.getStream(sidecar.blobPath);
         const buf = await buffer(signal === undefined ? stream : addAbortSignal(signal, stream));
         addObjectFingerprint(fingerprints, sidecar.blobPath, buf);
-        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: sidecar.photoId });
+        const decrypt = createDecryptStream(discovery.resolveKey, { photoId: `sidecar:${sidecarOwnerOf(sidecar)}` });
         const readable = Readable.from([buf]);
         try {
           for await (const _ of readable.pipe(decrypt)) {
@@ -491,7 +492,7 @@ export class RestoreEngine {
     const completed = new Set((checkpoint.completedSidecarIds ?? []).filter((id) => ids.has(id)));
     for (const entry of entries) {
       if (!completed.has(entry.id)) continue;
-      if (!(await store.verifySidecar(entry.sidecar.photoId, entry.sidecar.hash, discovery.resolveKey))) {
+      if (!(await store.verifySidecar(sidecarOwnerOf(entry.sidecar), entry.sidecar.hash, discovery.resolveKey))) {
         completed.delete(entry.id);
       }
     }
@@ -505,7 +506,7 @@ export class RestoreEngine {
       try {
         const remoteStream = await this.deps.provider.getStream(entry.sidecar.blobPath);
         await store.restoreSidecar(
-          entry.sidecar.photoId,
+          sidecarOwnerOf(entry.sidecar),
           entry.sidecar.hash,
           signal === undefined ? remoteStream : addAbortSignal(signal, remoteStream),
           discovery.resolveKey,
@@ -806,6 +807,7 @@ export class RestoreEngine {
         for (const sidecar of candidate.manifest.sidecars.filter((item) => !missingPaths.has(item.blobPath))) {
           sidecarRepo.insert({
             photoId: sidecar.photoId,
+            ownerId: sidecarOwnerOf(sidecar),
             role: sidecar.role,
             fileName: sidecar.fileName,
             contentHash: sidecar.hash,

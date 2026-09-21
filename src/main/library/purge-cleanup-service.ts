@@ -56,9 +56,8 @@ export class PurgeCleanupService {
     for (const item of this.deps.repo.pending()) {
       if (aborted()) break;
       if (!eligible.has(item.id)) continue;
-      // An included sibling defers this original-removal request.
-      // Sidecars are per-photo objects and do not share the original's gate.
-      if (item.kind === 'original' && this.deps.repo.hasIncludedReference(item.contentHash)) {
+      // Included variants retain shared original and companion objects.
+      if (this.deps.repo.isRetained(item)) {
         continue;
       }
       try {
@@ -67,7 +66,7 @@ export class PurgeCleanupService {
         const handle = await this.deps.custody.resolveAuthority(authority);
         if (aborted()) break;
         // A resolver can await reconnect proof; check sharing again after it.
-        if (item.kind === 'original' && this.deps.repo.hasIncludedReference(item.contentHash)) continue;
+        if (this.deps.repo.isRetained(item)) continue;
         try {
           await handle.provider.delete(item.remotePath);
         } catch (error) {

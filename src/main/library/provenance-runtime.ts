@@ -1,3 +1,4 @@
+import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import type { Readable } from 'node:stream';
 
 import { BlobStoreError } from '../blobs/blob-store.js';
@@ -63,7 +64,7 @@ export function createProvenanceRuntime(ctx: ProvenanceRuntimeContext): Provenan
         try {
           loaded.push(
             await readPrefix(
-              parts.blobStore.getSidecarStream(photo.id, sidecar.contentHash, parts.keyStore.resolver()),
+              parts.blobStore.getSidecarStream(sidecarOwnerOf(sidecar), sidecar.contentHash, parts.keyStore.resolver()),
               PROVENANCE_SCAN_LIMIT,
             ),
           );

@@ -36,6 +36,9 @@ export interface PurgeDeps {
     /** Companion custody hashes — captured BEFORE purgeRow CASCADEs the
      * sidecar rows away (#484). */
     readonly sidecarHashesForPhoto: (photoId: string) => readonly string[];
+    readonly sidecarObjectsForPhoto?: ((photoId: string) => readonly { ownerId: string; contentHash: string }[]) | undefined;
+    readonly hasSidecarOwner?: ((ownerId: string) => boolean) | undefined;
+    readonly hasSidecarObject?: ((ownerId: string, hash: string) => boolean) | undefined;
   };
   /** Persists exclusion cleanup and removes the row in one transaction. */
   readonly purgeExcluding?: ((photoId: string, authorized: boolean) => Promise<number>) | undefined;
@@ -95,10 +98,10 @@ export class PurgeService {
         protectedCount += 1;
         continue;
       }
-      // Sidecar custody is per photo (#484): captured before the row purge
-      // CASCADEs the companion rows away, deleted with the photo, and a
-      // failed remote delete stays visible via the same audited counter.
-      const sidecarHashes = this.deps.repo.sidecarHashesForPhoto(photoId);
+      // Capture immutable object identities before reference rows CASCADE.
+      const sidecars =
+        this.deps.repo.sidecarObjectsForPhoto?.(photoId) ??
+        this.deps.repo.sidecarHashesForPhoto(photoId).map((contentHash) => ({ ownerId: photoId, contentHash }));
       let remoteProvider: StorageProvider | undefined;
       let remoteFailureReason: string | null = null;
       const pendingExclusion = photo.coverage === 'excluding';
@@ -131,9 +134,19 @@ export class PurgeService {
             remoteFailureReason,
           );
       }
-      await this.deps.blobs.deleteSidecars(photoId);
-      for (const hash of pendingExclusion || photo.coverage === 'excluded' ? [] : sidecarHashes) {
-        remoteFailures += await this.deleteRemote(photoId, hash, `sidecars/${photoId}/${hash}`, remoteProvider, remoteFailureReason);
+      for (const ownerId of new Set([photoId, ...sidecars.map((sidecar) => sidecar.ownerId)])) {
+        if (this.deps.repo.hasSidecarOwner?.(ownerId) !== true) await this.deps.blobs.deleteSidecars(ownerId);
+      }
+      for (const sidecar of pendingExclusion || photo.coverage === 'excluded' ? [] : sidecars) {
+        const unreferenced = (): boolean => this.deps.repo.hasSidecarObject?.(sidecar.ownerId, sidecar.contentHash) !== true;
+        remoteFailures += await this.deleteRemote(
+          photoId,
+          sidecar.contentHash,
+          `sidecars/${sidecar.ownerId}/${sidecar.contentHash}`,
+          remoteProvider,
+          remoteFailureReason,
+          unreferenced,
+        );
       }
       this.deps.audit(`PURGE photo=${photoId} bytes=${String(photo.bytes)}`);
       purged += 1;
@@ -172,7 +185,9 @@ export class PurgeService {
     remotePath: string,
     provider: StorageProvider | undefined,
     failureReason: string | null,
+    unreferenced: () => boolean = () => true,
   ): Promise<0 | 1> {
+    if (!unreferenced()) return 0;
     if (provider === undefined) {
       this.deps.audit(
         `ORPHAN-REMOTE photo=${photoId} hash=${contentHash} path=${remotePath} reason=${failureReason ?? 'custody-unavailable'}`,
@@ -180,6 +195,7 @@ export class PurgeService {
       return 1;
     }
     for (let attempt = 1; attempt <= REMOTE_ATTEMPTS; attempt += 1) {
+      if (!unreferenced()) return 0;
       try {
         await provider.delete(remotePath);
         return 0;

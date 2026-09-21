@@ -152,12 +152,9 @@ export class BlobStore {
     return join(this.thumbsDir, contentHash.slice(0, 2), `${contentHash}.${size}`);
   }
 
-  // Sidecar custody (#484, ADR-0031 §4) is PER PHOTO: companions live under
-  // sidecars/<id:2>/<photoId>/<hash> and their envelope AAD binds
-  // `sidecar:<photoId>` — a companion moved between photos or namespaces
-  // fails authentication, which is the association guarantee the issue asks
-  // for. Duplicated bytes across photos are accepted (sidecars are KBs) in
-  // exchange for purge = remove the photo's directory, no shared-hash guard.
+  // Companions retain their immutable import owner (#1120, ADR-0031 §3).
+  // Callers resolve variant references before entering this byte store;
+  // paths and envelope AAD stay bound to that owner after root purge.
   private sidecarDir(photoId: string): string {
     return join(this.sidecarsDir, photoId.slice(0, 2), photoId);
   }

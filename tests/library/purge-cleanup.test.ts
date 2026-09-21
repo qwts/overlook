@@ -1,3 +1,4 @@
+import { SidecarRepository } from '../../src/main/db/sidecar-repository.js';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
@@ -264,6 +265,42 @@ test('a clean-error transition during identity capture preserves the photo and r
     assert.equal(b.queue.pending().length, 0);
     assert.equal(w.store.hasOriginal(w.hash), true);
     assert.equal(w.provider.deletes, 0);
+  } finally {
+    w.close();
+  }
+});
+
+test('pending exclusion cleanup retains shared companion owner paths after root purge (#1120)', async () => {
+  const w = await world();
+  try {
+    const b = w.bind();
+    const hash = 'e'.repeat(64);
+    const path = `sidecars/photo/${hash}`;
+    new SidecarRepository(w.db()).insert({
+      photoId: 'photo',
+      role: 'xmp',
+      fileName: 'photo.xmp',
+      contentHash: hash,
+      bytes: 12,
+      keyId: 1,
+      importedAt: AT,
+    });
+    await w.provider.put(path, Readable.from('retained companion'));
+    new VariantRepository(w.db()).duplicate(b.photos.get('photo')!, 'sibling', AT);
+    b.photos.softDelete(['photo']);
+    await b.purge.purge(['photo']);
+    assert.equal(b.queue.pending().length, 2);
+    assert.equal(b.queue.pending().find((item) => item.kind === 'sidecar')?.remotePath, path);
+    assert.equal(b.cleanup.hasManifestDebt(), false, 'included sibling retains both objects');
+    await certify(b.cleanup);
+    assert.deepEqual(await b.cleanup.retry(), { settled: 0, pending: 2 });
+    assert.equal(w.provider.deletes, 0, 'reference checks protect even an eligible queue item');
+    run(w.db(), "DELETE FROM photos WHERE id = 'sibling'");
+    await b.cleanup.retry();
+    assert.equal(w.provider.deletes, 0, 'reference removal alone cannot reuse publication evidence');
+    await certify(b.cleanup);
+    assert.deepEqual(await b.cleanup.retry(), { settled: 2, pending: 0 });
+    assert.equal((await w.provider.list('sidecars')).length, 0);
   } finally {
     w.close();
   }

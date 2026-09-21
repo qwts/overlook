@@ -113,6 +113,14 @@ export class VariantRepository {
       run(this.db, `INSERT INTO sync_ledger (photo_id, status, dirty) VALUES (?, 'local', 1)`, id);
       run(
         this.db,
+        `INSERT INTO photo_sidecars (photo_id, role, file_name, content_hash, bytes, key_id, imported_at, owner_id)
+         SELECT ?, role, file_name, content_hash, bytes, key_id, imported_at, coalesce(owner_id, photo_id)
+         FROM photo_sidecars WHERE photo_id = ?`,
+        id,
+        source.id,
+      );
+      run(
+        this.db,
         `INSERT INTO album_photos (album_id, photo_id, position)
          SELECT ap.album_id, ?, (SELECT coalesce(max(x.position), -1) + 1 FROM album_photos x WHERE x.album_id = ap.album_id)
            FROM album_photos ap WHERE ap.photo_id = ?`,

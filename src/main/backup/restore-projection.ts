@@ -50,6 +50,15 @@ export function projectVerifiedManifest(
     const protectedPhotos = manifest.protectedPhotos.filter((photo) =>
       photo.objects.every((object) => object.status === 'offloaded' || !missingPaths.has(object.path)),
     );
+    if (manifest.schema === 16)
+      return {
+        ...manifest,
+        ...ordinary,
+        protectedPhotos,
+        sidecars: manifest.sidecars.filter((sidecar) => retainedPhotoIds.has(sidecar.photoId) && !missingPaths.has(sidecar.blobPath)),
+        variantFamilies: manifest.variantFamilies.filter((family) => retainedPhotoIds.has(family.representativeId)),
+        coverage: coverageTotals(ordinary.photos),
+      };
     const sidecars = manifest.sidecars.filter((sidecar) => retainedPhotoIds.has(sidecar.photoId) && !missingPaths.has(sidecar.blobPath));
     const variantFamilies = manifest.variantFamilies.filter((family) => retainedPhotoIds.has(family.representativeId));
     return { ...manifest, ...ordinary, protectedPhotos, sidecars, variantFamilies, coverage: coverageTotals(ordinary.photos) };

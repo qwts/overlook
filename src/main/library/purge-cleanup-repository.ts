@@ -44,12 +44,12 @@ export class PurgeCleanupRepository {
         if (row.authorityId !== null && row.authorityId !== authorityId) throw new Error('source authority changed before purge');
         const paths: { kind: 'original' | 'sidecar'; path: string }[] = [];
         paths.push({ kind: 'original', path: `blobs/${row.contentHash.slice(0, 2)}/${row.contentHash}` });
-        for (const sidecar of queryAll<{ hash: string }>(
+        for (const sidecar of queryAll<{ hash: string; ownerId: string }>(
           this.db,
-          'SELECT DISTINCT content_hash AS hash FROM photo_sidecars WHERE photo_id = @photoId',
+          'SELECT DISTINCT content_hash AS hash, coalesce(owner_id, photo_id) AS ownerId FROM photo_sidecars WHERE photo_id = @photoId',
           { photoId },
         )) {
-          paths.push({ kind: 'sidecar', path: `sidecars/${photoId}/${sidecar.hash}` });
+          paths.push({ kind: 'sidecar', path: `sidecars/${sidecar.ownerId}/${sidecar.hash}` });
         }
         for (const path of paths) {
           runNamed(
@@ -82,11 +82,26 @@ export class PurgeCleanupRepository {
   }
 
   hasManifestDebt(): boolean {
-    return this.pending().some((item) => item.kind === 'sidecar' || !this.hasIncludedReference(item.contentHash));
+    return this.pending().some((item) => !this.isRetained(item));
   }
 
   settle(id: number): void {
     run(this.db, 'DELETE FROM purge_remote_cleanup WHERE id = ?', id);
+  }
+
+  isRetained(item: PurgeCleanupItem): boolean {
+    if (item.kind === 'original') return this.hasIncludedReference(item.contentHash);
+    const [prefix, ownerId, hash, extra] = item.remotePath.split('/');
+    if (prefix !== 'sidecars' || ownerId === undefined || hash === undefined || extra !== undefined) return false;
+    return (
+      queryGet(
+        this.db,
+        `SELECT 1 FROM photo_sidecars s JOIN sync_ledger l ON l.photo_id = s.photo_id
+      WHERE l.coverage = 'included' AND coalesce(s.owner_id, s.photo_id) = ? AND s.content_hash = ? LIMIT 1`,
+        ownerId,
+        hash,
+      ) !== undefined
+    );
   }
 
   hasIncludedReference(hash: string): boolean {

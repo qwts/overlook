@@ -11,6 +11,12 @@
 export const SIDECAR_ROLES = ['xmp', 'aae'] as const;
 export type SidecarRole = (typeof SIDECAR_ROLES)[number];
 
+/** Legacy records were sealed for their photo; shared references retain that
+ * owner even after the importing row is purged. */
+export function sidecarOwnerOf(sidecar: { readonly photoId: string; readonly ownerId?: string | undefined }): string {
+  return sidecar.ownerId ?? sidecar.photoId;
+}
+
 const ROLE_BY_EXTENSION: Readonly<Record<string, SidecarRole>> = {
   xmp: 'xmp',
   aae: 'aae',

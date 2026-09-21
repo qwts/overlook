@@ -1,3 +1,4 @@
+import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { ConsistencyChecker, type ConsistencyDeps } from './consistency.js';
@@ -24,7 +25,8 @@ export interface ConsistencyFactoryDeps {
 export function createConsistencyChecker(deps: ConsistencyFactoryDeps): ConsistencyChecker {
   return new ConsistencyChecker({
     rows: () => deps.repo.allRows(),
-    ownedSidecars: () => new SidecarRepository(deps.db).allRows(),
+    ownedSidecars: () =>
+      new SidecarRepository(deps.db).allRows().map((row) => ({ photoId: sidecarOwnerOf(row), contentHash: row.contentHash })),
     hiddenOwnedHashes: () => deps.repo.migrationOwnedContentHashes(),
     blobs: {
       listOriginalHashes: async () => deps.blobStore.listOriginalHashes(),
