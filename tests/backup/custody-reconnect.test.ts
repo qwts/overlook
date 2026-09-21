@@ -478,7 +478,7 @@ test('a persisted bound authority is re-proven before its first custody handle a
   w.db.close();
 });
 
-test('purge source capture refuses unbound clean-error custody and bounds an unresponsive identity provider', async (t) => {
+test('purge source capture refuses unbound clean-error custody and bounds an unresponsive identity provider', async () => {
   const w = world();
   run(w.db, "UPDATE sync_ledger SET status = 'synced', custody_authority_id = NULL, dirty = 0 WHERE photo_id = 'P1'");
   let calls = 0;
@@ -488,6 +488,7 @@ test('purge source capture refuses unbound clean-error custody and bounds an unr
     providerSignal = signal;
     return new Promise<ProviderAccountIdentity>(() => undefined);
   };
+  const timeout = new AbortController();
   const routing = createCustodyRoutingRuntime({
     db: w.db,
     backupTarget: w.provider,
@@ -496,6 +497,10 @@ test('purge source capture refuses unbound clean-error custody and bounds an unr
     backupTargetConnected: () => true,
     status: (photoId) => w.ledger.status(photoId),
     now: () => VERIFIED_AT,
+    timeoutSignal: (milliseconds) => {
+      assert.equal(milliseconds, 10_000);
+      return timeout.signal;
+    },
     masterKey: () => Buffer.from(w.masterKey),
   });
   try {
@@ -503,11 +508,6 @@ test('purge source capture refuses unbound clean-error custody and bounds an unr
     await assert.rejects(routing.captureAuthority('P1'), /custody-unavailable/u);
     assert.equal(calls, 0, 'a selected account cannot claim an unknown legacy source');
     run(w.db, "UPDATE sync_ledger SET status = 'synced' WHERE photo_id = 'P1'");
-    const timeout = new AbortController();
-    t.mock.method(AbortSignal, 'timeout', (milliseconds: number) => {
-      assert.equal(milliseconds, 10_000);
-      return timeout.signal;
-    });
     const capture = routing.captureAuthority('P1');
     assert.equal(calls, 1);
     assert.equal(providerSignal, timeout.signal);

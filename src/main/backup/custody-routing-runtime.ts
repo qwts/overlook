@@ -18,6 +18,7 @@ export interface CustodyRoutingRuntimeDeps {
   readonly backupTargetConnected: () => boolean;
   readonly status: (photoId: string) => SyncStatus | undefined;
   readonly now: () => string;
+  readonly timeoutSignal?: ((milliseconds: number) => AbortSignal) | undefined;
   readonly masterKey: () => Buffer;
   readonly persistAccountIdentity?: ((providerId: string, identity: ProviderAccountIdentity) => boolean) | undefined;
   readonly writeCustodyHints?: ((hints: NonNullable<LibraryEntry['custodyHints']>) => void) | undefined;
@@ -247,12 +248,13 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return null;
     }
   };
+  const timeoutSignal = deps.timeoutSignal ?? ((milliseconds: number) => AbortSignal.timeout(milliseconds));
   const ensureTargetAuthority = async (): Promise<CustodyAuthority> => {
     if (!deps.backupTargetConnected()) throw new CustodyResolutionError('custody-disconnected');
     const providerId = deps.backupTarget.id;
     const root = remoteRoot();
     // Bound the provider even if it ignores cancellation; no identity means no purge.
-    const identity = await accountIdentity(deps.backupTarget, AbortSignal.timeout(10_000));
+    const identity = await accountIdentity(deps.backupTarget, timeoutSignal(10_000));
     if (identity === null) throw new CustodyResolutionError('custody-unavailable');
     if (!deps.backupTargetConnected() || deps.backupTarget.id !== providerId || remoteRoot() !== root)
       throw new CustodyResolutionError('custody-unavailable');
