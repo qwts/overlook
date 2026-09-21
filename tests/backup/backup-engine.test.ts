@@ -10,13 +10,13 @@ import { buffer } from 'node:stream/consumers';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, type BackupEngineDeps, type BackupSettings, type NetworkKind } from '../../src/main/backup/backup-engine.js';
-import { createManifestDebtStore } from '../../src/main/backup/manifest-debt.js';
 import { FaultInjectingProvider, MockProvider } from '../../src/main/backup/mock-provider.js';
 import { ProviderError } from '../../src/main/backup/provider.js';
 import type { RecoveryBootstrapPublication } from '../../src/main/backup/recovery-bootstrap.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
-import { claimsForContentHashes } from '../../src/main/db/backup-claims.js';
+import { createBackupClaimDeps } from '../../src/main/db/backup-claims.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
+import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { sampleJpeg } from '../../src/main/library/seed.js';
@@ -115,12 +115,11 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
     recoveryGenerationHealthy: () => Promise.resolve(true),
     // #741 production wiring: preflight claim lookup, local presence, and
     // durable manifest debt all resolve against the same library DB.
-    claimsForContentHashes: (hashes) => claimsForContentHashes(db, hashes),
-    hasLocalOriginal: (hash) => store.hasOriginal(hash),
-    manifestDebt: createManifestDebtStore(db),
+    ...createBackupClaimDeps(db, store),
   };
   return {
     deps,
+    keys: new KeyringRepository(db),
     repo,
     ledger,
     store,
@@ -138,6 +137,111 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
 }
 
 describe('backup engine (#105)', () => {
+  test('locked dirty originals stay pending only after key reimport (#1134)', async () => {
+    const w = await world(1);
+    w.keys.setPresent(1, false);
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: () => {
+        throw new Error('locked original must not open');
+      },
+    });
+    assert.equal(w.repo.pendingCount(), 0);
+    assert.equal(w.ledger.pendingCount(), 0);
+    const skipped = await engine.run();
+    assert.equal(skipped.uploaded, 0);
+    assert.equal(skipped.failed, 0);
+    assert.equal(skipped.manifestUploaded, false, 'an absent remote blob still blocks a truthful publication');
+    assert.equal(w.ledger.isDirty('P0'), true);
+    assert.equal(w.ledger.status('P0'), 'local');
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED photo=P0 key=1'));
+    assert.equal(w.repo.manifestSnapshot().photos.length, 1);
+    assert.equal(w.repo.manifestSnapshot().keyring.length, 1);
+    w.keys.setPresent(1, true);
+    assert.equal(w.repo.pendingCount(), 1);
+    assert.equal(w.ledger.pendingCount(), 1);
+    const resumed = await w.engine.run();
+    assert.equal(resumed.uploaded, 1);
+    assert.equal(resumed.manifestUploaded, true);
+    assert.equal(w.repo.pendingCount(), 0);
+  });
+
+  test('locked manifest-only debt keeps its row and key in a published manifest (#1134)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    w.ledger.setStatus('P0', 'offloaded');
+    w.ledger.markDirty('P0');
+    w.keys.setPresent(1, false);
+    let carried = '';
+    const engine = new BackupEngine({
+      ...w.deps,
+      sealManifest: (json) => {
+        carried = json;
+        return Promise.resolve(Buffer.from(json));
+      },
+      encryptedStream: () => {
+        throw new Error('locked original must not open');
+      },
+    });
+    const result = await engine.run();
+    assert.equal(result.failed, 0);
+    assert.equal(result.uploaded, 0);
+    assert.equal(result.manifestUploaded, true);
+    assert.match(carried, /"id":"P0"/);
+    assert.match(carried, /"keyring":\[/);
+    assert.equal(w.ledger.isDirty('P0'), true, 'skipping must preserve manifest-only dirt');
+    assert.equal(w.repo.pendingCount(), 0);
+    w.keys.setPresent(1, true);
+    assert.equal(w.repo.pendingCount(), 1);
+    await engine.run();
+    assert.equal(w.ledger.isDirty('P0'), false);
+  });
+
+  test('key removal while a run awaits skips subsequent originals without upload errors (#1134)', async () => {
+    const w = await world(2);
+    const opened: string[] = [];
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: (hash) => {
+        opened.push(hash);
+        return w.store.getEncryptedStream(hash);
+      },
+      pendingCountChanged: () => w.keys.setPresent(1, false),
+    });
+    const result = await engine.run();
+    assert.equal(result.uploaded, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(w.ledger.isDirty('P1'), true);
+    assert.equal(w.ledger.status('P1'), 'local');
+    assert.equal(w.repo.pendingCount(), 0);
+    assert.equal(new Set(opened).size, 1);
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED photo=P1 key=1'));
+  });
+
+  test('manifest reconciliation cannot reupload a locked synced original (#1134)', async () => {
+    const w = await world(1);
+    await w.engine.run();
+    const blob = (await w.provider.list('blobs'))[0];
+    assert.ok(blob);
+    await w.provider.delete(blob.path);
+    w.ledger.markDirty('P0');
+    w.keys.setPresent(1, false);
+    const engine = new BackupEngine({
+      ...w.deps,
+      encryptedStream: () => {
+        throw new Error('reconciliation must not open locked original');
+      },
+    });
+    const result = await engine.run();
+    assert.equal(result.failed, 0);
+    assert.equal(result.uploaded, 0);
+    assert.equal(result.manifestUploaded, false);
+    assert.equal(result.blockedRemoteOnly, 1);
+    assert.equal(w.ledger.status('P0'), 'synced');
+    assert.equal(w.ledger.isDirty('P0'), true);
+    assert.equal((await w.provider.list('blobs')).length, 0);
+  });
+
   test('EXIT CRITERIA: a full backup clears pendingCount, uploads ciphertext as-is + a manifest', async () => {
     const w = await world(3);
     assert.equal(w.ledger.pendingCount(), 3);

@@ -73,3 +73,21 @@ ImportCeremony`.
 11. Open a library created before this release. **Expected:** every existing
     key row gains a reference and fingerprint at first open; nothing reads
     as locked; the backup manifest publishes at schema 15.
+
+## Locked backup work (#1134)
+
+Remove a retired key while one of its photos has upload or manifest-only debt,
+then run backup. Expect `BACKUP-SKIP-LOCKED` with the photo/key ids, no original
+read or upload for that photo, and no upload failure attributed to the skip.
+Pending counts exclude the photo immediately; its dirty flag and status survive.
+Reimport the key: the count returns and the next backup resumes the work.
+
+Schema 15 continues carrying the photo and its keyring reference. Existing remote
+blobs allow a manifest to publish while the key is absent. If a never-uploaded
+locked photo has no remote blob, publication remains incomplete with durable debt;
+the completeness barrier must not publish a false remote-copy claim. Reimporting
+the key allows the upload and publication to complete. Reconciliation must not
+bypass the locked-row skip.
+
+Automated coverage: `tests/backup/backup-engine.test.ts` and the production keyring
+factory notification test in `tests/crypto/keyring-service.test.ts`.

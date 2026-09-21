@@ -142,7 +142,15 @@ export class SyncLedger {
   }
 
   pendingCount(): number {
-    return queryAll<{ n: number }>(this.db, "SELECT count(*) AS n FROM sync_ledger WHERE dirty = 1 AND coverage = 'included'")[0]?.n ?? 0;
+    return (
+      queryAll<{ n: number }>(
+        this.db,
+        `SELECT count(*) AS n FROM sync_ledger l
+      WHERE l.dirty = 1 AND l.coverage = 'included'
+        AND NOT EXISTS (SELECT 1 FROM photos p JOIN keys k ON k.id = p.key_id
+          WHERE p.id = l.photo_id AND k.material_present = 0)`,
+      )[0]?.n ?? 0
+    );
   }
 
   // ---- Backup coverage (ADR-0033). Coverage is orthogonal to the upload

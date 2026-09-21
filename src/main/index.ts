@@ -134,10 +134,10 @@ function getLibraryService(): LibraryService {
     refreshCustodyHints(db, registryRuntime);
     const store = new BlobStore({ dataDir });
     const blobStoreReady = store.init();
-    // Keyring registry (#517, ADR-0032 §2): a keys row per custody record (#90) and absent keys marked for `locked`.
     keyringService = createKeyringService({
       ...{ db, keyStore, blobStore: store, harnessEnv, libraryChanged: applicationEvents.libraryChanged },
       invalidate: (id) => [thumbService, fullService].forEach((service) => service?.invalidate(id)),
+      pendingCountChanged: (count) => emitPendingCount({ count }),
     });
     const libraryId = getProviderRuntime().libraryId();
     const protectedRuntime = new ProtectedRuntime({

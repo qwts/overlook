@@ -865,7 +865,8 @@ export class PhotosRepository {
       queryAll<{ n: number }>(
         this.db,
         `SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id
-          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL`,
+          WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.id = p.key_id AND k.material_present = 0)`,
       )[0]?.n ?? 0
     );
   }

@@ -117,6 +117,8 @@ export interface BackupEngineDeps {
   readonly provider: StorageProvider;
   readonly ledger: SyncLedger;
   readonly dirtyPhotos: () => readonly DirtyBackupPhoto[];
+  /** Device-local key custody; absent only for older/test compositions. */
+  readonly isKeyAvailable?: ((keyId: number) => boolean) | undefined;
   /** RAW ciphertext for `contentHash` — uploaded as-is. */
   readonly encryptedStream: (contentHash: string) => Readable;
   /** Seals the manifest JSON (envelope, current key) → ciphertext bytes. */
@@ -337,7 +339,10 @@ export class BackupEngine {
     // offloaded → syncing, so they are manifest-only debt: excluded from
     // the upload loop, settled after the manifest generation lands
     // (PR #274 review — before this they crashed the whole run).
-    const dirty = this.deps.dirtyPhotos();
+    const candidates = this.deps.dirtyPhotos();
+    const dirty = candidates.filter((item) => this.canBackUp(item));
+    // Locked records remain in schema 15; never erase their publication debt.
+    if (dirty.length !== candidates.length) this.setManifestOwed(true);
     const manifestOnly = dirty.filter((item) => item.status === 'offloaded');
     if (manifestOnly.length > 0) {
       this.setManifestOwed(true);
@@ -358,6 +363,14 @@ export class BackupEngine {
     for (const item of items) {
       if (signal?.aborted === true) {
         break; // dirty rows remain dirty — the next run resumes
+      }
+      // Custody can change while an earlier upload awaits the provider.
+      if (!this.canBackUp(item)) {
+        pending = Math.max(0, pending - 1);
+        done += 1;
+        this.deps.events.progress(done, total, item.id);
+        this.deps.pendingCountChanged(pending);
+        continue;
       }
       const outcome = await this.uploadItem(item, settings, signal, (result) => {
         done += 1;
@@ -404,10 +417,9 @@ export class BackupEngine {
     const settleManifestOnly = (): void => {
       if (manifestOnly.length === 0 || manifestOnlySettled) return;
       manifestOnlySettled = true;
-      for (const item of manifestOnly) {
-        this.deps.ledger.settleManifestOnly(item.id);
-      }
-      pending = Math.max(0, pending - manifestOnly.length);
+      const available = manifestOnly.filter((item) => this.canBackUp(item));
+      for (const item of available) this.deps.ledger.settleManifestOnly(item.id);
+      pending = Math.max(0, pending - available.length);
       this.deps.pendingCountChanged(pending);
     };
 
@@ -451,6 +463,7 @@ export class BackupEngine {
           let requeueFailed = 0;
           for (const item of reconciled.uploadNow) {
             if (aborted()) break;
+            if (!this.canBackUp(item)) continue;
             const outcome = await this.uploadItem(item, settings, signal, () => undefined);
             if (outcome === 'uploaded') uploaded += 1;
             else {
@@ -573,11 +586,18 @@ export class BackupEngine {
     // later per-item emission overwrites them with this run's snapshot-
     // derived value (PR #831 review). One authoritative count — a count(*),
     // never a materialized set — reconciles at run end.
-    const livePending = this.deps.pendingCount?.() ?? this.deps.dirtyPhotos().length;
+    const livePending =
+      this.deps.pendingCount?.() ?? this.deps.dirtyPhotos().filter((item) => this.deps.isKeyAvailable?.(item.keyId) !== false).length;
     if (livePending !== pending) {
       this.deps.pendingCountChanged(livePending);
     }
     return { uploaded, failed, manifestUploaded, skipped: null, integrity, blockedRemoteOnly };
+  }
+
+  private canBackUp(item: { readonly id: string; readonly keyId: number }): boolean {
+    if (this.deps.isKeyAvailable?.(item.keyId) !== false) return true;
+    this.deps.audit(`BACKUP-SKIP-LOCKED photo=${item.id} key=${String(item.keyId)}`);
+    return false;
   }
 
   /** One verified item upload (#105/#106 semantics, extracted for the
@@ -662,7 +682,7 @@ export class BackupEngine {
     const uploadNow: BackupItemPhoto[] = [];
     let blocked = 0;
     for (const claim of claims) {
-      if (claim.status === 'synced' && this.deps.hasLocalOriginal?.(claim.contentHash) === true) {
+      if (this.canBackUp(claim) && claim.status === 'synced' && this.deps.hasLocalOriginal?.(claim.contentHash) === true) {
         if (!claim.deleted && !this.deps.ledger.isDirty(claim.id)) this.deps.ledger.markDirty(claim.id);
         uploadNow.push({ id: claim.id, contentHash: claim.contentHash, bytes: claim.bytes, fileName: claim.fileName, keyId: claim.keyId });
       } else {
