@@ -552,3 +552,80 @@ test('removal during integrity IO cannot mark a locked row corrupt or repair its
     assert.ok(audits.includes('INTEGRITY-SKIP-LOCKED photo=locked'));
   }
 });
+
+test('key removal during repair suppresses its result or error and starts no later verification (#1134)', async () => {
+  for (const phase of ['put', 'put-error', 'verify-error']) {
+    const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-repair-lock-')) });
+    let available = true;
+    let verifies = 0;
+    let marked = false;
+    provider.put = () => {
+      if (phase !== 'verify-error') available = false;
+      return phase === 'put-error' ? Promise.reject(new Error('repair transport failed')) : Promise.resolve({ bytes: 5 });
+    };
+    provider.verify = () => {
+      verifies += 1;
+      if (verifies === 1) return Promise.reject(new ProviderError('missing', 'not-found'));
+      available = false;
+      return Promise.reject(new Error('verification transport failed'));
+    };
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      isAvailable: () => available,
+      hasLocal: () => true,
+      encryptedStream: () => Readable.from([Buffer.from('local')]),
+      verifyRemoteCiphertext: () => Promise.resolve(false),
+      markUnrecoverable: () => {
+        marked = true;
+      },
+      markVerified: () => {
+        marked = true;
+      },
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: () => undefined,
+      now: () => new Date(),
+    });
+    const result = await scrubber.scrub();
+    assert.equal(result.repaired, 0);
+    assert.equal(result.unrecoverable, 0);
+    assert.equal(marked, false);
+    assert.equal(verifies, phase === 'verify-error' ? 2 : 1);
+  }
+});
+
+test('key removal during local hashing stops before any remote request (#1134)', async () => {
+  for (const broken of [false, true]) {
+    const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-hash-lock-')) });
+    let available = true;
+    let verifies = 0;
+    provider.verify = () => {
+      verifies += 1;
+      return Promise.reject(new Error('remote must not be contacted'));
+    };
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      isAvailable: () => available,
+      hasLocal: () => true,
+      encryptedStream: () =>
+        Readable.from(
+          (async function* () {
+            yield Buffer.from('local');
+            await Promise.resolve();
+            available = false;
+            if (broken) throw new Error('local stream failed');
+          })(),
+        ),
+      verifyRemoteCiphertext: () => Promise.resolve(false),
+      markUnrecoverable: () => assert.fail('locked row must stay unchanged'),
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: () => undefined,
+      now: () => new Date(),
+    });
+    assert.equal((await scrubber.scrub()).repaired, 0);
+    assert.equal(verifies, 0);
+  }
+});

@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { lockedDirtyPhotos, unavailableKeyIdsForPhoto } from './backup-key-availability.js';
+import { lockedDirtySummary, unavailableKeyIdsForPhoto } from './backup-key-availability.js';
 import { queryAll } from './sql.js';
 import { createManifestDebtStore } from '../backup/manifest-debt.js';
 import type { BackupEngineDeps } from '../backup/backup-engine.js';
@@ -33,14 +33,14 @@ export function createBackupClaimDeps(
   blobs: { hasOriginal(contentHash: string): boolean },
 ): Pick<
   BackupEngineDeps,
-  'claimsForContentHashes' | 'hasLocalOriginal' | 'manifestDebt' | 'unavailableKeyIdsForPhoto' | 'lockedDirtyPhotos'
+  'claimsForContentHashes' | 'hasLocalOriginal' | 'manifestDebt' | 'unavailableKeyIdsForPhoto' | 'lockedDirtySummary'
 > {
   return {
     claimsForContentHashes: (hashes) => claimsForContentHashes(db, hashes),
     hasLocalOriginal: (hash) => blobs.hasOriginal(hash),
     manifestDebt: createManifestDebtStore(db),
     unavailableKeyIdsForPhoto: (id) => unavailableKeyIdsForPhoto(db, id),
-    lockedDirtyPhotos: () => lockedDirtyPhotos(db),
+    lockedDirtySummary: () => lockedDirtySummary(db),
   };
 }
 

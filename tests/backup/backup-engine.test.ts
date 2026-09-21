@@ -137,6 +137,14 @@ async function world(count: number, overrides?: { settings?: Partial<BackupSetti
 }
 
 describe('backup engine (#105)', () => {
+  test('large locked queues emit one bounded audit record per run (#1134)', async () => {
+    const w = await world(0);
+    const engine = new BackupEngine({ ...w.deps, lockedDirtySummary: () => ({ count: 94_000, keyIds: [2, 3] }) });
+    await engine.run();
+    await engine.run();
+    assert.deepEqual(w.audits, ['BACKUP-SKIP-LOCKED skips=94000 key=2,3', 'BACKUP-SKIP-LOCKED skips=94000 key=2,3']);
+  });
+
   test('queue setup uses bulk custody selection before the first progress event (#1134)', async () => {
     const w = await world(12);
     let started = false;
@@ -176,7 +184,7 @@ describe('backup engine (#105)', () => {
     assert.equal((await engine.run()).manifestUploaded, false, 'independent publication debt cannot claim an absent remote blob');
     assert.equal(w.ledger.isDirty('P0'), true);
     assert.equal(w.ledger.status('P0'), 'local');
-    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED photo=P0 key=1'));
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED skips=1 key=1'));
     assert.equal(w.repo.manifestSnapshot().photos.length, 1);
     assert.equal(w.repo.manifestSnapshot().keyring.length, 1);
     w.keys.setPresent(1, true);
@@ -245,7 +253,7 @@ describe('backup engine (#105)', () => {
     assert.equal(w.ledger.status('P1'), 'local');
     assert.equal(w.repo.pendingCount(), 0);
     assert.equal(new Set(opened).size, 1);
-    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED photo=P1 key=1'));
+    assert.ok(w.audits.includes('BACKUP-SKIP-LOCKED skips=1 key=1'));
   });
 
   test('manifest reconciliation cannot reupload a locked synced original (#1134)', async () => {

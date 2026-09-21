@@ -19,25 +19,19 @@ export function unavailableKeyIdsForPhoto(db: BetterSqlite3.Database, photoId: s
   ).map((row) => row.id);
 }
 
-/** Audit worklist in one SQL walk, not one synchronous query per dirty row. */
-export function lockedDirtyPhotos(db: BetterSqlite3.Database): readonly { id: string; keyIds: readonly number[] }[] {
-  const rows = queryAll<{ photoId: string; keyId: number }>(
+/** Count skips and distinct keys in SQL; never materialize every locked row. */
+export function lockedDirtySummary(db: BetterSqlite3.Database): { count: number; keyIds: readonly number[] } {
+  const row = queryAll<{ count: number; keyIds: string | null }>(
     db,
     `WITH dirty AS (
     SELECT p.id, p.key_id FROM ordinary_visible_photos p JOIN sync_ledger l ON l.photo_id = p.id
     WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
-  )
-  SELECT d.id AS photoId, k.id AS keyId FROM dirty d JOIN keys k ON k.id = d.key_id WHERE k.material_present = 0
-  UNION
-  SELECT d.id AS photoId, k.id AS keyId FROM dirty d JOIN photo_sidecars s ON s.photo_id = d.id
-    JOIN keys k ON k.id = s.key_id WHERE k.material_present = 0
-  ORDER BY photoId, keyId`,
-  );
-  const grouped = new Map<string, number[]>();
-  for (const row of rows) {
-    const ids = grouped.get(row.photoId) ?? [];
-    ids.push(row.keyId);
-    grouped.set(row.photoId, ids);
-  }
-  return [...grouped].map(([id, keyIds]) => ({ id, keyIds }));
+  ), locked AS (
+    SELECT d.id AS photoId, k.id AS keyId FROM dirty d JOIN keys k ON k.id = d.key_id WHERE k.material_present = 0
+    UNION
+    SELECT d.id AS photoId, k.id AS keyId FROM dirty d JOIN photo_sidecars s ON s.photo_id = d.id
+      JOIN keys k ON k.id = s.key_id WHERE k.material_present = 0
+  ) SELECT count(DISTINCT photoId) AS count, group_concat(DISTINCT keyId) AS keyIds FROM locked`,
+  )[0];
+  return { count: row?.count ?? 0, keyIds: row?.keyIds?.split(',').map(Number) ?? [] };
 }

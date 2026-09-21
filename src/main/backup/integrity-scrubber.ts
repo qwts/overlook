@@ -124,12 +124,20 @@ export class BackupIntegrityScrubber {
 
   private async checkLocalBacked(item: BackupIntegrityItem): Promise<number> {
     const path = blobPath(item.contentHash);
-    const local = await digest(this.deps.encryptedStream(item.contentHash));
+    let local: { readonly sha256: string; readonly bytes: number };
+    try {
+      local = await digest(this.deps.encryptedStream(item.contentHash));
+    } catch (error) {
+      if (!this.isAvailable(item)) return 0;
+      throw error;
+    }
+    if (!this.isAvailable(item)) return 0;
     let damaged: boolean;
     try {
       const remote = await this.deps.provider.verify(path);
       damaged = remote.sha256 !== local.sha256 || remote.bytes !== local.bytes;
     } catch (error) {
+      if (!this.isAvailable(item)) return 0;
       if (!isRemoteDamage(error)) {
         throw error;
       }
@@ -142,12 +150,18 @@ export class BackupIntegrityScrubber {
       return 0;
     }
 
-    await this.deps.provider.put(path, this.deps.encryptedStream(item.contentHash));
-    const repaired = await this.deps.provider.verify(path);
-    if (repaired.sha256 !== local.sha256 || repaired.bytes !== local.bytes) {
-      throw new ProviderError(`integrity repair verification failed for ${item.id}`, 'corrupt');
+    try {
+      await this.deps.provider.put(path, this.deps.encryptedStream(item.contentHash));
+      if (!this.isAvailable(item)) return 0;
+      const repaired = await this.deps.provider.verify(path);
+      if (!this.isAvailable(item)) return 0;
+      if (repaired.sha256 !== local.sha256 || repaired.bytes !== local.bytes) {
+        throw new ProviderError(`integrity repair verification failed for ${item.id}`, 'corrupt');
+      }
+    } catch (error) {
+      if (!this.isAvailable(item)) return 0;
+      throw error;
     }
-    if (!this.isAvailable(item)) return 0;
     this.deps.audit(`INTEGRITY-REPAIRED photo=${item.id} hash=${item.contentHash}`);
     this.deps.markVerified?.(item.id);
     return 1;
@@ -157,8 +171,14 @@ export class BackupIntegrityScrubber {
     const path = blobPath(item.contentHash);
     let valid = false;
     try {
-      valid = await this.deps.verifyRemoteCiphertext(item, await this.deps.provider.getStream(path));
+      const ciphertext = await this.deps.provider.getStream(path);
+      if (!this.isAvailable(item)) {
+        ciphertext.destroy();
+        return 0;
+      }
+      valid = await this.deps.verifyRemoteCiphertext(item, ciphertext);
     } catch (error) {
+      if (!this.isAvailable(item)) return 0;
       if (!isRemoteDamage(error)) {
         throw error;
       }

@@ -77,7 +77,8 @@ ImportCeremony`.
 ## Locked backup work (#1134)
 
 Remove a retired key while one of its photos has upload or manifest-only debt,
-then run backup. Expect `BACKUP-SKIP-LOCKED` with the photo/key ids, no original
+then run backup. Expect one `BACKUP-SKIP-LOCKED` summary with skip count and
+key ids per run, no original
 read or upload for that photo, and no upload failure attributed to the skip.
 Pending counts exclude the photo immediately; its dirty flag and status survive.
 Reimport the key: the count returns and the next backup resumes the work.
