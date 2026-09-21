@@ -118,7 +118,7 @@ export interface BackupEngineDeps {
   readonly ledger: SyncLedger;
   readonly dirtyPhotos: () => readonly DirtyBackupPhoto[];
   /** Device-local key custody; absent only for older/test compositions. */
-  readonly isKeyAvailable?: ((keyId: number) => boolean) | undefined;
+  readonly unavailableKeyIdsForPhoto?: ((photoId: string) => readonly number[]) | undefined;
   /** RAW ciphertext for `contentHash` — uploaded as-is. */
   readonly encryptedStream: (contentHash: string) => Readable;
   /** Seals the manifest JSON (envelope, current key) → ciphertext bytes. */
@@ -285,6 +285,8 @@ interface ReconcileOutcome {
   readonly blocked: number;
 }
 
+class LockedBackupPhotoError extends Error {}
+
 export class BackupEngine {
   private current: Promise<BackupRunResult> | null = null;
   /** A failed manifest upload owes the remote a generation. */
@@ -371,12 +373,12 @@ export class BackupEngine {
       }
       const outcome = await this.uploadItem(item, settings, signal, (result) => {
         done += 1;
-        if (result === 'uploaded') pending = Math.max(0, pending - 1);
+        if (result === 'uploaded' || result === 'skipped') pending = Math.max(0, pending - 1);
         this.deps.events.progress(done, total, item.id);
         this.deps.pendingCountChanged(pending);
       });
       if (outcome === 'uploaded') uploaded += 1;
-      else failed += 1;
+      else if (outcome !== 'skipped') failed += 1;
       if (outcome === 'stop') break;
       if (outcome === 'failed-transient') {
         transientStreak += 1;
@@ -463,7 +465,7 @@ export class BackupEngine {
             if (!this.canBackUp(item)) continue;
             const outcome = await this.uploadItem(item, settings, signal, () => undefined);
             if (outcome === 'uploaded') uploaded += 1;
-            else {
+            else if (outcome !== 'skipped') {
               failed += 1;
               requeueFailed += 1;
             }
@@ -478,17 +480,30 @@ export class BackupEngine {
           }
           for (const sidecar of reconciled.sidecarUploadNow) {
             if (aborted()) break;
+            if (!this.canBackUp({ id: sidecar.photoId, keyId: sidecar.keyId })) continue;
             try {
               const remotePath = sidecarPath(sidecar.photoId, sidecar.contentHash);
-              await this.uploadWithRetry(remotePath, () => this.encryptedSidecar(sidecar), signal);
+              const owner = { id: sidecar.photoId, keyId: sidecar.keyId };
+              await this.uploadWithRetry(
+                remotePath,
+                () => {
+                  if (!this.canBackUp(owner)) throw new LockedBackupPhotoError();
+                  return this.encryptedSidecar(sidecar);
+                },
+                signal,
+              );
+              if (!this.canBackUp(owner)) continue;
               const local = await this.hashStream(this.encryptedSidecar(sidecar));
+              if (!this.canBackUp(owner)) continue;
               const remote = await this.deps.provider.verify(remotePath);
+              if (!this.canBackUp(owner)) continue;
               if (remote.sha256 !== local.sha256 || remote.bytes !== local.bytes) {
                 throw new ProviderError(`verify mismatch for ${sidecar.fileName}`, 'corrupt');
               }
               this.notePresent(remotePath);
               this.invalidateListing('sidecars');
             } catch (error) {
+              if (error instanceof LockedBackupPhotoError) continue;
               requeueFailed += 1;
               console.error(
                 `[overlook] sidecar reconcile failed for ${sidecar.fileName}: ${error instanceof Error ? error.message : String(error)}`,
@@ -584,7 +599,8 @@ export class BackupEngine {
     // derived value (PR #831 review). One authoritative count — a count(*),
     // never a materialized set — reconciles at run end.
     const livePending =
-      this.deps.pendingCount?.() ?? this.deps.dirtyPhotos().filter((item) => this.deps.isKeyAvailable?.(item.keyId) !== false).length;
+      this.deps.pendingCount?.() ??
+      this.deps.dirtyPhotos().filter((item) => (this.deps.unavailableKeyIdsForPhoto?.(item.id).length ?? 0) === 0).length;
     if (livePending !== pending) {
       this.deps.pendingCountChanged(livePending);
     }
@@ -592,8 +608,9 @@ export class BackupEngine {
   }
 
   private canBackUp(item: { readonly id: string; readonly keyId: number }): boolean {
-    if (this.deps.isKeyAvailable?.(item.keyId) !== false) return true;
-    this.deps.audit(`BACKUP-SKIP-LOCKED photo=${item.id} key=${String(item.keyId)}`);
+    const missing = this.deps.unavailableKeyIdsForPhoto?.(item.id) ?? [];
+    if (missing.length === 0) return true;
+    this.deps.audit(`BACKUP-SKIP-LOCKED photo=${item.id} key=${missing.join(',')}`);
     return false;
   }
 
@@ -605,11 +622,15 @@ export class BackupEngine {
     item: BackupItemPhoto,
     settings: BackupSettings,
     signal: AbortSignal | undefined,
-    progressed: (result: 'uploaded' | 'failed') => void,
-  ): Promise<'uploaded' | 'failed' | 'failed-transient' | 'stop'> {
+    progressed: (result: 'uploaded' | 'failed' | 'skipped') => void,
+  ): Promise<'uploaded' | 'failed' | 'failed-transient' | 'stop' | 'skipped'> {
     const started = this.deps.now();
+    const originalState = this.deps.ledger.status(item.id) ?? 'local';
+    const requireCustody = (): void => {
+      if (!this.canBackUp(item)) throw new LockedBackupPhotoError();
+    };
     let syncState: SyncStatus = 'synced';
-    let outcome: 'uploaded' | 'failed' | 'failed-transient' | 'stop' = 'uploaded';
+    let outcome: 'uploaded' | 'failed' | 'failed-transient' | 'stop' | 'skipped' = 'uploaded';
     try {
       // A row killed mid-upload resumes: it is already 'syncing' and the
       // machine (rightly) rejects syncing → syncing (PR #203 review).
@@ -617,12 +638,22 @@ export class BackupEngine {
         this.deps.ledger.setStatus(item.id, 'syncing');
       }
       const remotePath = blobPath(item.contentHash);
-      await this.uploadWithRetry(remotePath, () => this.deps.encryptedStream(item.contentHash), signal);
+      await this.uploadWithRetry(
+        remotePath,
+        () => {
+          requireCustody();
+          return this.deps.encryptedStream(item.contentHash);
+        },
+        signal,
+      );
+      requireCustody();
       // Verify-after-upload (#106, ADR-0007): "backed up" is never a lie.
       // The LOCAL ciphertext hash is the truth the remote must match
       // before the row may go synced.
       const local = await this.hashLocalCiphertext(item.contentHash);
+      requireCustody();
       const remote = await this.deps.provider.verify(remotePath);
+      requireCustody();
       if (remote.sha256 !== local.sha256 || remote.bytes !== local.bytes) {
         this.deps.audit(
           `VERIFY-MISMATCH photo=${item.id} local=${local.sha256}/${String(local.bytes)} remote=${remote.sha256}/${String(remote.bytes)}`,
@@ -636,10 +667,21 @@ export class BackupEngine {
       for (const sidecar of this.deps.sidecarsForPhoto?.(item.id) ?? []) {
         const sidecarRemote = sidecarPath(sidecar.photoId, sidecar.contentHash);
         const alreadyPresent = this.presenceFor().verified.has(sidecarRemote) || (await this.listedPaths('sidecars')).has(sidecarRemote);
+        requireCustody();
         if (!alreadyPresent) {
-          await this.uploadWithRetry(sidecarRemote, () => this.encryptedSidecar(sidecar), signal);
+          await this.uploadWithRetry(
+            sidecarRemote,
+            () => {
+              requireCustody();
+              return this.encryptedSidecar(sidecar);
+            },
+            signal,
+          );
+          requireCustody();
           const localSidecar = await this.hashStream(this.encryptedSidecar(sidecar));
+          requireCustody();
           const remoteSidecar = await this.deps.provider.verify(sidecarRemote);
+          requireCustody();
           if (remoteSidecar.sha256 !== localSidecar.sha256 || remoteSidecar.bytes !== localSidecar.bytes) {
             this.deps.audit(`VERIFY-MISMATCH sidecar=${sidecarRemote}`);
             throw new ProviderError(`verify mismatch for ${sidecar.fileName}`, 'corrupt');
@@ -647,19 +689,27 @@ export class BackupEngine {
           this.notePresent(sidecarRemote);
         }
       }
+      requireCustody();
       this.deps.ledger.markBackedUp(item.id, new Date(this.deps.now()).toISOString());
       this.notePresent(remotePath);
     } catch (error) {
-      outcome = error instanceof ProviderError && error.kind === 'transient' && error.scope === 'provider' ? 'failed-transient' : 'failed';
-      this.deps.ledger.markError(item.id);
-      syncState = 'error';
-      console.error(`[overlook] backup failed for ${item.fileName}: ${error instanceof Error ? error.message : String(error)}`);
-      if (error instanceof ProviderError && (error.kind === 'auth' || error.kind === 'quota')) {
-        this.deps.syncStateChanged([{ id: item.id, syncState }]);
-        return 'stop'; // retrying the rest cannot help — surface and stop
+      if (error instanceof LockedBackupPhotoError || !this.canBackUp(item)) {
+        outcome = 'skipped';
+        syncState = originalState;
+        if (this.deps.ledger.status(item.id) !== originalState) this.deps.ledger.setStatus(item.id, originalState);
+      } else {
+        outcome =
+          error instanceof ProviderError && error.kind === 'transient' && error.scope === 'provider' ? 'failed-transient' : 'failed';
+        this.deps.ledger.markError(item.id);
+        syncState = 'error';
+        console.error(`[overlook] backup failed for ${item.fileName}: ${error instanceof Error ? error.message : String(error)}`);
+        if (error instanceof ProviderError && (error.kind === 'auth' || error.kind === 'quota')) {
+          this.deps.syncStateChanged([{ id: item.id, syncState }]);
+          return 'stop'; // retrying the rest cannot help — surface and stop
+        }
       }
     }
-    progressed(outcome === 'uploaded' ? 'uploaded' : 'failed');
+    progressed(outcome === 'skipped' ? 'skipped' : outcome === 'uploaded' ? 'uploaded' : 'failed');
     this.deps.syncStateChanged([{ id: item.id, syncState }]);
     await this.throttle(settings, this.deps.now() - started);
     return outcome;
@@ -712,7 +762,7 @@ export class BackupEngine {
       const rows = new Map((this.deps.allSidecars?.() ?? []).map((row) => [sidecarPath(row.photoId, row.contentHash), row]));
       for (const path of sidecarMissing) {
         const row = rows.get(path);
-        if (row === undefined) blocked += 1;
+        if (row === undefined || !this.canBackUp({ id: row.photoId, keyId: row.keyId })) blocked += 1;
         else sidecarUploadNow.push(row);
       }
     }

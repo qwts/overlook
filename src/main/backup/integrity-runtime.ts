@@ -2,7 +2,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { KeyResolver } from '../crypto/envelope.js';
-import { queryGet } from '../db/sql.js';
+import { unavailableKeyIdsForPhoto } from '../db/backup-key-availability.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import { BackupIntegrityCursorStore } from './integrity-cursor.js';
 import {
@@ -49,13 +49,7 @@ function scrubber(
     provider,
     batchSize: 50,
     items,
-    isAvailable: (id) =>
-      queryGet(
-        deps.db,
-        `SELECT 1 FROM photos p JOIN keys k ON k.id = p.key_id
-      WHERE p.id = ? AND k.material_present = 0`,
-        id,
-      ) === undefined,
+    isAvailable: (id) => unavailableKeyIdsForPhoto(deps.db, id).length === 0,
     hasLocal: (hash) => deps.blobs.hasOriginal(hash),
     encryptedStream: (hash) => deps.blobs.getEncryptedStream(hash),
     verifyRemoteCiphertext: (item, ciphertext) => verifyRemoteOriginalCiphertext(item, ciphertext, deps.resolveKey),

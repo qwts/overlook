@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { queryAll, queryGet } from './sql.js';
+import { unavailableKeyIdsForPhoto } from './backup-key-availability.js';
+import { queryAll } from './sql.js';
 import { createManifestDebtStore } from '../backup/manifest-debt.js';
 import type { BackupEngineDeps } from '../backup/backup-engine.js';
 
@@ -30,13 +31,12 @@ export interface OrdinaryClaimDetail {
 export function createBackupClaimDeps(
   db: BetterSqlite3.Database,
   blobs: { hasOriginal(contentHash: string): boolean },
-): Pick<BackupEngineDeps, 'claimsForContentHashes' | 'hasLocalOriginal' | 'manifestDebt' | 'isKeyAvailable'> {
+): Pick<BackupEngineDeps, 'claimsForContentHashes' | 'hasLocalOriginal' | 'manifestDebt' | 'unavailableKeyIdsForPhoto'> {
   return {
     claimsForContentHashes: (hashes) => claimsForContentHashes(db, hashes),
     hasLocalOriginal: (hash) => blobs.hasOriginal(hash),
     manifestDebt: createManifestDebtStore(db),
-    isKeyAvailable: (id) =>
-      queryGet<{ present: number }>(db, 'SELECT material_present AS present FROM keys WHERE id = ?', id)?.present === 1,
+    unavailableKeyIdsForPhoto: (id) => unavailableKeyIdsForPhoto(db, id),
   };
 }
 

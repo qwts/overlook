@@ -10,10 +10,10 @@ import { buffer } from 'node:stream/consumers';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { BackupEngine, sidecarBackupDeps, type BackupEngineDeps } from '../../src/main/backup/backup-engine.js';
-import { createManifestDebtStore } from '../../src/main/backup/manifest-debt.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
-import { claimsForContentHashes } from '../../src/main/db/backup-claims.js';
+import { createBackupClaimDeps } from '../../src/main/db/backup-claims.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
+import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { SidecarRepository } from '../../src/main/db/sidecar-repository.js';
 import { run } from '../../src/main/db/sql.js';
@@ -54,15 +54,18 @@ function photoInsert(id: string, contentHash: string, bytes: number): PhotoInser
   };
 }
 
-async function world() {
+async function world(separateSidecarKey = false) {
   const dataDir = mkdtempSync(join(tmpdir(), 'overlook-sidecar-backup-'));
   const db = openLibraryDatabase({ path: join(dataDir, 'library.db'), dbKey: randomBytes(32) });
   run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-07-13T00:00:00.000Z')`);
+  run(db, `INSERT OR IGNORE INTO keys (id, wrapped_key, created_at) VALUES (2, 'test', '2026-07-13T00:00:00.000Z')`);
+  const keys = new KeyringRepository(db);
   const repo = new PhotosRepository(db);
   const sidecars = new SidecarRepository(db);
   const store = new BlobStore({ dataDir });
   await store.init();
   const key: EnvelopeKey = { id: 1, key: randomBytes(32) };
+  const companionKey: EnvelopeKey = separateSidecarKey ? { id: 2, key: randomBytes(32) } : key;
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-sidecar-remote-')) });
   const ledger = new SyncLedger(db);
   let clock = 0;
@@ -87,9 +90,7 @@ async function world() {
     audit: () => undefined,
     integrityScrub: () => Promise.resolve({ checked: 0, repaired: 0, unrecoverable: 0, cycleComplete: false }),
     recoveryGenerationHealthy: () => Promise.resolve(true),
-    claimsForContentHashes: (hashes) => claimsForContentHashes(db, hashes),
-    hasLocalOriginal: (hash) => store.hasOriginal(hash),
-    manifestDebt: createManifestDebtStore(db),
+    ...createBackupClaimDeps(db, store),
   };
 
   async function addPhoto(id: string, seed: number, withSidecar: boolean): Promise<string | null> {
@@ -97,14 +98,14 @@ async function world() {
     const ref = await store.putOriginal(Readable.from([bytes]), key, id);
     repo.insert(photoInsert(id, ref.contentHash, ref.bytes));
     if (!withSidecar) return null;
-    const sidecarRef = await store.putSidecar(Readable.from([XMP]), key, id);
+    const sidecarRef = await store.putSidecar(Readable.from([XMP]), companionKey, id);
     sidecars.insert({
       photoId: id,
       role: 'xmp',
       fileName: `${id}.xmp`,
       contentHash: sidecarRef.contentHash,
       bytes: sidecarRef.bytes,
-      keyId: 1,
+      keyId: companionKey.id,
       importedAt: '2026-07-29T00:00:00.000Z',
     });
     return sidecarRef.contentHash;
@@ -118,10 +119,76 @@ async function world() {
     return JSON.parse(sealed.toString('utf8')) as { sidecars: { photoId: string; blobPath: string }[]; photos: { id: string }[] };
   }
 
-  return { deps, repo, store, ledger, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
+  return { keys, deps, repo, store, ledger, provider, addPhoto, latestManifest, engine: new BackupEngine(deps) };
 }
 
 describe('sidecar backup round trip (#484)', () => {
+  test('an absent companion key locks counts, uploads, integrity selection and reconciliation (#1134)', async () => {
+    const w = await world(true);
+    const hash = await w.addPhoto('P0', 1, true);
+    assert.ok(hash);
+    w.keys.setPresent(2, false);
+    assert.equal(w.repo.pendingCount(), 0);
+    assert.equal(w.ledger.pendingCount(), 0);
+    assert.equal((await w.engine.run()).uploaded, 0);
+    assert.equal(w.ledger.isDirty('P0'), true);
+    assert.equal((await w.provider.list('blobs')).length, 0);
+    assert.equal((await w.provider.list('sidecars')).length, 0);
+    w.keys.setPresent(2, true);
+    assert.equal(w.repo.pendingCount(), 1);
+    assert.equal((await w.engine.run()).uploaded, 1);
+    w.ledger.markDirty('P0');
+    w.keys.setPresent(2, false);
+    assert.deepEqual(w.repo.integrityItems({ afterId: null, limit: 10 }), []);
+    await w.provider.delete(`sidecars/P0/${hash}`);
+    const reconciler = new BackupEngine(w.deps);
+    reconciler.oweManifest();
+    const blocked = await reconciler.run();
+    assert.equal(blocked.failed, 0);
+    assert.equal(blocked.uploaded, 0);
+    assert.equal(blocked.manifestUploaded, false);
+    assert.equal((await w.provider.list('sidecars')).length, 0);
+    assert.equal(w.ledger.isDirty('P0'), true);
+    w.keys.setPresent(2, true);
+    const resumed = await reconciler.run();
+    assert.equal(resumed.manifestUploaded, true);
+    assert.equal(w.ledger.isDirty('P0'), false);
+  });
+
+  test('removal during original put or verification preserves dirty work and skips companions (#1134)', async () => {
+    for (const removedKeyId of [1, 2]) {
+      for (const phase of ['put', 'verify']) {
+        const w = await world(true);
+        await w.addPhoto('P0', 1, true);
+        const put = w.provider.put.bind(w.provider);
+        const verify = w.provider.verify.bind(w.provider);
+        w.provider.put = async (path, stream) => {
+          const result = await put(path, stream);
+          if (phase === 'put' && path.startsWith('blobs/')) w.keys.setPresent(removedKeyId, false);
+          return result;
+        };
+        w.provider.verify = async (path) => {
+          const result = await verify(path);
+          if (phase === 'verify' && path.startsWith('blobs/')) w.keys.setPresent(removedKeyId, false);
+          return result;
+        };
+        const skipped = await w.engine.run();
+        assert.equal(skipped.uploaded, 0);
+        assert.equal(skipped.failed, 0);
+        assert.equal(w.ledger.status('P0'), 'local');
+        assert.equal(w.ledger.isDirty('P0'), true);
+        assert.equal(w.repo.pendingCount(), 0);
+        assert.equal((await w.provider.list('sidecars')).length, 0);
+        w.provider.put = put;
+        w.provider.verify = verify;
+        w.keys.setPresent(removedKeyId, true);
+        assert.equal(w.repo.pendingCount(), 1);
+        assert.equal((await w.engine.run()).uploaded, 1);
+        assert.equal(w.ledger.isDirty('P0'), false);
+      }
+    }
+  });
+
   test('ACCEPTANCE: the companion uploads with its photo and lands in the schema-6 manifest; a deleted-unbacked photo stays out', async () => {
     const w = await world();
     const hash = await w.addPhoto('P0', 1, true);

@@ -96,3 +96,12 @@ corrupt ciphertext or permission to repair a remote original.
 Automated coverage: `tests/backup/backup-engine.test.ts`,
 `tests/backup/integrity-scrubber.test.ts`, and the production keyring
 factory notification test in `tests/crypto/keyring-service.test.ts`.
+
+A companion can use a different key from its original. Removing either key locks
+the owning photo's backup work and count. Remove a key while its original upload
+or verification is in flight: the row must regain its previous status and remain
+dirty, with no subsequent companion upload or ledger settlement. A request already
+sent to the provider may finish; it does not count as completed backup while
+custody is absent. Reimport resumes the whole photo/companion transaction.
+
+Automated race and companion-key coverage: `tests/backup/sidecar-backup.test.ts`.

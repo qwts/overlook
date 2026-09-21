@@ -1,3 +1,4 @@
+import { PHOTO_HAS_ABSENT_KEY_SQL } from './backup-key-availability.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
@@ -844,7 +845,7 @@ export class PhotosRepository {
           AND (@custodyAuthorityId IS NULL OR l.custody_authority_id = @custodyAuthorityId)
           AND (@legacyUnbound = 0 OR l.custody_authority_id IS NULL)
           AND l.coverage = 'included'
-          AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.id = p.key_id AND k.material_present = 0)
+          AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})
           AND (@afterId IS NULL OR p.id > @afterId)
         ORDER BY p.id
         LIMIT @limit`,
@@ -867,7 +868,7 @@ export class PhotosRepository {
         this.db,
         `SELECT count(*) AS n FROM sync_ledger l JOIN ordinary_visible_photos p ON p.id = l.photo_id
           WHERE l.dirty = 1 AND l.coverage = 'included' AND p.deleted_at IS NULL
-            AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.id = p.key_id AND k.material_present = 0)`,
+            AND NOT (${PHOTO_HAS_ABSENT_KEY_SQL})`,
       )[0]?.n ?? 0
     );
   }
