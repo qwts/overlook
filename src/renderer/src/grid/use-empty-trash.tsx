@@ -8,11 +8,17 @@ import { PurgeConfirm } from './PurgeConfirm';
 export function useEmptyTrash(): { readonly open: () => void; readonly dialog: ReactElement | null } {
   const { formatCount } = useFormats();
   const dispatch = useAppDispatch();
-  const [photoIds, setPhotoIds] = useState<readonly string[] | null>(null);
+  const [selection, setSelection] = useState<{
+    readonly ids: readonly string[];
+    readonly excluded: number;
+    readonly excluding: number;
+  } | null>(null);
 
   const open = (): void => {
     void (async () => {
       const ids: string[] = [];
+      let excluded = 0;
+      let excluding = 0;
       let cursor: PageCursor | null | undefined;
       do {
         const page = await window.overlook.library.page({
@@ -20,23 +26,29 @@ export function useEmptyTrash(): { readonly open: () => void; readonly dialog: R
           limit: 500,
           ...(cursor === undefined || cursor === null ? {} : { cursor }),
         });
-        ids.push(...page.photos.map(({ id }) => id));
+        for (const photo of page.photos) {
+          ids.push(photo.id);
+          if (photo.coverage === 'excluded') excluded += 1;
+          if (photo.coverage === 'excluding') excluding += 1;
+        }
         cursor = page.nextCursor;
       } while (cursor !== null);
-      if (ids.length > 0) setPhotoIds(ids);
+      if (ids.length > 0) setSelection({ ids, excluded, excluding });
     })().catch(() => {
       dispatch({ type: 'toast/shown', toast: { title: "Couldn't load Trash contents", tone: 'red' } });
     });
   };
 
   const dialog =
-    photoIds === null ? null : (
+    selection === null ? null : (
       <PurgeConfirm
-        count={photoIds.length}
-        onCancel={() => setPhotoIds(null)}
+        count={selection.ids.length}
+        excludedCount={selection.excluded}
+        excludingCount={selection.excluding}
+        onCancel={() => setSelection(null)}
         onConfirm={() => {
-          const confirmedIds = [...photoIds];
-          setPhotoIds(null);
+          const confirmedIds = [...selection.ids];
+          setSelection(null);
           void window.overlook.library.purge({ photoIds: confirmedIds }).then((outcome) => {
             if (outcome.status === 'cancelled') return;
             const { purged, protected: protectedCount, remoteFailures } = outcome.result;

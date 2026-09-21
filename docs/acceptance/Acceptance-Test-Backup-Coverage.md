@@ -88,7 +88,8 @@ RemovesCloudCopy / KeepsOnThisDevice`.
 
 - Repeat the refused-delete scenario, move that photo to Trash, and open
   Purge. The dialog says its cloud copy may still exist because removal is
-  pending. A mixed selection counts settled exclusions separately.
+  pending. A mixed selection counts settled exclusions separately. Repeat with
+  **Empty Trash**, including enough rows to span pages; its counts must match.
 - Confirm purge. The photo and its local original disappear (unless a sibling
   still needs the original); migration 39 retains remote cleanup outside the
   photo and sync-ledger cascades. If source custody cannot be captured or the
