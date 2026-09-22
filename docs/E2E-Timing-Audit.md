@@ -43,6 +43,9 @@ Failure diagnostics retain separate bounded tails for all console output and
 application messages (`[overlook]` and renderer errors). Platform noise cannot
 evict the application tail. Active-library relocation logs engine failures before
 reactivation reloads the renderer and can discard its IPC response (#1128).
+The active relocation acceptance keeps its destination-path and photo-count
+assertions: content access is fenced during teardown and copy so a renderer
+request cannot reopen the source and recreate its ephemeral cache mid-scan.
 
 `expectRendererReload` arms the `framenavigated` listener **before** triggering
 an in-place reload (active-library move, app-lock relock), then requires the

@@ -71,8 +71,14 @@ export interface RelocationRuntimeOptions {
 
 export class RelocationRuntime {
   private running: { readonly id: string; readonly controller: AbortController } | null = null;
+  private contentBlocked = false;
 
   constructor(private readonly options: RelocationRuntimeOptions) {}
+
+  /** Lazy access must not reopen the source while the engine copies it. */
+  requireContentAccess(): void {
+    if (this.contentBlocked) throw new Error('library relocation is in progress');
+  }
 
   /** One move at a time, app-wide: multi-select is N sequential singles
    * driven by the wizard, each with independent progress and results. */
@@ -123,6 +129,7 @@ export class RelocationRuntime {
 
     const controller = new AbortController();
     this.running = { id, controller };
+    this.contentBlocked = isActive;
     try {
       // Quiesce the active library first (ADR-0017 §4 teardown: fence →
       // cancel/drain → checkpoint → close → zero keys → release lock); the
@@ -153,9 +160,11 @@ export class RelocationRuntime {
         }
         throw error;
       } finally {
+        this.contentBlocked = false;
         if (isActive) await this.options.active.reactivate(id);
       }
     } finally {
+      this.contentBlocked = false;
       this.running = null;
     }
   }
@@ -228,6 +237,7 @@ export class RelocationRuntime {
 
     const controller = new AbortController();
     this.running = { id, controller };
+    this.contentBlocked = isActive;
     try {
       if (isActive) await this.options.active.closeLibrary();
       try {
@@ -242,9 +252,11 @@ export class RelocationRuntime {
         if (error instanceof RelocationError) return { ok: false, reason: error.reason, detail: error.message };
         throw error;
       } finally {
+        this.contentBlocked = false;
         if (isActive) await this.options.active.reactivate(id);
       }
     } finally {
+      this.contentBlocked = false;
       this.running = null;
     }
   }
