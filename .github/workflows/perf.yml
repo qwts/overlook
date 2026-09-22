@@ -6,6 +6,11 @@ name: Perf harness
 # are indicative — the recorded baselines come from the dev machine.
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Diagnostic main-process CPU profile (timings are not baseline evidence)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -76,6 +81,8 @@ jobs:
       # upload below still runs.
       - name: Run the perf harness (Electron under Xvfb)
         timeout-minutes: 45
+        env:
+          OVERLOOK_PERF_PROFILE: ${{ inputs.profile && '1' || '0' }}
         run: xvfb-run --auto-servernum -- npm run test:perf:inner
 
       # No guard diagnostics step here: this job invokes the :inner entrypoint, so the
@@ -88,5 +95,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: perf-report
-          path: test-results/perf-report.json
+          path: |
+            test-results/*perf-report.json
+            test-results/perf-query-measurements.json
+            test-results/perf-query-profile.cpuprofile
           retention-days: 90

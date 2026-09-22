@@ -8,6 +8,7 @@ import type { Page } from '@playwright/test';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import { BUDGETS, type PerfReport } from './budgets.js';
 import { SCROLL_TRIAL_COUNT, summarizeScrollTrials, type ScrollStats, type ScrollTrial } from './scroll-stats.js';
+import { profileQueries } from './query-profile.js';
 
 // #123: the 200K target becomes measurable — one harness, written budgets
 // (ratchets: never loosen), a stable report. Runs the E4.8 synthetic
@@ -118,20 +119,40 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     // Query latency (median of rounds) over the real IPC boundary.
     const page500Ms = await queryMedianMs(page, `window.overlook.library.page({ source: 'all', limit: 500 })`);
     const countsMs = await queryMedianMs(page, `window.overlook.library.counts({ recentSince: '2026-01-01T00:00:00.000Z' })`);
-    const searchMs = await queryMedianMs(
-      page,
-      // A real place — matches ~1/6 of the library, so bm25 ranks a large
-      // candidate set (#390; the FTS index replaced the old instr() scan).
-      `window.overlook.library.page({ source: 'all', limit: 500, query: 'lisbon' })`,
-    );
-    const semanticVectorSearchMs = await queryMedianMs(
-      page,
-      `window.overlook.library.page({ source: 'all', limit: 500, query: 'a neon tram at dusk', searchMode: 'auto' })`,
-    );
+    const { searchMs, semanticVectorSearchMs } = await profileQueries(app, async () => {
+      const searchMs = await queryMedianMs(
+        page,
+        // A real place — matches ~1/6 of the library, so bm25 ranks a large
+        // candidate set (#390; the FTS index replaced the old instr() scan).
+        `window.overlook.library.page({ source: 'all', limit: 500, query: 'lisbon', searchMode: 'keyword' })`,
+      );
+      const semanticVectorSearchMs = await queryMedianMs(
+        page,
+        `window.overlook.library.page({ source: 'all', limit: 500, query: 'a neon tram at dusk', searchMode: 'auto' })`,
+      );
+      return { searchMs, semanticVectorSearchMs };
+    });
     // Routine CI stays offline, so it uses the deterministic query vector and
     // composes that measurement with the production text tower's separately
     // enforced ADR maximum. The sum is a conservative end-to-end bound.
     const semanticSearchMs = semanticVectorSearchMs + TEXT_QUERY_BUDGET_MS;
+    // Retain partial measurements even if the later import never finishes.
+    writeFileSync(
+      'test-results/perf-query-measurements.json',
+      JSON.stringify(
+        {
+          diagnosticProfile: process.env['OVERLOOK_PERF_PROFILE'] === '1',
+          coldStartMs,
+          page500Ms,
+          countsMs,
+          searchMs,
+          semanticVectorSearchMs,
+          semanticSearchMs,
+        },
+        null,
+        2,
+      ),
+    );
 
     console.log(
       `[perf] queries page=${page500Ms.toFixed(0)}ms counts=${countsMs.toFixed(0)}ms search=${searchMs.toFixed(0)}ms semantic-vector=${semanticVectorSearchMs.toFixed(0)}ms semantic-composed=${semanticSearchMs.toFixed(0)}ms`,
@@ -168,7 +189,8 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     const mainRssMb = await app.evaluate(() => Promise.resolve(process.memoryUsage().rss / 1024 / 1024));
     const rendererHeapMb = await page.evaluate<number>(`(performance).memory ? (performance).memory.usedJSHeapSize / 1024 / 1024 : 0`);
 
-    const report: PerfReport = {
+    const report: PerfReport & { readonly diagnosticProfile: boolean } = {
+      diagnosticProfile: process.env['OVERLOOK_PERF_PROFILE'] === '1',
       librarySize: LIBRARY_SIZE,
       coldStartMs,
       page500Ms,
