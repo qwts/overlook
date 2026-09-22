@@ -178,7 +178,10 @@ protected-migration-hidden IDs are unavailable, not readable ordinary photos.
 Native dispatch targets the focused lightbox photo before the grid selection.
 
 Change the live selection or open another workflow while its custody query is
-pending: the stale result must not open Export. Context-menu Export instead
+pending: the stale result must not open Export or publish a skipped-photo toast.
+Exercise Import, Settings, library switching, activity, duplicate review, and
+shell overlays such as shortcut help or offload. Closing the newer workflow
+before the old query completes must not revive the request. Context-menu Export instead
 retains the menu's explicit target snapshot when the grid restores its prior
 selection. Verify this with an unselected photo while another photo is selected;
 Export must open for the context target, without replacing the prior selection.

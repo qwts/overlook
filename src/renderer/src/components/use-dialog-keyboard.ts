@@ -1,8 +1,15 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const dialogStack: symbol[] = [];
+let dialogRevision = 0;
+let renderedDialogs = 0;
+
+/** Async workflows may only publish into the dialog scope where they started. */
+export function currentDialogScope(): { readonly revision: number; readonly open: boolean } {
+  return { revision: dialogRevision, open: renderedDialogs > 0 };
+}
 
 function trapTab(event: KeyboardEvent, panel: HTMLDivElement): void {
   const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
@@ -24,6 +31,14 @@ function trapTab(event: KeyboardEvent, panel: HTMLDivElement): void {
 
 export function useDialogKeyboard(rendered: boolean, panelRef: RefObject<HTMLDivElement>, requestClose: () => void): void {
   const stackTokenRef = useRef<symbol>(Symbol('dialog'));
+  useLayoutEffect(() => {
+    if (!rendered) return;
+    dialogRevision++;
+    renderedDialogs++;
+    return () => {
+      renderedDialogs--;
+    };
+  }, [rendered]);
   useEffect(() => {
     if (!rendered) return;
     const token = stackTokenRef.current;

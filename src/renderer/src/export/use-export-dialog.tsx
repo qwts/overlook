@@ -1,5 +1,6 @@
 import { useState, useRef, useLayoutEffect, type ReactElement } from 'react';
 import { useIntl } from 'react-intl';
+import { currentDialogScope } from '../components/use-dialog-keyboard.js';
 import { photoCommandTargets } from '../commands/photo-command-targets.js';
 
 import type { Board } from '../../../shared/moodboard/board.js';
@@ -34,7 +35,7 @@ export function useExportDialog(): ExportDialogController {
     () => () => {
       requestRef.current++;
     },
-    [state.protectedAlbum],
+    [state.protectedAlbum, state.dialogRevision],
   );
   const dispatch = useAppDispatch();
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<readonly string[] | null>(null);
@@ -53,12 +54,19 @@ export function useExportDialog(): ExportDialogController {
     setSelectedPhotoIds(next);
   };
   const openPhotos = (next: readonly string[], target: 'snapshot' | 'live' = 'snapshot'): void => {
+    const dialogScope = currentDialogScope();
+    if (dialogScope.open) return;
     const invocation = ++requestRef.current;
     const targetRevision = liveTargetRevisionRef.current;
     void photoCommandTargets('photo.export', next, intl).then(({ photoIds: eligible, notice }) => {
       // Context menus restore the prior selection after invoking their captured
       // targets. Only selection-bound commands follow later selection changes.
-      if (requestRef.current !== invocation || (target === 'live' && liveTargetRevisionRef.current !== targetRevision)) return;
+      if (
+        requestRef.current !== invocation ||
+        currentDialogScope().revision !== dialogScope.revision ||
+        (target === 'live' && liveTargetRevisionRef.current !== targetRevision)
+      )
+        return;
       if (notice !== null) dispatch({ type: 'toast/shown', toast: { title: notice, tone: 'amber' } });
       if (eligible.length === 0) return;
       setPhotoIds(eligible);

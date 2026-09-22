@@ -11,6 +11,7 @@ import {
   useSelectionExportAvailability,
   type PhotoKeyLookup,
 } from '../../src/renderer/src/commands/use-photo-key-selection.js';
+import { Dialog } from '../../src/renderer/src/components/Dialog.js';
 import { SelectionPill } from '../../src/renderer/src/grid/SelectionPill.js';
 import { duplicatePhotos } from '../../src/renderer/src/grid/duplicate-photos.js';
 import { useExportDialog, type ExportDialogController } from '../../src/renderer/src/export/use-export-dialog.js';
@@ -71,7 +72,7 @@ let exportDialog: ExportDialogController;
 let state: AppState;
 let dispatch: Dispatch<AppAction>;
 let runCommand: (id: CommandId) => void;
-function NativeProbe() {
+function NativeProbe({ otherWorkflowOpen = false }: { readonly otherWorkflowOpen?: boolean }) {
   exportDialog = useExportDialog();
   state = useAppState();
   dispatch = useAppDispatch();
@@ -91,14 +92,18 @@ function NativeProbe() {
     closeOffload: () => {},
     pcloudEnabled: false,
   });
-  return null;
+  return otherWorkflowOpen ? (
+    <Dialog open title="Newer workflow">
+      <p>Newer workflow</p>
+    </Dialog>
+  ) : null;
 }
-function renderNative(): void {
+function renderNative(otherWorkflowOpen = false): void {
   act(() =>
     root?.render(
       <IntlProvider locale="en">
         <AppStateProvider>
-          <NativeProbe />
+          <NativeProbe otherWorkflowOpen={otherWorkflowOpen} />
         </AppStateProvider>
       </IntlProvider>,
     ),
@@ -212,6 +217,75 @@ test('changing protected scope cancels a pending explicit export (#1235)', async
     await Promise.resolve();
   });
   assert.equal(state.exportOpen, false);
+});
+
+for (const dialog of ['import', 'settings', 'libraries', 'activity', 'duplicates'] as const) {
+  test(`opening ${dialog} cancels a pending export without replacing the newer workflow (#1235)`, async () => {
+    setup();
+    let finish: ((result: PhotoKeySelection) => void) | undefined;
+    query = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    renderNative();
+    act(() => dispatch({ type: 'selection/replaced', photoIds: ['old'] }));
+    act(() => (dialog === 'import' ? runCommand('photo.export') : exportDialog.openPhotos(['old'])));
+    act(() => dispatch({ type: 'dialog/set', dialog, open: true }));
+    await act(async () => {
+      finish?.({ photoIds: ['old'], locked: 1, missing: 0 });
+      await Promise.resolve();
+    });
+    assert.equal(state.exportOpen, false);
+    assert.equal(state[`${dialog}Open`], true);
+    assert.equal(state.toast, null, 'a superseded request must not publish skipped-photo feedback');
+  });
+}
+
+test('a dialog opened and closed in one render still supersedes pending export (#1235)', async () => {
+  setup();
+  let finish: ((result: PhotoKeySelection) => void) | undefined;
+  query = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  renderNative();
+  act(() => exportDialog.openPhotos(['old']));
+  act(() => {
+    dispatch({ type: 'dialog/set', dialog: 'settings', open: true });
+    dispatch({ type: 'dialog/set', dialog: 'settings', open: false });
+  });
+  await act(async () => {
+    finish?.({ photoIds: ['old'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  assert.equal(state.settingsOpen, false);
+  assert.equal(state.exportOpen, false);
+});
+
+test('shell overlays supersede pending export and refuse a new one until closed (#1235)', async () => {
+  setup();
+  let finish: ((result: PhotoKeySelection) => void) | undefined;
+  const requests: string[][] = [];
+  query = (ids) =>
+    new Promise((resolve) => {
+      requests.push([...ids]);
+      finish = resolve;
+    });
+  renderNative();
+  act(() => exportDialog.openPhotos(['old']));
+  renderNative(true);
+  act(() => exportDialog.openPhotos(['blocked']));
+  assert.deepEqual(requests, [['old']]);
+  renderNative(false);
+  await act(async () => {
+    finish?.({ photoIds: ['old'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  assert.equal(state.exportOpen, false);
+  query = (ids) => Promise.resolve({ photoIds: ids, locked: 0, missing: 0 });
+  act(() => exportDialog.openPhotos(['fresh']));
+  await flush();
+  assert.equal(state.exportOpen, true);
 });
 
 test('mixed pixel commands filter authoritatively and retain localized skipped counts (#1235)', async () => {
