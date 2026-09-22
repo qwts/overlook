@@ -92,7 +92,8 @@
     "seed:perf": "OVERLOOK_SEED_SYNTHETIC=200000 electron-vite dev",
     "benchmark:cold-storage": "node scripts/benchmark-cold-storage.mjs",
     "benchmark:embedding": "node scripts/benchmark-embedding-model.mjs",
-    "postinstall": "node scripts/ensure-electron-binary.mjs"
+    "postinstall": "node scripts/ensure-electron-binary.mjs",
+    "test:embedding-native:inner": "npm run test:compile && node scripts/run-electron-node-test.mjs .test-dist/tests/embedding/native-worker.test.js"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
