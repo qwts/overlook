@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../../src/main/db/edit-bake-debt-repository.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Database from 'better-sqlite3-multiple-ciphers';
@@ -47,17 +48,18 @@ test('edit bake debt backfills old heads and only settles the current revision, 
     revisions.append('edited', revision(old, null));
     migrate(db);
     assert.equal(queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version, 44);
-    assert.equal(revisions.pendingBake('edited'), old, 'legacy edited previews have no trusted bake identity');
-    assert.equal(revisions.pendingBake('unedited'), undefined);
+    const debt = new EditBakeDebtRepository(db);
+    assert.equal(debt.pending('edited'), old, 'legacy edited previews have no trusted bake identity');
+    assert.equal(debt.pending('unedited'), undefined);
     revisions.append('edited', revision(next, old));
-    assert.equal(revisions.pendingBake('edited'), next);
-    assert.equal(revisions.settleBake('edited', old), false, 'older completion cannot clear newer debt');
-    assert.equal(revisions.settleBake('edited', next), true);
-    assert.equal(revisions.pendingBake('edited'), undefined);
+    assert.equal(debt.pending('edited'), next);
+    assert.equal(debt.settle('edited', old), false, 'older completion cannot clear newer debt');
+    assert.equal(debt.settle('edited', next), true);
+    assert.equal(debt.pending('edited'), undefined);
     assert.equal(
       queryGet<{ dirty: number }>(db, "SELECT dirty FROM sync_ledger WHERE photo_id = 'edited'")?.dirty,
-      1,
-      'new derivatives are owed to backup even if metadata did not change',
+      0,
+      'local derivative repairs do not re-upload unchanged originals',
     );
     assert.throws(
       db.transaction(() => {
@@ -67,7 +69,7 @@ test('edit bake debt backfills old heads and only settles the current revision, 
       /rollback/u,
     );
     assert.equal(revisions.head('edited').head?.id, next);
-    assert.equal(revisions.pendingBake('edited'), undefined, 'head and debt roll back together');
+    assert.equal(debt.pending('edited'), undefined, 'head and debt roll back together');
     revisions.append('edited', revision(rolledBack, next));
     run(db, "DELETE FROM photos WHERE id = 'edited'");
     assert.equal(queryGet(db, "SELECT 1 FROM photo_edit_bake_debt WHERE photo_id = 'edited'"), undefined, 'purge cascades local debt');

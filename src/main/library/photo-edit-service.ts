@@ -1,6 +1,7 @@
 import { previousEditState } from '../../shared/library/edit-revert.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import { markDirty } from '../backup/sync-ledger.js';
 import { EditRevisionRepository, type EditHead } from '../db/edit-revision-repository.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
@@ -49,10 +50,12 @@ export interface PhotoEditServiceDeps {
 export type EditMutationKind = 'save' | 'reset' | 'revert';
 
 export class PhotoEditService {
+  private readonly bakeDebt: EditBakeDebtRepository;
   private readonly revisions: EditRevisionRepository;
 
   constructor(private readonly deps: PhotoEditServiceDeps) {
     this.revisions = new EditRevisionRepository(deps.db);
+    this.bakeDebt = new EditBakeDebtRepository(deps.db);
   }
 
   head(photoId: string): EditHead {
@@ -114,7 +117,7 @@ export class PhotoEditService {
     let availabilityChanged = false;
     let previewStateChanged = false;
     if (derivatives === 'regenerated' && this.revisions.head(photoId).head?.id === document.id) {
-      this.revisions.settleBake(photoId, document.id);
+      this.bakeDebt.settle(photoId, document.id);
       const currentPhoto = this.deps.repo.get(photoId);
       previewStateChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
       availabilityChanged = previewStateChanged && currentPhoto?.dimensionStatus !== 'unavailable';

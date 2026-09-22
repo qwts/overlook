@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { markDirty } from '../backup/sync-ledger.js';
 
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
@@ -91,32 +90,6 @@ export function viewRevision(row: EditRevisionRow): EditRevisionView {
 
 export class EditRevisionRepository {
   constructor(private readonly db: BetterSqlite3.Database) {}
-
-  pendingBake(photoId: string): string | undefined {
-    return queryGet<{ head: string }>(this.db, 'SELECT head_revision_id AS head FROM photo_edit_bake_debt WHERE photo_id = ?', photoId)
-      ?.head;
-  }
-
-  /** A stale completion cannot settle a newer revision's repair debt. */
-  settleBake(photoId: string, headId: string): boolean {
-    return this.db.transaction(() => {
-      const settled =
-        queryGet(
-          this.db,
-          `DELETE FROM photo_edit_bake_debt
-        WHERE photo_id = ? AND head_revision_id = ?
-          AND head_revision_id = (SELECT edit_head FROM photos WHERE id = ?)
-        RETURNING photo_id`,
-          photoId,
-          headId,
-          photoId,
-        ) !== undefined;
-      // A backup may have completed while the original was absent. The new
-      // derivative bytes need publication even when their dimensions match.
-      if (settled) markDirty(this.db, photoId);
-      return settled;
-    })();
-  }
 
   headRow(photoId: string): EditRevisionRow | null {
     const raw = queryGet<RawRow>(

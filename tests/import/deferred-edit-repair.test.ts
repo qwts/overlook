@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../../src/main/db/edit-bake-debt-repository.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,7 @@ import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryGet, run } from '../../src/main/db/sql.js';
 import { PhotoEditService } from '../../src/main/library/photo-edit-service.js';
 import { createRawRepairRuntime } from '../../src/main/import/raw-repair-runtime.js';
 import { ThumbnailPool } from '../../src/main/import/thumbnail-pool.js';
@@ -55,7 +56,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       keyId: 1,
     });
     repo.setDimensionStatus('root', 'verified');
-    let revisions = new EditRevisionRepository(db);
+    let bakeDebt = new EditBakeDebtRepository(db);
     const pool = new ThumbnailPool({ workerUrl: new URL('../../src/main/import/thumbnail-worker.js', import.meta.url), size: 1 });
     const thumbnails = new ThumbnailService(pool, blobs);
     await thumbnails.generateFor({ photoId: 'root', bytes, contentHash: original.contentHash, key, fileKind });
@@ -77,17 +78,18 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     assert.equal(saved.derivatives, 'deferred');
     const headId = saved.head?.id;
     assert.ok(headId);
-    assert.equal(revisions.pendingBake('root'), headId);
+    assert.equal(bakeDebt.pending('root'), headId);
     assert.equal((await service.save('root', edits)).changed, false, 'the identical save is still a no-op');
     const id = 'root';
     db.close();
     db = openLibraryDatabase(database);
     repo = new PhotosRepository(db);
-    revisions = new EditRevisionRepository(db);
+    const revisions = new EditRevisionRepository(db);
+    bakeDebt = new EditBakeDebtRepository(db);
     const restored = repo.get(id);
     assert.ok(restored);
     assert.equal(restored.previewFailure, null, 'valid old previews are not missing');
-    assert.equal(revisions.pendingBake(id), headId);
+    assert.equal(bakeDebt.pending(id), headId);
     assert.equal(
       repo.previewRepairCandidates([original.contentHash]).some((photo) => photo.id === id),
       true,
@@ -97,6 +99,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     const repair = createRawRepairRuntime({
       repo,
       revisions,
+      bakeDebt,
       blobs,
       blobsReady: Promise.resolve(),
       thumbnails,
@@ -109,16 +112,19 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     });
     try {
       await repair.repair([original.contentHash]);
-      assert.equal(revisions.pendingBake(id), headId, 'missing original retains debt across startup');
+      assert.equal(bakeDebt.pending(id), headId, 'missing original retains debt across startup');
       assert.equal(repo.get(id)?.previewFailure, null, 'old readable previews stay available');
       await blobs.putOriginal(Readable.from([bytes]), key, id);
-      run(db, "UPDATE sync_ledger SET status = 'synced' WHERE photo_id = ?", id);
+      run(db, "UPDATE sync_ledger SET status = 'synced', dirty = 0 WHERE photo_id = ?", id);
       await repair.repair([original.contentHash]);
       const mid = await buffer(blobs.getThumbStream(original.contentHash, 'mid', () => key.key, id));
       const metadata = await sharp(mid).metadata();
       assert.equal(metadata.width, 40);
       assert.equal(metadata.height, 60);
-      assert.equal(revisions.pendingBake(id), undefined);
+      assert.equal(repo.get(id)?.width, 60, 'edited output dimensions do not replace original dimensions');
+      assert.equal(repo.get(id)?.height, 40);
+      assert.equal(queryGet<{ dirty: number }>(db, 'SELECT dirty FROM sync_ledger WHERE photo_id = ?', id)?.dirty, 0);
+      assert.equal(bakeDebt.pending(id), undefined);
       assert.equal(revisions.head(id).head?.id, headId, 'repair never rewrites the durable edit head');
       assert.equal(revisions.head(id).history.length, 1);
       assert.equal(repo.get(id)?.previewFailure, null);

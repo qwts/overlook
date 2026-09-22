@@ -93,7 +93,10 @@ provider configured for the steps below.
     `thumbnail-replacement-order.test.ts` forces an older publication to overlap
     a newer edit and proves that both final derivative files represent the newer
     request. The migration's local-only debt is keyed by the expected edit head;
-    successful old completions cannot clear a newer head's debt.
+    successful old completions cannot clear a newer head's debt. Re-baking only
+    local derivatives must preserve original dimensions and must not queue an
+    unchanged original for backup. Successful duplicate and restore bakes settle
+    their supported head's debt immediately; failed or unsupported bakes retain it.
 
 16. Newer format: with the app closed, insert an `edit_revisions` row whose
     document carries an operation of a type or version this build does not

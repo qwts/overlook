@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../../src/main/db/edit-bake-debt-repository.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -101,6 +102,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     const repair = createRawRepairRuntime({
       repo,
       revisions,
+      bakeDebt: new EditBakeDebtRepository(db),
       blobs,
       blobsReady: Promise.resolve(),
       thumbnails: new ThumbnailService(pool, blobs),
