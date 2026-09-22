@@ -653,9 +653,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Reject cancelled workflow
+        if: ${{ cancelled() }}
+        run: exit 1
       - name: Enforce the selected lifecycle lane
+        if: ${{ !cancelled() }}
         env:
-          CANCELLED: ${{ cancelled() }}
           MODE: ${{ needs.policy.outputs.mode }}
           POLICY: ${{ needs.policy.result }}
           COMPLETE: ${{ needs.ci.result }}
@@ -670,7 +673,6 @@ jobs:
           MERGE_VALIDATED: ${{ needs.merge-evidence.outputs.validated }}
           POST_MERGE: ${{ needs.post-merge.result }}
         run: |
-          test "$CANCELLED" = false
           test "$POLICY" = success
           test "$WORKFLOW_RUNTIME" = success
           case "$MODE" in

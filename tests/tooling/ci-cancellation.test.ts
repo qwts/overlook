@@ -78,7 +78,6 @@ const gate = jobSource('gate');
 const script = gate.split('        run: |\n')[1]?.replace(/^ {10}/gmu, '');
 assert.ok(script, 'aggregate gate script must exist');
 const success = {
-  CANCELLED: 'false',
   POLICY: 'success',
   WORKFLOW_RUNTIME: 'success',
   MODE: 'full',
@@ -94,13 +93,19 @@ const success = {
   POST_MERGE: 'success',
 };
 function verdict(overrides: Record<string, string>): number | null {
-  return spawnSync('bash', ['-e', '-c', script ?? 'exit 99'], { env: { ...process.env, ...success, ...overrides } }).status;
+  const cancelled = overrides['CANCELLED'] === 'true';
+  const reject = /name: Reject cancelled workflow\n {8}if: \$\{\{ cancelled\(\) \}\}\n {8}run: (.+)/u.exec(gate)?.[1];
+  assert.ok(reject);
+  const command = cancelled ? reject : script;
+  return spawnSync('bash', ['-e', '-c', command ?? 'exit 99'], { env: { ...process.env, ...success, ...overrides } }).status;
 }
 
 test('aggregate verdict fails closed for cancelled workflows and required jobs', () => {
   assert.match(gate, /if: always\(\)/u);
   assert.match(jobSource('e2e-gate'), /always\(\)/u);
-  assert.match(gate, /CANCELLED: \$\{\{ cancelled\(\) \}\}/u);
+  // Status functions are valid in step conditions, not in env expressions.
+  assert.match(gate, /name: Enforce the selected lifecycle lane\n {8}if: \$\{\{ !cancelled\(\) \}\}/u);
+  assert.doesNotMatch(gate, /[A-Z_]+: \$\{\{ (?:cancelled|always|success|failure)\(\)/u);
   for (const MODE of ['full', 'manual', 'queue', 'post-merge']) {
     assert.equal(verdict({ MODE }), 0, MODE);
     assert.notEqual(verdict({ MODE, CANCELLED: 'true' }), 0, MODE);
