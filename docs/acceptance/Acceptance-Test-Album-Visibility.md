@@ -38,3 +38,22 @@ the steps below.
 1. Hide an album, run a backup, restore into a fresh profile, and confirm the
    same album is hidden and All Photos shows the same rows. Switch libraries
    and back, and confirm the policy is unchanged.
+
+## Sidebar failure recovery (#1180)
+
+`App/Sidebar failures` provides deterministic rejection/retry stories for the
+three IPC paths below; the normal Electron album flows continue to cover real
+successful operations.
+
+1. Open **New album**, enter a name, and reject the creation request. Confirm a
+   localized error explains how to retry, the field retains the name and focus,
+   and no album appears. While the request is pending, repeated Enter must not
+   create duplicates. Retry with Enter; after success the field closes and focus
+   returns to **New album**. Escape cancels the name entry when no request is
+   pending; clicking elsewhere does not discard a nonempty name.
+2. Select an album and reject **Hide from All Photos**. Confirm the actions menu
+   closes, focus returns to its opener, selection and visibility remain unchanged,
+   and the error tells the user to reopen the menu to retry. Retry successfully.
+3. Repeat with **Use folder setting** on an album with explicit visibility inside
+   a folder. Expect the same failure feedback, preserved selection/focus, and a
+   successful retry. Neither rejection may escape as an unhandled promise.
