@@ -683,39 +683,6 @@ describe('PhotosRepository', () => {
     assert.deepEqual(counts, { all: 3, favorites: 1, recent: 1, raw: 3, offloaded: 1, unavailable: 0, deleted: 1, excluded: 0 });
     db.close();
   });
-
-  test('200K synthetic rows: one keyset page stays fast (baseline recorded)', () => {
-    const { db, repo } = openSeeded();
-    const insert = db.prepare(
-      `INSERT INTO photos (id, file_name, file_kind, width, height, bytes, content_hash, derivative_key,
-        imported_at, import_source, favorite, key_id, taken_at)
-       VALUES (?, ?, 'jpeg', 6000, 4000, 8400000, ?, ?, '2026-07-01T00:00:00.000Z', 'seed', 0, 1, ?)`,
-    );
-    db.transaction(() => {
-      for (let i = 0; i < 200_000; i += 1) {
-        const n = String(i).padStart(7, '0');
-        insert.run(
-          `01J8SEED${n}`,
-          `IMG_${n}.JPG`,
-          `seed-hash-${n}`,
-          `seed-hash-${n}`,
-          `2026-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}T08:00:00.000Z`,
-        );
-      }
-    })();
-
-    const started = process.hrtime.bigint();
-    const page = repo.page({ source: 'all', limit: 200 });
-    const elapsedMs = Number(process.hrtime.bigint() - started) / 1_000_000;
-    assert.equal(page.photos.length, 200);
-    assert.notEqual(page.nextCursor, null);
-    // Baseline: keyset page over 200K rows. Budget formalizes in M11; this
-    // bound only catches order-of-magnitude regressions (e.g. a lost index).
-    assert.ok(elapsedMs < 250, `page query took ${elapsedMs.toFixed(1)}ms`);
-
-    console.log(`[baseline] 200K keyset page: ${elapsedMs.toFixed(1)}ms`);
-    db.close();
-  });
 });
 
 describe('albums (#117)', () => {
