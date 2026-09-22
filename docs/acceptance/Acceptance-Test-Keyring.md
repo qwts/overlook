@@ -177,6 +177,9 @@ message alongside the completion result. Repeated IDs count once. Unknown or
 protected-migration-hidden IDs are unavailable, not readable ordinary photos.
 Native dispatch targets the focused lightbox photo before the grid selection.
 
+Command-hover Export follows the live selection when the hovered photo belongs
+to it; hovering an unselected photo captures only that photo. Verify that changing
+selection cancels the former pending export but preserves the latter.
 Change the live selection or open another workflow while its custody query is
 pending: the stale result must not open Export or publish a skipped-photo toast.
 Exercise Import, Settings, library switching, activity, duplicate review, and

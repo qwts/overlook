@@ -20,6 +20,7 @@ import { AppStateProvider, useAppDispatch, useAppState } from '../../src/rendere
 import type { PhotoKeySelection } from '../../src/shared/ipc/library-selection-channels.js';
 import type { AppAction, AppState } from '../../src/shared/library/app-state.js';
 import type { CommandId } from '../../src/shared/commands/registry.js';
+import { quickActionExportTarget, quickActionTargetIds } from '../../src/shared/commands/quick-actions.js';
 
 let root: Root | undefined;
 const previous = window.overlook;
@@ -154,6 +155,30 @@ test('export discards an in-flight result after the target selection changes (#1
   });
   assert.equal(state.exportOpen, false);
 });
+
+for (const origin of ['hover', 'context'] as const) {
+  for (const selected of [true, false]) {
+    test(`Quick Action export ${origin}, selected=${String(selected)} preserves target lifetime (#1235)`, async () => {
+      setup();
+      let finish: ((result: PhotoKeySelection) => void) | undefined;
+      query = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
+      renderNative();
+      act(() => dispatch({ type: 'selection/replaced', photoIds: selected ? ['photo', 'other'] : ['other'] }));
+      const ids = quickActionTargetIds('photo.export', 'photo', [...state.selection]);
+      act(() => exportDialog.openPhotos(ids, quickActionExportTarget('photo', state.selection, origin)));
+      act(() => dispatch({ type: 'selection/replaced', photoIds: ['new'] }));
+      await act(async () => {
+        finish?.({ photoIds: [...ids], locked: 0, missing: 0 });
+        await Promise.resolve();
+      });
+      assert.equal(state.exportOpen, origin === 'context' || !selected);
+      if (state.exportOpen) assert.deepEqual((exportDialog.dialog?.props as { photoIds: readonly string[] }).photoIds, ids);
+    });
+  }
+}
 
 test('context export preserves captured targets when the menu restores selection (#1235)', async () => {
   setup();

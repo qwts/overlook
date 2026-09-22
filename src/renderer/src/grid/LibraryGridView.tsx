@@ -31,6 +31,7 @@ import {
   configuredQuickActions,
   initialQuickActionVisibility,
   quickActionAvailability,
+  quickActionExportTarget,
   quickActionTargetIds,
   reduceQuickActionVisibility,
 } from '../../../shared/commands/quick-actions.js';
@@ -354,7 +355,7 @@ export function LibraryGridView({
     });
   };
 
-  const invokeQuickAction = (commandId: QuickActionCommandId, photo: PhotoRecord): void => {
+  const invokeQuickAction = (commandId: QuickActionCommandId, photo: PhotoRecord, origin: 'hover' | 'context' = 'hover'): void => {
     const photoIds = quickActionTargetIds(commandId, photo.id, [...state.selection]);
     if (!quickActionAvailability(commandId, inTrash ? 'trash' : 'library', photoIds.length === 1 && photo.locked).enabled) return;
     dispatchQuickActionVisibility({ type: 'dismiss' });
@@ -364,7 +365,7 @@ export function LibraryGridView({
         else toggleFavorites(photoIds);
         return;
       case 'photo.export':
-        onExport(photoIds);
+        onExport(photoIds, quickActionExportTarget(photo.id, state.selection, origin));
         return;
       case 'album.membership.add':
         setQuickAlbumIds(photoIds);
@@ -732,7 +733,7 @@ export function LibraryGridView({
               });
               return;
             }
-            invokeQuickAction(id, contextPhoto.photo);
+            invokeQuickAction(id, contextPhoto.photo, 'context');
             if (id === 'photo.export') {
               dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
             }
