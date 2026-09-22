@@ -8,6 +8,9 @@ import {
   type ExternalFileDropBoundary,
 } from '../../src/renderer/src/shell/external-file-drop.js';
 
+import { ALBUM_REORDER_DRAG_TYPE } from '../../src/shared/library/album-reorder-drag.js';
+import { PHOTO_DRAG_TYPE } from '../../src/shared/library/photo-drag.js';
+
 const boundaries: ExternalFileDropBoundary[] = [];
 
 afterEach(() => {
@@ -108,6 +111,30 @@ test('recovery-key targets retain their file drop while unknown drops cannot nav
 
   const unknownDrop = dispatchDrag('drop', document.body, textTransfer);
   assert.equal(unknownDrop.defaultPrevented, true);
+  assert.equal(result.unsupported.count, 0);
+});
+
+test('internal collection and photo drags reach their nested target through the window capture boundary', () => {
+  const result = install();
+  const target = document.createElement('button');
+  document.body.append(target);
+  const received: string[] = [];
+  const captured: boolean[] = [];
+  target.addEventListener('drop', (event) => {
+    event.preventDefault();
+    received.push(...Array.from(event.dataTransfer?.types ?? []));
+  });
+  for (const type of [ALBUM_REORDER_DRAG_TYPE, PHOTO_DRAG_TYPE]) {
+    const transfer = dataTransfer([], [type]);
+    captured.push(dispatchDrag('dragenter', target, transfer).defaultPrevented);
+    captured.push(dispatchDrag('dragover', target, transfer).defaultPrevented);
+    assert.equal(dispatchDrag('drop', target, transfer).defaultPrevented, true);
+  }
+  assert.deepEqual(received, [ALBUM_REORDER_DRAG_TYPE, PHOTO_DRAG_TYPE]);
+  assert.deepEqual(captured, [false, false, false, false]);
+  assert.deepEqual(result.states, []);
+  assert.deepEqual(result.paths, []);
+  assert.deepEqual(result.diagnostics, []);
   assert.equal(result.unsupported.count, 0);
 });
 
