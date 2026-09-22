@@ -248,10 +248,10 @@ export class FaultInjectingProvider implements StorageProvider {
 
   async put(path: string, bytes: Readable): Promise<{ bytes: number }> {
     if (this.faults.has('auth-expired')) {
-      throw new ProviderError('auth token expired', 'auth');
+      throw new ProviderError('auth token expired', 'auth', 'provider', true);
     }
     if (this.faults.has('put')) {
-      throw new ProviderError('injected upload failure', 'transient');
+      throw new ProviderError('injected upload failure', 'transient', 'provider', true);
     }
     return this.inner.put(path, bytes);
   }
