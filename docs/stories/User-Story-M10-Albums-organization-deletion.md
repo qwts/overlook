@@ -46,6 +46,12 @@ Enter closes it and restores the opener after success. Escape cancels entry
 when no request is pending. Existing Electron album flows cover successful
 real creation; the story covers rejection and retry deterministically.
 
+After a failed inline album creation, retry with Enter. On success the name
+field disappears, the New album button becomes enabled, and focus returns to
+that button after the UI commit. If the user moved focus away while creation
+was pending, completion must preserve that focus instead.
+`App/Sidebar failures / CreatePreservesMovedFocus` covers the latter case.
+
 ## Definition of done
 
 See the epic issue [#45](https://github.com/qwts/photos/issues/45) — the epic body is canonical; this page is the planning index entry.
