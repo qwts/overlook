@@ -68,7 +68,7 @@ const messages = defineMessages({
   },
 });
 
-const REASON_MESSAGES: Record<SkipReason, keyof typeof messages> = {
+const REASON_MESSAGES = {
   'not-found': 'reasonNotFound',
   deleted: 'reasonDeleted',
   'already-excluded': 'reasonAlreadyExcluded',
@@ -77,7 +77,7 @@ const REASON_MESSAGES: Record<SkipReason, keyof typeof messages> = {
   'provider-disconnected': 'reasonDisconnected',
   'restore-failed': 'reasonRestoreFailed',
   'local-missing': 'reasonLocalMissing',
-};
+} as const satisfies Record<SkipReason, keyof typeof messages>;
 
 export interface CoverageDialogProps {
   readonly photoIds: readonly string[];
