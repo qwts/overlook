@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.15
+
+### Patch Changes
+
+- 851d412: Expose a typed read-only query for key availability across a complete ordinary-photo selection, including offscreen rows and distinct locked or unavailable counts.
+- bd9f72a: Restore focus to the new-album button after successful creation commits its enabled state.
+
 ## 0.76.14
 
 ### Patch Changes
