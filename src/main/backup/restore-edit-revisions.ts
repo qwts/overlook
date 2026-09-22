@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { EditRevisionRepository } from '../db/edit-revision-repository.js';
@@ -53,4 +54,21 @@ export function editRevisionsMatch(db: BetterSqlite3.Database, manifest: Restora
   const expected = 'editRevisions' in manifest ? manifest.editRevisions : [];
   const actual = new EditRevisionRepository(db).snapshot(new Set(manifest.photos.map((photo) => photo.id)));
   return fingerprint(expected) === fingerprint(actual);
+}
+
+/** Restore rendered these heads before catalog reconstruction created the debt. */
+export async function settleRestoredEditBakes(
+  db: BetterSqlite3.Database,
+  manifest: RestorableBackupManifest,
+  verifiedPreview: (photoId: string) => Promise<boolean>,
+): Promise<void> {
+  if (!('editRevisions' in manifest)) return;
+  const debt = new EditBakeDebtRepository(db);
+  for (const revision of manifest.editRevisions) {
+    if (!revision.current) continue;
+    const parsed = parseEditRevision(revision.document);
+    if (parsed.ok && parsed.unsupported === null && (await verifiedPreview(revision.photoId))) {
+      debt.settle(revision.photoId, revision.id);
+    }
+  }
 }
