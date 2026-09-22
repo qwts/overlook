@@ -4,7 +4,7 @@ import { migrateAlbumFolders } from './album-folder-migration.js';
 import { migrateAlbumVisibility } from './album-visibility-migration.js';
 import { migrateGalleryPolicy } from './gallery-policy-migration.js';
 import { migrateSmartAlbums } from './smart-album-migration.js';
-import { migrateEditRevisions } from './edit-revision-migration.js';
+import { migrateEditBakeDebt, migrateEditRevisions } from './edit-revision-migration.js';
 import { migratePhotoProvenance } from './provenance-migration.js';
 import { migrateVariants } from './variant-migration.js';
 import { migratePerceptualFingerprints } from './fingerprint-migration.js';
@@ -56,4 +56,5 @@ export const COLLECTION_MIGRATIONS: readonly {
     name: 'pending-manifest-publication',
     up: migratePendingManifestPublication,
   },
+  { version: 44, name: 'deferred-edit-bakes', up: migrateEditBakeDebt },
 ];
