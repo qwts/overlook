@@ -166,6 +166,7 @@ export class RestoreCoordinator {
               libraryId: verification.libraryId,
               generation: verification.generation,
               photos: verification.photos,
+              ...(verification.coverage === undefined ? {} : { coverage: verification.coverage }),
               verifiedCount: verification.verifiedCount,
               missingCount: verification.missingCount,
               corruptCount: verification.corruptCount,
@@ -340,6 +341,7 @@ export class RestoreCoordinator {
         libraryId: result.libraryId,
         generation: result.generation,
         photos: result.photos,
+        ...(result.coverage === undefined ? {} : { coverage: result.coverage }),
         resumed: result.resumed,
         missing: result.missing,
       };
@@ -403,6 +405,7 @@ export class RestoreCoordinator {
           libraryId: result.libraryId,
           generation: result.generation,
           photos: result.photos,
+          ...(result.coverage === undefined ? {} : { coverage: result.coverage }),
           verifiedCount: result.verifiedCount,
           missingCount: result.missingCount,
           corruptCount: result.corruptCount,

@@ -199,6 +199,7 @@ test('a reopened running dialog follows status-changed to the complete screen', 
           libraryId: LIBRARY.libraryId,
           generation: 3,
           photos: 100,
+          coverage: { excludedCount: 2, excludedBytes: 4096 },
           resumed: false,
           missing: [],
         },
@@ -207,6 +208,7 @@ test('a reopened running dialog follows status-changed to the complete screen', 
     });
     assert.match(container.textContent ?? '', /Restore complete/u);
     assert.match(container.textContent ?? '', /100 photos restored/u);
+    assert.match(container.querySelector('[data-testid="restore-excluded"]')?.textContent ?? '', /2 photos \(4\.1 kB\)/u);
     assert.doesNotMatch(container.textContent ?? '', /Downloading and verifying originals/u);
   } finally {
     restore();

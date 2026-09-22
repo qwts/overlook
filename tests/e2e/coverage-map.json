@@ -2905,7 +2905,11 @@
         },
         {
           "type": "unit-dom",
-          "path": "tests/backup/restore-coverage-disclosure.test.ts"
+          "paths": [
+            "tests/backup/restore-coverage-disclosure.test.ts",
+            "tests/dom/restore-workflow-missing.test.tsx",
+            "tests/dom/restore-workflow-reopen.test.tsx"
+          ]
         }
       ]
     }

@@ -3,15 +3,11 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import type { RestoreLibrarySummary } from '../../../shared/backup/restore-contract.js';
 import { useFormats } from '../i18n/use-formats.js';
+import { RestoreExclusionNotice } from './RestoreExclusionNotice.js';
 import { Badge } from '../components/Badge.js';
 import { CopyableValue } from '../components/CopyableValue.js';
 
 const messages = defineMessages({
-  excluded: {
-    id: 'restore.library.excluded',
-    defaultMessage:
-      '{count, plural, one {# photo} other {# photos}} ({bytes}) deliberately not held by this backup; kept as placeholders when restored.',
-  },
   copyLibraryId: { id: 'restore.copy.libraryId', defaultMessage: 'library ID' },
   selectLibrary: { id: 'restore.select.library', defaultMessage: 'Select library {libraryId}' },
 });
@@ -57,9 +53,7 @@ export function RestoreLibraryCard({
           <div className="ovl-restore__meta">Metadata is unavailable until this backup validates.</div>
         )}
         {valid && library.excludedCount !== null && library.excludedCount > 0 && library.excludedBytes !== null ? (
-          <div className="ovl-restore__notice" data-testid="restore-excluded">
-            {intl.formatMessage(messages.excluded, { count: library.excludedCount, bytes: formatBytes(library.excludedBytes) })}
-          </div>
+          <RestoreExclusionNotice coverage={{ excludedCount: library.excludedCount, excludedBytes: library.excludedBytes }} />
         ) : null}
         {library.generatedAt === null ? null : (
           <div className="ovl-restore__date">

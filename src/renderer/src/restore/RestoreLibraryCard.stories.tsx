@@ -32,7 +32,7 @@ export const DeliberatelyExcluded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByTestId('restore-excluded')).toHaveTextContent(
-      '2 photos (4 KB) deliberately not held by this backup; kept as placeholders when restored.',
+      '2 photos (4.1 kB) deliberately not held by this backup; kept as placeholders when restored.',
     );
     await expect(canvas.getByRole('button', { name: /Select library/u })).toBeEnabled();
   },

@@ -125,7 +125,18 @@ test('restore discloses deliberate exclusions and retains a report without missi
   assert.equal(discovered.error, null);
   assert.equal(discovered.libraries[0]?.excludedCount, 1);
   assert.equal(discovered.libraries[0]?.excludedBytes, 2048);
-  const result = await engine.run({ masterKey, allowReplace: false });
+  const sessionId = discovered.sessionId;
+  assert.ok(sessionId !== null);
+  const verified = await coordinator.verify(sessionId, LIBRARY_ID);
+  assert.ok(verified.result !== null);
+  assert.deepEqual(verified.result.coverage, { excludedCount: 1, excludedBytes: 2048 });
+  assert.deepEqual(coordinator.status().verification?.coverage, verified.result.coverage);
+  const response = await coordinator.run(sessionId, LIBRARY_ID, verified.result.verificationId, false);
+  assert.equal(response.error, null);
+  const result = response.result;
+  assert.ok(result !== null);
+  assert.deepEqual(result.coverage, { excludedCount: 1, excludedBytes: 2048 });
+  assert.deepEqual(coordinator.status().lastResult?.coverage, result.coverage);
   assert.deepEqual(result.missing, [], 'deliberate exclusions are not missing-object failures');
   const report = JSON.parse(await readFile(join(targetDir, 'restore-report.json'), 'utf8')) as {
     generation: number;

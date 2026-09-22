@@ -40,7 +40,7 @@ import {
 } from './restore-staging.js';
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
 import { ProviderError, type StorageProvider } from './provider.js';
-import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
+import type { RestoreCoverage, RestoreMissingObject } from '../../shared/backup/restore-contract.js';
 import { projectVerifiedManifest } from './restore-projection.js';
 import {
   addPresenceFingerprint,
@@ -92,6 +92,7 @@ export interface RestoreRunResult {
   readonly libraryId: string;
   readonly generation: number;
   readonly photos: number;
+  readonly coverage?: RestoreCoverage;
   readonly resumed: boolean;
   /** Objects the restore could not recover (#915). Empty for a complete
    * restore; a partial restore reports every one, never just the first. */
@@ -108,6 +109,7 @@ export interface RestoreVerifyResult {
    * restore parameter. */
   readonly objectSetSha256: string;
   readonly photos: number;
+  readonly coverage?: RestoreCoverage;
   readonly missing: readonly RestoreMissingObject[];
   /** Counts split for the verify screen (X missing, Y corrupt) */
   readonly missingCount: number;
@@ -196,6 +198,7 @@ export class RestoreEngine {
     const missingCount = missing.filter((o) => o.reason === 'not-found').length;
     const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
     const verifiedCount = blobPhotos(candidate.manifest.photos).length - missing.filter((o) => o.kind === 'original').length;
+    const coverage = coverageTotals(candidate.manifest.photos);
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
@@ -203,6 +206,7 @@ export class RestoreEngine {
       sealedManifestSha256: candidate.sealedSha256,
       objectSetSha256: objectSetSha256(fingerprints),
       photos: candidate.manifest.photos.length,
+      ...(coverage.excludedCount > 0 ? { coverage } : {}),
       missing,
       missingCount,
       corruptCount,
@@ -474,6 +478,7 @@ export class RestoreEngine {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
       photos: blobPhotos(restoreCandidate.manifest.photos).length,
+      ...(coverage.excludedCount > 0 ? { coverage } : {}),
       resumed,
       missing: missing ?? [],
     };

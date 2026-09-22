@@ -36,7 +36,10 @@ interface RestoreMock {
   };
 }
 
-function mockOverlook(missing: readonly (typeof MISSING)[number][]): RestoreMock {
+function mockOverlook(
+  missing: readonly (typeof MISSING)[number][],
+  coverage?: { readonly excludedCount: number; readonly excludedBytes: number },
+): RestoreMock {
   const previous = (window as unknown as { overlook?: unknown }).overlook;
   const providers = [{ id: 'prov-a', label: 'Provider A', available: true, unavailableReason: null }];
   const missingCount = missing.filter((o) => o.reason === 'not-found').length;
@@ -138,6 +141,7 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): RestoreMock
             libraryId: '01KY000QE5PMZR2P66DX0CCR6D',
             generation: 3,
             photos: Math.max(0, verifiedCount),
+            coverage,
             resumed: false,
             fallbackFromGeneration: null,
             relaunching: false,
@@ -353,6 +357,18 @@ test('gap triage exposes all five truthful actions and retains failures on scree
     assert.equal(restoreMock.calls.csvExports.length, 1);
     assert.equal(restoreMock.calls.corruptExports.length, 1);
     assert.equal(restoreMock.calls.trash.length, 1);
+  } finally {
+    restoreMock.cleanup();
+  }
+});
+
+test('completion discloses actual restored-generation exclusions without a missing-object warning (#1125)', async () => {
+  const restoreMock = mockOverlook([], { excludedCount: 2, excludedBytes: 4096 });
+  try {
+    const host = await runToComplete(false);
+    assert.equal(host.querySelector('[data-testid="restore-missing"]'), null);
+    assert.match(host.querySelector('[data-testid="restore-excluded"]')?.textContent ?? '', /2 photos \(4\.1 kB\) deliberately not held/u);
+    assert.match(host.textContent ?? '', /3 photos restored/u);
   } finally {
     restoreMock.cleanup();
   }

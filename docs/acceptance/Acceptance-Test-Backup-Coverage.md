@@ -127,5 +127,8 @@ remains a missing-object failure, distinct from the excluded placeholder.
 
 The #1125 disclosure slice is covered by `Restore library coverage /
 DeliberatelyExcluded` and `tests/backup/restore-coverage-disclosure.test.ts`.
+Verification, confirmation, and completion retain the exclusion count and bytes;
+completion uses the activated generation, including after fallback or UI reopen.
+The durable report records exclusions separately from missing objects.
 Bulk placeholder cleanup and origin-specific tile/Inspector copy remain
 tracked in #1125; excluded rows are kept by default.
