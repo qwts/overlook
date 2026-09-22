@@ -1,3 +1,4 @@
+import { ALBUM_REORDER_DRAG_TYPE } from '../../../shared/library/album-reorder-drag.js';
 import { PHOTO_DRAG_TYPE } from '../../../shared/library/photo-drag.js';
 
 const PASSTHROUGH_SELECTOR = '[data-overlook-file-drop-target]';
@@ -37,8 +38,9 @@ function transferTypes(transfer: DataTransfer | null): readonly string[] {
         .map((type) => type.slice(0, 64));
 }
 
-function isInternalPhotoDrag(transfer: DataTransfer | null): boolean {
-  return transferTypes(transfer).includes(PHOTO_DRAG_TYPE);
+function isInternalLibraryDrag(transfer: DataTransfer | null): boolean {
+  const types = transferTypes(transfer);
+  return types.includes(PHOTO_DRAG_TYPE) || types.includes(ALBUM_REORDER_DRAG_TYPE);
 }
 
 function isFileTransfer(transfer: DataTransfer | null): boolean {
@@ -129,7 +131,7 @@ export function installExternalFileDropBoundary(
     setDragging(false);
     report(diagnostic('reset', undefined, reason));
   };
-  const shouldPassThrough = (event: DragEvent): boolean => isPassthroughTarget(event) || isInternalPhotoDrag(event.dataTransfer);
+  const shouldPassThrough = (event: DragEvent): boolean => isPassthroughTarget(event) || isInternalLibraryDrag(event.dataTransfer);
 
   const onDragEnter = (event: DragEvent): void => {
     if (shouldPassThrough(event)) {

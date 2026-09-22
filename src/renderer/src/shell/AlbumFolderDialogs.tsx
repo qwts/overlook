@@ -186,7 +186,14 @@ export function MoveAlbumDialog({
     setError(null);
     void window.overlook.albums
       .move({ albumId: album.id, parentId: destination === '' ? null : destination })
-      .then(({ album: moved }) => onComplete(moved))
+      .then((result) => {
+        if ('refusal' in result) {
+          setSaving(false);
+          setError(intl.formatMessage(messages.moveFailed));
+          return;
+        }
+        onComplete(result.album);
+      })
       .catch(() => {
         setSaving(false);
         setError(intl.formatMessage(messages.moveFailed));

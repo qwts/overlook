@@ -66,8 +66,8 @@ export const albumChannels = {
   ),
   albumMove: defineChannel(
     'album:move',
-    z.object({ albumId: z.string().min(1), parentId: z.string().min(1).nullable() }),
-    z.object({ album: albumListingSchema }),
+    z.object({ albumId: z.string().min(1), parentId: z.string().min(1).nullable(), position: z.number().int().nonnegative().optional() }),
+    z.union([z.object({ album: albumListingSchema }), z.object({ refusal: z.enum(['cycle', 'depth']) })]),
   ),
   albumSetTags: defineChannel(
     'album:set-tags',
