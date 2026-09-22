@@ -131,6 +131,7 @@ export class EmbeddingPool {
       workerData: {
         modelPath: this.options.modelPath,
         providers: this.options.providers,
+        ...(this.options.disableCpuFallback === undefined ? {} : { disableCpuFallback: this.options.disableCpuFallback }),
         ...(this.options.textModelPath === undefined ? {} : { textModelPath: this.options.textModelPath }),
         ...(this.options.tokenizerPath === undefined ? {} : { tokenizerPath: this.options.tokenizerPath }),
       } satisfies EmbeddingWorkerData,
