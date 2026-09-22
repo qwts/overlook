@@ -195,7 +195,7 @@ export class RestoreEngine {
     await this.scanProtected(discovery, candidate, missing, fingerprints, request.signal, ticker);
     const missingCount = missing.filter((o) => o.reason === 'not-found').length;
     const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
-    const verifiedCount = candidate.manifest.photos.length - missing.filter((o) => o.kind === 'original').length;
+    const verifiedCount = blobPhotos(candidate.manifest.photos).length - missing.filter((o) => o.kind === 'original').length;
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
@@ -468,7 +468,7 @@ export class RestoreEngine {
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
-      photos: restoreCandidate.manifest.photos.length,
+      photos: blobPhotos(restoreCandidate.manifest.photos).length,
       resumed,
       missing: missing ?? [],
     };
@@ -699,9 +699,10 @@ export class RestoreEngine {
   ): Promise<RestoreCheckpoint> {
     const thumbnails = this.deps.thumbnails(store);
     const skip = missingOriginalIds(missing);
-    const manifestIds = new Set(candidate.manifest.photos.map((photo) => photo.id));
+    const carried = blobPhotos(candidate.manifest.photos);
+    const manifestIds = new Set(carried.map((photo) => photo.id));
     const completed = new Set(checkpoint.completedThumbnailIds.filter((id) => manifestIds.has(id)));
-    for (const photo of candidate.manifest.photos) {
+    for (const photo of carried) {
       if (completed.has(photo.id) && !(await store.verifyThumbs(manifestDerivativeKey(photo), discovery.resolveKey, photo.id))) {
         completed.delete(photo.id);
         await store.deleteThumbs(manifestDerivativeKey(photo));
@@ -712,15 +713,15 @@ export class RestoreEngine {
     // revisions land in the catalog later, but the tiles must show the same
     // edits the backed-up library showed, not the untouched original.
     const transforms = restoredHeadTransforms(candidate.manifest);
-    this.emit('rebuilding', done, candidate.manifest.photos.length, null);
-    for (const photo of candidate.manifest.photos.filter((item) => !completed.has(item.id) && !skip.has(item.id))) {
+    this.emit('rebuilding', done, carried.length, null);
+    for (const photo of carried.filter((item) => !completed.has(item.id) && !skip.has(item.id))) {
       assertNotAborted(signal);
       await bakeRestoredDerivatives(thumbnails, store, recoveredKeys, discovery, photo, transforms.get(photo.id), signal);
       completed.add(photo.id);
       done += 1;
       checkpoint = { ...checkpoint, completedThumbnailIds: [...completed] };
       await saveCheckpoint(paths, checkpoint);
-      this.emit('rebuilding', done, candidate.manifest.photos.length, photo.id);
+      this.emit('rebuilding', done, carried.length, photo.id);
     }
     return checkpoint;
   }
@@ -840,7 +841,7 @@ export class RestoreEngine {
         boards: boardsSnapshot(db),
       };
       if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the verified projection');
-      for (const photo of candidate.manifest.photos) {
+      for (const photo of blobPhotos(candidate.manifest.photos)) {
         if (skip.has(photo.id)) continue;
         if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)))) {
           throw new RestoreError('corrupt', `final verification failed for ${photo.id}`);
