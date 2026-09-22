@@ -111,3 +111,12 @@ Automated coverage: `tests/library/purge-cleanup.test.ts` (atomic persistence,
 restart, sharing, account mismatch and late queue entries),
 `tests/backup/backup-engine.test.ts` (publication failure and retry ordering),
 and `PurgeConfirm.stories.tsx` (pending, settled and mixed counts).
+
+### Restore byte-boundary regression (#1233)
+
+Restore an exclusions-only backup: activation must retain its placeholder row
+without generating thumbnails or verifying an absent original, and report
+zero recovered photos. Repeat with one included photo: its bytes must still
+verify and count as recovered. Remove that included original and verify it
+remains a missing-object failure, distinct from the excluded placeholder.
+`tests/backup/restore-excluded-placeholders.test.ts` exercises all three paths.
