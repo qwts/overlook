@@ -43,6 +43,56 @@ describe('BlobStore', () => {
     assert.deepEqual(back, plaintext);
   });
 
+  test('recovery publishes only the recorded content address from a single streamed read (#1101)', async () => {
+    const { store, dataDir } = await freshStore();
+    const plaintext = randomBytes(300_000);
+    const expected = createHash('sha256').update(plaintext).digest('hex');
+    let reads = 0;
+    const source = Readable.from(
+      (function* () {
+        reads += 1;
+        yield plaintext.subarray(0, 100_000);
+        yield plaintext.subarray(100_000);
+      })(),
+    );
+    const ref = await store.putOriginal(source, KEY, 'asset-owner', expected);
+    assert.equal(reads, 1);
+    assert.deepEqual(ref, { contentHash: expected, keyId: KEY.id, bytes: plaintext.length });
+    assert.equal(await store.verifyOriginal(expected, RESOLVE, 'asset-owner'), true);
+    assert.deepEqual(await buffer(store.getStream(expected, RESOLVE, 'asset-owner')), plaintext);
+    assert.deepEqual(readdirSync(join(dataDir, 'tmp')), []);
+  });
+
+  test('wrong recovery bytes publish no original and leave no encrypted staging file (#1101)', async () => {
+    const { store, dataDir } = await freshStore();
+    const original = randomBytes(128);
+    const ref = await store.putOriginal(Readable.from([original]), KEY, 'asset-owner');
+    const before = await buffer(store.getEncryptedStream(ref.contentHash));
+    const wrong = randomBytes(128);
+    const wrongHash = createHash('sha256').update(wrong).digest('hex');
+    await assert.rejects(
+      store.putOriginal(Readable.from([wrong]), KEY, 'asset-owner', ref.contentHash),
+      /recovery bytes do not match the recorded original/u,
+    );
+    assert.equal(store.hasOriginal(wrongHash), false);
+    assert.deepEqual(await buffer(store.getEncryptedStream(ref.contentHash)), before);
+    assert.deepEqual(readdirSync(join(dataDir, 'tmp')), []);
+    assert.equal(walkFiles(join(dataDir, 'blobs')).length, 1);
+  });
+
+  test('matching recovery never replaces a previously published owner envelope (#1101)', async () => {
+    const { store, dataDir } = await freshStore();
+    const plaintext = randomBytes(128);
+    const ref = await store.putOriginal(Readable.from([plaintext]), KEY, 'asset-owner');
+    const before = await buffer(store.getEncryptedStream(ref.contentHash));
+    const differentKey = { id: 2, key: randomBytes(32) };
+    const recovered = await store.putOriginal(Readable.from([plaintext]), differentKey, 'sibling', ref.contentHash);
+    assert.equal(recovered.keyId, KEY.id, 'report the retained envelope key rather than the attempted write key');
+    assert.deepEqual(await buffer(store.getEncryptedStream(ref.contentHash)), before);
+    assert.equal(await store.verifyOriginal(ref.contentHash, RESOLVE, 'asset-owner'), true);
+    assert.deepEqual(readdirSync(join(dataDir, 'tmp')), []);
+  });
+
   test('thumb round-trip addressed by original hash + size', async () => {
     const { store } = await freshStore();
     const original = randomBytes(2048);
