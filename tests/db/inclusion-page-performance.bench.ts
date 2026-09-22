@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -10,7 +10,8 @@ import { run } from '../../src/main/db/sql.js';
 import type { PageCursor } from '../../src/shared/library/types.js';
 
 test('200K synthetic rows: inclusion-filter cursor walks stay within the page budget', () => {
-  const path = join(mkdtempSync(join(tmpdir(), 'overlook-inclusion-perf-')), 'library.db');
+  const directory = mkdtempSync(join(tmpdir(), 'overlook-inclusion-perf-'));
+  const path = join(directory, 'library.db');
   const db = openLibraryDatabase({ path, dbKey: randomBytes(32) });
   run(db, "INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'wrapped-test-key', ?)", new Date().toISOString());
   const repo = new PhotosRepository(db);
@@ -88,5 +89,6 @@ test('200K synthetic rows: inclusion-filter cursor walks stay within the page bu
     }
   } finally {
     db.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });
