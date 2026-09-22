@@ -2429,6 +2429,9 @@
   "restore.error.details": {
     "defaultMessage": "Details"
   },
+  "restore.library.excluded": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}} ({bytes}) deliberately not held by this backup; kept as placeholders when restored."
+  },
   "restore.local.error.alreadyRegistered": {
     "defaultMessage": "That library is already registered."
   },

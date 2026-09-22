@@ -9,6 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
 import { AnnouncerProvider } from '../../src/renderer/src/components/LiveAnnouncer.js';
 import type { RestoreStatusSnapshot } from '../../src/shared/backup/restore-contract.js';
+import { RestoreLibraryCard } from '../../src/renderer/src/restore/restore-library-card.js';
 import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
 
 function idleRestoreStatus(): RestoreStatusSnapshot {
@@ -49,6 +50,8 @@ const LIBRARY = {
   generatedAt: '2026-07-22T19:32:00.000Z',
   photos: 100,
   totalBytes: 16_200_000,
+  excludedCount: 0,
+  excludedBytes: 0,
   albums: 1,
   compatibility: 'compatible' as const,
   validation: 'valid' as const,
@@ -197,6 +200,7 @@ test('a reopened running dialog follows status-changed to the complete screen', 
           libraryId: LIBRARY.libraryId,
           generation: 3,
           photos: 100,
+          coverage: { excludedCount: 2, excludedBytes: 4096 },
           resumed: false,
           missing: [],
         },
@@ -205,6 +209,7 @@ test('a reopened running dialog follows status-changed to the complete screen', 
     });
     assert.match(container.textContent ?? '', /Restore complete/u);
     assert.match(container.textContent ?? '', /100 photos restored/u);
+    assert.match(container.querySelector('[data-testid="restore-excluded"]')?.textContent ?? '', /2 photos \(4\.1 kB\)/u);
     assert.doesNotMatch(container.textContent ?? '', /Downloading and verifying originals/u);
   } finally {
     restore();
@@ -315,4 +320,45 @@ test('SettingsDialog no longer nests RestoreWorkflow, so closing Settings cannot
   const source = readFileSync(join(process.cwd(), 'src/renderer/src/settings/SettingsDialog.tsx'), 'utf8');
   assert.doesNotMatch(source, /RestoreWorkflow/u);
   assert.match(source, /onRestore\?:/u);
+});
+
+test('backup selection descriptions identify each exclusion notice without dangling references (#1125)', async () => {
+  const { restore } = installOverlook(idleRestoreStatus());
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <AnnouncerProvider>
+            {[0, 2, 3].map((excludedCount) => (
+              <RestoreLibraryCard
+                key={excludedCount}
+                library={{ ...LIBRARY, excludedCount, excludedBytes: excludedCount * 2048 }}
+                selected={false}
+                onSelect={() => undefined}
+              />
+            ))}
+          </AnnouncerProvider>
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    const buttons = [...container.querySelectorAll('.ovl-restore__librarySelect')];
+    assert.equal(buttons.length, 3);
+    assert.equal(buttons[0]?.getAttribute('aria-describedby'), null);
+    const descriptions = buttons.slice(1).map((button) => {
+      const id = button.getAttribute('aria-describedby');
+      assert.ok(id);
+      const notice = document.getElementById(id);
+      assert.equal(notice?.getAttribute('data-testid'), 'restore-excluded');
+      assert.match(notice?.textContent ?? '', /deliberately not held by this backup/u);
+      return id;
+    });
+    assert.equal(new Set(descriptions).size, 2, 'each card refers to its own exclusion totals');
+  } finally {
+    restore();
+  }
 });
