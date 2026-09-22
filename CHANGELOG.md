@@ -1,5 +1,14 @@
 # photos
 
+## 0.76.12
+
+### Patch Changes
+
+- 4f413df: Bound manifest publication and preserve unresolved metadata writes across cancellation and library reopen.
+- eef77d8: Refuse export batches containing locked photos before any content or destination work, with guidance to import the missing keys.
+- a7097aa: Prevent renderer requests from reopening the source library while relocation copies it, and preserve failure diagnostics before the renderer reloads.
+- 429914e: Preserve album names for retry after failed sidebar creation and show actionable errors when album visibility changes fail.
+
 ## 0.76.11
 
 ### Patch Changes
