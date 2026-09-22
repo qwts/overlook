@@ -1,7 +1,8 @@
-import { ipcMain } from 'electron';
+import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
-import type { wrapHandler as createValidatedHandler } from '../../shared/ipc/registry.js';
+import type { IpcHandlerRegistrar, wrapHandler as createValidatedHandler } from '../../shared/ipc/registry.js';
+import { AlbumTreeConstraintError } from '../../shared/library/album-tree.js';
 import { mutateWithActivity } from '../activity/activity-publication.js';
 import type { ActivityFacade } from '../activity/activity-publication.js';
 import { albumMembershipCommand, albumOrderCommand } from '../history/command-drafts.js';
@@ -13,8 +14,9 @@ export function registerAlbumIpcHandlers(
   wrapHandler: typeof createValidatedHandler,
   getActivity?: () => ActivityFacade,
   onManifestChanged?: () => void,
+  registrar: IpcHandlerRegistrar = electron.ipcMain,
 ): void {
-  ipcMain.handle(channels.albumCreate.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumCreate.name, (_event, request: unknown) =>
     wrapHandler(channels.albumCreate, ({ name, kind, parentId, predicate }) =>
       mutateWithActivity(
         getActivity,
@@ -28,7 +30,7 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
-  ipcMain.handle(channels.albumSetVisibility.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumSetVisibility.name, (_event, request: unknown) =>
     wrapHandler(channels.albumSetVisibility, ({ albumId, showInAllPhotos }) =>
       mutateWithActivity(
         getActivity,
@@ -42,23 +44,28 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
-  ipcMain.handle(channels.albumMove.name, (_event, request: unknown) =>
-    wrapHandler(channels.albumMove, ({ albumId, parentId }) => {
-      const result = mutateWithActivity(
-        getActivity,
-        () => ({ album: getService().moveAlbum(albumId, parentId) }),
-        () => ({
-          eventType: 'album.moved',
-          entityIds: [albumId, ...(parentId === null ? [] : [parentId])],
-          outcome: 'succeeded',
-          payload: { parentId },
-        }),
-      );
-      onManifestChanged?.();
-      return result;
+  registrar.handle(channels.albumMove.name, (_event, request: unknown) =>
+    wrapHandler(channels.albumMove, ({ albumId, parentId, position }) => {
+      try {
+        const result = mutateWithActivity(
+          getActivity,
+          () => ({ album: getService().moveAlbum(albumId, parentId, position) }),
+          () => ({
+            eventType: 'album.moved',
+            entityIds: [albumId, ...(parentId === null ? [] : [parentId])],
+            outcome: 'succeeded',
+            payload: { parentId },
+          }),
+        );
+        onManifestChanged?.();
+        return result;
+      } catch (error) {
+        if (error instanceof AlbumTreeConstraintError) return { refusal: error.reason };
+        throw error;
+      }
     })(request),
   );
-  ipcMain.handle(channels.albumSetTags.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumSetTags.name, (_event, request: unknown) =>
     wrapHandler(channels.albumSetTags, ({ albumId, tags }) => {
       const result = mutateWithActivity(
         getActivity,
@@ -74,7 +81,7 @@ export function registerAlbumIpcHandlers(
       return result;
     })(request),
   );
-  ipcMain.handle(channels.albumSetPredicate.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumSetPredicate.name, (_event, request: unknown) =>
     wrapHandler(channels.albumSetPredicate, ({ albumId, predicate }) => {
       const result = mutateWithActivity(
         getActivity,
@@ -90,7 +97,7 @@ export function registerAlbumIpcHandlers(
       return result;
     })(request),
   );
-  ipcMain.handle(channels.albumDuplicate.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumDuplicate.name, (_event, request: unknown) =>
     wrapHandler(channels.albumDuplicate, ({ albumId }) => {
       const result = mutateWithActivity(
         getActivity,
@@ -101,10 +108,10 @@ export function registerAlbumIpcHandlers(
       return result;
     })(request),
   );
-  ipcMain.handle(channels.libraryFacetValues.name, (_event, request: unknown) =>
+  registrar.handle(channels.libraryFacetValues.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryFacetValues, ({ facet }) => ({ values: getService().facetValues(facet) }))(request),
   );
-  ipcMain.handle(channels.albumRename.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumRename.name, (_event, request: unknown) =>
     wrapHandler(channels.albumRename, ({ albumId, name }) => {
       mutateWithActivity(
         getActivity,
@@ -114,7 +121,7 @@ export function registerAlbumIpcHandlers(
       return {};
     })(request),
   );
-  ipcMain.handle(channels.albumDelete.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumDelete.name, (_event, request: unknown) =>
     wrapHandler(channels.albumDelete, ({ albumId, folder }) => {
       mutateWithActivity(
         getActivity,
@@ -124,7 +131,7 @@ export function registerAlbumIpcHandlers(
       return {};
     })(request),
   );
-  ipcMain.handle(channels.albumAddPhotos.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumAddPhotos.name, (_event, request: unknown) =>
     wrapHandler(channels.albumAddPhotos, ({ albumId, photoIds }) =>
       mutateWithActivity(
         getActivity,
@@ -142,7 +149,7 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
-  ipcMain.handle(channels.albumRemovePhotos.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumRemovePhotos.name, (_event, request: unknown) =>
     wrapHandler(channels.albumRemovePhotos, ({ albumId, photoIds }) =>
       mutateWithActivity(
         getActivity,
@@ -160,7 +167,7 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
-  ipcMain.handle(channels.albumMovePhotos.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumMovePhotos.name, (_event, request: unknown) =>
     wrapHandler(channels.albumMovePhotos, ({ sourceAlbumId, targetAlbumId, photoIds }) =>
       mutateWithActivity(
         getActivity,
@@ -177,7 +184,7 @@ export function registerAlbumIpcHandlers(
       ),
     )(request),
   );
-  ipcMain.handle(channels.albumReorder.name, (_event, request: unknown) =>
+  registrar.handle(channels.albumReorder.name, (_event, request: unknown) =>
     wrapHandler(channels.albumReorder, ({ albumId, position, commandId }) => {
       const result = mutateWithActivity(
         getActivity,

@@ -36,7 +36,8 @@ export interface AlbumTreeProps {
 // The sidebar's collection tree (#505, ADR-0030 §1): one flat list in
 // depth-first order — the order main already keeps — with each row indented
 // by its depth. Rows under a collapsed folder are not rendered. Reordering
-// stays among siblings (the hook enforces it); a folder carries its subtree.
+// keeps sibling previews separate from atomic cross-folder drops; a folder
+// carries its subtree.
 export function AlbumTree({
   collapsed,
   activeAlbumId,
@@ -79,11 +80,12 @@ export function AlbumTree({
         const photoDropProps = folder || smart ? null : albumDrop.targetProps(album);
         const reorderRowProps = albumReorder.rowProps(album);
         const feedback = albumDrop.feedback?.albumId === album.id ? albumDrop.feedback : null;
+        const collectionTarget = albumReorder.dropTarget?.albumId === album.id ? albumReorder.dropTarget : null;
         return (
           // A list item is intentionally the drop boundary; activation remains on its nested button.
           // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- typed album/photo drop target
           <li
-            className={`ovl-sidebar__albumrow${feedback === null ? '' : ` ovl-sidebar__albumrow--drop-${feedback.phase}`}${albumReorder.grabbedId === album.id ? ' ovl-sidebar__albumrow--grabbed' : ''}${albumReorder.draggingId === album.id ? ' ovl-sidebar__albumrow--dragging' : ''}`}
+            className={`ovl-sidebar__albumrow${collectionTarget === null ? '' : ' ovl-sidebar__albumrow--drop-allowed'}${feedback === null ? '' : ` ovl-sidebar__albumrow--drop-${feedback.phase}`}${albumReorder.grabbedId === album.id ? ' ovl-sidebar__albumrow--grabbed' : ''}${albumReorder.draggingId === album.id ? ' ovl-sidebar__albumrow--dragging' : ''}`}
             key={album.id}
             data-kind={album.kind}
             data-depth={depth}
@@ -96,7 +98,10 @@ export function AlbumTree({
               reorderRowProps.onDragOver(event);
               if (!event.isPropagationStopped()) photoDropProps?.onDragOver(event);
             }}
-            onDragLeave={photoDropProps?.onDragLeave}
+            onDragLeave={(event) => {
+              reorderRowProps.onDragLeave(event);
+              photoDropProps?.onDragLeave(event);
+            }}
             onDrop={(event) => {
               reorderRowProps.onDrop(event);
               if (!event.isPropagationStopped()) photoDropProps?.onDrop(event);
@@ -114,7 +119,7 @@ export function AlbumTree({
                   ? intl.formatMessage(folder ? messages.folderPositionSuffix : messages.positionSuffix, { position: position + 1, total })
                   : undefined
               }
-              statusLabel={feedback?.label}
+              statusLabel={collectionTarget?.label ?? feedback?.label}
               hiddenLabel={
                 album.unsupported !== null
                   ? intl.formatMessage(messages.unsupported)
