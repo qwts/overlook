@@ -60,7 +60,12 @@ export const CreateRetry: Story = {
     const opener = canvas.getByRole('button', { name: 'New album' });
     await userEvent.click(opener);
     const input = canvas.getByRole('textbox', { name: 'Album name' });
-    await userEvent.type(input, 'Retry album{Enter}{Enter}{Escape}');
+    await userEvent.type(input, 'Retry album');
+    await userEvent.click(canvas.getByRole('button', { name: /Favorites/u }));
+    await expect(input).toHaveValue('Retry album');
+    await userEvent.click(opener);
+    await expect(input).toHaveFocus();
+    await userEvent.keyboard('{Enter}{Enter}{Escape}');
     await expect(create).toHaveBeenCalledTimes(1);
     await expect(input).toHaveValue('Retry album');
     reject(new Error('create failed'));

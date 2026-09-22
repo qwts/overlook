@@ -192,6 +192,7 @@ export function Sidebar({
   const [albumName, setAlbumName] = useState('');
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const newAlbumRef = useRef<HTMLButtonElement>(null);
+  const albumNameRef = useRef<HTMLInputElement>(null);
   const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumListing; readonly x: number; readonly y: number } | null>(null);
   const [dialog, setDialog] = useState<CollectionDialog | null>(null);
   const allPhotosRef = useRef<HTMLButtonElement>(null);
@@ -345,6 +346,7 @@ export function Sidebar({
               disabled={creatingAlbum}
               onClick={() => {
                 setNamingAlbum(true);
+                albumNameRef.current?.focus();
               }}
             >
               <Icon name="plus" size={13} color="var(--text-faint)" />
@@ -357,6 +359,7 @@ export function Sidebar({
           className="ovl-sidebar__albumname"
           aria-label={intl.formatMessage(messages.albumName)}
           placeholder={intl.formatMessage(messages.albumName)}
+          ref={albumNameRef}
           value={albumName}
           readOnly={creatingAlbum}
           aria-busy={creatingAlbum}
@@ -382,7 +385,7 @@ export function Sidebar({
                 // The albums list refreshes off the library:changed push.
                 void window.overlook.albums.create({ name }).then(
                   () => {
-                    const restoreFocus = document.activeElement === input;
+                    const restoreFocus = input.ownerDocument.activeElement === input;
                     setCreatingAlbum(false);
                     setNamingAlbum(false);
                     setAlbumName('');
