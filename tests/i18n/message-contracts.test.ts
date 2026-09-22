@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createIntl, createIntlCache, defineMessages, type IntlShape } from 'react-intl';
+import { createIntl, createIntlCache, defineMessage, defineMessages, type IntlShape } from 'react-intl';
 
 import { en } from '../../src/shared/i18n/generated/en.js';
+
+const numeric = defineMessage<{ value: number | bigint }>({ id: 'test.numeric', defaultMessage: '{value, number}' });
 
 const messages = defineMessages({
   count: { id: 'coverage.dialog.skips', defaultMessage: '{count, plural, one {# will be skipped} other {# will be skipped}}' },
@@ -13,6 +15,8 @@ const messages = defineMessages({
 // This function is compiled, never executed. Unused @ts-expect-error directives
 // fail typecheck if an overload starts accepting invalid interpolation values.
 function invalidCalls(intl: IntlShape): void {
+  // @ts-expect-error Numeric ICU contracts do not accept string operands.
+  intl.formatMessage(numeric, { value: 'two' });
   // @ts-expect-error The plural count is required.
   intl.formatMessage(messages.count);
   // @ts-expect-error ICU plural operands must be numbers.
@@ -39,6 +43,8 @@ test('generated FormatJS contracts preserve plain, plural and rich-text renderin
     },
     createIntlCache(),
   );
+  assert.equal(intl.formatMessage(numeric, { value: 2n }), '2');
+  assert.equal(intl.formatMessage(numeric, { value: 2 }), '2');
   assert.equal(intl.formatMessage(messages.plain), 'Library activity will appear here.');
   assert.equal(intl.formatMessage(messages.count, { count: 2 }), '2 will be skipped');
   assert.equal(intl.formatMessage(messages.rich, { provider: 'Drive', cta: (parts) => parts }), 'Drive not connected — Connect');

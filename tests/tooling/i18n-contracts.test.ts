@@ -43,6 +43,10 @@ test('repeated ICU placeholders keep their strictest compatible type regardless 
   for (const types of [
     [1, 3, 2],
     [2, 3, 1],
+    [2, 6],
+    [6, 2],
+    [4, 2],
+    [2, 4],
     [1, 5],
     [5, 1],
   ]) {
@@ -71,4 +75,14 @@ test('contract output is stable and derives no-argument IDs from the source cata
   assert.doesNotMatch(output, /"z":/u);
   assert.match(output, /keyof typeof en/u);
   assert.match(output, /Record<never, never>/u);
+});
+
+test('number ICU elements retain bigint support without broadening date or plural uses (#1170)', async () => {
+  const contracts = await loadContracts();
+  for (const types of [[2], [1, 2], [2, 1]]) {
+    assert.deepEqual(contracts.messageArguments(types.map((type) => ({ type, value: 'value' }))), {
+      value: 'number | bigint',
+    });
+  }
+  assert.match(contracts.renderMessageContracts({ numeric: [{ type: 2, value: 'value' }] }), /"value": number \| bigint/u);
 });

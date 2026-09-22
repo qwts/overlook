@@ -13,7 +13,7 @@ const AST_TYPE = {
 };
 const VALUE_TYPES = new Map([
   [AST_TYPE.argument, 'MessageValue'],
-  [AST_TYPE.number, 'number'],
+  [AST_TYPE.number, 'number | bigint'],
   [AST_TYPE.date, 'Date | number'],
   [AST_TYPE.time, 'Date | number'],
   [AST_TYPE.select, 'string'],
@@ -33,7 +33,7 @@ export function messageArguments(elements) {
         } else if (type === 'MessageValue') {
           // A plain placeholder also used as a number/date retains that constraint.
           if (previous === 'MessageTag') throw new Error(`ICU tag/value collision: ${node.value}`);
-        } else if ([previous, type].every((value) => value === 'number' || value === 'Date | number')) {
+        } else if ([previous, type].every((value) => value === 'number' || value === 'number | bigint' || value === 'Date | number')) {
           args.set(node.value, 'number');
         } else {
           throw new Error(`Incompatible ICU argument types for ${node.value}: ${previous}, ${type}`);
