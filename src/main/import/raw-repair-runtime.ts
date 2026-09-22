@@ -61,8 +61,13 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
         signal,
         isCurrent: () => options.revisions.head(photo.id).head?.id === head?.id,
       });
-      if (outcome.generated && head !== null) options.bakeDebt.settle(photo.id, head.id);
-      return outcome;
+      if (!outcome.generated || head === null) return outcome;
+      return {
+        ...outcome,
+        settle: () => {
+          options.bakeDebt.settle(photo.id, head.id);
+        },
+      };
     },
     clearPreviewRepairDebt: (photoId) => options.repo.clearPreviewRepairDebt(photoId),
     repairMetadata: (photoId, metadata) => options.repo.repairPreviewMetadata(photoId, metadata),

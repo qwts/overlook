@@ -9,6 +9,11 @@ export interface RawRepairSummary {
   readonly skipped: number;
 }
 
+interface RepairOutcome extends ThumbnailOutcome {
+  /** Release durable publication debt only after all repaired row state is stored. */
+  readonly settle?: (() => void) | undefined;
+}
+
 export interface RawRepairServiceOptions {
   readonly candidates: (contentHashes?: readonly string[]) => readonly PhotoRecord[];
   readonly isUnavailable: (photoId: string) => boolean;
@@ -16,7 +21,7 @@ export interface RawRepairServiceOptions {
   readonly validThumbs: (photo: PhotoRecord) => Promise<boolean>;
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
   readonly extractMetadata: (bytes: Buffer, fileKind: PhotoRecord['fileKind']) => Promise<ExtractedMetadata>;
-  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, signal: AbortSignal) => Promise<ThumbnailOutcome>;
+  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, signal: AbortSignal) => Promise<RepairOutcome>;
   readonly repairMetadata: (photoId: string, metadata: ExtractedMetadata) => boolean;
   readonly repairGeneratedDimensions: (photoId: string, width: number, height: number) => boolean;
   readonly setDimensionStatus: (photoId: string, status: PhotoRecord['dimensionStatus']) => boolean;
@@ -117,7 +122,7 @@ export class RawRepairService {
         }
         const metadata = await this.options.extractMetadata(bytes, photo.fileKind);
         if (this.controller.signal.aborted) break;
-        let outcome: ThumbnailOutcome | null = null;
+        let outcome: RepairOutcome | null = null;
         const needsDimensionRepair = photo.dimensionStatus === 'legacy' || photo.width <= 0 || photo.height <= 0;
         if (!thumbsReady || needsDimensionRepair || requiresRebake) {
           outcome = await this.options.regenerate(photo, bytes, this.controller.signal);
@@ -142,6 +147,7 @@ export class RawRepairService {
         const failure = !thumbsReady && outcome?.generated !== true ? (outcome?.failure ?? 'decode-failed') : null;
         const debtCleared = outcome?.generated === true ? (this.options.clearPreviewRepairDebt?.(photo.id) ?? false) : false;
         const failureChanged = this.options.setPreviewFailure(photo.id, failure);
+        if (outcome?.generated === true) outcome.settle?.();
         if (repairedMetadata || repairedDimensions || repairedThumbs || debtCleared) {
           repaired += 1;
         }

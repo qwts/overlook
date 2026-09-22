@@ -122,9 +122,9 @@ export class VariantService {
       const outcome = await this.deps.regenerate(variant, bytes, transform, headId);
       if ((this.revisions.head(variant.id).head?.id ?? null) !== headId) return 'failed';
       if (outcome.generated) {
-        if (headId !== null) new EditBakeDebtRepository(this.deps.db).settle(variant.id, headId);
         this.deps.repo.setPreviewFailure(variant.id, null);
         this.deps.repo.clearPreviewRepairDebt(variant.id);
+        if (headId !== null) new EditBakeDebtRepository(this.deps.db).settle(variant.id, headId);
       } else {
         this.deps.repo.setPreviewFailure(variant.id, outcome.failure ?? 'decode-failed');
       }

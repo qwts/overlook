@@ -117,12 +117,12 @@ export class PhotoEditService {
     let availabilityChanged = false;
     let previewStateChanged = false;
     if (derivatives === 'regenerated' && this.revisions.head(photoId).head?.id === document.id) {
-      this.bakeDebt.settle(photoId, document.id);
       const currentPhoto = this.deps.repo.get(photoId);
       previewStateChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
       availabilityChanged = previewStateChanged && currentPhoto?.dimensionStatus !== 'unavailable';
       this.deps.repo.clearPreviewRepairDebt(photoId);
       this.deps.repo.setPreviewFailure(photoId, null);
+      this.bakeDebt.settle(photoId, document.id);
     }
     this.deps.changed(photoId, derivatives, availabilityChanged ? 'library' : 'none', previewStateChanged);
     return { ...this.revisions.head(photoId), changed: true, derivatives, pendingCount: this.deps.repo.pendingCount() };

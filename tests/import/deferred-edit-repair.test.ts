@@ -84,7 +84,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     db.close();
     db = openLibraryDatabase(database);
     repo = new PhotosRepository(db);
-    const revisions = new EditRevisionRepository(db);
+    let revisions = new EditRevisionRepository(db);
     bakeDebt = new EditBakeDebtRepository(db);
     const restored = repo.get(id);
     assert.ok(restored);
@@ -96,26 +96,48 @@ for (const fileKind of ['jpeg', 'png'] as const) {
     );
     const changed: string[][] = [];
     const memberships: string[] = [];
-    const repair = createRawRepairRuntime({
-      repo,
-      revisions,
-      bakeDebt,
-      blobs,
-      blobsReady: Promise.resolve(),
-      thumbnails,
-      currentKey: () => key,
-      resolveKey: () => key.key,
-      changed: (ids, membership) => {
-        changed.push([...ids]);
-        memberships.push(membership);
-      },
-    });
+    const createRepair = () =>
+      createRawRepairRuntime({
+        repo,
+        revisions,
+        bakeDebt,
+        blobs,
+        blobsReady: Promise.resolve(),
+        thumbnails,
+        currentKey: () => key,
+        resolveKey: () => key.key,
+        changed: (ids, membership) => {
+          changed.push([...ids]);
+          memberships.push(membership);
+        },
+      });
+    let repair = createRepair();
     try {
       await repair.repair([original.contentHash]);
       assert.equal(bakeDebt.pending(id), headId, 'missing original retains debt across startup');
       assert.equal(repo.get(id)?.previewFailure, null, 'old readable previews stay available');
       await blobs.putOriginal(Readable.from([bytes]), key, id);
       run(db, "UPDATE sync_ledger SET status = 'synced', dirty = 0 WHERE photo_id = ?", id);
+      if (fileKind === 'png') {
+        await blobs.deleteThumbs(original.contentHash);
+        repo.setPreviewFailure(id, 'corrupt');
+        repo.setPreviewFailure = () => {
+          throw new Error('interrupted after bake, before availability publication');
+        };
+        const interrupted = await repair.repair([original.contentHash]);
+        assert.equal(interrupted.failed, 1);
+        assert.equal(await blobs.verifyThumbs(original.contentHash, () => key.key, id), true);
+        assert.equal(bakeDebt.pending(id), headId, 'published files alone cannot settle debt before row availability');
+        assert.equal(repo.get(id)?.previewFailure, 'corrupt');
+        repair.close();
+        db.close();
+        db = openLibraryDatabase(database);
+        repo = new PhotosRepository(db);
+        revisions = new EditRevisionRepository(db);
+        bakeDebt = new EditBakeDebtRepository(db);
+        assert.equal(repo.previewRepairCandidates([original.contentHash]).length, 1, 'restart must retain the incomplete repair');
+        repair = createRepair();
+      }
       await repair.repair([original.contentHash]);
       const mid = await buffer(blobs.getThumbStream(original.contentHash, 'mid', () => key.key, id));
       const metadata = await sharp(mid).metadata();
@@ -129,7 +151,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       assert.equal(revisions.head(id).history.length, 1);
       assert.equal(repo.get(id)?.previewFailure, null);
       assert.equal(changed.flat().includes(id), true);
-      assert.equal(memberships.at(-1), 'none');
+      assert.equal(memberships.at(-1), fileKind === 'png' ? 'library' : 'none');
       assert.equal(repo.previewRepairCandidates([original.contentHash]).length, 0, 'the settled JPEG/PNG leaves maintenance');
     } finally {
       repair.close();
