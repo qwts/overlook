@@ -83,6 +83,9 @@ export interface OverlookApi {
   };
   readonly library: {
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;
+    readonly photoKeySelection: (
+      request: Req<typeof channels.libraryPhotoKeySelection>,
+    ) => Promise<Res<typeof channels.libraryPhotoKeySelection>>;
     readonly selectAll: (request: Req<typeof channels.librarySelectAll>) => Promise<Res<typeof channels.librarySelectAll>>;
     readonly selectionRange: (request: Req<typeof channels.librarySelectionRange>) => Promise<Res<typeof channels.librarySelectionRange>>;
     readonly get: (request: Req<typeof channels.libraryGet>) => Promise<Res<typeof channels.libraryGet>>;

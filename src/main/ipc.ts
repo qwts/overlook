@@ -238,6 +238,9 @@ export function registerLibraryHandlers(
       getEmbedding === undefined ? getService().selectionRange(req) : getService().searchSelectionRange(req, getEmbedding),
     )(request),
   );
+  ipcMain.handle(channels.libraryPhotoKeySelection.name, (_event, request: unknown) =>
+    wrapHandler(channels.libraryPhotoKeySelection, ({ photoIds }) => getService().photoKeySelection(photoIds))(request),
+  );
   ipcMain.handle(channels.libraryGet.name, (_event, request: unknown) =>
     wrapHandler(channels.libraryGet, ({ id }) => ({ photo: getService().get(id) ?? null }))(request),
   );
