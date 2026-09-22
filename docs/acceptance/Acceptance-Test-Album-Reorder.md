@@ -17,25 +17,38 @@ a new backup manifest even when every moved album is empty. No-op moves do not
 enter history. Protected albums, active source, selection, and membership do not
 change.
 
+Cross-folder pointer drops (#1104) use the existing `album:move` activity and
+inherited-visibility contract. The middle half of a folder row targets its
+children; the upper/lower edges target sibling placement before/after the row.
+Parent and position commit in one transaction. Destination feedback names the
+folder and position. On success the destination expands and focus returns to
+the moved handle. A depth/cycle/placement refusal leaves the tree unchanged,
+announces the main-process reason, and retains source focus. Sole-child handles
+remain available for cross-folder dragging; keyboard reordering stays within
+the sibling group.
+
 ## Executable matrix
 
-| Scenario                                        | Expected                                                                                  |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Focus handle, `Space`, arrow/Home/End, `Space`  | Preview moves; commit persists; focus stays on moved handle; polite position announcement |
-| `Esc` while grabbed                             | Original order returns; cancellation announced                                            |
-| First/last bound                                | Move command remains visible but disabled with an explicit reason                         |
-| Option+Up/Down on album row                     | Uses the same shared reorder command path                                                 |
-| Pointer drag from handle                        | Reorders ordinary albums; drag from row still performs photo membership drop              |
-| Drop on same position or invalid sidebar region | No history record; order reverts                                                          |
-| Collapsed sidebar                               | No handle; tooltip names album position; context menu still reorders                      |
-| Undo/redo and reload                            | Complete prior/next order is restored atomically and survives restart                     |
-| Album list changes during interaction           | Preview cancels and announces that the list changed                                       |
-| RTL / reduced motion                            | Handle uses logical-leading placement; ordering stays logical; transitions are removed    |
+| Scenario                                        | Expected                                                                                                  |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Focus handle, `Space`, arrow/Home/End, `Space`  | Preview moves; commit persists; focus stays on moved handle; polite position announcement                 |
+| `Esc` while grabbed                             | Original order returns; cancellation announced                                                            |
+| First/last bound                                | Move command remains visible but disabled with an explicit reason                                         |
+| Option+Up/Down on album row                     | Uses the same shared reorder command path                                                                 |
+| Pointer drag from handle                        | Reorders ordinary albums; drag from row still performs photo membership drop                              |
+| Drop on same position or invalid sidebar region | No history record; order reverts                                                                          |
+| Cross-folder drop on a collapsed folder         | Folder expands, parent/position persist atomically, destination is announced, moved handle receives focus |
+| Drop before another folder's child              | Moves into that parent at the displayed sibling position                                                  |
+| Cycle/depth refusal or pointer cancellation     | No partial tree/visibility change; source focus retained and refusal/cancellation announced               |
+| Collapsed sidebar                               | No handle; tooltip names album position; context menu still reorders                                      |
+| Undo/redo and reload                            | Complete prior/next order is restored atomically and survives restart                                     |
+| Album list changes during interaction           | Preview cancels and announces that the list changed                                                       |
+| RTL / reduced motion                            | Handle uses logical-leading placement; ordering stays logical; transitions are removed                    |
 
 ## Automated evidence
 
 - `tests/e2e/album-reorder.spec.ts`: keyboard commit, live announcement,
-  collapsed-menu command, undo, and reload persistence through the serialized
+  collapsed-menu command, undo, cross-folder placement/refusal/focus, and reload persistence through the serialized
   polite live region.
 - `src/renderer/src/shell/Sidebar.stories.tsx`: handle semantics, keyboard grab,
   collapsed rail, RTL, protected-row separation, and photo-drop coexistence.
@@ -44,3 +57,5 @@ change.
 - `tests/history/history-service.test.ts`: one-command undo/redo and manifest
   debt for empty-album order changes.
 - `tests/library/album-reorder-drag.test.ts`: dedicated versioned drag payload.
+
+- `tests/db/album-folders.test.ts` and `tests/library/album-drop-placement.test.ts`: atomic cross-parent placement/visibility rollback and pointer target resolution.

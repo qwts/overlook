@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import { useEffect } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 
 import { Sidebar } from './Sidebar';
 import type { OverlookApi } from '../../../shared/ipc/api.js';
@@ -487,6 +487,85 @@ function dataTransfer(): DataTransfer {
   return new DataTransfer();
 }
 
+function FolderDragHarness(args: ComponentProps<typeof Sidebar>) {
+  const [rows, setRows] = useState(args.albums);
+  useEffect(() => {
+    const previous = window.overlook;
+    const move: OverlookApi['albums']['move'] = async (request) => {
+      await moveAlbum(request);
+      const source = rows.find((album) => album.id === request.albumId);
+      if (source === undefined) throw new Error('missing story album');
+      const moved = { ...source, parentId: request.parentId };
+      setRows([...rows.filter((album) => album.id !== source.id), moved]);
+      return { album: moved };
+    };
+    (globalThis as { overlook?: OverlookApi }).overlook = { ...previous, albums: { ...previous.albums, move } };
+    return () => {
+      (globalThis as { overlook?: OverlookApi }).overlook = previous;
+    };
+  }, [rows]);
+  return <Sidebar {...args} albums={rows} />;
+}
+
+export const AlbumFolderDrag: Story = {
+  args: {
+    albums: [
+      listing({ id: 'f1', name: 'Trips', count: 214, kind: 'folder' }),
+      listing({ id: 'a1', name: 'Iceland', count: 214, parentId: 'f1' }),
+      listing({ id: 'f2', name: 'Archive', count: 0, kind: 'folder' }),
+    ],
+  },
+  render: (args) => <FolderDragHarness {...args} />,
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      window.localStorage.setItem('overlook.albumFoldersCollapsed', JSON.stringify(['f2']));
+      moveAlbum.mockReset();
+      moveAlbum.mockRejectedValueOnce(new Error('albums nest at most 6 levels deep'));
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const handle = canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' });
+    const destination = canvas.getByText('Archive').closest('.ovl-sidebar__albumrow');
+    if (destination === null) throw new Error('missing destination row');
+    const bounds = destination.getBoundingClientRect();
+    const center = bounds.top + bounds.height / 2;
+    const transfer = dataTransfer();
+    await expect(handle).toBeEnabled();
+    await fireEvent.dragStart(handle, { dataTransfer: transfer });
+    await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
+    await expect(canvas.getByText('Move Iceland to Archive, position 1.')).toBeVisible();
+    await fireEvent.dragEnd(handle, { dataTransfer: transfer });
+    await expect(moveAlbum).not.toHaveBeenCalled();
+    await expect(handle).toHaveFocus();
+
+    // Refusal preserves the old tree and names the main-process reason.
+    await fireEvent.dragStart(handle, { dataTransfer: transfer });
+    await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
+    await fireEvent.drop(destination, { dataTransfer: transfer, clientY: center });
+    await fireEvent.dragEnd(handle, { dataTransfer: transfer });
+    await waitFor(() =>
+      expect(within(document.body).getByTestId('screen-reader-announcer-polite')).toHaveTextContent('albums nest at most 6 levels deep'),
+    );
+    await expect(handle).toHaveFocus();
+    await expect(canvas.getByText('Iceland').closest('.ovl-sidebar__albumrow')).toHaveAttribute('data-depth', '1');
+
+    // A successful move expands the collapsed destination and focuses the new row.
+    await fireEvent.dragStart(handle, { dataTransfer: transfer });
+    await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
+    await fireEvent.drop(destination, { dataTransfer: transfer, clientY: center });
+    await fireEvent.dragEnd(handle, { dataTransfer: transfer });
+    await waitFor(() => expect(moveAlbum).toHaveBeenLastCalledWith({ albumId: 'a1', parentId: 'f2', position: 0 }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /^Archive/u })).toHaveAttribute('aria-expanded', 'true'));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toHaveFocus());
+    await waitFor(() =>
+      expect(within(document.body).getByTestId('screen-reader-announcer-polite')).toHaveTextContent('Moved Iceland to Archive.'),
+    );
+  },
+};
+
 // #505 / ADR-0030 §1–§2: folders nest albums with one indent per level, the
 // folder row discloses its children, a child following the folder's policy
 // says so and can leave it, "Move to folder…" offers every other folder, and
@@ -516,7 +595,7 @@ export const AlbumFolders: Story = {
     await expect(trips).toHaveAttribute('aria-expanded', 'true');
     const iceland = canvas.getByText('Iceland').closest('.ovl-sidebar__albumrow');
     await expect(iceland).toHaveAttribute('data-depth', '1');
-    await expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' })).toBeEnabled();
 
     await openActions(canvas.getByRole('button', { name: 'Actions for Iceland' }));
     await expect(

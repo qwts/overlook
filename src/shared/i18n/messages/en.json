@@ -38,6 +38,18 @@
   "album.context.actions": {
     "defaultMessage": "Actions for {album}"
   },
+  "album.drag.destination": {
+    "defaultMessage": "Move {name} to {destination}, position {position}."
+  },
+  "album.drag.failed": {
+    "defaultMessage": "Could not move {name}: {reason}."
+  },
+  "album.drag.movedTo": {
+    "defaultMessage": "Moved {name} to {destination}."
+  },
+  "album.drag.topLevel": {
+    "defaultMessage": "top-level Albums"
+  },
   "album.folder.create": {
     "defaultMessage": "Create"
   },

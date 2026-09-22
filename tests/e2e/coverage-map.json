@@ -1797,6 +1797,14 @@
         {
           "type": "unit-dom",
           "path": "tests/db/album-order.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/db/album-folders.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/library/album-drop-placement.test.ts"
         }
       ]
     },

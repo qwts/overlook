@@ -152,11 +152,31 @@ export function Sidebar({
   const dispatch = useAppDispatch();
   // Folders never hold photos (ADR-0030 §1): only albums are drop targets.
   const albumDrop = useAlbumPhotoDrop(albums.filter((album) => album.kind === 'album'));
-  const albumReorder = useAlbumReorder(albums);
   // Collapse to the 56px icon rail (#238): labels/counts move to tooltips,
   // headings become dividers, the backup card becomes the shield button.
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [collapsedFolders, setCollapsedFolders] = useState(readCollapsedFolders);
+  const albumReorder = useAlbumReorder(albums, (parentId) => {
+    if (parentId === null) return;
+    setCollapsedFolders((current) => {
+      const next = new Set(current);
+      const seen = new Set<string>();
+      let cursor: string | null = parentId;
+      while (cursor !== null && !seen.has(cursor)) {
+        seen.add(cursor);
+        next.delete(cursor);
+        cursor = albums.find((album) => album.id === cursor)?.parentId ?? null;
+      }
+      return next;
+    });
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FOLDERS_KEY, JSON.stringify([...collapsedFolders]));
+    } catch {
+      // Best-effort, like the rail state; the current view still updates.
+    }
+  }, [collapsedFolders]);
   const [sourceMenu, setSourceMenu] = useState<{ readonly x: number; readonly y: number; readonly origin: HTMLButtonElement } | null>(null);
   const toggleCollapsed = (): void => {
     const next = !collapsed;
@@ -171,11 +191,6 @@ export function Sidebar({
     const next = new Set(collapsedFolders);
     if (next.has(folderId)) next.delete(folderId);
     else next.add(folderId);
-    try {
-      window.localStorage.setItem(FOLDERS_KEY, JSON.stringify([...next]));
-    } catch {
-      // Best-effort, like the rail state.
-    }
     setCollapsedFolders(next);
   };
   // The card's aggregate bar rides backup:progress (#108); it hides again
