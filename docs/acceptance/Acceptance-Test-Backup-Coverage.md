@@ -77,8 +77,10 @@ RemovesCloudCopy / KeepsOnThisDevice`.
     dialog states that the photo has no cloud copy to remove; the purge
     completes without touching the provider.
 13. Run a disaster recovery restore from the provider after step 3.
-    **Expected:** the restore report counts one photo the backup deliberately
-    did not hold; the placeholder row appears with the red error glyph and
+    **Expected:** the validated recovery preview states the deliberately excluded
+    count and bytes, separately from missing-object failures. The durable
+    `restore-report.json` retains those totals in `coverage`, including when
+    `missing` is empty; the placeholder row appears with the red error glyph and
     the "On this device only" coverage text, and the library opens.
 14. Open a library backed up before this version. **Expected:** every photo
     is included; migration 35 adds the column with its default and the
@@ -120,3 +122,15 @@ zero recovered photos. Repeat with one included photo: its bytes must still
 verify and count as recovered. Remove that included original and verify it
 remains a missing-object failure, distinct from the excluded placeholder.
 `tests/backup/restore-excluded-placeholders.test.ts` exercises all three paths.
+
+### Recovery exclusion disclosure (#1125)
+
+The #1125 disclosure slice is covered by `Restore library coverage /
+DeliberatelyExcluded` and `tests/backup/restore-coverage-disclosure.test.ts`.
+The selection button exposes its exclusion count and bytes as an accessible
+description; cards without exclusions have no dangling description reference.
+Verification, confirmation, and completion retain the exclusion count and bytes;
+completion uses the activated generation, including after fallback or UI reopen.
+The durable report records exclusions separately from missing objects.
+Bulk placeholder cleanup and origin-specific tile/Inspector copy remain
+tracked in #1125; excluded rows are kept by default.

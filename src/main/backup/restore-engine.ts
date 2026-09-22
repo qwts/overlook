@@ -25,7 +25,7 @@ import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
 import { createManifestDebtStore } from './manifest-debt.js';
-import { blobPhotos } from './backup-manifest-coverage.js';
+import { blobPhotos, coverageTotals } from './backup-manifest-coverage.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import {
   activateStagedLibrary,
@@ -40,7 +40,7 @@ import {
 } from './restore-staging.js';
 import { RestoreError, toRestoreError, type RestoreCheckpoint, type RestoreProgress } from './restore-types.js';
 import { ProviderError, type StorageProvider } from './provider.js';
-import type { RestoreMissingObject } from '../../shared/backup/restore-contract.js';
+import type { RestoreCoverage, RestoreMissingObject } from '../../shared/backup/restore-contract.js';
 import { projectVerifiedManifest } from './restore-projection.js';
 import {
   addPresenceFingerprint,
@@ -92,6 +92,7 @@ export interface RestoreRunResult {
   readonly libraryId: string;
   readonly generation: number;
   readonly photos: number;
+  readonly coverage?: RestoreCoverage;
   readonly resumed: boolean;
   /** Objects the restore could not recover (#915). Empty for a complete
    * restore; a partial restore reports every one, never just the first. */
@@ -108,6 +109,7 @@ export interface RestoreVerifyResult {
    * restore parameter. */
   readonly objectSetSha256: string;
   readonly photos: number;
+  readonly coverage?: RestoreCoverage;
   readonly missing: readonly RestoreMissingObject[];
   /** Counts split for the verify screen (X missing, Y corrupt) */
   readonly missingCount: number;
@@ -196,6 +198,7 @@ export class RestoreEngine {
     const missingCount = missing.filter((o) => o.reason === 'not-found').length;
     const corruptCount = missing.filter((o) => o.reason === 'failed-verification').length;
     const verifiedCount = blobPhotos(candidate.manifest.photos).length - missing.filter((o) => o.kind === 'original').length;
+    const coverage = coverageTotals(candidate.manifest.photos);
     return {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
@@ -203,6 +206,7 @@ export class RestoreEngine {
       sealedManifestSha256: candidate.sealedSha256,
       objectSetSha256: objectSetSha256(fingerprints),
       photos: candidate.manifest.photos.length,
+      ...(coverage.excludedCount > 0 ? { coverage } : {}),
       missing,
       missingCount,
       corruptCount,
@@ -424,14 +428,19 @@ export class RestoreEngine {
       recoveredKeys.close();
     }
     assertNotAborted(request.signal);
-    if (missing !== null && missing.length > 0) {
-      // The NOT FOUND report rides the staging→active rename as a durable
+    const coverage = coverageTotals(restoreCandidate.manifest.photos);
+    if ((missing !== null && missing.length > 0) || coverage.excludedCount > 0) {
+      // Deliberate exclusions are separate from failed objects. The report rides the staging→active rename as a durable
       // file next to library.db so it survives a later user-chosen reopen
       // (#915/#994).
       const reportPath = join(paths.stagingDir, 'restore-report.json');
       await writeFile(
         `${reportPath}.tmp`,
-        JSON.stringify({ version: 1, generation: candidate.generation, generatedAt: candidate.manifest.generatedAt, missing }, null, 2),
+        JSON.stringify(
+          { version: 1, generation: candidate.generation, generatedAt: candidate.manifest.generatedAt, coverage, missing: missing ?? [] },
+          null,
+          2,
+        ),
       );
       await rename(`${reportPath}.tmp`, reportPath);
     }
@@ -469,6 +478,7 @@ export class RestoreEngine {
       libraryId: candidate.manifest.libraryId,
       generation: candidate.generation,
       photos: blobPhotos(restoreCandidate.manifest.photos).length,
+      ...(coverage.excludedCount > 0 ? { coverage } : {}),
       resumed,
       missing: missing ?? [],
     };

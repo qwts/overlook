@@ -3,6 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import type { ProviderDescriptor } from '../../../shared/backup/provider-descriptor.js';
 import type {
+  RestoreCoverage,
   RestoreLibrarySummary,
   RestoreMissingObject,
   RestoreProgressContract,
@@ -16,6 +17,7 @@ import { CopyableValue } from '../components/CopyableValue.js';
 import { Icon } from '../components/Icon.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { RecoveryKeyDropTarget } from './RecoveryKeyDropTarget.js';
+import { RestoreExclusionNotice } from './RestoreExclusionNotice.js';
 import { RestoreLibraryCard } from './restore-library-card.js';
 import { restoreProgressDetail, restoreStageLabel, restoreStepFromStatus, type RestoreWorkflowStep } from './restore-progress.js';
 
@@ -140,6 +142,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [missing, setMissing] = useState<readonly RestoreMissingObject[]>([]);
   const [restoredPhotoCount, setRestoredPhotoCount] = useState<number | null>(null);
+  const [restoredCoverage, setRestoredCoverage] = useState<RestoreCoverage | null>(null);
   const [verifyResult, setVerifyResult] = useState<{
     verificationId: string;
     missing: readonly RestoreMissingObject[];
@@ -147,6 +150,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     corruptCount: number;
     verifiedCount: number;
     photos: number;
+    coverage?: RestoreCoverage | undefined;
   } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState('');
@@ -189,12 +193,14 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         corruptCount: status.verification.corruptCount,
         verifiedCount: status.verification.verifiedCount,
         photos: status.verification.photos,
+        coverage: status.verification.coverage,
       });
     }
     if (status.lastError !== null) setError(status.lastError);
     if (status.lastResult !== null) {
       setMissing(status.lastResult.missing);
       setRestoredPhotoCount(status.lastResult.photos);
+      setRestoredCoverage(status.lastResult.coverage ?? null);
     }
     setVerifying(status.phase === 'verify-scan');
     const next = restoreStepFromStatus(status);
@@ -235,6 +241,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
     setFallbackNotice(null);
     setMissing([]);
     setRestoredPhotoCount(null);
+    setRestoredCoverage(null);
     setVerifyResult(null);
     setShowTrashConfirm(false);
     setTrashConfirm('');
@@ -306,6 +313,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
             corruptCount: response.result.corruptCount,
             verifiedCount: response.result.verifiedCount,
             photos: response.result.photos,
+            coverage: response.result.coverage,
           });
         }
       })
@@ -338,6 +346,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
         }
         setMissing(response.result?.missing ?? []);
         setRestoredPhotoCount(response.result?.photos ?? null);
+        setRestoredCoverage(response.result?.coverage ?? null);
         setStep('complete');
       });
   };
@@ -555,6 +564,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                     verified: verifyResult.verifiedCount,
                   })}
                 </strong>
+                <RestoreExclusionNotice coverage={verifyResult.coverage} />
                 <span>{intl.formatMessage(messages.verifyHelp)}</span>
                 {verifyResult.missing.length === 0 ? null : (
                   <ul className="ovl-restore__verifyList">
@@ -695,6 +705,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
                 Verified {formatCount(verifyResult.verifiedCount)} of {formatCount(verifyResult.photos)} photos will be restored;{' '}
                 {formatCount(verifyResult.missingCount + verifyResult.corruptCount)} unverified objects will be excluded and recorded in the
                 restore report.
+                <RestoreExclusionNotice coverage={verifyResult.coverage} />
               </span>
             ) : null}
           </div>
@@ -742,6 +753,7 @@ export function RestoreWorkflow({ context, onStartNew }: RestoreWorkflowProps): 
           <strong>{missing.length === 0 ? 'Restore complete' : intl.formatMessage(messages.missingHeading)}</strong>
           <span className="ovl-restore__completeSummary">
             {restoredPhotoCount === null ? null : <span>{intl.formatMessage(messages.restoredCount, { count: restoredPhotoCount })}</span>}
+            <RestoreExclusionNotice coverage={restoredCoverage} />
             <span>{fallbackNotice ?? 'Quit and reopen Overlook to use the restored library.'}</span>
           </span>
           {missing.length === 0 ? null : (
