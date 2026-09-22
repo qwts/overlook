@@ -33,6 +33,7 @@ function hasPhotoTarget(context: CommandMenuContext): boolean {
 
 export function commandEnabled(id: CommandId, context: CommandMenuContext): boolean {
   if (locked(context) && commandById(id).native?.lockSafe !== true) return false;
+  if (commandById(id).requiresPhotoKey === true && !context.hasPhotoKeyTarget) return false;
   switch (id) {
     case 'app.settings.open':
     case 'app.settings.open.storage':

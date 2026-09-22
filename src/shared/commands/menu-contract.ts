@@ -19,6 +19,7 @@ export const commandMenuContextSchema = z
     inAlbum: z.boolean(),
     /** Protected albums have their own authorized export boundary. */
     protectedAlbumOpen: z.boolean(),
+    hasPhotoKeyTarget: z.boolean(),
     selectionCount: z.number().int().nonnegative(),
     appLockConfigured: z.boolean(),
     providerBusy: z.boolean(),
@@ -41,6 +42,7 @@ export const EMPTY_COMMAND_MENU_CONTEXT: CommandMenuContext = {
   targetTrashable: false,
   inAlbum: false,
   protectedAlbumOpen: false,
+  hasPhotoKeyTarget: false,
   selectionCount: 0,
   appLockConfigured: false,
   providerBusy: false,

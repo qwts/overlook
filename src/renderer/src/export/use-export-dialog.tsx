@@ -1,4 +1,6 @@
-import { useState, type ReactElement } from 'react';
+import { useState, useRef, useEffect, type ReactElement } from 'react';
+import { useIntl } from 'react-intl';
+import { photoCommandTargets } from '../commands/photo-command-targets.js';
 
 import type { Board } from '../../../shared/moodboard/board.js';
 import type { PlacementAvailability } from '../../../shared/moodboard/availability.js';
@@ -21,29 +23,46 @@ export interface ExportDialogController {
 
 export function useExportDialog(): ExportDialogController {
   const state = useAppState();
+  const intl = useIntl();
+  const request = useRef(0);
+  useEffect(
+    () => () => {
+      request.current++;
+    },
+    [state.selection, state.lightboxId, state.protectedAlbum],
+  );
   const dispatch = useAppDispatch();
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<readonly string[] | null>(null);
   const [allPhotos, setAllPhotos] = useState(false);
   const [boardSelection, setBoardSelection] = useState<BoardExportSelection | null>(null);
   const close = (): void => {
+    request.current++;
     setAllPhotos(false);
     setSelectedPhotoIds(null);
     setBoardSelection(null);
     dispatch({ type: 'dialog/set', dialog: 'export', open: false });
   };
   const setPhotoIds = (next: readonly string[] | null): void => {
+    request.current++;
     setBoardSelection(null);
     setSelectedPhotoIds(next);
   };
   const openPhotos = (next: readonly string[]): void => {
-    setPhotoIds([...next]);
-    setAllPhotos(false);
-    dispatch({ type: 'dialog/set', dialog: 'export', open: true });
+    const invocation = ++request.current;
+    void photoCommandTargets('photo.export', next, intl).then(({ photoIds: eligible, notice }) => {
+      if (request.current !== invocation) return;
+      if (notice !== null) dispatch({ type: 'toast/shown', toast: { title: notice, tone: 'amber' } });
+      if (eligible.length === 0) return;
+      setPhotoIds(eligible);
+      setAllPhotos(false);
+      dispatch({ type: 'dialog/set', dialog: 'export', open: true });
+    });
   };
-  const openBoard = (request: BoardExportSelection): void => {
+  const openBoard = (selection: BoardExportSelection): void => {
+    request.current++;
     setSelectedPhotoIds(null);
     setAllPhotos(false);
-    setBoardSelection(request);
+    setBoardSelection(selection);
     dispatch({ type: 'dialog/set', dialog: 'export', open: true });
   };
 

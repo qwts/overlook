@@ -128,3 +128,15 @@ export const AlbumPickerFlow: Story = {
     await expect(canvas.queryByTestId('album-picker')).toBeNull();
   },
 };
+
+export const LockedSelection: Story = {
+  args: { count: 1, onClear: fn(), onExport: fn(), exportDisabledReason: 'The selected photos need keys that are not on this device.' },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Export…' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Add to album' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'More selection actions' }));
+    await expect(canvas.getByRole('menuitem', { name: 'Export…' })).toBeDisabled();
+    await expect(args.onExport).not.toHaveBeenCalled();
+  },
+};

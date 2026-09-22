@@ -20,6 +20,7 @@ import { glyphStateOf } from '../components/StatusGlyph';
 import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
 import { PurgeConfirm } from './PurgeConfirm';
+import { useSelectionExportReason } from '../commands/use-photo-key-selection.js';
 import { SelectionPill } from './SelectionPill';
 import { OriginalDeleteDialog } from './OriginalDeleteDialog';
 import { VirtualGrid, type VirtualGridItemKeyboard } from './VirtualGrid';
@@ -85,6 +86,7 @@ export function LibraryGridView({
   const { formatCalendarDate, formatCount } = useFormats();
   const state = useAppState();
   const dispatch = useAppDispatch();
+  const exportDisabledReason = useSelectionExportReason(state.selection);
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
   const facetsActive = activePredicate(state) !== undefined;
@@ -534,6 +536,7 @@ export function LibraryGridView({
       {state.selection.size > 0 ? (
         <SelectionPill
           count={state.selection.size}
+          exportDisabledReason={exportDisabledReason}
           onClear={() => {
             dispatch({ type: 'selection/cleared' });
           }}
@@ -686,7 +689,7 @@ export function LibraryGridView({
               });
             });
           }}
-          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds)}
+          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds, intl)}
           onTransfer={
             onTransfer === undefined
               ? undefined

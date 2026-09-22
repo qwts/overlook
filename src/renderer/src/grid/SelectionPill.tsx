@@ -14,6 +14,7 @@ export interface SelectionPillProps {
   readonly count: number;
   readonly onClear: () => void;
   /** Opens the ExportDialog with the selection set (#100). */
+  readonly exportDisabledReason?: string | undefined;
   readonly onExport?: (() => void) | undefined;
   readonly onOffload?: (() => void) | undefined;
   readonly onTransfer?: (() => void) | undefined;
@@ -37,6 +38,7 @@ export function SelectionPill({
   count,
   onClear,
   onExport,
+  exportDisabledReason,
   onOffload,
   onTransfer,
   onDelete,
@@ -55,7 +57,7 @@ export function SelectionPill({
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (moreOpen) moreMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    if (moreOpen) moreMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
   }, [moreOpen]);
   const closeMore = (): void => {
     setMoreOpen(false);
@@ -98,8 +100,15 @@ export function SelectionPill({
                   Transfer &amp; Sync
                 </Button>
               )}
-              <Button size="sm" variant="secondary" icon="share" onClick={onExport}>
-                Export
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="share"
+                onClick={onExport}
+                disabled={exportDisabledReason !== undefined}
+                title={exportDisabledReason}
+              >
+                {intl.formatMessage(commandById('photo.export').label)}
               </Button>
               <Button
                 size="sm"
@@ -141,7 +150,7 @@ export function SelectionPill({
                   tabIndex={-1}
                   aria-label="Selection actions"
                   onKeyDown={(event) => {
-                    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+                    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'));
                     const current = items.findIndex((item) => item === document.activeElement);
                     const next =
                       event.key === 'Home'
@@ -167,8 +176,14 @@ export function SelectionPill({
                       Transfer &amp; Sync
                     </button>
                   )}
-                  <button type="button" role="menuitem" onClick={onExport}>
-                    Export
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onExport}
+                    disabled={exportDisabledReason !== undefined}
+                    title={exportDisabledReason}
+                  >
+                    {intl.formatMessage(commandById('photo.export').label)}
                   </button>
                   {onMarkOriginal === undefined ? null : (
                     <button
