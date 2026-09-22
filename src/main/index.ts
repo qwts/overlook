@@ -114,6 +114,7 @@ const instanceId = ulid();
 let libraryParts: LibraryParts | undefined, releasedMaster: Buffer | undefined;
 
 function getLibraryService(): LibraryService {
+  getRelocationRuntime().requireContentAccess();
   if (libraryService === undefined) {
     const dataDir = registryRuntime.healActiveId().path;
     activateSettingsLibrary();
