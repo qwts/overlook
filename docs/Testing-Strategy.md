@@ -215,7 +215,10 @@ the machinery they measure changes.
 | 200K grid scroll | `npm run seed:perf` boots a 200,000-row synthetic profile; the grid's frame monitor exposes `globalThis.__overlookFrameStats` while scrolling | 557 frames observed, 0 dropped (>25 ms), worst 9.4 ms; 36 cells mounted |
 
 The inclusion-rule baseline (#1099) lives in
-`tests/db/inclusion-page-performance.test.ts`, run by the unit lane. It seeds
+`tests/db/inclusion-page-performance.bench.ts`, run sequentially after the unit
+and DOM lanes by both `npm test` and coverage. Its `.bench` suffix excludes it
+from the parallel unit glob. Settled sync-ledger rows accompany every photo,
+matching the production join footprint. It seeds
 200,000 rows: 20,000 below 4 MP and a disjoint 10,000 with preview failures.
 Each policy walks every 200-row page through `PhotosRepository.page`, checks
 unique IDs and exact membership, and records p50, p95, and maximum latency.
@@ -223,20 +226,25 @@ Timing excludes seeding and assertions but includes row hydration; it includes
 the terminal empty page. This mixed dataset supersedes the old homogeneous
 first-page fixture; the historical 0.4 ms result above is not a full-walk baseline.
 
-First local measurement, 2026-09-22, macOS Apple Silicon, Node 24.18.0
-(`npm test`; other local validation was active during the unfiltered walk):
+Calibration is pending after review corrected the fixture's missing ledger rows
+and isolated it from the parallel unit suite. The earlier empty-ledger timings
+are invalid for this production-shaped baseline. The original cold first-page 250 ms ceiling remains. The full-walk gate uses
+p95 rather than the maximum of thousands of samples; max is diagnostic output.
+Its initial p95 ceiling is 250 ms. The final p95 ratchet will use twice the slowest observed
+local/hosted p95, capped at that ceiling. No pixel-area index or schema change
+is proposed without representative measurements.
 
-| Policy           |    Rows |      p50 |      p95 |   Maximum |
-| ---------------- | ------: | -------: | -------: | --------: |
-| Unfiltered       | 200,000 | 45.22 ms | 98.94 ms | 148.75 ms |
-| Hide unavailable | 190,000 | 36.46 ms | 72.37 ms |  80.01 ms |
-| Minimum 4 MP     | 180,000 | 42.09 ms | 72.91 ms |  87.88 ms |
-| Both rules       | 170,000 | 38.76 ms | 80.23 ms |  97.72 ms |
+Corrected local measurement, 2026-09-22, macOS Apple Silicon, Node 24.18.0,
+via `npm test` (settled ledger rows; isolated benchmark lane):
 
-The cold first page was 1.3 ms. Every page currently retains a 250 ms ceiling.
-Hosted calibration is pending: the final p95 ratchet will use twice the slowest
-observed local/hosted p95, capped at that ceiling. No pixel-area index or schema
-change is justified by the local filtered measurements alone.
+| Policy           |    Rows |      p50 |      p95 |  Maximum |
+| ---------------- | ------: | -------: | -------: | -------: |
+| Unfiltered       | 200,000 | 33.26 ms | 71.25 ms | 77.19 ms |
+| Hide unavailable | 190,000 | 35.65 ms | 77.50 ms | 82.57 ms |
+| Minimum 4 MP     | 180,000 | 37.18 ms | 79.30 ms | 90.47 ms |
+| Both rules       | 170,000 | 39.76 ms | 83.15 ms | 90.13 ms |
+
+The corrected cold first page was 1.4 ms. Hosted calibration remains pending.
 
 The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
