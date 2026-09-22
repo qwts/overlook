@@ -1,3 +1,4 @@
+import { photoCommandAvailability } from './photo-availability.js';
 import { QUICK_ACTION_COMMANDS, commandById, type QuickActionCommandId, type QuickActionExposure } from './registry.js';
 
 export interface QuickActionVisibilityState {
@@ -28,13 +29,17 @@ export function reduceQuickActionVisibility(
 
 export interface QuickActionAvailabilityResult {
   readonly enabled: boolean;
-  readonly reason: 'library-only' | 'trash-only' | null;
+  readonly reason: 'library-only' | 'trash-only' | 'locked' | null;
 }
 
-export function quickActionAvailability(commandId: QuickActionCommandId, location: 'library' | 'trash'): QuickActionAvailabilityResult {
+export function quickActionAvailability(
+  commandId: QuickActionCommandId,
+  location: 'library' | 'trash',
+  locked = false,
+): QuickActionAvailabilityResult {
   const exposure = quickActionExposure(commandId);
   if (exposure.availability === 'anywhere' || exposure.availability === location) {
-    return { enabled: true, reason: null };
+    return photoCommandAvailability(commandId, locked);
   }
   return location === 'trash' ? { enabled: false, reason: 'library-only' } : { enabled: false, reason: 'trash-only' };
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { photoCommandAvailability } from '../../src/shared/commands/photo-availability.js';
 
 import {
   initialQuickActionVisibility,
@@ -36,4 +37,29 @@ test('Trash-only and library-only commands explain disabled availability (#532)'
     reason: 'trash-only',
   });
   assert.deepEqual(quickActionAvailability('photo.export', 'trash'), { enabled: true, reason: null });
+});
+
+test('locked single-photo export is disabled while metadata Quick Actions remain available (#1133)', () => {
+  assert.deepEqual(quickActionAvailability('photo.export', 'library', true), { enabled: false, reason: 'locked' });
+  assert.deepEqual(quickActionAvailability('photo.export', 'trash', true), { enabled: false, reason: 'locked' });
+  assert.deepEqual(quickActionAvailability('photo.export', 'library', false), { enabled: true, reason: null });
+  assert.deepEqual(quickActionAvailability('photo.favorite.toggle', 'library', true), { enabled: true, reason: null });
+  assert.deepEqual(quickActionAvailability('photo.trash', 'library', true), { enabled: true, reason: null });
+});
+
+test('single-photo custody policy preserves metadata commands and recovers when the key returns (#1133)', () => {
+  for (const id of ['photo.export', 'photo.duplicate'] as const) {
+    assert.deepEqual(photoCommandAvailability(id, true), { enabled: false, reason: 'locked' });
+    assert.deepEqual(photoCommandAvailability(id, false), { enabled: true, reason: null });
+  }
+  for (const id of [
+    'photo.open',
+    'photo.favorite.toggle',
+    'album.membership.add',
+    'photo.trash',
+    'photo.restore',
+    'photo.original.mark',
+  ] as const) {
+    assert.equal(photoCommandAvailability(id, true).enabled, true, id);
+  }
 });
