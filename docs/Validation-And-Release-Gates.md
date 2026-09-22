@@ -248,7 +248,10 @@ CPU inference, platform-provider preference, unavailable-provider fallback,
 image preprocessing, quantization, and cooperative shutdown. Direct worker
 responses must identify the platform provider (CoreML on macOS, DML on Windows)
 and CPU for the deliberately unavailable-provider case; silent CPU fallback
-cannot qualify an accelerator. This runs through
+cannot qualify an accelerator. Accelerator qualification sets ONNX Runtime's
+`session.disable_cpu_ep_fallback` so CPU-assigned graph nodes fail session
+creation; a negative CPU control proves the native binding enforces it. Normal
+application sessions retain fallback. This runs through
 the normal unit-test lane on local macOS and hosted Linux/Windows. It proves
 native integration with a deterministic fixture, not production CLIP quality
 or accelerator performance; packaged payload checks remain separate gates.
