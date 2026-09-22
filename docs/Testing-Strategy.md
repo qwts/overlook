@@ -218,6 +218,22 @@ The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
 the 200K run is manual because seeding takes ~17 s.
 
+### Collections tree performance (#1105)
+
+The manual performance lane also runs `tests/perf/collections-perf.spec.ts`:
+300 collections (42 folders and 258 nonempty albums), depth six, 1,000 photos,
+and 2,064 overlapping memberships over 200 distinct photos. Seeding is untimed
+and uses the real IPC APIs. Five samples measure listing, actual sibling
+reorders, and cross-folder moves; assertions verify membership and persisted
+structure. Sidebar expansion measures a native DOM click through the next
+painted frame with the complete subtree mounted, separately from IPC latency.
+
+`test-results/collections-perf-report.json` records fixture dimensions, every
+sample, and medians; the manual workflow uploads it alongside the existing
+report. New per-operation ceilings start at 1,000 ms pending hosted calibration
+and may only tighten. Existing performance ratchets are unchanged. No local
+heavy-lane result or completed hosted baseline is claimed yet.
+
 ### Perf budgets (#123 — RATCHETS: tighten, never loosen)
 
 The harness: `npm run test:perf` (own Playwright config, ~90 s;

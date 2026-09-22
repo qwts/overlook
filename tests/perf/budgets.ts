@@ -48,3 +48,11 @@ export interface PerfReport {
   readonly mainRssMb: number;
   readonly rendererHeapMb: number;
 }
+
+/** #1105 initial ceilings; hosted calibration can only tighten these bounds. */
+export const COLLECTION_BUDGETS = {
+  listMs: 1_000,
+  reorderMs: 1_000,
+  moveMs: 1_000,
+  sidebarExpandMs: 1_000,
+} as const;
