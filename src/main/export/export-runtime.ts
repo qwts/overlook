@@ -41,6 +41,7 @@ export interface ExportRuntimeOptions {
     | ((photoId: string) => readonly {
         readonly fileName: string;
         readonly contentHash: string;
+        readonly keyId: number;
         readonly bytes: number;
         readonly ownerId?: string | undefined;
       }[])
