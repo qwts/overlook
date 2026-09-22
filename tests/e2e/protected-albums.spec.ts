@@ -32,6 +32,14 @@ async function openPrivacy(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'Privacy' }).click();
 }
 
+async function closeSettings(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
+  // Closing restores focus after the exit transition. Wait before directing
+  // Enter to another control, or that restoration can redirect the key (#1173).
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeFocused();
+}
+
 async function exportRecoveryKey(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Back up encryption key' });
   await page.getByRole('button', { name: 'Back up…' }).click();
@@ -45,8 +53,7 @@ async function exportRecoveryKey(page: Page): Promise<void> {
 }
 
 async function createPrivateAlbum(page: Page): Promise<readonly string[]> {
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+  await closeSettings(page);
   await page.getByRole('button', { name: 'New album' }).click();
   await page.getByRole('textbox', { name: 'Album name' }).fill('Private originals');
   await page.getByRole('textbox', { name: 'Album name' }).press('Enter');
@@ -69,7 +76,7 @@ async function protectAlbum(page: Page): Promise<void> {
   await dialog.getByRole('button', { name: 'Protect album' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Unlock…' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await closeSettings(page);
 }
 
 async function lockedAlbumId(page: Page): Promise<string> {
@@ -121,7 +128,7 @@ async function changeAlbumPassword(page: Page): Promise<void> {
   await dialog.getByRole('button', { name: 'Change password' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Unlock…' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await closeSettings(page);
 }
 
 async function recoverAlbumPassword(page: Page): Promise<void> {
@@ -136,7 +143,7 @@ async function recoverAlbumPassword(page: Page): Promise<void> {
   await dialog.getByRole('button', { name: 'Recover' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Unlock…' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await closeSettings(page);
 }
 
 async function configureAppLock(page: Page): Promise<void> {
@@ -170,7 +177,7 @@ async function removeProtection(page: Page): Promise<void> {
   await dialog.getByRole('button', { name: 'Remove protection' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('.ovl-protected-settings__row', { hasText: 'Private originals' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await closeSettings(page);
 }
 
 async function prepareProtectedProfile(userData: string, keyFile: string): Promise<readonly string[]> {
