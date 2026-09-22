@@ -24,7 +24,9 @@ Parent and position commit in one transaction. Destination feedback names the
 folder and position. On success the destination expands and focus returns to
 the moved handle. A depth/cycle/placement refusal leaves the tree unchanged,
 announces the main-process reason, and retains source focus. Sole-child handles
-remain available for cross-folder dragging; keyboard reordering stays within
+remain available for cross-folder dragging. The grip and its tooltip anchor
+stay inside the collection row, including RTL layouts; they must not overlap the
+next row. Keyboard reordering stays within
 the sibling group.
 
 ## Executable matrix

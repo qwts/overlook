@@ -64,6 +64,10 @@ test('collection drag: collapsed folder, sibling placement, refusal, focus, and 
     await sourceHandle.focus();
     const sourceBounds = await sourceHandle.boundingBox();
     if (sourceBounds === null) throw new Error('missing drag source');
+    const sourceRow = await row(source).boundingBox();
+    if (sourceRow === null) throw new Error('missing source row');
+    expect(sourceBounds.y).toBeGreaterThanOrEqual(sourceRow.y);
+    expect(sourceBounds.y + sourceBounds.height).toBeLessThanOrEqual(sourceRow.y + sourceRow.height);
     const x = sourceBounds.x + sourceBounds.width / 2;
     const y = sourceBounds.y + sourceBounds.height / 2;
     await page.mouse.move(x, y);
@@ -80,6 +84,7 @@ test('collection drag: collapsed folder, sibling placement, refusal, focus, and 
       await page.mouse.move(targetX, targetY, { steps: 5 });
       // Chromium needs a move after dragenter to deliver dragover before drop.
       await page.mouse.move(targetX + 1, targetY);
+      await expect(destination).toHaveClass(/ovl-sidebar__albumrow--drop-allowed/u);
     } finally {
       await page.mouse.up();
     }
