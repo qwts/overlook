@@ -13,6 +13,11 @@ that a document this version cannot evaluate is preserved and reported. Use a
 real library with several cameras, a few RAW files, and some tags for the
 steps below.
 
+The `EditingSmartAlbum` interaction story waits for its effect-initialized
+predicate to commit before asserting save behavior (#1242). The initial facet
+text, disabled/enabled Save changes states, single save call, and submitted
+camera/favorite predicates remain required; no timeout is extended.
+
 ## Facets
 
 1. Press **Filters** in the toolbar. Confirm a facet bar appears with one
