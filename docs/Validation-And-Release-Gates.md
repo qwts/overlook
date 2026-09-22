@@ -241,6 +241,15 @@ onnxruntime-node's nested directories and better-sqlite3-multiple-ciphers v13's
 flat `prebuilds/<platform>-<arch>.node` set. Universal macOS keeps both Darwin
 slices; unmapped targets fail safe by pruning nothing.
 
+ONNX upgrades update the exact `allowScripts` entry with the runtime version
+and regenerate third-party notices. `tests/embedding/native-worker.test.ts`
+runs a small, locally generated ONNX graph through the real embedding worker:
+CPU inference, platform-provider preference, unavailable-provider fallback,
+image preprocessing, quantization, and cooperative shutdown. This runs through
+the normal unit-test lane on local macOS and hosted Linux/Windows. It proves
+native integration with a deterministic fixture, not production CLIP quality
+or accelerator performance; packaged payload checks remain separate gates.
+
 Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
 and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
 `AZURE_CLIENT_SECRET` drive Azure Trusted Signing for the Windows installers
