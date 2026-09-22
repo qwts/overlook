@@ -98,5 +98,5 @@ jobs:
           path: |
             test-results/*perf-report.json
             test-results/perf-query-measurements.json
-            test-results/perf-query-profile.cpuprofile
+            test-results/perf-*-profile.cpuprofile
           retention-days: 90
