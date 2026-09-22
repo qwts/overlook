@@ -8,7 +8,10 @@ import { describe, test } from 'node:test';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { readGalleryPolicy, writeGalleryPolicy } from '../../src/main/db/gallery-policy-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryAll, run } from '../../src/main/db/sql.js';
+import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
+import { UNAVAILABLE_WHERE } from '../../src/main/db/photo-clauses.js';
 import { DEFAULT_GALLERY_POLICY } from '../../src/shared/library/gallery-policy.js';
 import type { PageCursor, PhotoInsert, SourceFilter } from '../../src/shared/library/types.js';
 
@@ -170,4 +173,65 @@ describe('gallery inclusion rules (#512, ADR-0030 §4)', () => {
     assert.deepEqual(repo.galleryPolicy(), { showUnavailable: false, minimumMegapixels: 4 });
     db.close();
   });
+});
+
+test('missing originals are independent of previews, sync errors, and sibling recovery (#1101)', () => {
+  const w = world();
+  try {
+    const availability = new OriginalAvailabilityRepository(w.db);
+    const missing = w.ids.large;
+    const transient = w.ids.tiny;
+    run(w.db, "UPDATE sync_ledger SET status = 'error' WHERE photo_id = ?", transient);
+    availability.repair(missing, 'error');
+    w.repo.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    assert.equal(w.repo.get(missing)?.originalFailure, 'missing-original');
+    assert.ok(
+      w.repo.manifestSnapshot().photos.every((photo) => !('originalFailure' in photo)),
+      'local absence never enters backup metadata',
+    );
+    assert.ok(walk(w.repo, 'unavailable').includes(missing));
+    assert.ok(!walk(w.repo, 'all').includes(missing));
+    assert.ok(walk(w.repo, 'all').includes(transient), 'upload failures retain availability');
+    w.repo.setPreviewFailure(missing, null);
+    w.repo.clearPreviewRepairDebt(missing);
+    assert.ok(walk(w.repo, 'unavailable').includes(missing), 'preview repair cannot clear original absence');
+    const original = w.repo.get(missing);
+    assert.ok(original);
+    new VariantRepository(w.db).duplicate(original, 'missing-sibling', '2026-09-22');
+    assert.equal(w.repo.get('missing-sibling')?.originalFailure, 'missing-original');
+    assert.deepEqual(new Set(availability.verifiedRestored(original.contentHash)), new Set([missing, 'missing-sibling']));
+    assert.ok(!walk(w.repo, 'unavailable').includes(missing));
+    assert.ok(walk(w.repo, 'all').includes(missing), 'verified recovery changes membership without restart');
+    assert.equal(w.repo.get('missing-sibling')?.previewFailure, 'deferred-original', 'independent preview debt remains');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('consistency evidence and ledger repair commit together (#1101)', () => {
+  const w = world();
+  try {
+    w.db.exec("CREATE TRIGGER fail_ledger BEFORE UPDATE OF status ON sync_ledger BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error'), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'local');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('remote-backed consistency repair clears local absence and retains the Unavailable index (#1101)', () => {
+  const w = world();
+  try {
+    const availability = new OriginalAvailabilityRepository(w.db);
+    availability.repair(w.ids.large, 'error');
+    availability.repair(w.ids.large, 'offloaded');
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'offloaded');
+    assert.ok(!walk(w.repo, 'unavailable').includes(w.ids.large));
+    const plan = queryAll<{ detail: string }>(w.db, `EXPLAIN QUERY PLAN SELECT p.id FROM photos p WHERE ${UNAVAILABLE_WHERE}`);
+    assert.ok(plan.some((row) => row.detail.includes('idx_photos_unavailable')));
+  } finally {
+    w.db.close();
+  }
 });

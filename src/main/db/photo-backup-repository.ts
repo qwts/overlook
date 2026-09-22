@@ -44,6 +44,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
       (row): BackupManifestPhotoV14 => {
         const {
           previewFailure: _previewFailure,
+          originalFailure: _originalFailure,
           dimensionStatus: _dimensionStatus,
           syncState: _syncState,
           coverage,

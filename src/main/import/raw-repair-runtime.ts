@@ -28,7 +28,10 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
     candidates: (hashes) => options.repo.previewRepairCandidates(hashes),
     isUnavailable: (photoId) => {
       const photo = options.repo.get(photoId);
-      return photo !== undefined && (photo.previewFailure !== null || photo.dimensionStatus === 'unavailable');
+      return (
+        photo !== undefined &&
+        (photo.previewFailure !== null || photo.dimensionStatus === 'unavailable' || photo.originalFailure === 'missing-original')
+      );
     },
     requiresRebake: (photoId) => options.bakeDebt.pending(photoId) !== undefined,
     validThumbs: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),

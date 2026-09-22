@@ -67,6 +67,8 @@ export interface PhotoRecord extends PhotoMetadataFields {
   readonly deletedAt: string | null;
   /** Local derivative/display state; originals and backup manifests remain authoritative. */
   readonly previewFailure: PreviewFailureReason | null;
+  /** Device-local original absence; omitted by older photo projections. */
+  readonly originalFailure?: 'missing-original' | null | undefined;
   /** Local integrity hint; metadata-mismatch means the original may have corrupt metadata. */
   readonly dimensionStatus: DimensionStatus;
   /** Probed container facts (ADR-0026 §1); null for kinds without them. */
