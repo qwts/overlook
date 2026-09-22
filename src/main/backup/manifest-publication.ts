@@ -38,7 +38,7 @@ export class ManifestPublication {
     this.providerId = provider.id;
   }
 
-  async read<T>(operation: () => Promise<T>): Promise<T> {
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
     this.signal.throwIfAborted();
     if (this.provider.id !== this.providerId) throw new Error('manifest publication provider changed');
     const result = await raceWithAbort(operation(), this.signal);
@@ -54,7 +54,7 @@ export class ManifestPublication {
   }
 
   async reconcile(): Promise<void> {
-    this.accountId = (await this.read(() => this.provider.accountIdentity(this.signal))).accountId;
+    this.accountId = (await this.execute(() => this.provider.accountIdentity(this.signal))).accountId;
     const pending = this.journal.load();
     if (pending === null) return;
     if (pending.providerId !== this.providerId || pending.libraryId !== this.libraryId || pending.accountId !== this.accountId)
@@ -72,7 +72,7 @@ export class ManifestPublication {
 
   private async fingerprint(path: string): Promise<PendingManifestMutation['expected']> {
     try {
-      return await this.read(() => this.provider.verify(path));
+      return await this.execute(() => this.provider.verify(path));
     } catch (error) {
       if (!(error instanceof ProviderError) || error.kind !== 'not-found') throw error;
       this.signal.throwIfAborted();
@@ -82,7 +82,7 @@ export class ManifestPublication {
 
   private async mutate(operation: () => Promise<unknown>, pending: PendingManifestMutation): Promise<void> {
     try {
-      await this.read(operation);
+      await this.execute(operation);
       this.journal.save({ ...pending, settled: true });
     } catch (error) {
       // A rejected network request can still commit remotely. Only an explicit
@@ -105,7 +105,7 @@ export class ManifestPublication {
     this.signal.addEventListener('abort', abort, { once: true });
     try {
       await this.mutate(() => this.provider.put(path, stream), pending);
-      const remote = await this.read(() => this.provider.verify(path));
+      const remote = await this.execute(() => this.provider.verify(path));
       if (remote.sha256 !== expected.sha256 || remote.bytes !== expected.bytes)
         throw new ProviderError(`verify mismatch for ${path}`, 'corrupt');
       this.journal.save(null);

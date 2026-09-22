@@ -15,6 +15,7 @@ import { migrateProtectedVariantSources } from './protected-variant-migration.js
 import { migrateDisclosurePolicy } from './disclosure-migration.js';
 import { migrateConfirmedPreviewAbsence, migratePreviewRepairDebt } from './preview-repair-migration.js';
 import { migrateSidecarOwners } from './sidecar-owner-migration.js';
+import { migratePendingManifestPublication } from './manifest-publication-migration.js';
 
 // ADR-0030 collection migrations (27..30), kept together so `migrations.ts`
 // stays a ledger: gallery inclusion rules (#512), collection visibility
@@ -53,8 +54,6 @@ export const COLLECTION_MIGRATIONS: readonly {
   {
     version: 43,
     name: 'pending-manifest-publication',
-    up: (db) => {
-      db.exec('ALTER TABLE backup_manifest_debt ADD COLUMN pending_mutation TEXT');
-    },
+    up: migratePendingManifestPublication,
   },
 ];

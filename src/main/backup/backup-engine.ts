@@ -875,7 +875,7 @@ export class BackupEngine {
       const entries =
         publication === undefined
           ? await this.deps.provider.list(prefix)
-          : await publication.read(() => this.deps.provider.list(prefix, publication.signal));
+          : await publication.execute(() => this.deps.provider.list(prefix, publication.signal));
       paths = new Set(entries.map((entry) => entry.path));
       presence.listed.set(prefix, paths);
     }
@@ -948,7 +948,7 @@ export class BackupEngine {
     await publication.reconcile();
     const generatedAt = new Date(this.deps.now()).toISOString();
     const cleanup = this.deps.purgeCleanup;
-    const purgeSnapshot = cleanup === undefined ? undefined : await publication.read(() => cleanup.snapshot());
+    const purgeSnapshot = cleanup === undefined ? undefined : await publication.execute(() => cleanup.snapshot());
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
@@ -966,7 +966,7 @@ export class BackupEngine {
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-        sidecars: await publication.read(() => this.sidecarManifestObjects(blobPhotoIds, publication.signal)),
+        sidecars: await publication.execute(() => this.sidecarManifestObjects(blobPhotoIds, publication.signal)),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
         ...(this.deps.albumTreeSnapshot?.() ?? {
@@ -1000,17 +1000,17 @@ export class BackupEngine {
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
       publication,
     );
-    const existing = await publication.read(() => this.deps.provider.list('manifest', publication.signal));
+    const existing = await publication.execute(() => this.deps.provider.list('manifest', publication.signal));
     const { generation, previousPath } = nextManifestPublication(existing);
     const previousManifest =
       previousPath === null
         ? null
         : {
             generation: generation - 1,
-            sha256: (await publication.read(() => this.deps.provider.verify(previousPath))).sha256,
+            sha256: (await publication.execute(() => this.deps.provider.verify(previousPath))).sha256,
           };
     const json = JSON.stringify(manifest);
-    const sealed = await publication.read(() => this.deps.sealManifest(json));
+    const sealed = await publication.execute(() => this.deps.sealManifest(json));
     const manifestSha256 = createHash('sha256').update(sealed).digest('hex');
     // The bootstrap is a superset across rotations and lands first: a crash
     // can leave an old manifest with newer wrapped keys, never a manifest
@@ -1023,7 +1023,7 @@ export class BackupEngine {
     });
     await publication.putVerified('recovery/bootstrap.ovrb', bootstrap);
     await publication.putVerified(`manifest/gen-${String(generation)}.ovlk`, sealed);
-    const all = await publication.read(() => this.deps.provider.list('manifest', publication.signal));
+    const all = await publication.execute(() => this.deps.provider.list('manifest', publication.signal));
     for (const stale of staleManifestPaths(all, generation)) await publication.remove(stale);
     publication.signal.throwIfAborted();
     if (protectedSnapshot !== undefined) this.deps.protectedBackup?.settleManifest(protectedSnapshot);
