@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { photoKeySelection } from '../db/photo-key-selection.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import { deleteFolder, moveCollection, setAlbumTags, setCollectionVisibility, type FolderDeletion } from '../db/album-tree-repository.js';
 import { facetValues, type FacetValue } from '../db/smart-album-queries.js';
@@ -95,6 +96,10 @@ export class LibraryService {
 
   selectionRange(request: SelectionRangeRequest): SelectionRangeResult {
     return { photoIds: this.repo.selectionRange(request) };
+  }
+
+  photoKeySelection(photoIds: readonly string[]): ReturnType<typeof photoKeySelection> {
+    return photoKeySelection(this.db, photoIds);
   }
 
   get(photoId: string): PhotoRecord | undefined {
