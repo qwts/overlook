@@ -139,6 +139,13 @@ until `electron-vite` supports Vite 8 and React 19 is migrated deliberately. Eac
 is a Dependabot ignore; `.github/dependabot.yml` is the source of truth for the
 exact bounds and removal conditions.
 
+Dependabot keeps `react-intl` and `@formatjs/intl` in the `formatjs-runtime`
+group, and `onnxruntime-node` in `native-inference`, before the general
+`dev-tooling` group. FormatJS message-contract migrations and ONNX native
+qualification therefore get separate PRs instead of holding routine SDK and
+tooling updates (#1170). These groups change batching, not version eligibility;
+all existing exact pins, ignore bounds, and validation requirements still apply.
+
 Four overrides exist, each with a removal condition:
 
 - **`axe-core`** is pinned exact and overridden into `axe-playwright` (which

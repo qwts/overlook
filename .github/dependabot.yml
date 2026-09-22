@@ -65,6 +65,17 @@ updates:
       release-versioning:
         patterns:
           - '@changesets/*'
+      # FormatJS runtime majors change the typed message-values contract (#1170).
+      # Keep that migration together and out of routine SDK/tooling updates.
+      formatjs-runtime:
+        patterns:
+          - 'react-intl'
+          - '@formatjs/intl'
+      # ONNX updates require install-script, native initialization, and supported
+      # platform qualification (#1170), independently of JavaScript tooling.
+      native-inference:
+        patterns:
+          - 'onnxruntime-node'
       # Everything else: low peer-constraint risk, keeps flowing as one PR.
       dev-tooling:
         patterns:
