@@ -2229,7 +2229,13 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/library/format.test.ts", "tests/dom/intl-host.test.tsx"]
+          "paths": [
+            "tests/library/format.test.ts",
+            "tests/dom/intl-host.test.tsx",
+            "tests/i18n/message-contracts.test.ts",
+            "tests/backup/custody-presentation.test.ts",
+            "tests/tooling/i18n-contracts.test.ts"
+          ]
         }
       ]
     },

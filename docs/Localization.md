@@ -43,6 +43,21 @@ the contributor procedure.
 
 ## Update Existing Copy
 
+`npm run i18n:extract` also derives argument contracts from FormatJS's compiled
+ICU AST. The generated English module preserves literal IDs and records the
+values required by placeholders, plurals, dates, selects, and rich-text tags.
+The shared declaration connects those contracts to FormatJS's public typed
+descriptors; every TypeScript project includes it through the root config.
+Keep message-key mappings narrow with `satisfies` so selecting a label does
+not accidentally widen its type to messages requiring interpolation.
+
+The `defineMessages` overload bridges registered IDs to their argument types
+because the upstream inferred overload otherwise assigns an empty contract.
+Remove that bridge when upstream inference supports the registered catalog,
+keeping the negative compile checks in `tests/i18n/message-contracts.test.ts`.
+Extraction freshness, invalid-value type checks, and runtime plural/rich-text
+and translated custody tests cover this contract.
+
 Change the source message in code, run `npm run i18n:extract`, and update every
 shipping catalog in the same pull request. A catalog mismatch is a failing
 gate, not a fallback-to-English policy. Translator context belongs beside the
