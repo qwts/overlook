@@ -554,3 +554,19 @@ export const DeferredVariantPreviews: Story = {
     await expect(canvas.getByText('PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE')).toBeVisible();
   },
 };
+
+export const LockedDuplicate: Story = {
+  args: { photo: { ...PHOTO, locked: true, keyId: 7 } },
+  play: async ({ canvasElement }) => {
+    const duplicate = fn(window.overlook.variants.duplicate);
+    Object.assign(window.overlook.variants, { duplicate });
+    const section = within(await within(canvasElement).findByTestId('inspector-variants'));
+    const action = section.getByRole('button', { name: 'Duplicate' });
+    await expect(action).toBeDisabled();
+    await expect(section.getByText('LOCKED — KEY #7 IS NOT ON THIS DEVICE')).toBeVisible();
+    // Native activation verifies disabled semantics without a pointer helper rejecting the CSS guard.
+    action.click();
+    await expect(duplicate).not.toHaveBeenCalled();
+    await expect(section.getByRole('button', { name: /Promote/u })).toBeEnabled();
+  },
+};
