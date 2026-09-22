@@ -106,7 +106,8 @@ export function LightboxVideo({
 
   const name = photo.fileName;
   const ann = useCallback(
-    (id: keyof typeof messages) => announce(intl.formatMessage(messages[id]), 'polite', 'lightbox-video'),
+    (id: 'annPreserved' | 'annError' | 'annPlaying' | 'annPaused' | 'annEnded') =>
+      announce(intl.formatMessage(messages[id]), 'polite', 'lightbox-video'),
     [announce, intl],
   );
 

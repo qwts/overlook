@@ -17,6 +17,7 @@
     "types": ["node"],
     "skipLibCheck": true
   },
+  "files": ["src/shared/i18n/formatjs-contracts.d.ts"],
   "include": ["src/shared/**/*.ts", "tests/**/*.ts", "playwright.config.ts", "playwright.perf.config.ts", "electron.vite.config.ts"],
   "exclude": ["tests/dom", "tests/fixtures"]
 }
