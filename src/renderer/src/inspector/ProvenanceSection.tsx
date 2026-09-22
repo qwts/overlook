@@ -88,29 +88,29 @@ interface BadgePresentation {
   readonly label: keyof typeof messages;
 }
 
-const TIER_PRESENTATION: Readonly<Record<ProvenanceTier, BadgePresentation>> = {
+const TIER_PRESENTATION = {
   verified: { tone: 'green', icon: 'shield-check', label: 'tierVerified' },
   declared: { tone: 'cyan', icon: 'info', label: 'tierDeclared' },
   detected: { tone: 'amber', icon: 'eye', label: 'tierDetected' },
   unknown: { tone: 'neutral', icon: 'info', label: 'tierUnknown' },
-};
+} as const satisfies Readonly<Record<ProvenanceTier, BadgePresentation>>;
 
 // No evaluation happened (nothing stored yet, or the original is not local)
 // or the stored record is in a format this build cannot read: neither is a
 // tier, and neither may be worded as Unknown.
 type ProvenanceState = ProvenanceTier | 'pending' | 'unsupported';
 
-const STATE_PRESENTATION: Readonly<Record<'pending' | 'unsupported', BadgePresentation>> = {
+const STATE_PRESENTATION = {
   pending: { tone: 'neutral', icon: 'circle-help', label: 'statePending' },
   unsupported: { tone: 'neutral', icon: 'file-key', label: 'stateUnsupported' },
-};
+} as const satisfies Readonly<Record<'pending' | 'unsupported', BadgePresentation>>;
 
-const CLAIM_LABEL: Readonly<Record<ProvenanceClaim, keyof typeof messages>> = {
+const CLAIM_LABEL = {
   generated: 'claimGenerated',
   edited: 'claimEdited',
   tool: 'claimTool',
   capture: 'claimCapture',
-};
+} as const satisfies Readonly<Record<ProvenanceClaim, keyof typeof messages>>;
 
 function summaryOf(intl: IntlShape, tier: ProvenanceTier, sources: readonly ProvenanceSource[]): string {
   const credential = credentialOutcome(sources);
