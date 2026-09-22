@@ -1,7 +1,15 @@
+import {
+  ManifestPublication,
+  nextManifestPublication,
+  staleManifestPaths,
+  type ManifestPublicationJournal,
+  type PendingManifestMutation,
+} from './manifest-publication.js';
+import type { ManifestDebtStore } from './manifest-debt.js';
 import type { BackupManifestSidecarV16 } from './backup-manifest-sidecars.js';
 import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { ProviderError, type StorageProvider } from './provider.js';
@@ -191,7 +199,8 @@ export interface BackupEngineDeps {
   readonly settleExclusions?: (() => Promise<unknown>) | undefined;
   /** Durable manifest debt (#741): survives restart so an owed generation is
    * never forgotten between runs. */
-  readonly manifestDebt?: { readonly load: () => boolean; readonly save: (owed: boolean) => void } | undefined;
+  readonly manifestDebt?: ManifestDebtStore | undefined;
+  readonly publicationTimeoutSignal?: ((milliseconds: number) => AbortSignal) | undefined;
   readonly protectedBackup?: {
     readonly run: (signal?: AbortSignal) => Promise<{ readonly uploaded: number; readonly failed: number }>;
     readonly scrub: () => Promise<BackupIntegritySummary>;
@@ -230,29 +239,6 @@ const BACKOFF_BASE_MS = 500;
  * transients (one bad path, a per-object conflict) never advance the streak
  * (PR #831 review). Dirty rows resume next run. */
 const TRANSIENT_FAILURE_BREAK = 10;
-/** Manifest generations retained remotely (ADR-0007). */
-const MANIFEST_KEEP = 2;
-const MANIFEST_GENERATION_PATH = /^manifest\/gen-(\d+)\.ovlk$/u;
-
-function nextManifestPublication(entries: readonly { readonly path: string }[]): {
-  readonly generation: number;
-  readonly previousPath: string | null;
-} {
-  let previous: { readonly generation: number; readonly path: string } | null = null;
-  for (const { path } of entries) {
-    const match = MANIFEST_GENERATION_PATH.exec(path);
-    if (match === null) continue;
-    const generation = Number(match[1]);
-    if (!Number.isSafeInteger(generation) || generation <= 0) {
-      throw new Error(`invalid manifest generation path ${path}`);
-    }
-    if (previous === null || generation > previous.generation) previous = { generation, path };
-  }
-  if (previous !== null && previous.generation >= Number.MAX_SAFE_INTEGER) {
-    throw new Error('manifest generation space is exhausted');
-  }
-  return { generation: (previous?.generation ?? 0) + 1, previousPath: previous?.path ?? null };
-}
 const EMPTY_INTEGRITY: BackupRunIntegrity = {
   checked: 0,
   repaired: 0,
@@ -299,7 +285,20 @@ export class BackupEngine {
   private readonly lockedPhotoIds = new Set<string>();
   private readonly lockedKeys = new Set<number>();
 
-  constructor(private readonly deps: BackupEngineDeps) {}
+  private readonly publicationJournal: ManifestPublicationJournal;
+
+  constructor(private readonly deps: BackupEngineDeps) {
+    // Legacy/test compositions without a database still retain uncertainty for
+    // the engine lifetime. Production uses createManifestDebtStore's journal.
+    let pending: PendingManifestMutation | null = null;
+    this.publicationJournal = deps.manifestDebt?.publicationJournal ?? {
+      load: () => pending,
+      save: (value) => {
+        pending = value;
+        this.setManifestOwed(true);
+      },
+    };
+  }
 
   /** Single-flight: a trigger during a run joins it (the dirty set is the
    * queue — anything newly dirtied is the NEXT run's work). */
@@ -345,6 +344,30 @@ export class BackupEngine {
     }
     if (this.deps.manifestDebt?.load() === true) {
       this.manifestOwed = true;
+    }
+
+    let publication: ManifestPublication | undefined;
+    const publicationScope = (): ManifestPublication => {
+      if (publication === undefined) {
+        const deadline = this.deps.publicationTimeoutSignal?.(120_000) ?? AbortSignal.timeout(120_000);
+        publication = new ManifestPublication(
+          this.deps.provider,
+          this.deps.libraryId(),
+          this.publicationJournal,
+          signal === undefined ? deadline : AbortSignal.any([signal, deadline]),
+        );
+      }
+      return publication;
+    };
+    const publicationFailure = (): void => publication?.reportFailure(this.deps.audit, signal);
+    if (this.publicationJournal.load() !== null) {
+      this.setManifestOwed(true);
+      try {
+        await publicationScope().reconcile();
+      } catch {
+        publicationFailure();
+        return { uploaded: 0, failed: 0, manifestUploaded: false, skipped: null, integrity: EMPTY_INTEGRITY, blockedRemoteOnly: 0 };
+      }
     }
 
     // OFFLOADED rows can dirty too (album/favorite edits in the Offloaded
@@ -442,7 +465,7 @@ export class BackupEngine {
     if (uploaded > 0 || this.manifestOwed) {
       for (let attempt = 0; ; attempt += 1) {
         try {
-          await this.uploadManifest();
+          await this.uploadManifest(publicationScope());
           this.setManifestOwed(false);
           manifestUploaded = true;
           publishBlocked = false;
@@ -455,6 +478,7 @@ export class BackupEngine {
           // even with nothing dirty (PR #203 review).
           this.setManifestOwed(true);
           manifestUploaded = false;
+          publicationFailure();
           if (!(error instanceof ManifestIncompleteError)) {
             console.error(`[overlook] manifest upload failed: ${error instanceof Error ? error.message : String(error)}`);
             break;
@@ -578,7 +602,7 @@ export class BackupEngine {
           // that blocked earlier in this run.
           this.setManifestOwed(true);
           try {
-            await this.uploadManifest();
+            await this.uploadManifest(publicationScope());
             this.setManifestOwed(false);
             manifestUploaded = true;
             settleManifestOnly();
@@ -586,6 +610,7 @@ export class BackupEngine {
               this.deps.audit('INTEGRITY-RECOVERY-REPAIRED');
             }
           } catch (error) {
+            publicationFailure();
             manifestUploaded = false;
             if (error instanceof ManifestIncompleteError) {
               this.deps.audit(`MANIFEST-INCOMPLETE count=${String(error.missing.length)} first=${error.missing[0] ?? ''}`);
@@ -817,13 +842,13 @@ export class BackupEngine {
     return open(sidecarOwnerOf(sidecar), sidecar.contentHash);
   }
 
-  private async hashStream(stream: Readable): Promise<{ sha256: string; bytes: number }> {
+  private async hashStream(stream: Readable, signal?: AbortSignal): Promise<{ sha256: string; bytes: number }> {
     const hasher = createHash('sha256');
     let bytes = 0;
     stream.on('data', (chunk: Buffer) => {
       bytes += chunk.length;
     });
-    await pipeline(stream, hasher);
+    await pipeline(stream, hasher, { signal });
     return { sha256: hasher.digest('hex'), bytes };
   }
 
@@ -843,11 +868,15 @@ export class BackupEngine {
     this.presenceFor().listed.delete(prefix);
   }
 
-  private async listedPaths(prefix: string): Promise<ReadonlySet<string>> {
+  private async listedPaths(prefix: string, publication?: ManifestPublication): Promise<ReadonlySet<string>> {
     const presence = this.presenceFor();
     let paths = presence.listed.get(prefix);
     if (paths === undefined) {
-      paths = new Set((await this.deps.provider.list(prefix)).map((entry) => entry.path));
+      const entries =
+        publication === undefined
+          ? await this.deps.provider.list(prefix)
+          : await publication.execute(() => this.deps.provider.list(prefix, publication.signal));
+      paths = new Set(entries.map((entry) => entry.path));
       presence.listed.set(prefix, paths);
     }
     return paths;
@@ -860,24 +889,25 @@ export class BackupEngine {
   private async assertManifestComplete(
     photos: readonly { readonly blobPath: string }[],
     protectedPaths: readonly string[],
-    sidecarPaths: readonly string[] = [],
+    sidecarPaths: readonly string[],
+    publication: ManifestPublication,
   ): Promise<void> {
     const missing: string[] = [];
     const verified = this.presenceFor().verified;
     if (photos.length > 0) {
-      const present = await this.listedPaths('blobs');
+      const present = await this.listedPaths('blobs', publication);
       for (const photo of photos) {
         if (!present.has(photo.blobPath) && !verified.has(photo.blobPath)) missing.push(photo.blobPath);
       }
     }
     if (protectedPaths.length > 0) {
-      const present = await this.listedPaths('protected');
+      const present = await this.listedPaths('protected', publication);
       for (const path of protectedPaths) {
         if (!present.has(path) && !verified.has(path)) missing.push(path);
       }
     }
     if (sidecarPaths.length > 0) {
-      const present = await this.listedPaths('sidecars');
+      const present = await this.listedPaths('sidecars', publication);
       for (const path of sidecarPaths) {
         if (!present.has(path) && !verified.has(path)) missing.push(path);
       }
@@ -892,11 +922,12 @@ export class BackupEngine {
    * byte-for-byte before it publishes. Rows whose photo the snapshot omits
    * (soft-deleted, never backed up) stay out — schema 6 rejects a sidecar
    * referencing a photo absent from the manifest (PR #849 review). */
-  private async sidecarManifestObjects(photoIds: ReadonlySet<string>): Promise<readonly BackupManifestSidecarV16[]> {
+  private async sidecarManifestObjects(photoIds: ReadonlySet<string>, signal: AbortSignal): Promise<readonly BackupManifestSidecarV16[]> {
     const rows = (this.deps.allSidecars?.() ?? []).filter((row) => photoIds.has(row.photoId));
     const objects: BackupManifestSidecarV16[] = [];
     for (const row of rows) {
-      const ciphertext = await this.hashStream(this.encryptedSidecar(row));
+      signal.throwIfAborted();
+      const ciphertext = await this.hashStream(this.encryptedSidecar(row), signal);
       objects.push({
         photoId: row.photoId,
         ownerId: sidecarOwnerOf(row),
@@ -913,9 +944,11 @@ export class BackupEngine {
   }
 
   /** Seals and uploads the next manifest generation; prunes past N=2. */
-  private async uploadManifest(): Promise<void> {
+  private async uploadManifest(publication: ManifestPublication): Promise<void> {
+    await publication.reconcile();
     const generatedAt = new Date(this.deps.now()).toISOString();
-    const purgeSnapshot = await this.deps.purgeCleanup?.snapshot();
+    const cleanup = this.deps.purgeCleanup;
+    const purgeSnapshot = cleanup === undefined ? undefined : await publication.execute(() => cleanup.snapshot());
     const protectedSnapshot = this.deps.protectedBackup?.snapshot();
     const snapshot = this.deps.manifestSnapshot();
     const carriedPhotoIds = new Set(snapshot.photos.map((photo) => photo.id));
@@ -933,7 +966,7 @@ export class BackupEngine {
         protectedPhotos: protectedSnapshot?.protectedPhotos ?? [],
         activity: this.deps.activitySnapshot?.() ?? [],
         boards: this.deps.boardsSnapshot?.() ?? [],
-        sidecars: await this.sidecarManifestObjects(blobPhotoIds),
+        sidecars: await publication.execute(() => this.sidecarManifestObjects(blobPhotoIds, publication.signal)),
         galleryPolicy: this.deps.galleryPolicySnapshot?.() ?? DEFAULT_GALLERY_POLICY,
         hiddenAlbumIds: this.deps.hiddenAlbumIdsSnapshot?.() ?? [],
         ...(this.deps.albumTreeSnapshot?.() ?? {
@@ -965,18 +998,19 @@ export class BackupEngine {
       carried,
       manifest.protectedPhotos.flatMap((photo) => photo.objects.map((object) => object.path)),
       manifest.sidecars.map((sidecar) => sidecar.blobPath),
+      publication,
     );
-    const existing = await this.deps.provider.list('manifest');
+    const existing = await publication.execute(() => this.deps.provider.list('manifest', publication.signal));
     const { generation, previousPath } = nextManifestPublication(existing);
     const previousManifest =
       previousPath === null
         ? null
         : {
             generation: generation - 1,
-            sha256: (await this.deps.provider.verify(previousPath)).sha256,
+            sha256: (await publication.execute(() => this.deps.provider.verify(previousPath))).sha256,
           };
     const json = JSON.stringify(manifest);
-    const sealed = await this.deps.sealManifest(json);
+    const sealed = await publication.execute(() => this.deps.sealManifest(json));
     const manifestSha256 = createHash('sha256').update(sealed).digest('hex');
     // The bootstrap is a superset across rotations and lands first: a crash
     // can leave an old manifest with newer wrapped keys, never a manifest
@@ -987,27 +1021,16 @@ export class BackupEngine {
       manifestSha256,
       previousManifest,
     });
-    await this.putBufferVerified('recovery/bootstrap.ovrb', bootstrap);
-    await this.putBufferVerified(`manifest/gen-${String(generation)}.ovlk`, sealed);
-    const all = await this.deps.provider.list('manifest');
-    const sorted = [...all].sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true }));
-    for (const stale of sorted.slice(0, Math.max(0, sorted.length - MANIFEST_KEEP))) {
-      await this.deps.provider.delete(stale.path);
-    }
+    await publication.putVerified('recovery/bootstrap.ovrb', bootstrap);
+    await publication.putVerified(`manifest/gen-${String(generation)}.ovlk`, sealed);
+    const all = await publication.execute(() => this.deps.provider.list('manifest', publication.signal));
+    for (const stale of staleManifestPaths(all, generation)) await publication.remove(stale);
+    publication.signal.throwIfAborted();
     if (protectedSnapshot !== undefined) this.deps.protectedBackup?.settleManifest(protectedSnapshot);
     if (purgeSnapshot !== undefined)
       this.deps.purgeCleanup?.settleManifest(purgeSnapshot, [
         ...blobPhotos(manifest.photos).map((photo) => photo.blobPath),
         ...manifest.sidecars.map((sidecar) => sidecar.blobPath),
       ]);
-  }
-
-  private async putBufferVerified(path: string, bytes: Buffer): Promise<void> {
-    await this.deps.provider.put(path, Readable.from([bytes]));
-    const remote = await this.deps.provider.verify(path);
-    const sha256 = createHash('sha256').update(bytes).digest('hex');
-    if (remote.sha256 !== sha256 || remote.bytes !== bytes.length) {
-      throw new ProviderError(`verify mismatch for ${path}`, 'corrupt');
-    }
   }
 }

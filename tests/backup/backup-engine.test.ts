@@ -364,7 +364,9 @@ describe('backup engine (#105)', () => {
     w.engine.oweManifest();
     const put = w.deps.provider.put.bind(w.deps.provider);
     w.deps.provider.put = (path, bytes) =>
-      path === 'manifest/gen-2.ovlk' ? Promise.reject(new ProviderError('interrupted manifest publish', 'transient')) : put(path, bytes);
+      path === 'manifest/gen-2.ovlk'
+        ? Promise.reject(new ProviderError('interrupted manifest publish', 'transient', 'provider', true))
+        : put(path, bytes);
 
     assert.equal((await w.engine.run()).manifestUploaded, false);
     assert.deepEqual(w.bootstrapGenerations, [1, 2]);
@@ -700,10 +702,19 @@ describe('backup engine (#105)', () => {
     // A fresh engine (restart: no presence cache, no verified-upload notes)
     // owes a generation — publication must preflight, refuse, and re-upload
     // from the local original within the run.
-    const restarted = new BackupEngine(w.deps);
+    let deadlines = 0;
+    const restarted = new BackupEngine({
+      ...w.deps,
+      publicationTimeoutSignal: (ms) => {
+        assert.equal(ms, 120_000);
+        deadlines += 1;
+        return new AbortController().signal;
+      },
+    });
     restarted.oweManifest();
     const result = await restarted.run();
     assert.equal(result.manifestUploaded, true);
+    assert.equal(deadlines, 1, 'publication retries must not reset the budget');
     assert.equal(result.blockedRemoteOnly, 0);
     assert.equal(result.uploaded, 1, 'the missing blob re-uploaded from local');
     assert.ok(w.audits.some((line) => line.startsWith('MANIFEST-INCOMPLETE count=1')));
