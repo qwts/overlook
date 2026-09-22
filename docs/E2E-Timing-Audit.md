@@ -181,3 +181,11 @@ Because the higher-concurrency miss did not reproduce locally, the required lane
 chooses the stable one-worker baseline and removes retries instead of hiding a
 miss. Retained JSON artifacts supply load, memory, and Linux CPU/I/O pressure;
 the process guard supplies aggregate RSS and process count.
+
+## Protected-album keyboard activation (#1173)
+
+After closing Settings, the protected-album lifecycle spec waits for both dialog
+removal and focus restoration to the Settings opener. Escape alone starts an
+asynchronous exit; sending Enter to the sidebar before focus settles can reopen
+Settings. The subsequent keyboard activation and password-input focus assertions
+remain required, with no added sleep or expanded timeout.
