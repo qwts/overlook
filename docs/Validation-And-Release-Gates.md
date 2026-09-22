@@ -263,6 +263,16 @@ the normal unit-test lane on local macOS and hosted Linux/Windows. It proves
 native integration with a deterministic fixture, not production CLIP quality
 or accelerator performance; packaged payload checks remain separate gates.
 
+To qualify the owner-provided Windows ARM64 hardware, explicitly dispatch CI on
+an inspected commit with `purpose=diagnostics` and `qualify_dml_arm64=true`.
+The policy-gated `Native ARM64 DirectML qualification` job uses labels
+`[self-hosted, Windows, ARM64]` (currently `SURFACE-13`), asserts native ARM64
+Node and Electron, records adapter/driver names, and runs the unchanged strict native-worker
+fixture with CPU fallback disabled and its negative CPU control. It never runs
+on ordinary PR events. A successful job qualifies only that commit, runtime,
+architecture, and adapter; it does not establish x64 adapter availability or
+replace the required hosted CI result. No secret configuration is required.
+
 Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
 and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
 `AZURE_CLIENT_SECRET` drive Azure Trusted Signing for the Windows installers

@@ -11,6 +11,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      qualify_dml_arm64:
+        description: Explicitly qualify DirectML on the owner-provided Windows ARM64 runner
+        required: false
+        type: boolean
+        default: false
       purpose:
         description: Why the complete suite is being run manually
         required: true
@@ -365,6 +370,48 @@ jobs:
 
   # Main always executes the source import on both native Windows architectures,
   # even when exact merge-group evidence lets the Ubuntu suite use its short smoke.
+  dml-arm64-qualification:
+    name: Native ARM64 DirectML qualification
+    needs: policy
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.qualify_dml_arm64 == true &&
+      needs.policy.result == 'success' && needs.policy.outputs.run_full == 'true'
+    runs-on: [self-hosted, Windows, ARM64]
+    timeout-minutes: 20
+    steps:
+      - name: Configure LF checkout
+        run: git config --global core.autocrlf false
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup native Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          architecture: arm64
+      - name: Assert native ARM64 runner and record adapters
+        shell: pwsh
+        run: |
+          node scripts/assert-platform.mjs win32 arm64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, Status | Format-List
+      - name: Install locked dependencies
+        uses: qwts/qwts-agent-ci/.github/actions/bounded-command@3a5617b287d922e37f262210a1d8750d8217b56d
+        with:
+          task: Install native ARM64 DirectML qualification dependencies
+          executable: cmd.exe
+          arguments-json: '["/d","/s","/c","npm ci"]'
+          timeout-seconds: '600'
+          attempts: '1'
+      - name: Assert native Electron architecture
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+        run: npx --no-install electron scripts/assert-platform.mjs win32 arm64
+      - name: Qualify native worker without CPU substitution
+        timeout-minutes: 5
+        run: npm run test:embedding-native:inner
+
   windows-main-smoke:
     name: Windows ${{ matrix.arch }} source import
     needs: policy
