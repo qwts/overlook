@@ -52,8 +52,3 @@ real successful operations. Album creation failure recovery is documented in
 2. Repeat with **Use folder setting** on an album with explicit visibility inside
    a folder. Expect the same failure feedback, preserved selection/focus, and a
    successful retry. Neither rejection may escape as an unhandled promise.
-
-After a failed inline album creation, retry with Enter. On success the name
-field disappears, the New album button becomes enabled, and focus returns to
-that button after the UI commit. If the user moved focus away while creation
-was pending, completion must preserve that focus instead.

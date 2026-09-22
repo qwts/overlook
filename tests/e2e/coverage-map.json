@@ -2894,6 +2894,16 @@
           "path": "tests/commands/quick-actions.test.ts"
         }
       ]
+    },
+    {
+      "id": "1230-album-create-focus",
+      "wiki": "User-Story-M10-Albums-organization-deletion",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/SidebarFailures.stories.tsx"
+        }
+      ]
     }
   ]
 }
