@@ -16,7 +16,7 @@ export function RestoreExclusionNotice({ coverage }: { readonly coverage: Restor
   const { formatBytes } = useFormats();
   if (coverage === null || coverage === undefined || coverage.excludedCount === 0) return null;
   return (
-    <span className="ovl-restore__notice" data-testid="restore-excluded">
+    <span className="ovl-restore__notice mono-data" data-testid="restore-excluded">
       {intl.formatMessage(messages.excluded, { count: coverage.excludedCount, bytes: formatBytes(coverage.excludedBytes) })}
     </span>
   );
