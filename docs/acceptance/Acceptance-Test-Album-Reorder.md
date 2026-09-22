@@ -54,7 +54,7 @@ the sibling group.
   collapsed-menu command, undo, cross-folder placement/refusal/focus, and reload persistence through the serialized
   polite live region.
 - `src/renderer/src/shell/Sidebar.stories.tsx`: handle semantics, keyboard grab,
-  collapsed rail, RTL, protected-row separation, and photo-drop coexistence.
+  collapsed rail, RTL, protected-row separation, photo-drop coexistence, live destination feedback, and release-zone placement after a different hover zone.
 - `tests/db/album-order.test.ts`: exact-set validation, atomic replacement, and
   contiguous positions.
 - `tests/history/history-service.test.ts`: one-command undo/redo and manifest

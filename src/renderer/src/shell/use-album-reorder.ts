@@ -361,6 +361,7 @@ export function useAlbumReorder<T extends ReorderableAlbum>(
       const preview = (event: DragEvent<HTMLLIElement>): void => {
         const drop = accept(event);
         if (drop === null) return;
+        const previous = dropRef.current;
         dropRef.current = drop;
         const album = byId.get(drop.sourceId);
         if (parentOf(album) === drop.parentId) {
@@ -368,14 +369,15 @@ export function useAlbumReorder<T extends ReorderableAlbum>(
           setPreviewOrder(move(byId, displayOrder, drop.sourceId, drop.position));
         } else {
           setPreviewOrder(null);
-          setDropTarget({
-            albumId: target.id,
-            label: intl.formatMessage(messages.destination, {
-              name: album?.name ?? '',
-              destination: drop.parentId === null ? intl.formatMessage(messages.topLevel) : (byId.get(drop.parentId)?.name ?? ''),
-              position: drop.position + 1,
-            }),
+          const label = intl.formatMessage(messages.destination, {
+            name: album?.name ?? '',
+            destination: drop.parentId === null ? intl.formatMessage(messages.topLevel) : (byId.get(drop.parentId)?.name ?? ''),
+            position: drop.position + 1,
           });
+          setDropTarget({ albumId: target.id, label });
+          if (previous?.sourceId !== drop.sourceId || previous.parentId !== drop.parentId || previous.position !== drop.position) {
+            publish(label);
+          }
         }
       };
       return {
@@ -389,11 +391,7 @@ export function useAlbumReorder<T extends ReorderableAlbum>(
           }
         },
         onDrop: (event) => {
-          const accepted = accept(event);
-          const drop =
-            accepted !== null && dropRef.current?.targetId === target.id && dropRef.current.sourceId === accepted.sourceId
-              ? dropRef.current
-              : accepted;
+          const drop = accept(event);
           const album = drop === null ? undefined : byId.get(drop.sourceId);
           if (album === undefined || drop === null) return;
           pointerCommittedRef.current = true;

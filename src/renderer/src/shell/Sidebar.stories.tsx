@@ -542,6 +542,9 @@ export const AlbumFolderDrag: Story = {
     await fireEvent.dragStart(handle, { dataTransfer: transfer });
     await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
     await waitFor(() => expect(canvas.getByText('Move Iceland to Archive, position 1.')).toBeVisible());
+    await waitFor(() =>
+      expect(within(document.body).getByTestId('screen-reader-announcer-polite')).toHaveTextContent('Move Iceland to Archive, position 1.'),
+    );
     await fireEvent.dragEnd(handle, { dataTransfer: transfer });
     await expect(moveAlbum).not.toHaveBeenCalled();
     await expect(handle).toHaveFocus();
@@ -568,6 +571,19 @@ export const AlbumFolderDrag: Story = {
     await waitFor(() =>
       expect(within(document.body).getByTestId('screen-reader-announcer-polite')).toHaveTextContent('Moved Iceland to Archive.'),
     );
+
+    // Releasing at another zone of the same row must override its last hover.
+    const movedHandle = canvas.getByRole('button', { name: 'Reorder Iceland, position 1 of 1' });
+    const trips = canvas.getByText('Trips').closest('.ovl-sidebar__albumrow');
+    if (trips === null) throw new Error('missing Trips row');
+    const tripsBounds = trips.getBoundingClientRect();
+    await fireEvent.dragStart(movedHandle, { dataTransfer: transfer });
+    await fireEvent.dragOver(trips, { dataTransfer: transfer, clientY: tripsBounds.top + tripsBounds.height / 2 });
+    await waitFor(() => expect(canvas.getByText('Move Iceland to Trips, position 1.')).toBeVisible());
+    await fireEvent.drop(trips, { dataTransfer: transfer, clientY: tripsBounds.top + 1 });
+    await fireEvent.dragEnd(movedHandle, { dataTransfer: transfer });
+    await waitFor(() => expect(moveAlbum).toHaveBeenLastCalledWith({ albumId: 'a1', parentId: null, position: 0 }));
+    await waitFor(() => expect(canvas.getByText('Iceland').closest('.ovl-sidebar__albumrow')).toHaveAttribute('data-depth', '0'));
   },
 };
 
