@@ -365,6 +365,61 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
+  # Full-suite policy approval is required before scheduling owner-provided hardware.
+  dml-arm64-qualification:
+    name: Native ARM64 DirectML qualification
+    needs: policy
+    if: >-
+      !cancelled() && needs.policy.result == 'success' &&
+      needs.policy.outputs.run_full == 'true'
+    runs-on: [self-hosted, Windows, ARM64]
+    timeout-minutes: 20
+    # Command-scope config covers checkout and cleanup without changing the laptop.
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
+    steps:
+      - name: Verify command-scoped LF checkout
+        shell: pwsh
+        run: |
+          $setting = git config --show-scope --get core.autocrlf
+          if ($LASTEXITCODE -ne 0 -or $setting -notmatch '^command\s+false$') {
+            throw 'DirectML checkout requires command-scoped core.autocrlf=false'
+          }
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup native Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          architecture: arm64
+      - name: Assert native ARM64 runner and record adapters
+        shell: pwsh
+        run: |
+          node scripts/assert-platform.mjs win32 arm64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, Status | Format-List
+      - name: Install locked dependencies
+        uses: qwts/qwts-agent-ci/.github/actions/bounded-command@3a5617b287d922e37f262210a1d8750d8217b56d
+        with:
+          task: Install native ARM64 DirectML qualification dependencies
+          executable: cmd.exe
+          arguments-json: '["/d","/s","/c","npm ci"]'
+          timeout-seconds: '600'
+          attempts: '1'
+      - name: Assert native Electron architecture
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+        run: npx --no-install electron scripts/assert-platform.mjs win32 arm64
+      - name: Qualify native worker without CPU substitution
+        timeout-minutes: 5
+        env:
+          OVERLOOK_DML_QUALIFICATION: '1'
+        run: npm run test:embedding-native:inner
+
   # Main always executes the source import on both native Windows architectures,
   # even when exact merge-group evidence lets the Ubuntu suite use its short smoke.
   windows-main-smoke:
@@ -643,6 +698,7 @@ jobs:
         ci,
         windows-tests,
         windows-main-smoke,
+        dml-arm64-qualification,
         e2e-gate,
         docs-gov,
         codeql,
@@ -664,6 +720,7 @@ jobs:
           COMPLETE: ${{ needs.ci.result }}
           WINDOWS_TESTS: ${{ needs.windows-tests.result }}
           WINDOWS_MAIN: ${{ needs.windows-main-smoke.result }}
+          DML_ARM64: ${{ needs.dml-arm64-qualification.result }}
           E2E_GATE: ${{ needs.e2e-gate.result }}
           DOCS_GOV: ${{ needs.docs-gov.result }}
           CODEQL: ${{ needs.codeql.result }}
@@ -677,6 +734,7 @@ jobs:
           test "$WORKFLOW_RUNTIME" = success
           case "$MODE" in
             full)
+              test "$DML_ARM64" = success
               if [ "$PREFLIGHT_VALIDATED" = true ]; then
                 test "$PREFLIGHT" = success
               else
@@ -688,6 +746,7 @@ jobs:
               fi
               ;;
             queue|manual)
+              test "$DML_ARM64" = success
               test "$COMPLETE" = success
               test "$WINDOWS_TESTS" = success
               test "$E2E_GATE" = success
