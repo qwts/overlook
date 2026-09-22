@@ -20,6 +20,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { renderMessageContracts } from './i18n-contracts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Resolve the CLI's JS entry and run it with the current node binary rather
@@ -64,10 +65,13 @@ function stableJson(record) {
 /** A locale tag as a TS identifier for the generated modules: pt-BR → pt_BR. */
 const identifierFor = (locale) => locale.replace(/-/gu, '_');
 
-function renderGeneratedCatalog(locale, compiled) {
+function renderGeneratedCatalog(locale, compiled, ast) {
   const sorted = Object.keys(compiled).sort();
   const entries = sorted.map((id) => `  ${JSON.stringify(id)}: ${JSON.stringify(compiled[id])},`);
   const body = entries.length === 0 ? '{}' : `{\n${entries.join('\n')}\n}`;
+  if (ast !== undefined) {
+    return `${generatedHeader(locale)}\n\nimport type { MessageValue, MessageTag } from '@formatjs/intl';\n\nexport const en = ${body} as const satisfies Readonly<Record<string, string>>;\n${renderMessageContracts(ast)}`;
+  }
   return `${generatedHeader(locale)}\n\nexport const ${identifierFor(locale)}: Readonly<Record<string, string>> = ${body};\n`;
 }
 
@@ -103,11 +107,11 @@ function extractCatalog(tempDir) {
 }
 
 /** Compile an extracted-format catalog to the runtime string map (id → message). */
-function compileCatalog(extracted, tempDir, label) {
+function compileCatalog(extracted, tempDir, label, ast = false) {
   const inFile = path.join(tempDir, `${label}.source.json`);
   const outFile = path.join(tempDir, `${label}.compiled.json`);
   writeFileSync(inFile, stableJson(extracted));
-  runFormatjs(['compile', inFile, '--out-file', outFile]);
+  runFormatjs(['compile', inFile, '--out-file', outFile, ...(ast ? ['--ast'] : [])]);
   return JSON.parse(readFileSync(outFile, 'utf8'));
 }
 
@@ -136,7 +140,10 @@ function main() {
     for (const locale of locales) {
       const source = locale === 'en' ? extracted : JSON.parse(readFileSync(path.join(MESSAGES_DIR, `${locale}.json`), 'utf8'));
       const compiled = compileCatalog(source, tempDir, locale);
-      out.set(path.join(GENERATED_DIR, `${locale}.ts`), renderGeneratedCatalog(locale, compiled));
+      out.set(
+        path.join(GENERATED_DIR, `${locale}.ts`),
+        renderGeneratedCatalog(locale, compiled, locale === 'en' ? compileCatalog(source, tempDir, 'en-ast', true) : undefined),
+      );
       const mainCatalog = Object.fromEntries(
         Object.entries(compiled).filter(([id]) => id.startsWith('commands.') || id.startsWith('menu.')),
       );
