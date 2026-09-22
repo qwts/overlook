@@ -253,9 +253,17 @@ export class BlobStore {
     return out;
   }
 
-  /** Streams plaintext into an encrypted, content-addressed original. */
-  async putOriginal(plaintext: Readable, key: EnvelopeKey, photoId: string): Promise<BlobRef> {
-    return this.put(plaintext, key, photoId, (hash) => this.originalPath(hash));
+  /** Streams plaintext into an encrypted, content-addressed original.
+   * Recovery supplies the recorded hash: verify the same bytes we encrypted
+   * before publishing, without a second file read or a plaintext buffer. */
+  async putOriginal(plaintext: Readable, key: EnvelopeKey, photoId: string, expectedContentHash?: string): Promise<BlobRef> {
+    if (expectedContentHash !== undefined) assertHash(expectedContentHash);
+    return this.put(plaintext, key, photoId, (hash) => {
+      if (expectedContentHash !== undefined && hash !== expectedContentHash) {
+        throw new BlobStoreError('recovery bytes do not match the recorded original');
+      }
+      return this.originalPath(hash);
+    });
   }
 
   /** Same envelope path for derivatives; addressed by ORIGINAL hash + size. */
