@@ -1,5 +1,5 @@
 import type { CustodyAuthority } from './custody-authority-repository.js';
-import type { StorageProvider } from './provider.js';
+import { raceWithAbort, type StorageProvider } from './provider.js';
 
 export type CustodyFailureReason = 'custody-disconnected' | 'custody-wrong-account' | 'custody-unavailable';
 
@@ -20,6 +20,7 @@ export interface CustodyHandleDependencies {
   readonly authorityForPhoto: (photoId: string) => CustodyAuthority | undefined;
   readonly provider: (providerId: string) => StorageProvider | undefined;
   readonly remoteRoot: () => string;
+  readonly timeoutSignal?: ((milliseconds: number) => AbortSignal) | undefined;
   readonly prepareAuthority?:
     | ((authority: CustodyAuthority) => Promise<{
         readonly authority: CustodyAuthority;
@@ -59,9 +60,10 @@ export class CustodyHandleResolver {
     const provider = this.deps.provider(authority.providerId);
     if (provider === undefined) throw new CustodyResolutionError('custody-disconnected');
 
+    const signal = this.deps.timeoutSignal?.(10_000) ?? AbortSignal.timeout(10_000);
     let authState: Awaited<ReturnType<StorageProvider['authState']>>;
     try {
-      authState = await provider.authState();
+      authState = await raceWithAbort(provider.authState(), signal);
     } catch {
       throw new CustodyResolutionError('custody-unavailable');
     }
@@ -70,7 +72,7 @@ export class CustodyHandleResolver {
 
     let accountId: string;
     try {
-      accountId = (await provider.accountIdentity()).accountId;
+      accountId = (await raceWithAbort(provider.accountIdentity(signal), signal)).accountId;
     } catch {
       throw new CustodyResolutionError('custody-unavailable');
     }
