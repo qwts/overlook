@@ -10,6 +10,7 @@ const messages = defineMessages({
   },
   unavailable: { id: 'commands.photo.keys.unavailable', defaultMessage: 'Could not verify photo keys. Try again.' },
   locked: { id: 'commands.photo.keys.locked', defaultMessage: 'The selected photos need keys that are not on this device.' },
+  retry: { id: 'commands.photo.keys.retry', defaultMessage: 'Retry photo keys' },
   checking: { id: 'commands.photo.keys.checking', defaultMessage: 'Checking photo keys…' },
 });
 

@@ -19,6 +19,7 @@ export const commandMenuContextSchema = z
     inAlbum: z.boolean(),
     /** Protected albums have their own authorized export boundary. */
     protectedAlbumOpen: z.boolean(),
+    /** Readable targets exist, or a failed lookup can retry the invocation preflight. */
     hasPhotoKeyTarget: z.boolean(),
     selectionCount: z.number().int().nonnegative(),
     appLockConfigured: z.boolean(),

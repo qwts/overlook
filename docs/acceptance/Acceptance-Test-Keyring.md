@@ -164,6 +164,11 @@ Select a locked photo, including one outside the loaded grid page. Native
 File → Export and the selection pill's wide and overflow Export controls must
 remain disabled. Favorite and album membership remain usable. Reimport its key:
 the library change event refreshes availability without changing the selection.
+If the custody lookup fails, both pill layouts show “Retry photo keys” with the
+failure reason instead of remaining in “Checking photo keys…”. Retry must restore
+normal Export after a successful lookup without starting an export itself.
+Native Export can retry a failed presentation lookup through its invocation-time
+query; another failure or a locked result must still leave Export closed.
 
 Select readable and locked photos together, including offscreen IDs. Export
 opens for only the readable IDs and reports the exact locked/unavailable skip

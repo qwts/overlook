@@ -443,6 +443,9 @@
   "commands.photo.keys.locked": {
     "defaultMessage": "The selected photos need keys that are not on this device."
   },
+  "commands.photo.keys.retry": {
+    "defaultMessage": "Retry photo keys"
+  },
   "commands.photo.keys.skipped": {
     "defaultMessage": "Skipped {locked, plural, one {# locked photo} other {# locked photos}} and {missing, plural, one {# unavailable photo} other {# unavailable photos}}."
   },

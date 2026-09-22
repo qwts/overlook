@@ -67,6 +67,7 @@ export const en: Readonly<Record<string, string>> = {
   "commands.photo.favorite.toggle": "Toggle favorite",
   "commands.photo.keys.checking": "Checking photo keys…",
   "commands.photo.keys.locked": "The selected photos need keys that are not on this device.",
+  "commands.photo.keys.retry": "Retry photo keys",
   "commands.photo.keys.skipped": "Skipped {locked, plural, one {# locked photo} other {# locked photos}} and {missing, plural, one {# unavailable photo} other {# unavailable photos}}.",
   "commands.photo.keys.unavailable": "Could not verify photo keys. Try again.",
   "commands.photo.offload": "Offload original…",

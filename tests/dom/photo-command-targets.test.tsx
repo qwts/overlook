@@ -5,7 +5,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { IntlProvider, createIntl } from 'react-intl';
 
 import { photoCommandTargets } from '../../src/renderer/src/commands/photo-command-targets.js';
-import { usePhotoKeySelection, useSelectionExportReason } from '../../src/renderer/src/commands/use-photo-key-selection.js';
+import {
+  usePhotoKeySelection,
+  usePhotoKeyTarget,
+  useSelectionExportAvailability,
+  type PhotoKeyLookup,
+} from '../../src/renderer/src/commands/use-photo-key-selection.js';
 import { SelectionPill } from '../../src/renderer/src/grid/SelectionPill.js';
 import { duplicatePhotos } from '../../src/renderer/src/grid/duplicate-photos.js';
 import { useExportDialog, type ExportDialogController } from '../../src/renderer/src/export/use-export-dialog.js';
@@ -227,9 +232,9 @@ test('mixed pixel commands filter authoritatively and retain localized skipped c
   assert.deepEqual((await photoCommandTargets('photo.export', ['locked-a'], intl)).photoIds, []);
 });
 
-let snapshot: PhotoKeySelection | null;
+let snapshot: PhotoKeyLookup['state'];
 function KeyProbe({ ids }: { readonly ids: readonly string[] }) {
-  snapshot = usePhotoKeySelection(ids);
+  snapshot = usePhotoKeySelection(ids).state;
   return null;
 }
 test('availability ignores stale responses and reloads offscreen custody on key return (#1235)', async () => {
@@ -242,26 +247,34 @@ test('availability ignores stale responses and reloads offscreen custody on key 
     pending[0]?.resolve({ photoIds: ['old'], locked: 0, missing: 0 });
     await Promise.resolve();
   });
-  assert.equal(snapshot, null);
+  assert.deepEqual(snapshot, { status: 'loading' });
   await act(async () => {
     pending[1]?.resolve({ photoIds: [], locked: 1, missing: 0 });
     await Promise.resolve();
   });
-  assert.deepEqual(snapshot, { photoIds: [], locked: 1, missing: 0 });
+  assert.deepEqual(snapshot, { status: 'ready', result: { photoIds: [], locked: 1, missing: 0 } });
   act(() => changed());
-  assert.equal(snapshot, null);
+  assert.deepEqual(snapshot, { status: 'loading' });
   assert.deepEqual(pending[2]?.ids, ['new']);
   await act(async () => {
     pending[2]?.resolve({ photoIds: ['new'], locked: 0, missing: 0 });
     await Promise.resolve();
   });
-  assert.deepEqual(snapshot, { photoIds: ['new'], locked: 0, missing: 0 });
+  assert.deepEqual(snapshot, { status: 'ready', result: { photoIds: ['new'], locked: 0, missing: 0 } });
 });
 
 const pillSelection = new Set(['offscreen']);
 function PillProbe({ onExport }: { readonly onExport: () => void }) {
-  const reason = useSelectionExportReason(pillSelection);
-  return <SelectionPill count={1} onClear={() => {}} onExport={onExport} exportDisabledReason={reason} />;
+  const availability = useSelectionExportAvailability(pillSelection);
+  return (
+    <SelectionPill
+      count={1}
+      onClear={() => {}}
+      onExport={onExport}
+      exportDisabledReason={availability.disabledReason}
+      onRetryExport={availability.retry}
+    />
+  );
 }
 
 test('both pill layouts disable Export while preserving metadata actions (#1235)', async () => {
@@ -303,4 +316,86 @@ test('both pill layouts disable Export while preserving metadata actions (#1235)
   assert.equal(overflow?.disabled, false);
   act(() => wide?.click());
   assert.equal(exports, 1);
+});
+
+test('both pill layouts expose failure and recover through an explicit custody retry (#1235)', async () => {
+  setup();
+  query = () => Promise.reject(new Error('temporary lookup failure'));
+  let exports = 0;
+  act(() =>
+    root?.render(
+      <IntlProvider locale="en">
+        <PillProbe
+          onExport={() => {
+            exports++;
+          }}
+        />
+      </IntlProvider>,
+    ),
+  );
+  await flush();
+  const wideRetry = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Retry photo keys');
+  assert.ok(wideRetry);
+  assert.equal(wideRetry.disabled, false);
+  assert.equal(
+    document.getElementById(wideRetry.getAttribute('aria-describedby') ?? '')?.textContent,
+    'Could not verify photo keys. Try again.',
+  );
+  const more = document.querySelector<HTMLButtonElement>('button[aria-label="More selection actions"]');
+  act(() => more?.click());
+  const menuRetry = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (button) => button.textContent === 'Retry photo keys',
+  );
+  assert.ok(menuRetry);
+  assert.equal(menuRetry.disabled, false);
+  let finish: ((result: PhotoKeySelection) => void) | undefined;
+  query = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  act(() => menuRetry.click());
+  assert.equal(wideRetry.disabled, true);
+  assert.equal(wideRetry.title, 'Checking photo keys…');
+  assert.equal(exports, 0);
+  await act(async () => {
+    finish?.({ photoIds: ['offscreen'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  assert.equal(wideRetry.disabled, false);
+  assert.equal(menuRetry.disabled, false);
+  assert.match(wideRetry.textContent ?? '', /Export/);
+  act(() => wideRetry.click());
+  assert.equal(exports, 1);
+});
+
+let nativeCanRetry = false;
+function NativeMenuProbe() {
+  nativeCanRetry = usePhotoKeyTarget(useAppState());
+  return null;
+}
+
+test('native retry after a lookup failure still requires a successful invocation preflight (#1235)', async () => {
+  setup();
+  query = () => Promise.reject(new Error('temporary lookup failure'));
+  act(() =>
+    root?.render(
+      <IntlProvider locale="en">
+        <AppStateProvider>
+          <NativeProbe />
+          <NativeMenuProbe />
+        </AppStateProvider>
+      </IntlProvider>,
+    ),
+  );
+  act(() => dispatch({ type: 'selection/replaced', photoIds: ['offscreen'] }));
+  await flush();
+  assert.equal(nativeCanRetry, true);
+  act(() => runCommand('photo.export'));
+  await flush();
+  assert.equal(state.exportOpen, false);
+  assert.equal(state.toast?.title, 'Could not verify photo keys. Try again.');
+  query = (ids) => Promise.resolve({ photoIds: ids, locked: 0, missing: 0 });
+  act(() => runCommand('photo.export'));
+  await flush();
+  assert.equal(state.exportOpen, true);
 });

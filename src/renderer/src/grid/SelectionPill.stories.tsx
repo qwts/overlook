@@ -140,3 +140,22 @@ export const LockedSelection: Story = {
     await expect(args.onExport).not.toHaveBeenCalled();
   },
 };
+
+export const FailedCustodyLookup: Story = {
+  args: {
+    count: 1,
+    onClear: fn(),
+    onExport: fn(),
+    onRetryExport: fn(),
+    exportDisabledReason: 'Could not verify photo keys. Try again.',
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const retry = canvas.getByRole('button', { name: 'Retry photo keys' });
+    await expect(retry).toBeEnabled();
+    await expect(retry).toHaveAccessibleDescription('Could not verify photo keys. Try again.');
+    await userEvent.click(retry);
+    await expect(args.onRetryExport).toHaveBeenCalledOnce();
+    await expect(args.onExport).not.toHaveBeenCalled();
+  },
+};
