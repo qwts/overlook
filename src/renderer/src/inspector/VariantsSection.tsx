@@ -1,3 +1,4 @@
+import { photoCommandAvailability, LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import type { ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -64,6 +65,7 @@ export function VariantsSection({ photo, onShowPhoto, api }: VariantsSectionProp
   const { announce } = useAnnouncer();
   const { formatCalendarDate } = useFormats();
   const variants = usePhotoVariants(photo, api);
+  const duplicateAvailable = photoCommandAvailability('photo.duplicate', photo.locked).enabled;
   if (!variants.available || variants.family === null) return null;
   const family = variants.family;
   const count = family.variants.length;
@@ -128,8 +130,11 @@ export function VariantsSection({ photo, onShowPhoto, api }: VariantsSectionProp
         })}
       </ul>
       <p className={NOTE_CLASS}>{intl.formatMessage(messages.sharedOriginal)}</p>
+      {!duplicateAvailable ? (
+        <p className={NOTE_CLASS}>{intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })}</p>
+      ) : null}
       <div className={ACTIONS_CLASS}>
-        <Button size="sm" icon="copy" disabled={variants.busy} onClick={() => void duplicate()}>
+        <Button size="sm" icon="copy" disabled={variants.busy || !duplicateAvailable} onClick={() => void duplicate()}>
           {intl.formatMessage(variants.busy ? messages.duplicating : messages.duplicate)}
         </Button>
       </div>
