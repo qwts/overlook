@@ -80,7 +80,9 @@ test('200K synthetic rows: inclusion-filter cursor walks stay within the page bu
       console.log(
         `[baseline] 200K inclusion ${scenario.name}: pages=${String(timings.length)} rows=${String(seen.size)} p50=${p50.toFixed(2)}ms p95=${p95.toFixed(2)}ms max=${max.toFixed(2)}ms`,
       );
-      // Calibrate the distribution, not a single scheduler pause. Preserve
+      // 2026-09-22 calibration: slowest local/Ubuntu/Windows p95 = 188.25ms.
+      // min(2 * 188.25, 250) = 250ms; evidence is in Testing-Strategy.md.
+      // Ratchet the distribution, not a single scheduler pause. Preserve
       // the original cold first-page ceiling above; log max for diagnosis.
       assert.ok(p95 < 250, `${scenario.name}: p95 page ${p95.toFixed(2)}ms exceeds 250ms`);
     }

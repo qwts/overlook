@@ -226,13 +226,11 @@ Timing excludes seeding and assertions but includes row hydration; it includes
 the terminal empty page. This mixed dataset supersedes the old homogeneous
 first-page fixture; the historical 0.4 ms result above is not a full-walk baseline.
 
-Calibration is pending after review corrected the fixture's missing ledger rows
-and isolated it from the parallel unit suite. The earlier empty-ledger timings
-are invalid for this production-shaped baseline. The original cold first-page 250 ms ceiling remains. The full-walk gate uses
-p95 rather than the maximum of thousands of samples; max is diagnostic output.
-Its initial p95 ceiling is 250 ms. The final p95 ratchet will use twice the slowest observed
-local/hosted p95, capped at that ceiling. No pixel-area index or schema change
-is proposed without representative measurements.
+Review corrected the fixture's missing ledger rows and isolated it from the
+parallel unit suite. Earlier empty-ledger timings are superseded and are not
+calibration evidence. The original cold first-page 250 ms ceiling remains.
+The full-walk gate uses p95 rather than the maximum of thousands of samples;
+max remains diagnostic output.
 
 Corrected local measurement, 2026-09-22, macOS Apple Silicon, Node 24.18.0,
 via `npm test` (settled ledger rows; isolated benchmark lane):
@@ -244,7 +242,32 @@ via `npm test` (settled ledger rows; isolated benchmark lane):
 | Minimum 4 MP     | 180,000 | 37.18 ms | 79.30 ms | 90.47 ms |
 | Both rules       | 170,000 | 39.76 ms | 83.15 ms | 90.13 ms |
 
-The corrected cold first page was 1.4 ms. Hosted calibration remains pending.
+The corrected cold first page was 1.4 ms. Hosted calibration at
+`85e275bfdd362498aa5db0604f7238c590a6dd03`, 2026-09-22:
+
+| Platform / policy          |      p50 |       p95 |   Maximum |
+| -------------------------- | -------: | --------: | --------: |
+| Ubuntu / unfiltered        | 79.57 ms | 160.95 ms | 177.65 ms |
+| Ubuntu / hide unavailable  | 84.82 ms | 159.49 ms | 176.32 ms |
+| Ubuntu / minimum 4 MP      | 88.17 ms | 167.39 ms | 186.62 ms |
+| Ubuntu / both rules        | 88.76 ms | 184.31 ms | 193.43 ms |
+| Windows / unfiltered       | 59.29 ms | 131.35 ms | 317.31 ms |
+| Windows / hide unavailable | 78.97 ms | 161.41 ms | 233.19 ms |
+| Windows / minimum 4 MP     | 90.69 ms | 188.25 ms | 226.52 ms |
+| Windows / both rules       | 97.74 ms | 187.26 ms | 239.64 ms |
+
+Evidence: [Ubuntu complete suite](https://github.com/qwts/overlook/actions/runs/35708208092/job/106682240387)
+and [Windows unit lane](https://github.com/qwts/overlook/actions/runs/35708208092/job/106682240400).
+Cold first pages were 3.3 ms and 4.0 ms respectively. Both benchmark lanes
+passed; that workflow's separate relocation E2E failure is tracked in #1128.
+
+The ratchet is **250 ms p95 per policy**: twice the slowest corrected
+local/hosted p95 (188.25 ms), capped at the existing 250 ms budget. It is
+therefore stricter than twice that baseline. Tighten as measurements improve;
+do not raise the ceiling to make a regression pass. The isolated Windows max
+outlier illustrates why maximum latency is diagnostic rather than the
+full-walk gate. Filtered latency does not justify a pixel-area schema/index
+change from this evidence.
 
 The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
