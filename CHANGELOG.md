@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.13
+
+### Patch Changes
+
+- 47f070a: Rebuild deferred edit previews when an original returns, preserving the latest edit head across repair races.
+
 ## 0.76.12
 
 ### Patch Changes
