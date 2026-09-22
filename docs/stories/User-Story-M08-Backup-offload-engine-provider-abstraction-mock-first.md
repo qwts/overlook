@@ -55,8 +55,10 @@ prevents later settlement or retention in the cancelled publication.
 Schema 43 records the provider/account/library, target, expected and prior
 fingerprints, and whether a mutation completed or was explicitly refused before starting. The record precedes
 remote mutation and survives library close/reopen. Before retry, reconciliation
-must confirm the intended result, or the unchanged prior state of a completed
-mutation or explicit pre-mutation refusal. A generic provider rejection is not
+must confirm the intended result of an uncertain mutation. A completed mutation
+or explicit pre-mutation refusal permits retry even when verification failed.
+A completed corrupt manifest is removed through the same journal before
+republishing, so it cannot replace the valid predecessor in retention. A generic provider rejection is not
 proof that remote work stopped. Unchanged bytes cannot prove that an abandoned replacement completed.
 An unresolved outcome blocks new backup work for that library; a timeout does
 not authorize a blind retry or imply remote rollback. Providers may finish a

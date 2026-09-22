@@ -62,11 +62,23 @@ export class ManifestPublication {
     const remote = await this.fingerprint(pending.path);
     const matches = (expected: PendingManifestMutation['expected']): boolean =>
       remote === null ? expected === null : expected !== null && remote.sha256 === expected.sha256 && remote.bytes === expected.bytes;
-    if (
-      (!pending.settled && matches(pending.expected) && matches(pending.before)) ||
-      (!matches(pending.expected) && !(pending.settled && matches(pending.before)))
-    )
+    if (pending.settled) {
+      if (
+        remote !== null &&
+        (pending.expected === null || (!matches(pending.expected) && !matches(pending.before) && pending.path.startsWith('manifest/')))
+      ) {
+        // This completed put stored bytes that its bootstrap cannot authenticate.
+        // Remove that generation before choosing a successor, preserving the
+        // valid predecessor. Journal the repair too: deletion may outlive us.
+        const repair = { ...pending, expected: null, before: remote, settled: false };
+        this.journal.save(repair);
+        await this.mutate(() => this.provider.delete(pending.path), repair);
+        if ((await this.fingerprint(pending.path)) !== null)
+          throw new ProviderError('manifest repair deletion did not remove its target', 'corrupt');
+      }
+    } else if (matches(pending.before) || !matches(pending.expected)) {
       throw new Error('manifest publication outcome unknown: previous mutation not reconciled');
+    }
     this.journal.save(null);
   }
 

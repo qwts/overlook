@@ -313,3 +313,76 @@ test('a rejected network write remains uncertain until its intended bytes are ob
     w.close();
   }
 });
+
+for (const target of ['recovery/bootstrap.ovrb', 'manifest/gen-2.ovlk']) {
+  test(`completed corrupt ${target} is repaired without evicting the valid predecessor`, { timeout: 10_000 }, async () => {
+    const w = world();
+    const put = w.provider.put.bind(w.provider);
+    try {
+      assert.equal((await w.publish()).manifestUploaded, true);
+      const previous = await buffer(await w.provider.getStream('manifest/gen-1.ovlk'));
+      w.provider.put = (path, bytes) => put(path, path === target ? Readable.from(['corrupt']) : bytes);
+      assert.equal((await w.publish()).manifestUploaded, false);
+      assert.equal(w.debt().publicationJournal?.load()?.settled, true);
+      w.provider.put = put;
+      w.reopen();
+      if (target.startsWith('manifest/')) {
+        const remove = w.provider.delete.bind(w.provider);
+        w.provider.delete = () => Promise.reject(new ProviderError('repair refused before deletion', 'auth', 'provider', true));
+        assert.equal((await w.engine().run()).manifestUploaded, false);
+        assert.equal(w.debt().publicationJournal?.load()?.expected, null);
+        assert.equal(w.debt().publicationJournal?.load()?.settled, true);
+        w.provider.delete = remove;
+      }
+      assert.equal((await w.engine().run()).manifestUploaded, true);
+      assert.equal(w.debt().load(), false);
+      assert.deepEqual((await w.provider.list('manifest')).map((entry) => entry.path).sort(), [
+        'manifest/gen-1.ovlk',
+        'manifest/gen-2.ovlk',
+      ]);
+      assert.deepEqual(await buffer(await w.provider.getStream('manifest/gen-1.ovlk')), previous);
+      const bootstrap = JSON.parse((await buffer(await w.provider.getStream('recovery/bootstrap.ovrb'))).toString()) as {
+        manifestGeneration: number;
+        manifestSha256: string;
+      };
+      assert.equal(bootstrap.manifestGeneration, 2);
+      assert.equal((await w.provider.verify('manifest/gen-2.ovlk')).sha256, bootstrap.manifestSha256);
+    } finally {
+      w.close();
+    }
+  });
+}
+
+test('corrupt-generation repair deletion keeps its own uncertain intent across cancellation', { timeout: 10_000 }, async () => {
+  const w = world();
+  const put = w.provider.put.bind(w.provider);
+  const remove = w.provider.delete.bind(w.provider);
+  const reached = deferred<void>();
+  try {
+    assert.equal((await w.publish()).manifestUploaded, true);
+    w.provider.put = (path, bytes) => put(path, path === 'manifest/gen-2.ovlk' ? Readable.from(['corrupt']) : bytes);
+    assert.equal((await w.publish()).manifestUploaded, false);
+    w.provider.put = put;
+    w.provider.delete = (path) => {
+      assert.equal(path, 'manifest/gen-2.ovlk');
+      reached.resolve();
+      return new Promise(() => undefined);
+    };
+    const retry = w.engine().run();
+    await reached.promise;
+    w.expire();
+    assert.equal((await retry).manifestUploaded, false);
+    assert.equal(w.debt().publicationJournal?.load()?.expected, null);
+    assert.equal(w.debt().publicationJournal?.load()?.settled, false);
+    w.reopen();
+    w.provider.delete = remove;
+    assert.equal((await w.engine().run()).manifestUploaded, false);
+    assert.deepEqual((await w.provider.list('manifest')).map((entry) => entry.path).sort(), ['manifest/gen-1.ovlk', 'manifest/gen-2.ovlk']);
+    await remove('manifest/gen-2.ovlk');
+    assert.equal((await w.engine().run()).manifestUploaded, true);
+    assert.equal(w.debt().load(), false);
+    assert.deepEqual((await w.provider.list('manifest')).map((entry) => entry.path).sort(), ['manifest/gen-1.ovlk', 'manifest/gen-2.ovlk']);
+  } finally {
+    w.close();
+  }
+});
