@@ -139,3 +139,9 @@ Coverage: `PhotoContextMenu.stories.tsx` → `LockedPhotoActions` and
 `tests/commands/quick-actions.test.ts`. This single-target coverage does not
 qualify mixed/offscreen bulk filtering or native-menu execution parity; those
 remain tracked in #1133.
+
+The Lightbox Export button and Inspector Duplicate button must apply the same
+single-photo policy. A locked photo shows its Custody reason and neither
+callback starts pixel work. Lightbox Favorite and Inspector Promote remain
+metadata actions. Coverage: `LightboxCustody.stories.tsx` → `LockedExport` and
+`Inspector.stories.tsx` → `LockedDuplicate`.

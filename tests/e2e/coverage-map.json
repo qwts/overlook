@@ -2859,6 +2859,28 @@
           ]
         }
       ]
+    },
+    {
+      "id": "1133-locked-single-photo-actions",
+      "wiki": "Acceptance-Test-Keyring",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/grid/PhotoContextMenu.stories.tsx"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/lightbox/LightboxCustody.stories.tsx"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/inspector/Inspector.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/commands/quick-actions.test.ts"
+        }
+      ]
     }
   ]
 }
