@@ -7,9 +7,12 @@ interface ContractsModule {
   messageArguments(elements: readonly unknown[]): Record<string, string>;
   renderMessageContracts(ast: Record<string, readonly unknown[]>): string;
 }
-const contracts = (await import(pathToFileURL(join(process.cwd(), 'scripts/i18n-contracts.mjs')).href)) as ContractsModule;
+async function loadContracts(): Promise<ContractsModule> {
+  return import(pathToFileURL(join(process.cwd(), 'scripts/i18n-contracts.mjs')).href) as Promise<ContractsModule>;
+}
 
-test('ICU contracts collect nested select/plural branches and rich-text children (#1170)', () => {
+test('ICU contracts collect nested select/plural branches and rich-text children (#1170)', async () => {
+  const contracts = await loadContracts();
   assert.deepEqual(
     contracts.messageArguments([
       {
@@ -35,7 +38,8 @@ test('ICU contracts collect nested select/plural branches and rich-text children
   );
 });
 
-test('repeated ICU placeholders keep their strictest compatible type regardless of order (#1170)', () => {
+test('repeated ICU placeholders keep their strictest compatible type regardless of order (#1170)', async () => {
+  const contracts = await loadContracts();
   for (const types of [
     [1, 3, 2],
     [2, 3, 1],
@@ -57,7 +61,8 @@ test('repeated ICU placeholders keep their strictest compatible type regardless 
   assert.throws(() => contracts.messageArguments([{ type: 99 }]), /Unsupported ICU AST/u);
 });
 
-test('contract output is stable and derives no-argument IDs from the source catalog (#1170)', () => {
+test('contract output is stable and derives no-argument IDs from the source catalog (#1170)', async () => {
+  const contracts = await loadContracts();
   const plain = [{ type: 0, value: 'Plain' }];
   const argument = [{ type: 1, value: 'name' }];
   const output = contracts.renderMessageContracts({ z: plain, b: argument, a: argument });

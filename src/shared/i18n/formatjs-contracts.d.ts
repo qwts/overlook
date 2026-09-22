@@ -10,6 +10,10 @@ declare global {
 }
 
 // Bind literal source-catalog IDs to their generated ICU argument contracts.
+// Upstream defineMessages inference otherwise assigns an empty argument contract.
+// Remove this bridge when upstream infers registered IDs, retaining the negative
+// compile checks in tests/i18n/message-contracts.test.ts. Root tsconfig.files keeps
+// this registry present even in projects that replace the inherited include list.
 declare module '@formatjs/intl' {
   function defineMessages<const D extends Record<string, MessageDescriptor & { id: keyof FormatjsIntl.MessageArguments }>>(
     messages: D,

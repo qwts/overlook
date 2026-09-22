@@ -1,13 +1,24 @@
 // FormatJS's compiled ICU AST is the source of argument contracts, including
 // placeholders nested in select/plural branches and rich-text tags.
+const AST_TYPE = {
+  literal: 0,
+  argument: 1,
+  number: 2,
+  date: 3,
+  time: 4,
+  select: 5,
+  plural: 6,
+  pound: 7,
+  tag: 8,
+};
 const VALUE_TYPES = new Map([
-  [1, 'MessageValue'],
-  [2, 'number'],
-  [3, 'Date | number'],
-  [4, 'Date | number'],
-  [5, 'string'],
-  [6, 'number'],
-  [8, 'MessageTag'],
+  [AST_TYPE.argument, 'MessageValue'],
+  [AST_TYPE.number, 'number'],
+  [AST_TYPE.date, 'Date | number'],
+  [AST_TYPE.time, 'Date | number'],
+  [AST_TYPE.select, 'string'],
+  [AST_TYPE.plural, 'number'],
+  [AST_TYPE.tag, 'MessageTag'],
 ]);
 
 export function messageArguments(elements) {
@@ -28,7 +39,7 @@ export function messageArguments(elements) {
           throw new Error(`Incompatible ICU argument types for ${node.value}: ${previous}, ${type}`);
         }
         if (previous === 'MessageValue' && type === 'MessageTag') throw new Error(`ICU tag/value collision: ${node.value}`);
-      } else if (node.type !== 0 && node.type !== 7) {
+      } else if (node.type !== AST_TYPE.literal && node.type !== AST_TYPE.pound) {
         throw new Error(`Unsupported ICU AST node: ${node.type}`);
       }
       if (node.options !== undefined) {
