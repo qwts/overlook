@@ -471,3 +471,31 @@ test('Trash restore schedules only restored asset hashes, once per asset (#1115)
     db.close();
   }
 });
+
+test('photo-key selection resolves offscreen IDs, deduplicates skips, and observes key return (#1235)', async () => {
+  const { service, db } = seededService();
+  try {
+    run(db, "INSERT INTO keys (id, wrapped_key, created_at, material_present) VALUES (2, 'absent', '2026-07-01', 0)");
+    run(db, "UPDATE photos SET key_id = 2 WHERE id = '01J8LIB019'");
+    const channel = channels.libraryPhotoKeySelection;
+    const invoke = createInvoker(channel, (_name, request) =>
+      wrapHandler(channel, ({ photoIds }) => service.photoKeySelection(photoIds))(request),
+    );
+    assert.deepEqual(await invoke({ photoIds: ['01J8LIB019', '01J8LIB003', 'missing', '01J8LIB019'] }), {
+      photoIds: ['01J8LIB003'],
+      locked: 1,
+      missing: 1,
+    });
+    assert.deepEqual(await invoke({ photoIds: ['01J8LIB019'] }), { photoIds: [], locked: 1, missing: 0 });
+    run(db, 'UPDATE keys SET material_present = 1 WHERE id = 2');
+    assert.deepEqual(await invoke({ photoIds: ['01J8LIB019', '01J8LIB003'] }), {
+      photoIds: ['01J8LIB019', '01J8LIB003'],
+      locked: 0,
+      missing: 0,
+    });
+    assert.deepEqual(await invoke({ photoIds: [] }), { photoIds: [], locked: 0, missing: 0 });
+    await assert.rejects(invoke({ photoIds: [''] }));
+  } finally {
+    db.close();
+  }
+});
