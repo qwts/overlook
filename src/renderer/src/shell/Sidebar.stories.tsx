@@ -9,6 +9,7 @@ import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/l
 import { commandById } from '../../../shared/commands/registry.js';
 import { AppStateProvider, useAppDispatch } from '../state/app-state-context';
 import { beginPhotoDrag } from '../grid/photo-drag-session';
+import { endAlbumReorderDrag } from './album-reorder-drag-session';
 
 // #238 exit criteria: the sidebar collapses to the 56px icon rail (labels
 // and counts move to right-side tooltips, headings become dividers, the
@@ -501,6 +502,7 @@ function FolderDragHarness(args: ComponentProps<typeof Sidebar>) {
     };
     (globalThis as { overlook?: OverlookApi }).overlook = { ...previous, albums: { ...previous.albums, move } };
     return () => {
+      endAlbumReorderDrag();
       (globalThis as { overlook?: OverlookApi }).overlook = previous;
     };
   }, [rows]);
@@ -536,7 +538,7 @@ export const AlbumFolderDrag: Story = {
     await expect(handle).toBeEnabled();
     await fireEvent.dragStart(handle, { dataTransfer: transfer });
     await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
-    await expect(canvas.getByText('Move Iceland to Archive, position 1.')).toBeVisible();
+    await waitFor(() => expect(canvas.getByText('Move Iceland to Archive, position 1.')).toBeVisible());
     await fireEvent.dragEnd(handle, { dataTransfer: transfer });
     await expect(moveAlbum).not.toHaveBeenCalled();
     await expect(handle).toHaveFocus();

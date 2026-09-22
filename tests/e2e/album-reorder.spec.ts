@@ -59,11 +59,30 @@ test('collection drag: collapsed folder, sibling placement, refusal, focus, and 
   const row = (name: string) => page.locator('.ovl-sidebar__albumrow').filter({ has: page.getByText(name, { exact: true }) });
   const handle = (name: string) => row(name).locator('.ovl-sidebar__album-reorder');
   const drag = async (source: string, target: string, before = false): Promise<void> => {
-    const destination = row(target);
-    await destination.scrollIntoViewIfNeeded();
-    const bounds = await destination.boundingBox();
-    if (bounds === null) throw new Error('missing drag destination');
-    await handle(source).dragTo(destination, { targetPosition: { x: 20, y: before ? 1 : bounds.height / 2 } });
+    const sourceHandle = handle(source);
+    await sourceHandle.scrollIntoViewIfNeeded();
+    await sourceHandle.focus();
+    const sourceBounds = await sourceHandle.boundingBox();
+    if (sourceBounds === null) throw new Error('missing drag source');
+    const x = sourceBounds.x + sourceBounds.width / 2;
+    const y = sourceBounds.y + sourceBounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    try {
+      await page.mouse.move(x + 12, y, { steps: 3 });
+      await expect(row(source)).toHaveClass(/ovl-sidebar__albumrow--dragging/u);
+      const destination = row(target);
+      await destination.scrollIntoViewIfNeeded();
+      const bounds = await destination.boundingBox();
+      if (bounds === null) throw new Error('missing drag destination');
+      const targetX = bounds.x + bounds.width / 2;
+      const targetY = bounds.y + (before ? 1 : bounds.height / 2);
+      await page.mouse.move(targetX, targetY, { steps: 5 });
+      // Chromium needs a move after dragenter to deliver dragover before drop.
+      await page.mouse.move(targetX + 1, targetY);
+    } finally {
+      await page.mouse.up();
+    }
   };
   const tree = () =>
     page.evaluate(async () => (await (globalThis as unknown as { overlook: OverlookApi }).overlook.library.albums()).albums);
