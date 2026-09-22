@@ -269,17 +269,9 @@ outlier illustrates why maximum latency is diagnostic rather than the
 full-walk gate. Filtered latency does not justify a pixel-area schema/index
 change from this evidence.
 
-The cursor-seek regression (#1257) observes the SQL prepared by
-`PhotosRepository.page` against the migrated SQLCipher database. Date and name
-expression indexes must produce an index search for subsequent pages, not a scan
-from the beginning; size ordering remains covered too. An inclusive leading-key
-bound enables the search while the existing strict tuple preserves ID tie-breaks.
-The test walks tied keys and null-date fallback with inclusion filters on and off.
-The full 200K fixture and its 250 ms p95 budget remain unchanged; Windows hosted
-qualification is required before treating the reported overrun as resolved.
-A same-fixture local comparison on 2026-09-22 measured combined-filter p95 at
-83.91 ms before the bound and 1.11 ms afterward; the complete database benchmark
-fell from 156.8 s to 13.1 s. This is local evidence, not Windows qualification.
+Cursor-seek regressions (#1257) check SQLCipher index searches and strict cursor
+ordering across ties, null dates, and inclusion filters. Windows qualification
+retains the 200K fixture and 250 ms p95 budget.
 
 The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
