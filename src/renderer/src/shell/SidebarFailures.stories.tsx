@@ -77,6 +77,7 @@ export const CreateRetry: Story = {
     create.mockResolvedValueOnce({ album: { ...album, id: 'created', name: 'Retry album', count: 0 } });
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: 'Album name' })).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toBeEnabled());
     await waitFor(() => expect(opener).toHaveFocus());
     await expect(create).toHaveBeenNthCalledWith(2, { name: 'Retry album' });
   },
@@ -123,4 +124,24 @@ export const InheritedVisibilityRetry: Story = {
     ],
   },
   play: async ({ canvasElement }) => visibilityRetry(canvasElement, true),
+};
+
+export const CreatePreservesMovedFocus: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    let complete: (() => void) | undefined;
+    const pending = new Promise<{ album: AlbumListing }>((resolve) => {
+      complete = () => resolve({ album: { ...album, id: 'created', name: 'New album', count: 0 } });
+    });
+    const create = fn(window.overlook.albums.create).mockImplementationOnce(() => pending);
+    Object.assign(window.overlook.albums, { create });
+    await userEvent.click(canvas.getByRole('button', { name: 'New album' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Album name' }), 'New album{Enter}');
+    await expect(create).toHaveBeenCalledOnce();
+    const destination = canvas.getByRole('button', { name: /Favorites/u });
+    await userEvent.click(destination);
+    complete?.();
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: 'Album name' })).not.toBeInTheDocument());
+    await expect(destination).toHaveFocus();
+  },
 };
