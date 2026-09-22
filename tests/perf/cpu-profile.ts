@@ -5,7 +5,7 @@ import type { ElectronApplication } from '@playwright/test';
 type ProfileState = typeof globalThis & { overlookPerfSession?: Session };
 
 /** Opt-in diagnostic only: profiling perturbs timings, so these runs are not baselines. */
-export async function profileQueries<T>(app: ElectronApplication, operation: () => Promise<T>): Promise<T> {
+export async function profileMainProcess<T>(app: ElectronApplication, phase: 'query' | 'import', operation: () => Promise<T>): Promise<T> {
   if (process.env['OVERLOOK_PERF_PROFILE'] !== '1') return operation();
   console.log('[perf] DIAGNOSTIC CPU PROFILE ENABLED: timings are not baseline evidence');
   await app.evaluate(async () => {
@@ -21,9 +21,7 @@ export async function profileQueries<T>(app: ElectronApplication, operation: () 
       throw error;
     }
   });
-  try {
-    return await operation();
-  } finally {
+  return captureDuringOperation(operation, async () => {
     const profile = await app.evaluate(async () => {
       const state = globalThis as ProfileState;
       const session = state.overlookPerfSession;
@@ -35,6 +33,27 @@ export async function profileQueries<T>(app: ElectronApplication, operation: () 
         session.disconnect();
       }
     });
-    writeFileSync('test-results/perf-query-profile.cpuprofile', JSON.stringify(profile));
+    writeFileSync(`test-results/perf-${phase}-profile.cpuprofile`, JSON.stringify(profile));
+  });
+}
+
+/** Retain diagnostic evidence even while the measured operation is still pending. */
+export async function captureDuringOperation<T>(
+  operation: () => Promise<T>,
+  capture: () => Promise<void>,
+  captureAfterMs = 30_000,
+): Promise<T> {
+  let captured: Promise<void> | undefined;
+  const finish = (): Promise<void> => (captured ??= Promise.resolve().then(capture));
+  const timer = setTimeout(() => {
+    // The finally path reports capture failure. Attach a handler immediately so
+    // an early capture rejection cannot become an unhandled rejection.
+    void finish().catch(() => undefined);
+  }, captureAfterMs);
+  try {
+    return await operation();
+  } finally {
+    clearTimeout(timer);
+    await finish();
   }
 }
