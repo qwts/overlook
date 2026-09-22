@@ -69,6 +69,7 @@ class DriveWorld {
   };
   interruptAfterCommit = false;
   badUploadLocation = false;
+  rejectUploadStart = false;
   omitUploadSize = false;
   unauthorizedOnce = false;
   failNext: { status: number; reason?: string } | null = null;
@@ -98,7 +99,8 @@ class DriveWorld {
       return this.error(failure.status, failure.reason);
     }
     if (url.pathname.startsWith('/upload/session/')) return this.uploadChunk(url, init);
-    if (url.pathname.startsWith('/upload/drive/v3/files')) return this.startUpload(url, init);
+    if (url.pathname.startsWith('/upload/drive/v3/files'))
+      return this.rejectUploadStart ? this.error(403, 'storageQuotaExceeded') : this.startUpload(url, init);
     if (url.pathname === '/drive/v3/about') {
       return Response.json({
         ...(url.searchParams.get('fields')?.includes('user') === true ? { user: this.account ?? {} } : {}),
@@ -284,6 +286,25 @@ function setup(world = new DriveWorld(), pathsDir = mkdtempSync(join(tmpdir(), '
 
 const PAYLOAD = Buffer.from('OVLK-encrypted-envelope');
 
+test('Drive setup and upload initiation refusal permit retry without issuing target bytes', async () => {
+  for (const phase of ['lookup', 'initiation']) {
+    const state = setup();
+    if (phase === 'lookup') state.world.failNext = { status: 403, reason: 'storageQuotaExceeded' };
+    else state.world.rejectUploadStart = true;
+    await assert.rejects(
+      state.provider.put('recovery/bootstrap.ovrb', Readable.from([PAYLOAD])),
+      (error: unknown) => error instanceof ProviderError && error.kind === 'quota' && error.mutationNotStarted,
+    );
+    assert.equal(state.world.sessions.size, 0);
+    assert.equal(
+      [...state.world.files.values()].some((file) => file.bytes.equals(PAYLOAD)),
+      false,
+    );
+    state.world.rejectUploadStart = false;
+    assert.deepEqual(await state.provider.put('recovery/bootstrap.ovrb', Readable.from([PAYLOAD])), { bytes: PAYLOAD.length });
+  }
+});
+
 describe('Google Drive provider adapter (#277)', () => {
   test('captures account identity, detects replacement, and rejects an unavailable subject', async () => {
     const state = setup();
@@ -466,7 +487,7 @@ describe('Google Drive provider adapter (#277)', () => {
     missing.world.omitUploadSize = true;
     await assert.rejects(
       missing.provider.put('blobs/xx/missing-size', Readable.from([PAYLOAD])),
-      (error: unknown) => error instanceof ProviderError && error.kind === 'transient',
+      (error: unknown) => error instanceof ProviderError && error.kind === 'transient' && !error.mutationNotStarted,
     );
   });
 });
