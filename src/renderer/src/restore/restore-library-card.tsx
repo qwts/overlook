@@ -1,8 +1,9 @@
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { RestoreLibrarySummary } from '../../../shared/backup/restore-contract.js';
 import { useFormats } from '../i18n/use-formats.js';
+import { RestoreExclusionNotice } from './RestoreExclusionNotice.js';
 import { Badge } from '../components/Badge.js';
 import { CopyableValue } from '../components/CopyableValue.js';
 
@@ -23,6 +24,11 @@ export function RestoreLibraryCard({
   const intl = useIntl();
   const { formatBytes, formatCount } = useFormats();
   const valid = library.validation === 'valid';
+  const exclusionId = useId();
+  const exclusionCoverage =
+    valid && library.excludedCount !== null && library.excludedCount > 0 && library.excludedBytes !== null
+      ? { excludedCount: library.excludedCount, excludedBytes: library.excludedBytes }
+      : null;
   return (
     <div className={`ovl-restore__library${selected ? ' ovl-restore__library--selected' : ''}`} data-testid="restore-library-card">
       <div className="ovl-restore__libraryHead">
@@ -40,6 +46,7 @@ export function RestoreLibraryCard({
         className="ovl-restore__librarySelect"
         disabled={!valid}
         aria-pressed={selected}
+        aria-describedby={exclusionCoverage === null ? undefined : exclusionId}
         aria-label={intl.formatMessage(messages.selectLibrary, { libraryId: library.libraryId })}
         onClick={onSelect}
       >
@@ -51,6 +58,7 @@ export function RestoreLibraryCard({
         ) : (
           <div className="ovl-restore__meta">Metadata is unavailable until this backup validates.</div>
         )}
+        <RestoreExclusionNotice id={exclusionId} coverage={exclusionCoverage} />
         {library.generatedAt === null ? null : (
           <div className="ovl-restore__date">
             Backed up {intl.formatDate(library.generatedAt, { dateStyle: 'medium', timeStyle: 'short' })}

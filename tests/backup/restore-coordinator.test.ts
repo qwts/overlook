@@ -173,6 +173,8 @@ test('restore coordinator discovers validated metadata and runs through an opaqu
       generatedAt: GENERATED_AT,
       photos: 0,
       totalBytes: 0,
+      excludedCount: 0,
+      excludedBytes: 0,
       albums: 0,
       compatibility: 'compatible',
       validation: 'valid',
