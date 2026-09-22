@@ -157,7 +157,9 @@ for (const fileKind of ['jpeg', 'png'] as const) {
         assert.ok(scheduled, 'restoring from Trash must schedule repair without a restart');
         await scheduled;
       } else {
-        await repair.repair([original.contentHash]);
+        repo.setDimensionStatus(id, 'unavailable');
+        await repair.repairPhoto(id);
+        assert.equal(repo.get(id)?.dimensionStatus, 'verified', 'explicit retry repairs dimensions without losing the edit head');
       }
       const mid = await buffer(blobs.getThumbStream(original.contentHash, 'mid', () => key.key, id));
       const metadata = await sharp(mid).metadata();
