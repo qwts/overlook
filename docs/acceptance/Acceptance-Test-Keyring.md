@@ -106,3 +106,22 @@ sent to the provider may finish; it does not count as completed backup while
 custody is absent. Reimport resumes the whole photo/companion transaction.
 
 Automated race and companion-key coverage: `tests/backup/sidecar-backup.test.ts`.
+
+## Locked export preflight (#1133)
+
+The main export engine refuses a submitted batch containing a locked photo
+before reading originals or sidecars, compiling disclosure, checking destination
+space, writing files, transcoding, or emitting per-file progress. This applies
+to Original, Baked, and Original + sidecars. Reimporting the missing key permits
+a fresh export. `tests/export/export-engine.test.ts` exercises mixed/all-locked
+batches in all three modes and successful retry after key availability returns.
+
+Command availability and bulk filtering/skip feedback remain tracked in #1133;
+this engine boundary alone does not prove those UI acceptance requirements. A
+key removed after preflight still uses the existing per-file custody failures.
+
+Original + sidecars also refuses the whole batch when a companion key is absent,
+even if the original is readable. Importing that key permits a fresh export.
+Baked, Original without companions, and metadata choices that omit imported
+companions do not require their keys. The engine test uses a separately encrypted
+companion and verifies refusal before any original opens or output is written.
