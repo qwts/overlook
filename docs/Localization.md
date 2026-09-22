@@ -43,6 +43,12 @@ the contributor procedure.
 
 ## Update Existing Copy
 
+`npm run i18n:extract` also regenerates the types for required message values.
+After changing placeholders, plurals, dates, selects, or rich-text tags, run
+extraction before type checking. Fix missing or incorrectly typed values at
+the call site; do not cast away the generated argument contract. Keep label
+mappings narrow with `satisfies` when selecting between message keys.
+
 Change the source message in code, run `npm run i18n:extract`, and update every
 shipping catalog in the same pull request. A catalog mismatch is a failing
 gate, not a fallback-to-English policy. Translator context belongs beside the

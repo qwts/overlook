@@ -77,12 +77,12 @@ const fallbackMessages = defineMessages({
   error: { id: 'toolbar.search.fallback.error', defaultMessage: 'had an error' },
 });
 
-const filterLabels: Record<keyof ChipFilters, (typeof messages)[keyof typeof messages]> = {
+const filterLabels = {
   favorites: messages.filterFavorites,
   raw: messages.filterRaw,
   offloaded: messages.filterOffloaded,
   localOnly: messages.filterLocalOnly,
-};
+} satisfies Record<keyof ChipFilters, (typeof messages)[keyof typeof messages]>;
 
 // The 48px command strip (#79) per the design's Toolbar.jsx: wordmark,
 // debounced search, funnel + chip row, view segmented, zoom (hidden in list
