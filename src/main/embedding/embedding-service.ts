@@ -141,11 +141,11 @@ export class EmbeddingService {
   }
 
   async query(text: string): Promise<EmbeddingQueryResult> {
-    const status = this.status();
-    if (status.phase === 'disabled') return { embedding: null, fallback: 'disabled' };
-    if (status.phase === 'unavailable' || this.options.embedText === undefined) return { embedding: null, fallback: 'unavailable' };
-    if (status.phase === 'error') return { embedding: null, fallback: 'error' };
-    if (status.phase !== 'ready') return { embedding: null, fallback: 'indexing' };
+    const phase = this.options.available === false ? 'unavailable' : this.phase;
+    if (phase === 'disabled') return { embedding: null, fallback: 'disabled' };
+    if (phase === 'unavailable' || this.options.embedText === undefined) return { embedding: null, fallback: 'unavailable' };
+    if (phase === 'error') return { embedding: null, fallback: 'error' };
+    if (phase !== 'ready') return { embedding: null, fallback: 'indexing' };
     const controller = new AbortController();
     try {
       return { embedding: await this.options.embedText(text, controller.signal), fallback: null };
