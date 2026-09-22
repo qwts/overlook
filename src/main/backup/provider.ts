@@ -34,9 +34,27 @@ export class ProviderError extends Error {
     /** Provider failures affect the whole authority; object failures are
      * isolated to one remote path or library namespace. */
     readonly scope: 'provider' | 'object' = 'provider',
+    /** An adapter may assert this only before issuing the target mutation.
+     * A network error or an abort is not proof that a write did not happen. */
+    readonly mutationNotStarted = false,
   ) {
     super(message);
     this.name = 'ProviderError';
+  }
+}
+
+/** Only wrap preparation that cannot issue the target mutation. A rejected
+ * setup request may create a folder/session, but cannot replace target bytes. */
+export async function prepareProviderMutation<T>(prepare: () => Promise<T>): Promise<T> {
+  try {
+    return await prepare();
+  } catch (error) {
+    throw new ProviderError(
+      error instanceof ProviderError ? error.message : 'Provider mutation preparation failed',
+      error instanceof ProviderError ? error.kind : 'transient',
+      error instanceof ProviderError ? error.scope : 'provider',
+      true,
+    );
   }
 }
 

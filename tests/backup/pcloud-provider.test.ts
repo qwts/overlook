@@ -65,6 +65,40 @@ function world(script: Script, downloads: Record<string, string | number> = {}) 
 
 const ok = (extra: Record<string, unknown> = {}) => ({ result: 0, ...extra });
 
+test('pCloud distinguishes folder preparation refusal from an issued upload', async () => {
+  for (const result of [2094, 2008]) {
+    let fail = true;
+    const state = world({
+      createfolderifnotexists: () => (fail ? { result, error: 'setup refused' } : ok()),
+      uploadfile: () => ok({ metadata: [{ size: 3 }] }),
+    });
+    await assert.rejects(
+      state.provider.put('recovery/bootstrap.ovrb', Readable.from(['abc'])),
+      (error: unknown) => error instanceof ProviderError && error.mutationNotStarted && error.kind === (result === 2008 ? 'quota' : 'auth'),
+    );
+    assert.equal(
+      state.calls.some((call) => call.method === 'uploadfile'),
+      false,
+    );
+    fail = false;
+    assert.deepEqual(await state.provider.put('recovery/bootstrap.ovrb', Readable.from(['abc'])), { bytes: 3 });
+  }
+  const issued = world({
+    createfolderifnotexists: () => ok(),
+    uploadfile: () => {
+      throw new Error('lost response');
+    },
+  });
+  await assert.rejects(
+    issued.provider.put('recovery/bootstrap.ovrb', Readable.from(['abc'])),
+    (error: unknown) => error instanceof ProviderError && !error.mutationNotStarted,
+  );
+  assert.equal(
+    issued.calls.some((call) => call.method === 'uploadfile'),
+    true,
+  );
+});
+
 describe('pCloud provider adapter (#255)', () => {
   test('declares the conservative capability contract used by generic UI', () => {
     const { provider } = world({});
