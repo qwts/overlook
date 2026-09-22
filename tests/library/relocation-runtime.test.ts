@@ -47,21 +47,26 @@ function harness(overrides: Partial<RelocationRuntimeOptions> = {}, active = fal
       lockState: () => 'unlocked',
       providerBusy: () => false,
       closeLibrary: () => {
+        assert.throws(() => runtime.requireContentAccess(), /relocation is in progress/);
         calls.push('close');
         return Promise.resolve();
       },
       reactivate: (id) => {
+        assert.doesNotThrow(() => runtime.requireContentAccess(), 'reactivation may open the authoritative library');
         calls.push(`reactivate:${id}`);
         return Promise.resolve();
       },
     },
     emitProgress: () => undefined,
     relocate: (deps, options) => {
+      if (active) assert.throws(() => runtime.requireContentAccess(), /relocation is in progress/);
+      else assert.doesNotThrow(() => runtime.requireContentAccess(), 'inactive moves must not block the open library');
       calls.push('relocate');
       deps.registry.updatePath(options.libraryId, options.destDir);
       return Promise.resolve({ outcome: 'moved' as const, mode: 'copy' as const, items: 5, bytes: 100 });
     },
     resume: (deps, options) => {
+      if (active) assert.throws(() => runtime.requireContentAccess(), /relocation is in progress/);
       calls.push('resume');
       const journal = deps.journals.load(options.libraryId);
       assert.ok(journal);
@@ -102,6 +107,7 @@ describe('relocation runtime (#483, ADR-0022 §4)', () => {
     assert.equal(outcome.reason, 'verification-failed');
     assert.equal(outcome.detail, 'digest mismatch');
     assert.equal(h.registry.get(ULID_A)?.path, join(h.root, 'lib-a'));
+    assert.doesNotThrow(() => h.runtime.requireContentAccess(), 'engine failure must release the access fence');
   });
 
   test('an inactive move never touches teardown or reactivation', async () => {
@@ -109,6 +115,21 @@ describe('relocation runtime (#483, ADR-0022 §4)', () => {
     const outcome = await h.runtime.move(ULID_A, '/somewhere/new');
     assert.ok(outcome.ok);
     assert.deepEqual(h.calls, ['relocate']);
+  });
+
+  test('failed active teardown releases the access fence without starting the engine', async () => {
+    const h = harness({
+      active: {
+        openLibraryId: () => ULID_A,
+        lockState: () => 'unlocked',
+        providerBusy: () => false,
+        closeLibrary: () => Promise.reject(new Error('drain failed')),
+        reactivate: () => assert.fail('teardown did not finish'),
+      },
+    });
+    await assert.rejects(h.runtime.move(ULID_A, join(h.root, 'new-home')), /drain failed/);
+    assert.deepEqual(h.calls, []);
+    assert.doesNotThrow(() => h.runtime.requireContentAccess());
   });
 
   test('an unreadable custody probe refuses source-unreadable, never an opaque failure (PR #853 review)', async () => {
