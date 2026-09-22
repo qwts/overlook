@@ -24,6 +24,7 @@ interface Row {
 
 class MemoryStore implements FingerprintStore {
   readonly pendingLimits: number[] = [];
+  statusReads = 0;
   readonly rows = new Map<string, Row>();
   readonly photos = new Map<string, { candidate: FingerprintCandidate; isOriginal: boolean; variantSourceId: string | null }>();
 
@@ -51,6 +52,7 @@ class MemoryStore implements FingerprintStore {
   }
 
   status(version: string): FingerprintIndexStatus {
+    this.statusReads += 1;
     const ids = [...this.photos.keys()];
     const indexed = ids.filter((id) => this.fresh(id, version)?.rotations !== null && this.fresh(id, version) !== undefined).length;
     const deferred = ids.filter((id) => this.fresh(id, version)?.reason !== null && this.fresh(id, version) !== undefined).length;
@@ -116,6 +118,7 @@ function harness(
   overrides: Partial<ConstructorParameters<typeof DuplicateIndexService>[0]> & { readonly bytes?: (id: string) => Buffer | null } = {},
 ) {
   const store = new MemoryStore();
+  let clock = 0;
   const loads: string[] = [];
   const notified: FingerprintIndexStatus[] = [];
   const load =
@@ -130,6 +133,7 @@ function harness(
       notified.push(status);
     },
     notifyEvery: 2,
+    now: () => (clock += 1_000),
     yieldTurn: () => Promise.resolve(),
     ...overrides,
     load: (candidate, signal) => {
@@ -368,4 +372,80 @@ test('progress-driven review reads retain candidate batches and do not restart t
   assert.equal(h.store.pendingLimits.length, 4, 'read-only progress refreshes keep all three bounded batches');
   assert.equal(h.service.status().pending, 0);
   await h.service.close();
+});
+
+test('fast fingerprint deferrals count progress once at completion, not every row batch (#1221)', async () => {
+  const h = harness({ notifyEvery: 25, now: () => 0, bytes: () => null });
+  for (let index = 0; index < 129; index += 1) h.store.add(`P${String(index)}`);
+  h.service.schedule();
+  await settle();
+  assert.equal(h.loads.length, 129);
+  assert.equal(h.store.statusReads, 1, 'only the final full-library count runs during a burst');
+  assert.deepEqual(h.notified, [{ total: 129, indexed: 0, deferred: 129, pending: 0 }]);
+  h.store.add('added-after-completion');
+  assert.deepEqual(h.service.status(), { total: 130, indexed: 0, deferred: 129, pending: 1 });
+  assert.equal(h.store.statusReads, 2, 'explicit status still performs a fresh read');
+  await h.service.close();
+});
+
+test('elapsed progress preserves the row threshold and current completion counts (#1221)', async () => {
+  let clock = 0;
+  const h = harness({
+    notifyEvery: 2,
+    now: () => clock,
+    load: () => {
+      clock += 250;
+      return Promise.resolve(Buffer.from([1]));
+    },
+  });
+  for (let index = 0; index < 10; index += 1) h.store.add(`P${String(index)}`);
+  h.service.schedule();
+  await settle();
+  assert.deepEqual(
+    h.notified.map(({ indexed }) => indexed),
+    [4, 8, 10],
+  );
+  assert.equal(h.store.statusReads, 3);
+  assert.deepEqual(h.notified[2], { total: 10, indexed: 10, deferred: 0, pending: 0 });
+  await h.service.close();
+});
+
+test('progress recount duration does not cause immediate back-to-back recounts (#1221)', async () => {
+  let clock = 0;
+  const indexed: number[] = [];
+  const h = harness({
+    notifyEvery: 1,
+    now: () => clock,
+    load: () => {
+      clock += 500;
+      return Promise.resolve(Buffer.from([1]));
+    },
+    changed: (status) => {
+      indexed.push(status.indexed);
+      clock += 5_000;
+    },
+  });
+  for (let index = 0; index < 8; index += 1) h.store.add(`P${String(index)}`);
+  h.service.schedule();
+  await settle();
+  assert.deepEqual(indexed, [2, 4, 6, 8, 8]);
+  await h.service.close();
+});
+
+test('cancellation before the progress interval does not publish a completed status (#1221)', async () => {
+  const h = harness({
+    now: () => 0,
+    load: (candidate) => {
+      if (candidate.photoId === 'P2') void h.service.close();
+      return Promise.resolve(Buffer.from([1]));
+    },
+  });
+  h.store.add('P1');
+  h.store.add('P2');
+  h.service.schedule();
+  await settle();
+  await h.service.close();
+  assert.equal(h.store.rows.size, 1);
+  assert.equal(h.store.statusReads, 0);
+  assert.deepEqual(h.notified, []);
 });
