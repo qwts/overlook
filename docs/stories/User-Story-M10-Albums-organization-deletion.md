@@ -36,6 +36,16 @@ Lane A tail. User albums (CRUD + sidebar list + add-from-selection picker), the 
 
 Recorded decisions: album creation is an inline name row under the sidebar `+`; rename/delete use an accessible per-album action menu with keyboard and context-menu access; deleting an album never deletes its photos or blobs; the active album falls back to All Photos after deletion; the active-album selection action removes membership only; ordinary album ordering uses a dedicated handle and shared commands while the row remains the photo-drop target; photo drops from an album always ask Add or Move, and Move is target-first so failure leaves the source intact; Trash retention is library-scoped with Off / 7 / 30 / 90-day choices and a 30-day default; purge order is DB-first/remote-last so the local state never lies; destructive vocabulary and authorization follow ADR-0023's shared registry.
 
+## Creation failure recovery (#1180)
+
+`App/Sidebar failures / CreateRetry` exercises the name editor with a rejected
+creation request. The error explains how to retry; the name and focus remain.
+Repeated Enter while pending must issue only one request. Clicking elsewhere
+retains a nonempty name, and **New album** refocuses that editor. Retrying with
+Enter closes it and restores the opener after success. Escape cancels entry
+when no request is pending. Existing Electron album flows cover successful
+real creation; the story covers rejection and retry deterministically.
+
 ## Definition of done
 
 See the epic issue [#45](https://github.com/qwts/photos/issues/45) — the epic body is canonical; this page is the planning index entry.

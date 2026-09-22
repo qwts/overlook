@@ -3176,6 +3176,9 @@
   "sidebar.album.actions": {
     "defaultMessage": "Actions for {name}"
   },
+  "sidebar.album.createFailed": {
+    "defaultMessage": "Could not create {name}. Press Enter in the name field to retry."
+  },
   "sidebar.album.created": {
     "defaultMessage": "Created album {name}"
   },
@@ -3199,6 +3202,9 @@
   },
   "sidebar.album.unsupported": {
     "defaultMessage": "Saved query cannot be evaluated by this version"
+  },
+  "sidebar.album.visibilityFailed": {
+    "defaultMessage": "Could not change visibility for {name}. Reopen its actions menu to retry."
   },
   "sidebar.backingUp": {
     "defaultMessage": "Backing up"

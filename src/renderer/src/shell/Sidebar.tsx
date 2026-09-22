@@ -54,6 +54,11 @@ const messages = defineMessages({
   sourceDeleted: { id: 'sidebar.source.deleted', defaultMessage: 'Trash' },
   createdFolder: { id: 'sidebar.folder.created', defaultMessage: 'Created folder {name}' },
   createdAlbum: { id: 'sidebar.album.created', defaultMessage: 'Created album {name}' },
+  createFailed: { id: 'sidebar.album.createFailed', defaultMessage: 'Could not create {name}. Press Enter in the name field to retry.' },
+  visibilityFailed: {
+    id: 'sidebar.album.visibilityFailed',
+    defaultMessage: 'Could not change visibility for {name}. Reopen its actions menu to retry.',
+  },
   movedToFolder: { id: 'sidebar.album.movedToFolder', defaultMessage: 'Moved {name} to {folder}' },
   movedToTop: { id: 'sidebar.album.movedToTop', defaultMessage: 'Moved {name} to the top level' },
   deletedFolder: {
@@ -199,6 +204,10 @@ export function Sidebar({
   // Inline album creation (#117) — the design gives the + affordance but no
   // flow; an inline name row keeps it keyboard-first (Enter/Escape).
   const [namingAlbum, setNamingAlbum] = useState(false);
+  const [albumName, setAlbumName] = useState('');
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const newAlbumRef = useRef<HTMLButtonElement>(null);
+  const albumNameRef = useRef<HTMLInputElement>(null);
   const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumListing; readonly x: number; readonly y: number } | null>(null);
   const [dialog, setDialog] = useState<CollectionDialog | null>(null);
   const allPhotosRef = useRef<HTMLButtonElement>(null);
@@ -216,6 +225,17 @@ export function Sidebar({
   };
   const toast = (title: string, tone: 'green' | 'neutral' = 'green'): void => {
     dispatch({ type: 'toast/shown', toast: { title, tone } });
+  };
+  const setVisibility = (album: AlbumListing, showInAllPhotos: boolean | 'inherit'): void => {
+    setAlbumMenu(null);
+    restoreAlbumActionFocus();
+    // Listing/count changes arrive only after the authoritative library push.
+    void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos }).catch(() =>
+      dispatch({
+        type: 'toast/shown',
+        toast: { title: intl.formatMessage(messages.visibilityFailed, { name: album.name }), tone: 'red' },
+      }),
+    );
   };
   // The opener belongs to a row being removed: move focus to a stable
   // destination instead of leaving keyboard focus on body.
@@ -337,8 +357,11 @@ export function Sidebar({
               type="button"
               className="ovl-sidebar__gear"
               aria-label={intl.formatMessage(messages.newAlbum)}
+              ref={newAlbumRef}
+              disabled={creatingAlbum}
               onClick={() => {
                 setNamingAlbum(true);
+                albumNameRef.current?.focus();
               }}
             >
               <Icon name="plus" size={13} color="var(--text-faint)" />
@@ -351,23 +374,51 @@ export function Sidebar({
           className="ovl-sidebar__albumname"
           aria-label={intl.formatMessage(messages.albumName)}
           placeholder={intl.formatMessage(messages.albumName)}
+          ref={albumNameRef}
+          value={albumName}
+          readOnly={creatingAlbum}
+          aria-busy={creatingAlbum}
+          onChange={(event) => setAlbumName(event.currentTarget.value)}
           // The affordance just appeared under the pointer — take focus so
           // Enter/Escape work immediately.
           autoFocus
           onKeyDown={(event) => {
+            if (creatingAlbum) {
+              if (event.key === 'Enter' || event.key === 'Escape') event.preventDefault();
+              return;
+            }
             if (event.key === 'Escape') {
               setNamingAlbum(false);
+              setAlbumName('');
+              newAlbumRef.current?.focus();
             } else if (event.key === 'Enter') {
-              const name = event.currentTarget.value.trim();
+              event.preventDefault();
+              const name = albumName.trim();
               if (name !== '') {
+                const input = event.currentTarget;
+                setCreatingAlbum(true);
                 // The albums list refreshes off the library:changed push.
-                void window.overlook.albums.create({ name }).catch(() => undefined);
-                setNamingAlbum(false);
+                void window.overlook.albums.create({ name }).then(
+                  () => {
+                    const restoreFocus = input.ownerDocument.activeElement === input;
+                    setCreatingAlbum(false);
+                    setNamingAlbum(false);
+                    setAlbumName('');
+                    if (restoreFocus) requestAnimationFrame(() => newAlbumRef.current?.focus());
+                  },
+                  () => {
+                    setCreatingAlbum(false);
+                    dispatch({
+                      type: 'toast/shown',
+                      toast: { title: intl.formatMessage(messages.createFailed, { name }), tone: 'red' },
+                    });
+                  },
+                );
               }
             }
           }}
           onBlur={() => {
-            setNamingAlbum(false);
+            if (!creatingAlbum && albumName.trim() === '') setNamingAlbum(false);
           }}
         />
       ) : null}
@@ -443,17 +494,10 @@ export function Sidebar({
             setDialog({ kind: 'delete', album: albumMenu.album });
           }}
           onSetVisibility={(showInAllPhotos) => {
-            const album = albumMenu.album;
-            setAlbumMenu(null);
-            restoreAlbumActionFocus();
-            // The albums list and counts refresh off the library:changed push.
-            void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos });
+            setVisibility(albumMenu.album, showInAllPhotos);
           }}
           onInheritVisibility={() => {
-            const album = albumMenu.album;
-            setAlbumMenu(null);
-            restoreAlbumActionFocus();
-            void window.overlook.albums.setVisibility({ albumId: album.id, showInAllPhotos: 'inherit' });
+            setVisibility(albumMenu.album, 'inherit');
           }}
           onOpenAlbum={(albumId) => {
             setAlbumMenu(null);
