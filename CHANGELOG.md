@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.16
+
+### Patch Changes
+
+- c5cab5b: Coalesce background fingerprint progress counts so fast indexing and deferral bursts do not repeatedly scan the entire library. Explicit status reads and final completion counts remain current.
+- 3983127: Add an exact-photo repair path that preserves sibling variants and retries recorded preview and dimension failures through the existing repair queue.
+
 ## 0.76.15
 
 ### Patch Changes
