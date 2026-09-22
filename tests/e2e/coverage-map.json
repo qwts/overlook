@@ -346,6 +346,10 @@
         {
           "type": "manual",
           "reason": "Follow docs/acceptance/Acceptance-Test-Album-Visibility.md with a photo that belongs to two albums to verify the inclusion-wins disclosure, and a backup/restore that preserves which albums are hidden."
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/SidebarFailures.stories.tsx"
         }
       ]
     },
@@ -1502,6 +1506,10 @@
         {
           "type": "unit-dom",
           "path": "tests/db/library-db.test.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/SidebarFailures.stories.tsx"
         }
       ]
     },

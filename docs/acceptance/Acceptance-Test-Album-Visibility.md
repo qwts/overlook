@@ -38,3 +38,17 @@ the steps below.
 1. Hide an album, run a backup, restore into a fresh profile, and confirm the
    same album is hidden and All Photos shows the same rows. Switch libraries
    and back, and confirm the policy is unchanged.
+
+## Visibility failure recovery (#1180)
+
+`App/Sidebar failures` provides deterministic explicit/inherited visibility
+rejection and retry stories; the normal Electron album flows continue to cover
+real successful operations. Album creation failure recovery is documented in
+[M10](../stories/User-Story-M10-Albums-organization-deletion.md#creation-failure-recovery-1180).
+
+1. Select an album and reject **Hide from All Photos**. Confirm the actions menu
+   closes, focus returns to its opener, selection and visibility remain unchanged,
+   and the error tells the user to reopen the menu to retry. Retry successfully.
+2. Repeat with **Use folder setting** on an album with explicit visibility inside
+   a folder. Expect the same failure feedback, preserved selection/focus, and a
+   successful retry. Neither rejection may escape as an unhandled promise.
