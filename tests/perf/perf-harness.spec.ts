@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import { BUDGETS, type PerfReport } from './budgets.js';
 import { SCROLL_TRIAL_COUNT, summarizeScrollTrials, type ScrollStats, type ScrollTrial } from './scroll-stats.js';
-import { profileQueries } from './query-profile.js';
+import { profileMainProcess } from './cpu-profile.js';
 
 // #123: the 200K target becomes measurable — one harness, written budgets
 // (ratchets: never loosen), a stable report. Runs the E4.8 synthetic
@@ -119,7 +119,7 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     // Query latency (median of rounds) over the real IPC boundary.
     const page500Ms = await queryMedianMs(page, `window.overlook.library.page({ source: 'all', limit: 500 })`);
     const countsMs = await queryMedianMs(page, `window.overlook.library.counts({ recentSince: '2026-01-01T00:00:00.000Z' })`);
-    const { searchMs, semanticVectorSearchMs } = await profileQueries(app, async () => {
+    const { searchMs, semanticVectorSearchMs } = await profileMainProcess(app, 'query', async () => {
       const searchMs = await queryMedianMs(
         page,
         // A real place — matches ~1/6 of the library, so bm25 ranks a large
@@ -170,8 +170,8 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
     await page.evaluate(`window.overlook.settings.set({ patch: { autoBackupOnImport: false } })`);
     console.log('[perf] import starting');
     const importStarted = Date.now();
-    const summary = await page.evaluate<{ imported: number }>(
-      `window.overlook.import.run({ path: ${JSON.stringify(source)}, mode: 'copy' })`,
+    const summary = await profileMainProcess(app, 'import', () =>
+      page.evaluate<{ imported: number }>(`window.overlook.import.run({ path: ${JSON.stringify(source)}, mode: 'copy' })`),
     );
     const importSeconds = (Date.now() - importStarted) / 1000;
     expect(summary.imported).toBe(IMPORT_FILES);
