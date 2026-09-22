@@ -102,3 +102,22 @@ export const TrashActions: Story = {
     await expect(within(menu).getByRole('menuitem', { name: 'Delete permanently…' })).toBeVisible();
   },
 };
+
+export const LockedPhotoActions: Story = {
+  args: { photo: { ...PHOTO, locked: true, keyId: 7 }, targetCount: 1 },
+  play: async ({ canvasElement, args }) => {
+    const menu = within(within(canvasElement).getByRole('menu'));
+    const exportItem = menu.getByRole('menuitem', { name: /Export/u });
+    const duplicateItem = menu.getByRole('menuitem', { name: /Duplicate/u });
+    for (const item of [exportItem, duplicateItem]) {
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      await expect(item).toHaveAttribute('title', 'LOCKED — KEY #7 IS NOT ON THIS DEVICE');
+      await userEvent.click(item);
+    }
+    await expect(args.onExport).not.toHaveBeenCalled();
+    await expect(args.onDuplicate).not.toHaveBeenCalled();
+    await expect(args.onClose).not.toHaveBeenCalled();
+    await userEvent.click(menu.getByRole('menuitem', { name: 'Toggle favorite' }));
+    await expect(args.onToggleFavorite).toHaveBeenCalledOnce();
+  },
+};

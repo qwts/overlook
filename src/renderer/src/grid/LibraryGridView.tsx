@@ -1,3 +1,5 @@
+import { quickActionMessages } from './quick-action-messages.js';
+import { LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
@@ -53,13 +55,6 @@ const messages = defineMessages({
     id: 'library.trash.purge.complete',
     defaultMessage: 'Deleted {count, plural, one {# photo} other {# photos}} permanently',
   },
-  favoriteAdd: { id: 'library.quickActions.favorite.add', defaultMessage: 'Add to Favorites' },
-  favoriteRemove: { id: 'library.quickActions.favorite.remove', defaultMessage: 'Remove from Favorites' },
-  favoriteBusy: { id: 'library.quickActions.favorite.busy', defaultMessage: 'Favorite update in progress' },
-  unavailableInTrash: { id: 'library.quickActions.unavailableInTrash', defaultMessage: 'Unavailable for photos in Trash' },
-  availableOnlyInTrash: { id: 'library.quickActions.availableOnlyInTrash', defaultMessage: 'Available only for photos in Trash' },
-  targetPhoto: { id: 'library.quickActions.target.photo', defaultMessage: 'This photo' },
-  targetSelection: { id: 'library.quickActions.target.selection', defaultMessage: 'Selection ({count})' },
 });
 
 // Library view (#76/#77): PhotoTile or ListRow over the #74 engine, thumbs
@@ -329,35 +324,37 @@ export function LibraryGridView({
   const quickActionItems = (photo: PhotoRecord): readonly QuickActionItem[] => {
     const selection = [...state.selection];
     return configuredQuickActions(quickActionIds).map((command) => {
-      const availability = quickActionAvailability(command.id, inTrash ? 'trash' : 'library');
       const targetIds = quickActionTargetIds(command.id, photo.id, selection);
+      const availability = quickActionAvailability(command.id, inTrash ? 'trash' : 'library', targetIds.length === 1 && photo.locked);
       const busy = command.id === 'photo.favorite.toggle' && favoritePending.has(photo.id);
       return {
         id: command.id,
         label:
           command.id === 'photo.favorite.toggle'
-            ? intl.formatMessage(photo.favorite ? messages.favoriteRemove : messages.favoriteAdd)
+            ? intl.formatMessage(photo.favorite ? quickActionMessages.favoriteRemove : quickActionMessages.favoriteAdd)
             : intl.formatMessage(command.label),
         icon: command.quickAction.icon,
         enabled: availability.enabled && !busy,
         reason: busy
-          ? intl.formatMessage(messages.favoriteBusy)
+          ? intl.formatMessage(quickActionMessages.favoriteBusy)
           : availability.reason === 'library-only'
-            ? intl.formatMessage(messages.unavailableInTrash)
+            ? intl.formatMessage(quickActionMessages.unavailableInTrash)
             : availability.reason === 'trash-only'
-              ? intl.formatMessage(messages.availableOnlyInTrash)
-              : null,
+              ? intl.formatMessage(quickActionMessages.availableOnlyInTrash)
+              : availability.reason === 'locked'
+                ? intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })
+                : null,
         targetLabel:
           targetIds.length === 1
-            ? intl.formatMessage(messages.targetPhoto)
-            : intl.formatMessage(messages.targetSelection, { count: targetIds.length }),
+            ? intl.formatMessage(quickActionMessages.targetPhoto)
+            : intl.formatMessage(quickActionMessages.targetSelection, { count: targetIds.length }),
       };
     });
   };
 
   const invokeQuickAction = (commandId: QuickActionCommandId, photo: PhotoRecord): void => {
     const photoIds = quickActionTargetIds(commandId, photo.id, [...state.selection]);
-    if (!quickActionAvailability(commandId, inTrash ? 'trash' : 'library').enabled) return;
+    if (!quickActionAvailability(commandId, inTrash ? 'trash' : 'library', photoIds.length === 1 && photo.locked).enabled) return;
     dispatchQuickActionVisibility({ type: 'dismiss' });
     switch (commandId) {
       case 'photo.favorite.toggle':
