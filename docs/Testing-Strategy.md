@@ -230,9 +230,23 @@ painted frame with the complete subtree mounted, separately from IPC latency.
 
 `test-results/collections-perf-report.json` records fixture dimensions, every
 sample, and medians; the manual workflow uploads it alongside the existing
-report. New per-operation ceilings start at 1,000 ms pending hosted calibration
-and may only tighten. Existing performance ratchets are unchanged. No local
-heavy-lane result or completed hosted baseline is claimed yet.
+report. Hosted Ubuntu calibration at `0a782f27` in
+[run 35715275613](https://github.com/qwts/overlook/actions/runs/35715275613)
+passed this scenario in 57.9 seconds. Budgets are twice the slowest of five
+samples, rounded up to 25 ms, and may only tighten:
+
+| Metric                      |  Median | Slowest sample |   Budget |
+| --------------------------- | ------: | -------------: | -------: |
+| Collection listing over IPC | 59.9 ms |       128.1 ms | < 275 ms |
+| Sibling reorder over IPC    |  8.3 ms |         8.9 ms |  < 25 ms |
+| Cross-folder move over IPC  | 46.7 ms |        50.0 ms | < 100 ms |
+| Complete subtree expansion  | 66.2 ms |        74.4 ms | < 150 ms |
+
+The same run failed the separate 200K search assertion; its report also showed
+semantic-search and import values outside their existing bounds, tracked in
+[#1221](https://github.com/qwts/overlook/issues/1221). This collection baseline
+is not evidence that the complete performance lane passed. Existing ratchets
+are unchanged, and no local heavy-lane run is claimed.
 
 ### Perf budgets (#123 — RATCHETS: tighten, never loosen)
 

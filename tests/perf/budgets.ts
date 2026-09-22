@@ -49,10 +49,10 @@ export interface PerfReport {
   readonly rendererHeapMb: number;
 }
 
-/** #1105 initial ceilings; hosted calibration can only tighten these bounds. */
+/** #1105: twice each slowest calibration sample, rounded up to 25 ms. */
 export const COLLECTION_BUDGETS = {
-  listMs: 1_000,
-  reorderMs: 1_000,
-  moveMs: 1_000,
-  sidebarExpandMs: 1_000,
+  listMs: 275,
+  reorderMs: 25,
+  moveMs: 100,
+  sidebarExpandMs: 150,
 } as const;
