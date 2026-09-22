@@ -220,8 +220,8 @@ export class LibraryService {
   /** Folder placement (#505, ADR-0030 §1): cycles and the depth bound are
    * rejected inside the write; photos that changed sides through inherited
    * visibility are announced like a policy change. */
-  moveAlbum(albumId: string, parentId: string | null): AlbumListing {
-    const changed = moveCollection(this.db, albumId, parentId);
+  moveAlbum(albumId: string, parentId: string | null, position?: number): AlbumListing {
+    const changed = moveCollection(this.db, albumId, parentId, position);
     this.events.libraryChanged(changed, changed.length === 0 ? 'none' : 'library');
     return this.albumListing(albumId);
   }

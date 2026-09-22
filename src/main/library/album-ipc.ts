@@ -43,10 +43,10 @@ export function registerAlbumIpcHandlers(
     )(request),
   );
   ipcMain.handle(channels.albumMove.name, (_event, request: unknown) =>
-    wrapHandler(channels.albumMove, ({ albumId, parentId }) => {
+    wrapHandler(channels.albumMove, ({ albumId, parentId, position }) => {
       const result = mutateWithActivity(
         getActivity,
-        () => ({ album: getService().moveAlbum(albumId, parentId) }),
+        () => ({ album: getService().moveAlbum(albumId, parentId, position) }),
         () => ({
           eventType: 'album.moved',
           entityIds: [albumId, ...(parentId === null ? [] : [parentId])],

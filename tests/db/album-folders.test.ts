@@ -161,6 +161,37 @@ describe('album folders (#505)', () => {
     db.close();
   });
 
+  test('cross-parent placement is atomic with inherited visibility and carries the subtree (#1104)', () => {
+    const { db, repo, order, listing, inAllPhotos } = world();
+    try {
+      repo.createAlbum('source', 'Source', { kind: 'folder' });
+      repo.createAlbum('child', 'Child', { parentId: 'source' });
+      repo.createAlbum('destination', 'Destination', { kind: 'folder' });
+      repo.createAlbum('first', 'First', { parentId: 'destination' });
+      repo.createAlbum('last', 'Last', { parentId: 'destination' });
+      const member = photo();
+      repo.insert(member);
+      repo.addToAlbum('child', [member.id]);
+      setCollectionVisibility(db, 'destination', false);
+      const before = readAlbumTree(db);
+      assert.throws(() => moveCollection(db, 'source', 'destination', 9), /out of range/u);
+      assert.deepEqual(readAlbumTree(db), before, 'invalid placement rolls back parent, order and visibility');
+      assert.equal(inAllPhotos(member.id), 1);
+      assert.deepEqual(moveCollection(db, 'source', 'destination', 1), [member.id]);
+      assert.deepEqual(order(), ['destination', 'first', 'source', 'child', 'last']);
+      assert.equal(listing('source').parentId, 'destination');
+      assert.equal(listing('child').parentId, 'source');
+      assert.equal(inAllPhotos(member.id), 0, 'visibility changes in the same move');
+      const moved = readAlbumTree(db);
+      assert.throws(() => moveCollection(db, 'destination', 'source', 0), /into itself/u);
+      assert.deepEqual(readAlbumTree(db), moved, 'cycle refusal preserves the complete tree');
+      moveCollection(db, 'source', null, 0);
+      assert.deepEqual(order(), ['source', 'child', 'destination', 'first', 'last']);
+    } finally {
+      db.close();
+    }
+  });
+
   test('a folder policy is the default for descendants that have not set their own (§2)', () => {
     const { db, repo, listing, inAllPhotos } = world();
     repo.createAlbum('trips', 'Trips', { kind: 'folder' });
