@@ -120,11 +120,13 @@ test('300 collections at depth six: list, reorder, move, and sidebar render (#11
           start = performance.now();
           const moved = await overlook.albums.move({ albumId: movedId, parentId: destinationId });
           samples.move.push(performance.now() - start);
+          if ('refusal' in moved) throw new Error(`measured move was refused: ${moved.refusal}`);
           if (moved.album.parentId !== destinationId || moved.album.count !== 8) throw new Error('move did not preserve membership');
           const after = (await overlook.library.albums()).albums;
           if (after.find((album) => album.id === destinationId)?.count !== 8) throw new Error('destination folder count did not update');
           // Restore a real starting position for the next measured mutation.
-          await overlook.albums.move({ albumId: movedId, parentId: originalParent });
+          const restored = await overlook.albums.move({ albumId: movedId, parentId: originalParent });
+          if ('refusal' in restored) throw new Error(`fixture restoration was refused: ${restored.refusal}`);
           await overlook.albums.reorder({
             albumId: movedId,
             position,
