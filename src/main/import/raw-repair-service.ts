@@ -123,6 +123,10 @@ export class RawRepairService {
           outcome = await this.options.regenerate(photo, bytes, this.controller.signal);
         }
         if (this.controller.signal.aborted) break;
+        if (outcome?.discarded === true) {
+          skipped += 1;
+          continue; // A superseded repair must not overwrite the newer head's availability.
+        }
         if (requiresRebake && outcome?.generated !== true) {
           failed += 1;
           continue; // Keep the current availability and durable debt on failure/supersession.

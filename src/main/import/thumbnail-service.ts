@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey } from '../crypto/envelope.js';
-import type { ThumbnailDerivatives, ThumbnailPool } from './thumbnail-pool.js';
+import type { ThumbnailDerivatives, ThumbnailPoolResult } from './thumbnail-pool.js';
 import type { FileKind } from '../../shared/library/types.js';
 import type { EditTransform } from '../../shared/library/edit-revision.js';
 import type { PreviewFailureReason } from '../../shared/library/preview.js';
@@ -15,6 +15,8 @@ import type { PreviewFailureReason } from '../../shared/library/preview.js';
 export interface ThumbnailOutcome {
   /** False = placeholder (undecodable/unsupported bytes, E5.3 contract). */
   readonly generated: boolean;
+  /** Cancelled or superseded work must not publish availability/metadata changes. */
+  readonly discarded?: boolean | undefined;
   readonly width: number | null;
   readonly height: number | null;
   readonly failure?: PreviewFailureReason | undefined;
@@ -43,10 +45,14 @@ function canPublish(request: ThumbnailRequest): boolean {
   return request.signal?.aborted !== true && request.isCurrent?.() !== false;
 }
 
+interface ThumbnailGenerator {
+  generate(bytes: Buffer, signal?: AbortSignal, fileKind?: FileKind, transform?: EditTransform): Promise<ThumbnailPoolResult>;
+}
+
 export class ThumbnailService {
   private readonly replacements = new Map<string, Promise<unknown>>();
   constructor(
-    private readonly pool: Pick<ThumbnailPool, 'generate'>,
+    private readonly pool: ThumbnailGenerator,
     private readonly blobStore: BlobStore,
   ) {}
 
@@ -74,22 +80,24 @@ export class ThumbnailService {
   }
 
   private async generateAndStore(request: ThumbnailRequest, replace: boolean): Promise<ThumbnailOutcome> {
-    if (!canPublish(request)) return { generated: false, width: null, height: null };
+    if (!canPublish(request)) return { generated: false, width: null, height: null, discarded: true };
     const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind, request.transform);
-    if (derivatives === null) {
-      return { generated: false, width: null, height: null };
-    }
-    if ('failure' in derivatives) {
-      return { generated: false, width: null, height: null, failure: derivatives.failure };
-    }
     try {
-      if (!canPublish(request)) return { generated: false, width: null, height: null };
+      if (!canPublish(request)) return { generated: false, width: null, height: null, discarded: true };
+      if (derivatives === null) {
+        return { generated: false, width: null, height: null };
+      }
+      if ('failure' in derivatives) {
+        return { generated: false, width: null, height: null, failure: derivatives.failure };
+      }
       await this.store(request, derivatives, replace);
-      if (request.isCurrent?.() === false) return { generated: false, width: null, height: null };
+      if (request.isCurrent?.() === false) return { generated: false, width: null, height: null, discarded: true };
       return { generated: true, width: derivatives.width, height: derivatives.height };
     } finally {
-      derivatives.thumb.fill(0);
-      derivatives.mid.fill(0);
+      if (derivatives !== null && !('failure' in derivatives)) {
+        derivatives.thumb.fill(0);
+        derivatives.mid.fill(0);
+      }
     }
   }
 

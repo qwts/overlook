@@ -55,7 +55,11 @@ test('an older replacement cannot finish over a newer edit, including a late-loa
   head = 'new';
   const newer = service.regenerateFor(request('new'));
   release.resolve();
-  assert.equal((await old).generated, false, 'a superseded completion cannot settle debt');
+  assert.deepEqual(
+    await old,
+    { generated: false, width: null, height: null, discarded: true },
+    'a superseded completion cannot settle debt or publish stale availability',
+  );
   assert.equal((await newer).generated, true);
   assert.equal((await service.regenerateFor(request('old'))).generated, false, 'late old loads never publish');
   assert.deepEqual(generated, ['old', 'new']);
@@ -91,3 +95,29 @@ test('a failed replacement releases its queue and obsolete decoded buffers are z
   assert.deepEqual(mid, Buffer.alloc(5));
   assert.equal(await blobs.verifyThumbs(request.contentHash, () => key.key, request.photoId), false);
 });
+
+for (const result of [null, { failure: 'decode-failed' as const }]) {
+  test(`a superseded decode result (${result?.failure ?? 'empty'}) cannot publish availability (#1115)`, async () => {
+    const blobs = new BlobStore({ dataDir: join(tmpdir(), 'overlook-discarded-decode') });
+    let current = true;
+    const service = new ThumbnailService(
+      {
+        generate: () => {
+          current = false;
+          return Promise.resolve(result);
+        },
+      },
+      blobs,
+    );
+    assert.deepEqual(
+      await service.regenerateFor({
+        photoId: 'photo',
+        contentHash: 'a'.repeat(64),
+        key: { id: 1, key: Buffer.alloc(32, 9) },
+        bytes: Buffer.from('original'),
+        isCurrent: () => current,
+      }),
+      { generated: false, width: null, height: null, discarded: true },
+    );
+  });
+}
