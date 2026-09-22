@@ -43,6 +43,31 @@ Lane B tail — the biggest domain epic. Verified encrypted backup with per-phot
 
 Recorded decisions: blobs travel encrypted-once (never re-encrypted, never decrypted for backup); verify-after-upload is the trust chain that offload eligibility relies on; offloaded tiles keep thumbnails (browsable offline) rendered dimmed at 55%; manual offload rechecks provider state immediately before eviction, clears selection only after confirmed success, and Undo downloads and verifies bytes before returning the record to `synced`; viewing/export keeps the ledger offloaded by default through verified encrypted temporary custody, while Keep downloaded promotes ciphertext before returning the record to `synced`; Settings restore selected/all uses the same verified path; `unknown` network state proceeds under the Wi-Fi-only gate; Image Trail interop = write only under `/Overlook/`, import deferred.
 
+## Manifest publication bounds
+
+Manifest publication has one 120-second deadline per backup run, starting at
+its first publication or uncertainty reconciliation. Preparation, provider
+requests, and later publication attempts share it; ordinary photo transfer is
+separate. Cancellation/expiry reports `MANIFEST-PUBLISH-FAIL` with a reason and
+whether a mutation has an unknown outcome, leaves manifest debt owed, and
+prevents later settlement or retention in the cancelled publication.
+
+Schema 43 records the provider/account/library, target, expected and prior
+fingerprints, and whether a mutation completed or was explicitly refused before starting. The record precedes
+remote mutation and survives library close/reopen. Before retry, reconciliation
+must confirm the intended result, or the unchanged prior state of a completed
+mutation or explicit pre-mutation refusal. A generic provider rejection is not
+proof that remote work stopped. Unchanged bytes cannot prove that an abandoned replacement completed.
+An unresolved outcome blocks new backup work for that library; a timeout does
+not authorize a blind retry or imply remote rollback. Providers may finish a
+buffered/native write after caller cancellation, so cancellation is forwarded
+where supported and late results never touch the closed database.
+
+Retention removes only generations older than the verified predecessor;
+unrelated newer listing entries cannot displace it. Regression evidence is in
+`tests/backup/manifest-publication.test.ts`, including stalled reads, late puts,
+reopened databases, verification cancellation, and retention cancellation.
+
 ## Definition of done
 
 See the epic issue [#43](https://github.com/qwts/photos/issues/43) — the epic body is canonical; this page is the planning index entry.

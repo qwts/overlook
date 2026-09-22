@@ -34,6 +34,9 @@ export class ProviderError extends Error {
     /** Provider failures affect the whole authority; object failures are
      * isolated to one remote path or library namespace. */
     readonly scope: 'provider' | 'object' = 'provider',
+    /** An adapter may assert this only before issuing the target mutation.
+     * A network error or an abort is not proof that a write did not happen. */
+    readonly mutationNotStarted = false,
   ) {
     super(message);
     this.name = 'ProviderError';

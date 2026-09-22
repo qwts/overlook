@@ -50,4 +50,11 @@ export const COLLECTION_MIGRATIONS: readonly {
   { version: 40, name: 'shared-sidecar-custody', up: migrateSidecarOwners },
   { version: 41, name: 'deferred-variant-previews', up: migratePreviewRepairDebt },
   { version: 42, name: 'confirmed-preview-absence', up: migrateConfirmedPreviewAbsence },
+  {
+    version: 43,
+    name: 'pending-manifest-publication',
+    up: (db) => {
+      db.exec('ALTER TABLE backup_manifest_debt ADD COLUMN pending_mutation TEXT');
+    },
+  },
 ];
