@@ -34,6 +34,8 @@ export interface CommandDescriptor {
   readonly label: { readonly id: string; readonly defaultMessage: string };
   readonly surfaces: readonly CommandSurface[];
   readonly target: CommandTarget;
+  /** Pixel operations need the target photo key; metadata operations do not. */
+  readonly requiresPhotoKey?: boolean | undefined;
   readonly key?: string | undefined;
   /** Physical-key binding for position-stable image commands across layouts. */
   readonly code?: string | undefined;
@@ -501,6 +503,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   },
   {
     id: 'photo.export',
+    requiresPhotoKey: true,
     label: label('photo.export', 'Export…'),
     surfaces: [],
     target: 'selection',
@@ -512,7 +515,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   },
   { id: 'photo.open', label: label('photo.open', 'Open'), surfaces: [], target: 'focused-item' },
   // Variants (#496, ADR-0031 §3): a sibling variant over the same original.
-  { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection' },
+  { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection', requiresPhotoKey: true },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
   // Backup coverage (#506, ADR-0033 §7): contextual like offload — the

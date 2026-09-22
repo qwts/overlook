@@ -125,3 +125,17 @@ even if the original is readable. Importing that key permits a fresh export.
 Baked, Original without companions, and metadata choices that omit imported
 companions do not require their keys. The engine test uses a separately encrypted
 companion and verifies refusal before any original opens or output is written.
+
+## Locked single-photo menu actions (#1133)
+
+Open the context menu for one photo whose key is absent. Export and Duplicate
+must be disabled with the Custody reason naming its missing key. Clicking either
+must not invoke the action or close the menu. Open, favorite, album membership,
+Original classification, and Trash remain metadata operations. A single-photo
+Export Quick Action must show the same reason and refuse invocation. Restoring
+the key makes the pixel actions available again.
+
+Coverage: `PhotoContextMenu.stories.tsx` → `LockedPhotoActions` and
+`tests/commands/quick-actions.test.ts`. This single-target coverage does not
+qualify mixed/offscreen bulk filtering or native-menu execution parity; those
+remain tracked in #1133.
