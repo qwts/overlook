@@ -9,6 +9,7 @@ import { pipeline } from 'node:stream/promises';
 import {
   assertSafeRemotePath,
   ProviderError,
+  prepareProviderMutation,
   raceWithAbort,
   type ProviderAccountIdentity,
   type ProviderAuthState,
@@ -151,12 +152,14 @@ export class ICloudDriveProvider implements StorageProvider {
 
   async put(path: string, bytes: Readable): Promise<{ bytes: number }> {
     const remote = this.remotePath(path);
-    const directory = await mkdtemp(join(this.temporaryRoot, 'overlook-icloud-put-'));
+    const directory = await prepareProviderMutation(() => mkdtemp(join(this.temporaryRoot, 'overlook-icloud-put-')));
     const source = join(directory, 'payload.ovlk');
     try {
-      await pipeline(bytes, createWriteStream(source, { flags: 'wx', mode: 0o600 }));
-      const size = (await stat(source)).size;
-      await this.options.bridge.replaceFile(remote, source, await this.accountToken());
+      const { size, accountToken } = await prepareProviderMutation(async () => {
+        await pipeline(bytes, createWriteStream(source, { flags: 'wx', mode: 0o600 }));
+        return { size: (await stat(source)).size, accountToken: await this.accountToken() };
+      });
+      await this.options.bridge.replaceFile(remote, source, accountToken);
       return { bytes: size };
     } catch (error) {
       throw providerError(error);
@@ -206,7 +209,8 @@ export class ICloudDriveProvider implements StorageProvider {
     // container's recoverable variant. A bridge change that purges without
     // that server-side retention would violate the product rule.
     try {
-      await this.options.bridge.delete(this.remotePath(path), await this.accountToken());
+      const accountToken = await prepareProviderMutation(() => this.accountToken());
+      await this.options.bridge.delete(this.remotePath(path), accountToken);
     } catch (error) {
       if (error instanceof ICloudDriveNativeError && error.code === 'not-found') return;
       throw providerError(error);
