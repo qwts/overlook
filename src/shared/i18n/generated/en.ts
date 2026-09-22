@@ -1322,6 +1322,7 @@ interface InterpolatedMessageArguments {
   "purge.keptLocal.some": { "count": number };
   "purge.removalPending": { "count": number };
   "restore.copy.remotePath": { "path": MessageValue };
+  "restore.library.excluded": { "bytes": MessageValue; "count": number };
   "restore.missing.count": { "count": number };
   "restore.restored.count": { "count": number };
   "restore.select.library": { "libraryId": MessageValue };

@@ -2621,6 +2621,24 @@
       ]
     },
     {
+      "id": "1125-restore-exclusion-disclosure",
+      "wiki": "Acceptance-Test-Backup-Coverage",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/restore/RestoreLibraryCard.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/backup/restore-coverage-disclosure.test.ts",
+            "tests/dom/restore-workflow-missing.test.tsx",
+            "tests/dom/restore-workflow-reopen.test.tsx"
+          ]
+        }
+      ]
+    },
+    {
       "id": "994-restore-verify-results-no-quit",
       "wiki": "User-Story-M18-Recovery-key",
       "$note": "Verify originals with probe (no body download), always show Heal / Discard / Do nothing, move gaps aside on heal, and do not quit (#994).",
@@ -2902,20 +2920,12 @@
       ]
     },
     {
-      "id": "1125-restore-exclusion-disclosure",
-      "wiki": "Acceptance-Test-Backup-Coverage",
+      "id": "1230-album-create-focus",
+      "wiki": "User-Story-M10-Albums-organization-deletion",
       "coverage": [
         {
           "type": "storybook",
-          "path": "src/renderer/src/restore/RestoreLibraryCard.stories.tsx"
-        },
-        {
-          "type": "unit-dom",
-          "paths": [
-            "tests/backup/restore-coverage-disclosure.test.ts",
-            "tests/dom/restore-workflow-missing.test.tsx",
-            "tests/dom/restore-workflow-reopen.test.tsx"
-          ]
+          "path": "src/renderer/src/shell/SidebarFailures.stories.tsx"
         }
       ]
     }
