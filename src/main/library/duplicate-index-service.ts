@@ -41,10 +41,13 @@ export interface DuplicateIndexServiceOptions {
   readonly threshold?: number | undefined;
   /** Rows written between progress notifications. */
   readonly notifyEvery?: number | undefined;
+  /** Monotonic clock for background progress coalescing; explicit status reads stay fresh. */
+  readonly now?: (() => number) | undefined;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
 
 const CANDIDATE_BATCH_SIZE = 64;
+const PROGRESS_INTERVAL_MS = 1_000;
 
 const yieldTurn = async (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -165,6 +168,8 @@ export class DuplicateIndexService {
     const controller = new AbortController();
     this.controller = controller;
     let written = 0;
+    const now = this.options.now ?? (() => performance.now());
+    let nextProgressAt = now() + PROGRESS_INTERVAL_MS;
     try {
       this.options.repository.deleteOtherVersions(FINGERPRINT_VERSION);
       while (!controller.signal.aborted) {
@@ -180,7 +185,12 @@ export class DuplicateIndexService {
           if (stored) {
             written += 1;
             this.bump();
-            if (written % (this.options.notifyEvery ?? 25) === 0) this.options.changed?.(this.status());
+            // A status snapshot scans the whole library. Fast deferrals must
+            // not spend most of the pass recounting the same 200K rows (#1221).
+            if (written % (this.options.notifyEvery ?? 25) === 0 && now() >= nextProgressAt) {
+              this.options.changed?.(this.status());
+              nextProgressAt = now() + PROGRESS_INTERVAL_MS;
+            }
           }
           await (this.options.yieldTurn ?? yieldTurn)();
         }
