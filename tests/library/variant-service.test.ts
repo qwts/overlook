@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../../src/main/db/edit-bake-debt-repository.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,6 +54,7 @@ function photo(id: string): PhotoInsert {
 }
 
 interface Harness {
+  readonly bakeDebt: EditBakeDebtRepository;
   readonly service: VariantService;
   readonly repo: PhotosRepository;
   readonly revisions: EditRevisionRepository;
@@ -98,6 +100,7 @@ function harness(overrides: Partial<VariantServiceDeps> = {}): Harness {
     ...overrides,
   });
   return {
+    bakeDebt: new EditBakeDebtRepository(db),
     service,
     repo,
     revisions,
@@ -131,6 +134,7 @@ describe('VariantService (#496)', () => {
     assert.ok(entry);
     assert.equal(entry.sourceId, 'P1');
     assert.equal(entry.derivatives, 'regenerated');
+    assert.equal(h.bakeDebt.pending(entry.photoId), undefined, 'a successful duplicate owes no second bake');
     assert.equal(h.repo.get(entry.photoId)?.previewFailure, null);
     const variant = h.repo.get(entry.photoId);
     assert.ok(variant);

@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { markDirty } from '../backup/sync-ledger.js';
@@ -30,7 +31,7 @@ export interface VariantServiceDeps {
   readonly repo: PhotosRepository;
   /** Plaintext original bytes, or null when the original is not local (offloaded). */
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
-  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform) => Promise<ThumbnailOutcome>;
+  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform, headId: string | null) => Promise<ThumbnailOutcome>;
   readonly appVersion: string;
   readonly newId: () => string;
   readonly now: () => string;
@@ -108,6 +109,7 @@ export class VariantService {
   }
 
   private async bake(variant: PhotoRecord, transform: EditTransform): Promise<DuplicateResult['created'][number]['derivatives']> {
+    const headId = this.revisions.head(variant.id).head?.id ?? null;
     let bytes: Buffer | null;
     try {
       bytes = await this.deps.loadOriginal(variant);
@@ -117,10 +119,12 @@ export class VariantService {
     }
     if (bytes === null) return 'deferred';
     try {
-      const outcome = await this.deps.regenerate(variant, bytes, transform);
+      const outcome = await this.deps.regenerate(variant, bytes, transform, headId);
+      if ((this.revisions.head(variant.id).head?.id ?? null) !== headId) return 'failed';
       if (outcome.generated) {
         this.deps.repo.setPreviewFailure(variant.id, null);
         this.deps.repo.clearPreviewRepairDebt(variant.id);
+        if (headId !== null) new EditBakeDebtRepository(this.deps.db).settle(variant.id, headId);
       } else {
         this.deps.repo.setPreviewFailure(variant.id, outcome.failure ?? 'decode-failed');
       }
