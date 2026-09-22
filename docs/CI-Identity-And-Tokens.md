@@ -82,6 +82,13 @@ default-branch CodeQL. The `merge_group` lane and the shared policy action's
 narrow merge-queue actor exception remain dormant compatibility for a future
 transfer to an organization; they do not justify skipping exact-commit checks.
 
+Worker jobs use explicit `!cancelled()` status conditions so skipped evidence
+jobs still permit required fallback work, while superseded runs release their
+runners. The bounded aggregate gates retain `always()` to inspect unsuccessful
+dependencies; the CI verdict explicitly rejects a cancelled workflow. A cancelled
+run is never reusable exact-SHA evidence. GitHub documents the distinction in its
+[workflow cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
+
 Consequences worth knowing before touching a branch:
 
 - **Never manually rebase, merge `main` in, or "update" a branch that is merely

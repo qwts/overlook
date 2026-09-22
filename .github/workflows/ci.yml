@@ -117,7 +117,7 @@ jobs:
   zizmor:
     name: zizmor / unpinned-uses
     needs: policy
-    if: always() && needs.policy.result == 'success'
+    if: ${{ !cancelled() && needs.policy.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -131,11 +131,13 @@ jobs:
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
 
+  # Explicit cancellation status still permits intentionally skipped evidence jobs.
+  # always() here would keep superseded work alive after cancellation (#1246).
   ci:
     name: Complete suite
     needs: [policy, merge-evidence, preflight-evidence]
     if: >-
-      always() && needs.policy.result == 'success' &&
+      !cancelled() && needs.policy.result == 'success' &&
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
@@ -306,7 +308,7 @@ jobs:
     name: Windows x64 tests and import
     needs: [policy, merge-evidence, preflight-evidence]
     if: >-
-      always() && needs.policy.result == 'success' &&
+      !cancelled() && needs.policy.result == 'success' &&
       needs.policy.outputs.run_full == 'true' &&
       needs.preflight-evidence.outputs.validated != 'true'
     runs-on: windows-latest
@@ -422,7 +424,7 @@ jobs:
     name: E2E
     needs: [policy, merge-evidence, preflight-evidence]
     if: >-
-      always() && needs.policy.result == 'success' &&
+      !cancelled() && needs.policy.result == 'success' &&
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     runs-on: ubuntu-latest
@@ -558,7 +560,7 @@ jobs:
     name: Docs governance
     needs: [policy, merge-evidence, preflight-evidence]
     if: >-
-      always() && needs.policy.result == 'success' &&
+      !cancelled() && needs.policy.result == 'success' &&
       ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     uses: qwts/qwts-agent-docs-gov/.github/workflows/docs-governance.yml@67db7dc9c20bc29222fb605b7ff9432fd58a2a3f # qwts-agent-docs-gov 2026-09-15
@@ -569,7 +571,7 @@ jobs:
     name: Advanced CodeQL
     needs: [policy, merge-evidence, preflight-evidence]
     if: >-
-      always() && needs.policy.result == 'success' &&
+      !cancelled() && needs.policy.result == 'success' &&
       (needs.policy.outputs.run_post_merge == 'true' ||
       (needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true'))
     permissions:
@@ -653,6 +655,7 @@ jobs:
     steps:
       - name: Enforce the selected lifecycle lane
         env:
+          CANCELLED: ${{ cancelled() }}
           MODE: ${{ needs.policy.outputs.mode }}
           POLICY: ${{ needs.policy.result }}
           COMPLETE: ${{ needs.ci.result }}
@@ -667,6 +670,7 @@ jobs:
           MERGE_VALIDATED: ${{ needs.merge-evidence.outputs.validated }}
           POST_MERGE: ${{ needs.post-merge.result }}
         run: |
+          test "$CANCELLED" = false
           test "$POLICY" = success
           test "$WORKFLOW_RUNTIME" = success
           case "$MODE" in
