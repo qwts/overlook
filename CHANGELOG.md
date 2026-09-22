@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.12
+
+### Patch Changes
+
+- a7097aa: Prevent renderer requests from reopening the source library while relocation copies it, and preserve failure diagnostics before the renderer reloads.
+
 ## 0.76.11
 
 ### Patch Changes
