@@ -164,9 +164,8 @@ jobs:
           key: aca-${{ matrix.check }}-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             aca-${{ matrix.check }}-${{ runner.os }}-
-      # Exit 78 is the suite saying "nothing in this diff for me" and is not
-      # a failure; findings or a judge error turn this check's advisory job
-      # red without touching its siblings.
+      # A complete structured report keeps findings advisory. Missing reports,
+      # judge unavailability, and the 120s total execution deadline fail visibly.
       - name: Run ${{ matrix.check }}
         env:
           ACA_PROVIDER: qwen
@@ -174,9 +173,4 @@ jobs:
           QWEN_BASE_URL: https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           CHECK: ${{ matrix.check }}
-        run: |
-          rc=0
-          node .aca/src/cli.ts "$CHECK" --base origin/main || rc=$?
-          if [ "$rc" -ne 0 ] && [ "$rc" -ne 78 ]; then
-            exit "$rc"
-          fi
+        run: node scripts/run-aca.ts "$CHECK"
