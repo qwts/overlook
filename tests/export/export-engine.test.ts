@@ -208,6 +208,98 @@ describe('export engine (#97)', () => {
     assert.equal(readdirSync(world.destination).length, 2, 'completed files only — no partials');
   });
 
+  for (const mode of ['original', 'baked', 'original-sidecars'] as const) {
+    test(`${mode} refuses mixed and all-locked batches before content or destination work`, async () => {
+      const world = await seededWorld(2);
+      const locked = world.rows.get('PHOTO1');
+      assert.ok(locked);
+      world.rows.set(locked.id, { ...locked, locked: true });
+      const unexpected = (): never => {
+        throw new Error('export crossed the locked-photo preflight');
+      };
+      const engine = new ExportEngine({
+        ...world.deps,
+        disclosure: unexpected,
+        blobs: { getStream: unexpected },
+        openOriginal: unexpected,
+        sidecarsFor: unexpected,
+        sidecarStream: unexpected,
+        editHead: unexpected,
+        freeBytes: unexpected,
+        exists: unexpected,
+        writeFile: unexpected,
+        bufferStream: unexpected,
+        transcodeJpeg: unexpected,
+      });
+      for (const ids of [['PHOTO0', 'PHOTO1'], ['PHOTO1']]) {
+        await assert.rejects(
+          engine.exportPhotos(ids, world.destination, undefined, 'original', 'original', { mode }),
+          (error: unknown) => error instanceof ExportPreflightError && /Locked photos.*missing encryption keys/u.test(error.message),
+        );
+      }
+      assert.deepEqual(world.progress, []);
+      assert.deepEqual(readdirSync(world.destination), []);
+      world.rows.set(locked.id, locked);
+      const result = await world.engine.exportPhotos(['PHOTO0', 'PHOTO1'], world.destination, undefined, 'original', 'original', { mode });
+      assert.equal(result.exported, 2, 'restored key availability permits a fresh export');
+      assert.equal(result.failed, 0);
+    });
+  }
+
+  test('missing companion key refuses the entire batch before writing; importing it permits retry', async () => {
+    const world = await seededWorld(2);
+    const companionKey = { id: 2, key: randomBytes(32) };
+    const bytes = Buffer.from('encrypted companion');
+    const ref = await world.store.putSidecar(Readable.from([bytes]), companionKey, 'PHOTO1');
+    let imported = false;
+    const resolveKey = (id: number): Buffer | undefined => (id === 1 ? world.key.key : imported ? companionKey.key : undefined);
+    const engine = new ExportEngine({
+      ...world.deps,
+      resolveKey,
+      sidecarsFor: (id) =>
+        id === 'PHOTO1' ? [{ fileName: 'IMG_4022.xmp', contentHash: ref.contentHash, keyId: 2, bytes: bytes.length }] : [],
+      sidecarStream: (id, hash) => world.store.getSidecarStream(id, hash, resolveKey),
+      openOriginal: (photo) => {
+        assert.ok(imported, 'no original is opened before the entire batch passes preflight');
+        return Promise.resolve({ stream: world.store.getStream(photo.contentHash, resolveKey, photo.id) });
+      },
+    });
+    await assert.rejects(
+      engine.exportPhotos(['PHOTO0', 'PHOTO1'], world.destination),
+      (error: unknown) => error instanceof ExportPreflightError && /Locked companion files/u.test(error.message),
+    );
+    assert.deepEqual(world.progress, []);
+    assert.deepEqual(readdirSync(world.destination), []);
+    imported = true;
+    const result = await engine.exportPhotos(['PHOTO0', 'PHOTO1'], world.destination);
+    assert.equal(result.exported, 2);
+    assert.equal(result.failed, 0);
+    assert.equal(result.sidecarsExported, 1);
+    assert.deepEqual(readFileSync(join(world.destination, 'IMG_4022.xmp')), bytes);
+  });
+
+  test('missing companion keys do not block modes that omit the encrypted companion', async () => {
+    for (const [mode, metadata] of [
+      ['original', 'original'],
+      ['baked', 'original'],
+      ['original-sidecars', 'none'],
+      ['original-sidecars', 'overlook'],
+    ] as const) {
+      const world = await seededWorld(1);
+      const engine = new ExportEngine({
+        ...world.deps,
+        resolveKey: (id) => (id === 1 ? world.key.key : undefined),
+        sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), keyId: 2, bytes: 12 }],
+        sidecarStream: () => {
+          throw new Error('excluded companion must not be opened');
+        },
+      });
+      const result = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', metadata, { mode });
+      assert.equal(result.exported, 1);
+      assert.equal(result.failed, 0);
+    }
+  });
+
   test('free-space preflight fails BEFORE any bytes move', async () => {
     const world = await seededWorld(2);
     const deps: ExportEngineDeps = { ...world.deps, freeBytes: async () => Promise.resolve(10) };
@@ -301,7 +393,7 @@ describe('export engine (#97)', () => {
     const privateExport = await seededWorld(1);
     const engine = new ExportEngine({
       ...privateExport.deps,
-      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 12 }],
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), keyId: 1, bytes: 12 }],
       sidecarStream: () => Readable.from(['source sidecar']),
     });
     const privateSummary = await engine.exportPhotos(['PHOTO0'], privateExport.destination, undefined, 'original', 'none');
@@ -441,7 +533,7 @@ describe('edited export (#497, ADR-0031 §6)', () => {
     const engine = new ExportEngine({
       ...world.deps,
       editHead: () => head(ROTATED),
-      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), keyId: 1, bytes: 14 }],
       sidecarStream: () => Readable.from(['source sidecar']),
     });
     const summary = await engine.exportPhotos(['PHOTO0'], world.destination, undefined, 'original', 'original', {
@@ -453,7 +545,7 @@ describe('edited export (#497, ADR-0031 §6)', () => {
     // Without edits to carry, the companion keeps the stem as before.
     const plain = new ExportEngine({
       ...world.deps,
-      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), bytes: 14 }],
+      sidecarsFor: () => [{ fileName: 'IMG_4021.xmp', contentHash: 'a'.repeat(64), keyId: 1, bytes: 14 }],
       sidecarStream: () => Readable.from(['source sidecar']),
     });
     const other = await seededWorld(1);
