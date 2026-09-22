@@ -89,6 +89,8 @@ function mockOverlook(missing: readonly (typeof MISSING)[number][]): RestoreMock
               generatedAt: '2026-07-22T19:32:00.000Z',
               photos: 3,
               totalBytes: 16_200_000,
+              excludedCount: 0,
+              excludedBytes: 0,
               albums: 1,
               compatibility: 'compatible',
               validation: 'valid',

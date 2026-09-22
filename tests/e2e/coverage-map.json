@@ -2894,6 +2894,20 @@
           "path": "tests/commands/quick-actions.test.ts"
         }
       ]
+    },
+    {
+      "id": "1125-restore-exclusion-disclosure",
+      "wiki": "Acceptance-Test-Backup-Coverage",
+      "coverage": [
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/restore/RestoreLibraryCard.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/backup/restore-coverage-disclosure.test.ts"
+        }
+      ]
     }
   ]
 }

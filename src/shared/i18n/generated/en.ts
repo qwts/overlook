@@ -809,6 +809,7 @@ export const en: Readonly<Record<string, string>> = {
   "restore.copy.libraryId": "library ID",
   "restore.copy.remotePath": "remote path {path}",
   "restore.error.details": "Details",
+  "restore.library.excluded": "{count, plural, one {# photo} other {# photos}} ({bytes}) deliberately not held by this backup; kept as placeholders when restored.",
   "restore.local.error.alreadyRegistered": "That library is already registered.",
   "restore.local.error.alreadyRegisteredHelp": "Choose the registered library from the library switcher.",
   "restore.local.error.notLibrary": "That folder isn't an Overlook library.",

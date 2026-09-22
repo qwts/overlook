@@ -31,6 +31,8 @@ export const restoreLibrarySummarySchema = z.object({
   generatedAt: z.string().datetime().nullable(),
   photos: z.number().int().nonnegative().nullable(),
   totalBytes: z.number().int().nonnegative().nullable(),
+  excludedCount: z.number().int().nonnegative().nullable(),
+  excludedBytes: z.number().int().nonnegative().nullable(),
   albums: z.number().int().nonnegative().nullable(),
   compatibility: z.enum(['compatible', 'unsupported', 'unknown']),
   validation: z.enum(['valid', 'wrong-key', 'corrupt', 'unsupported']),

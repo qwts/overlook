@@ -25,7 +25,7 @@ import { SidecarRepository } from '../db/sidecar-repository.js';
 import { ActivityRepository } from '../activity/activity-repository.js';
 import type { ThumbnailService } from '../import/thumbnail-service.js';
 import { createManifestDebtStore } from './manifest-debt.js';
-import { blobPhotos } from './backup-manifest-coverage.js';
+import { blobPhotos, coverageTotals } from './backup-manifest-coverage.js';
 import { discoverRestore, type RestoreCandidate, type RestoreDiscovery } from './restore-discovery.js';
 import {
   activateStagedLibrary,
@@ -424,14 +424,19 @@ export class RestoreEngine {
       recoveredKeys.close();
     }
     assertNotAborted(request.signal);
-    if (missing !== null && missing.length > 0) {
-      // The NOT FOUND report rides the staging→active rename as a durable
+    const coverage = coverageTotals(restoreCandidate.manifest.photos);
+    if ((missing !== null && missing.length > 0) || coverage.excludedCount > 0) {
+      // Deliberate exclusions are separate from failed objects. The report rides the staging→active rename as a durable
       // file next to library.db so it survives a later user-chosen reopen
       // (#915/#994).
       const reportPath = join(paths.stagingDir, 'restore-report.json');
       await writeFile(
         `${reportPath}.tmp`,
-        JSON.stringify({ version: 1, generation: candidate.generation, generatedAt: candidate.manifest.generatedAt, missing }, null, 2),
+        JSON.stringify(
+          { version: 1, generation: candidate.generation, generatedAt: candidate.manifest.generatedAt, coverage, missing: missing ?? [] },
+          null,
+          2,
+        ),
       );
       await rename(`${reportPath}.tmp`, reportPath);
     }
