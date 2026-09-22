@@ -1806,6 +1806,10 @@
         {
           "type": "unit-dom",
           "path": "tests/library/album-drop-placement.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/external-file-drop.test.ts"
         }
       ]
     },

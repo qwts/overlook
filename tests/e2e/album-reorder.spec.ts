@@ -59,34 +59,6 @@ test('collection drag: collapsed folder, sibling placement, refusal, focus, and 
   const row = (name: string) => page.locator('.ovl-sidebar__albumrow').filter({ has: page.getByText(name, { exact: true }) });
   const handle = (name: string) => row(name).locator('.ovl-sidebar__album-reorder');
   const drag = async (source: string, target: string, before = false): Promise<void> => {
-    const observation = await page.evaluateHandle<{ events: string[]; stop: () => void }>(`(() => {
-      const events = [];
-      const types = ['dragstart', 'dragenter', 'dragover', 'dragleave', 'drop', 'dragend'];
-      const record = (event) => {
-        if (!(event instanceof DragEvent)) return;
-        const row = event.target instanceof Element ? event.target.closest('.ovl-sidebar__albumrow') : null;
-        const label = row?.querySelector('.ovl-siderow__label')?.textContent ?? null;
-        queueMicrotask(() => {
-          if (events.length === 100) events.shift();
-          events.push(
-            JSON.stringify({
-              type: event.type,
-              label,
-              y: event.clientY,
-              prevented: event.defaultPrevented,
-              effect: event.dataTransfer?.dropEffect,
-            }),
-          );
-        });
-      };
-      for (const type of types) document.addEventListener(type, record, true);
-      return {
-        events,
-        stop: () => {
-          for (const type of types) document.removeEventListener(type, record, true);
-        },
-      };
-    })()`);
     const sourceHandle = handle(source);
     await sourceHandle.scrollIntoViewIfNeeded();
     await sourceHandle.focus();
@@ -115,18 +87,6 @@ test('collection drag: collapsed folder, sibling placement, refusal, focus, and 
       await expect(destination).toHaveClass(/ovl-sidebar__albumrow--drop-allowed/u);
     } finally {
       await page.mouse.up();
-      const events = await observation.evaluate((state) => {
-        state.stop();
-        return state.events;
-      });
-      await observation.dispose();
-      const state = {
-        albums: await tree(),
-        announcement: await page.getByTestId('screen-reader-announcer-polite').textContent(),
-      };
-      await test
-        .info()
-        .attach(`drag-${source}-to-${target}`, { body: JSON.stringify({ events, ...state }, null, 2), contentType: 'application/json' });
     }
   };
   const tree = () =>

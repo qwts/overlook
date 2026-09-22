@@ -26,7 +26,8 @@ the moved handle. A depth/cycle/placement refusal leaves the tree unchanged,
 announces the main-process reason, and retains source focus. Sole-child handles
 remain available for cross-folder dragging. The grip and its tooltip anchor
 stay inside the collection row, including RTL layouts; they must not overlap the
-next row. Keyboard reordering stays within
+next row. The application file-drop capture boundary passes internal collection
+and photo drags through to their own targets. Keyboard reordering stays within
 the sibling group.
 
 ## Executable matrix
