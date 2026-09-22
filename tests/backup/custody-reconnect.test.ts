@@ -16,7 +16,7 @@ import { sealRecoveryBootstrap } from '../../src/main/backup/recovery-bootstrap.
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryGet, run } from '../../src/main/db/sql.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 const LIBRARY_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -518,6 +518,178 @@ test('purge source capture refuses unbound clean-error custody and bounds an unr
     assert.ok(w.photos.get('P1'), 'failed capture does not remove the photo');
   } finally {
     await routing.close();
+    w.db.close();
+  }
+});
+
+function unboundRouting() {
+  const w = world();
+  run(w.db, "UPDATE sync_ledger SET status = 'synced', custody_authority_id = NULL WHERE photo_id = 'P1'");
+  run(w.db, 'DELETE FROM custody_authorities');
+  const deadlines: AbortController[] = [];
+  const routing = createCustodyRoutingRuntime({
+    db: w.db,
+    backupTarget: w.provider,
+    libraryId: () => LIBRARY_ID,
+    provider: () => w.provider,
+    backupTargetConnected: () => true,
+    status: (photoId) => w.ledger.status(photoId),
+    now: () => VERIFIED_AT,
+    timeoutSignal: (milliseconds) => {
+      assert.equal(milliseconds, 10_000);
+      const deadline = new AbortController();
+      deadlines.push(deadline);
+      return deadline.signal;
+    },
+    masterKey: () => Buffer.from(w.masterKey),
+  });
+  const authorityCount = (): number => queryGet<{ count: number }>(w.db, 'SELECT COUNT(*) AS count FROM custody_authorities')?.count ?? 0;
+  return { ...w, routing, deadlines, authorityCount };
+}
+
+for (const path of ['legacy', 'offload'] as const) {
+  test(
+    `${path} identity timeout aborts the provider, ignores late success, and permits a fresh retry (#1193)`,
+    { timeout: 10_000 },
+    async () => {
+      const w = unboundRouting();
+      const identity = await w.provider.accountIdentity();
+      await putBootstrap(w.provider, w.masterKey);
+      if (path === 'legacy') w.ledger.setStatus('P1', 'offloaded');
+      let providerSignal: AbortSignal | undefined;
+      let complete: ((value: ProviderAccountIdentity) => void) | undefined;
+      w.provider.accountIdentity = (signal?: AbortSignal) => {
+        providerSignal = signal;
+        return new Promise<ProviderAccountIdentity>((resolve) => {
+          complete = resolve;
+        });
+      };
+      try {
+        const pending = path === 'legacy' ? w.routing.integrity.legacyAuthority() : w.routing.offloadAuthority(10);
+        assert.equal(providerSignal, w.deadlines[0]?.signal);
+        assert.ok(complete);
+        assert.ok(w.deadlines[0]);
+        w.deadlines[0].abort(new Error('identity deadline'));
+        if (path === 'legacy') assert.equal(await pending, null);
+        else await assert.rejects(pending, /custody-unavailable/u);
+        assert.equal(providerSignal?.aborted, true);
+        assert.equal(w.authorityCount(), 0);
+        assert.equal(w.authorities.forPhoto('P1'), undefined);
+        complete(identity);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(w.authorityCount(), 0, 'late identity must not create custody');
+        assert.equal(w.ledger.status('P1'), path === 'legacy' ? 'offloaded' : 'synced');
+        w.provider.accountIdentity = () => Promise.resolve(identity);
+        if (path === 'legacy') {
+          const handle = await w.routing.integrity.legacyAuthority();
+          assert.equal(handle?.authority.lastVerifiedAt, VERIFIED_AT);
+          assert.equal(handle?.authority.accountId, identity.accountId);
+        } else {
+          const authorityId = await w.routing.offloadAuthority(10);
+          assert.equal(w.authorities.get(authorityId)?.accountId, identity.accountId);
+        }
+        assert.equal(w.authorityCount(), 1);
+      } finally {
+        await w.routing.close();
+        w.db.close();
+      }
+    },
+  );
+}
+
+for (const stalledCall of [2, 3]) {
+  test(
+    `legacy lookup bounds reconnect identity call ${String(stalledCall)} without granting custody (#1193)`,
+    { timeout: 10_000 },
+    async () => {
+      const w = unboundRouting();
+      const identity = await w.provider.accountIdentity();
+      await putBootstrap(w.provider, w.masterKey);
+      w.ledger.setStatus('P1', 'offloaded');
+      let calls = 0;
+      let providerSignal: AbortSignal | undefined;
+      let complete: ((value: ProviderAccountIdentity) => void) | undefined;
+      let reached: (() => void) | undefined;
+      const stalled = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      w.provider.accountIdentity = (signal?: AbortSignal) => {
+        calls += 1;
+        if (calls !== stalledCall) return Promise.resolve(identity);
+        providerSignal = signal;
+        reached?.();
+        return new Promise<ProviderAccountIdentity>((resolve) => {
+          complete = resolve;
+        });
+      };
+      try {
+        const pending = w.routing.integrity.legacyAuthority();
+        await stalled;
+        assert.equal(w.deadlines.length, 2, 'reconnect shares one deadline across identity, bootstrap, and confirmation');
+        assert.ok(w.deadlines[1]);
+        w.deadlines[1].abort(new Error('reconnect deadline'));
+        assert.equal(await pending, null);
+        assert.equal(providerSignal?.aborted, true);
+        assert.ok(complete);
+        complete(identity);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(w.authorityCount(), 0);
+        assert.equal(w.authorities.forPhoto('P1'), undefined);
+        assert.equal(w.ledger.status('P1'), 'offloaded');
+      } finally {
+        await w.routing.close();
+        w.db.close();
+      }
+    },
+  );
+}
+
+test('legacy final handle identity timeout preserves existing custody and refuses a late result (#1193)', { timeout: 10_000 }, async () => {
+  const w = unboundRouting();
+  const identity = await w.provider.accountIdentity();
+  await putBootstrap(w.provider, w.masterKey);
+  const authority = w.authorities.create({
+    providerId: w.provider.id,
+    ...identity,
+    remoteRoot: ROOT,
+    createdAt: VERIFIED_AT,
+    lastVerifiedAt: VERIFIED_AT,
+  });
+  w.ledger.setStatus('P1', 'offloaded');
+  let calls = 0;
+  let providerSignal: AbortSignal | undefined;
+  let complete: ((value: ProviderAccountIdentity) => void) | undefined;
+  let reached: (() => void) | undefined;
+  const stalled = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  w.provider.accountIdentity = (signal?: AbortSignal) => {
+    calls += 1;
+    if (calls < 4) return Promise.resolve(identity);
+    providerSignal = signal;
+    reached?.();
+    return new Promise<ProviderAccountIdentity>((resolve) => {
+      complete = resolve;
+    });
+  };
+  try {
+    const pending = w.routing.integrity.legacyAuthority();
+    await stalled;
+    assert.equal(w.deadlines.length, 3);
+    assert.ok(w.deadlines[2]);
+    assert.equal(providerSignal, w.deadlines[2].signal);
+    w.deadlines[2].abort(new Error('final identity deadline'));
+    assert.equal(await pending, null);
+    assert.equal(providerSignal?.aborted, true);
+    assert.ok(complete);
+    complete(identity);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(w.authorityCount(), 1);
+    assert.deepEqual(w.authorities.get(authority.id), authority);
+    assert.equal(w.authorities.forPhoto('P1'), undefined);
+    assert.equal(w.ledger.status('P1'), 'offloaded');
+  } finally {
+    await w.routing.close();
     w.db.close();
   }
 });

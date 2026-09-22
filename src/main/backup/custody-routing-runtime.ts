@@ -25,6 +25,10 @@ export interface CustodyRoutingRuntimeDeps {
   readonly audit?: ((line: string) => void) | undefined;
 }
 
+function custodyDeadline(deps: CustodyRoutingRuntimeDeps): AbortSignal {
+  return deps.timeoutSignal?.(10_000) ?? AbortSignal.timeout(10_000);
+}
+
 async function accountIdentity(
   provider: StorageProvider,
   signal?: AbortSignal,
@@ -126,7 +130,7 @@ class ReconnectProofCoordinator {
 
   private async prove(provider: StorageProvider): Promise<Awaited<ReturnType<typeof verifyCustodyReconnect>>> {
     this.authorities.stageReconnectVerification(provider.id);
-    const signal = this.abortController.signal;
+    const signal = AbortSignal.any([this.abortController.signal, custodyDeadline(this.deps)]);
     const identity = await accountIdentity(provider, signal);
     if (identity === null) return { ok: false, reason: 'unavailable' };
     const result = await verifyCustodyReconnect(
@@ -230,11 +234,12 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
     provider: deps.provider,
     remoteRoot,
     prepareAuthority: (authority) => reconnect.prepare(authority),
+    timeoutSignal: deps.timeoutSignal,
   });
   const custodyStatus = createCustodyStatus(deps, authorities, resolver);
   const legacyAuthority = async () => {
     if (!deps.backupTargetConnected()) return null;
-    const identity = await accountIdentity(deps.backupTarget);
+    const identity = await accountIdentity(deps.backupTarget, custodyDeadline(deps));
     if (identity === null) return null;
     let authority = authorities.verified(deps.backupTarget.id, identity.accountId, remoteRoot());
     if (authority === undefined && authorities.legacyUnboundCount().items > 0) {
@@ -248,13 +253,12 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return null;
     }
   };
-  const timeoutSignal = deps.timeoutSignal ?? ((milliseconds: number) => AbortSignal.timeout(milliseconds));
   const ensureTargetAuthority = async (): Promise<CustodyAuthority> => {
     if (!deps.backupTargetConnected()) throw new CustodyResolutionError('custody-disconnected');
     const providerId = deps.backupTarget.id;
     const root = remoteRoot();
-    // Bound the provider even if it ignores cancellation; no identity means no purge.
-    const identity = await accountIdentity(deps.backupTarget, timeoutSignal(10_000));
+    // Bound the provider even if it ignores cancellation; no identity means no new custody.
+    const identity = await accountIdentity(deps.backupTarget, custodyDeadline(deps));
     if (identity === null) throw new CustodyResolutionError('custody-unavailable');
     if (!deps.backupTargetConnected() || deps.backupTarget.id !== providerId || remoteRoot() !== root)
       throw new CustodyResolutionError('custody-unavailable');
@@ -277,14 +281,7 @@ export function createCustodyRoutingRuntime(deps: CustodyRoutingRuntimeDeps) {
       return ensureTargetAuthority();
     },
     offloadAuthority: async (bytes: number): Promise<number> => {
-      const identity = await deps.backupTarget.accountIdentity();
-      const authority = authorities.create({
-        providerId: deps.backupTarget.id,
-        accountId: identity.accountId,
-        accountLabel: identity.accountLabel,
-        remoteRoot: remoteRoot(),
-        createdAt: deps.now(),
-      });
+      const authority = await ensureTargetAuthority();
       hintCoordinator?.beforeBinding({ providerId: authority.providerId, accountId: authority.accountId }, bytes);
       return authority.id;
     },
