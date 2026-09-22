@@ -273,6 +273,36 @@ The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
 the 200K run is manual because seeding takes ~17 s.
 
+### Collections tree performance (#1105)
+
+The manual performance lane also runs `tests/perf/collections-perf.spec.ts`:
+300 collections (42 folders and 258 nonempty albums), depth six, 1,000 photos,
+and 2,064 overlapping memberships over 200 distinct photos. Seeding is untimed
+and uses the real IPC APIs. Five samples measure listing, actual sibling
+reorders, and cross-folder moves; assertions verify membership and persisted
+structure. Sidebar expansion measures a native DOM click through the next
+painted frame with the complete subtree mounted, separately from IPC latency.
+
+`test-results/collections-perf-report.json` records fixture dimensions, every
+sample, and medians; the manual workflow uploads it alongside the existing
+report. Hosted Ubuntu calibration at `0a782f27` in
+[run 35715275613](https://github.com/qwts/overlook/actions/runs/35715275613)
+passed this scenario in 57.9 seconds. Budgets are twice the slowest of five
+samples, rounded up to 25 ms, and may only tighten:
+
+| Metric                      |  Median | Slowest sample |   Budget |
+| --------------------------- | ------: | -------------: | -------: |
+| Collection listing over IPC | 59.9 ms |       128.1 ms | < 275 ms |
+| Sibling reorder over IPC    |  8.3 ms |         8.9 ms |  < 25 ms |
+| Cross-folder move over IPC  | 46.7 ms |        50.0 ms | < 100 ms |
+| Complete subtree expansion  | 66.2 ms |        74.4 ms | < 150 ms |
+
+The same run failed the separate 200K search assertion; its report also showed
+semantic-search and import values outside their existing bounds, tracked in
+[#1221](https://github.com/qwts/overlook/issues/1221). This collection baseline
+is not evidence that the complete performance lane passed. Existing ratchets
+are unchanged, and no local heavy-lane run is claimed.
+
 ### Perf budgets (#123 — RATCHETS: tighten, never loosen)
 
 The harness: `npm run test:perf` (own Playwright config, ~90 s;
