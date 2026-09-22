@@ -278,6 +278,12 @@ export class ExportEngine {
   ): Promise<ExportSummary> {
     const mode = resolvePayloadMode(format, edits);
     const photos = photoIds.map((id) => this.deps.repo.get(id));
+    // Refuse the batch before any unlocked member can cross the boundary.
+    // UI filtering is advisory; callers must not turn absent-key custody into
+    // partial output or one decryption failure per locked file (#1133).
+    if (photos.some((photo) => photo?.locked === true)) {
+      throw new ExportPreflightError('Locked photos cannot be exported. Import their missing encryption keys on this device and retry.');
+    }
     // ADR-0032 §6: the plan is compiled here, per photo, from intent. The
     // authored projection carries only disclosed fields; originals carry
     // embedded fields as they are, so a withheld embedded field refuses the

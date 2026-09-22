@@ -208,6 +208,44 @@ describe('export engine (#97)', () => {
     assert.equal(readdirSync(world.destination).length, 2, 'completed files only — no partials');
   });
 
+  for (const mode of ['original', 'baked', 'original-sidecars'] as const) {
+    test(`${mode} refuses mixed and all-locked batches before content or destination work`, async () => {
+      const world = await seededWorld(2);
+      const locked = world.rows.get('PHOTO1');
+      assert.ok(locked);
+      world.rows.set(locked.id, { ...locked, locked: true });
+      const unexpected = (): never => {
+        throw new Error('export crossed the locked-photo preflight');
+      };
+      const engine = new ExportEngine({
+        ...world.deps,
+        disclosure: unexpected,
+        blobs: { getStream: unexpected },
+        openOriginal: unexpected,
+        sidecarsFor: unexpected,
+        sidecarStream: unexpected,
+        editHead: unexpected,
+        freeBytes: unexpected,
+        exists: unexpected,
+        writeFile: unexpected,
+        bufferStream: unexpected,
+        transcodeJpeg: unexpected,
+      });
+      for (const ids of [['PHOTO0', 'PHOTO1'], ['PHOTO1']]) {
+        await assert.rejects(
+          engine.exportPhotos(ids, world.destination, undefined, 'original', 'original', { mode }),
+          (error: unknown) => error instanceof ExportPreflightError && /Locked photos.*missing encryption keys/u.test(error.message),
+        );
+      }
+      assert.deepEqual(world.progress, []);
+      assert.deepEqual(readdirSync(world.destination), []);
+      world.rows.set(locked.id, locked);
+      const result = await world.engine.exportPhotos(['PHOTO0', 'PHOTO1'], world.destination, undefined, 'original', 'original', { mode });
+      assert.equal(result.exported, 2, 'restored key availability permits a fresh export');
+      assert.equal(result.failed, 0);
+    });
+  }
+
   test('free-space preflight fails BEFORE any bytes move', async () => {
     const world = await seededWorld(2);
     const deps: ExportEngineDeps = { ...world.deps, freeBytes: async () => Promise.resolve(10) };
