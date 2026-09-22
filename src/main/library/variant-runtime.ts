@@ -1,3 +1,4 @@
+import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { buffer } from 'node:stream/consumers';
 
 import { ulid } from '../import/ulid.js';
@@ -28,6 +29,7 @@ export interface VariantRuntimeContext {
 
 export function createVariantRuntime(ctx: VariantRuntimeContext): VariantService {
   const repo = new PhotosRepository(ctx.parts.db);
+  const revisions = new EditRevisionRepository(ctx.parts.db);
   return new VariantService({
     db: ctx.parts.db,
     repo,
@@ -40,7 +42,7 @@ export function createVariantRuntime(ctx: VariantRuntimeContext): VariantService
         throw error;
       }
     },
-    regenerate: async (photo, bytes, transform) =>
+    regenerate: async (photo, bytes, transform, headId) =>
       ctx.runtime.thumbnails.regenerateFor({
         photoId: photo.id,
         bytes,
@@ -49,6 +51,7 @@ export function createVariantRuntime(ctx: VariantRuntimeContext): VariantService
         key: ctx.parts.keyStore.currentKey(),
         fileKind: photo.fileKind,
         transform,
+        isCurrent: () => (revisions.head(photo.id).head?.id ?? null) === headId,
       }),
     appVersion: ctx.appVersion,
     newId: () => ulid(),
