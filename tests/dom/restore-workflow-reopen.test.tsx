@@ -9,6 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { IntlHost } from '../../src/renderer/src/i18n/IntlHost.js';
 import { AnnouncerProvider } from '../../src/renderer/src/components/LiveAnnouncer.js';
 import type { RestoreStatusSnapshot } from '../../src/shared/backup/restore-contract.js';
+import { RestoreLibraryCard } from '../../src/renderer/src/restore/restore-library-card.js';
 import { RestoreWorkflow } from '../../src/renderer/src/restore/RestoreWorkflow.js';
 
 function idleRestoreStatus(): RestoreStatusSnapshot {
@@ -319,4 +320,45 @@ test('SettingsDialog no longer nests RestoreWorkflow, so closing Settings cannot
   const source = readFileSync(join(process.cwd(), 'src/renderer/src/settings/SettingsDialog.tsx'), 'utf8');
   assert.doesNotMatch(source, /RestoreWorkflow/u);
   assert.match(source, /onRestore\?:/u);
+});
+
+test('backup selection descriptions identify each exclusion notice without dangling references (#1125)', async () => {
+  const { restore } = installOverlook(idleRestoreStatus());
+  try {
+    container = document.createElement('div');
+    document.body.append(container);
+    await act(async () => {
+      root = createRoot(container as HTMLElement);
+      root.render(
+        <IntlHost>
+          <AnnouncerProvider>
+            {[0, 2, 3].map((excludedCount) => (
+              <RestoreLibraryCard
+                key={excludedCount}
+                library={{ ...LIBRARY, excludedCount, excludedBytes: excludedCount * 2048 }}
+                selected={false}
+                onSelect={() => undefined}
+              />
+            ))}
+          </AnnouncerProvider>
+        </IntlHost>,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+    const buttons = [...container.querySelectorAll('.ovl-restore__librarySelect')];
+    assert.equal(buttons.length, 3);
+    assert.equal(buttons[0]?.getAttribute('aria-describedby'), null);
+    const descriptions = buttons.slice(1).map((button) => {
+      const id = button.getAttribute('aria-describedby');
+      assert.ok(id);
+      const notice = document.getElementById(id);
+      assert.equal(notice?.getAttribute('data-testid'), 'restore-excluded');
+      assert.match(notice?.textContent ?? '', /deliberately not held by this backup/u);
+      return id;
+    });
+    assert.equal(new Set(descriptions).size, 2, 'each card refers to its own exclusion totals');
+  } finally {
+    restore();
+  }
 });

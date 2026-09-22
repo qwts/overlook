@@ -127,6 +127,8 @@ remains a missing-object failure, distinct from the excluded placeholder.
 
 The #1125 disclosure slice is covered by `Restore library coverage /
 DeliberatelyExcluded` and `tests/backup/restore-coverage-disclosure.test.ts`.
+The selection button exposes its exclusion count and bytes as an accessible
+description; cards without exclusions have no dangling description reference.
 Verification, confirmation, and completion retain the exclusion count and bytes;
 completion uses the activated generation, including after fallback or UI reopen.
 The durable report records exclusions separately from missing objects.
