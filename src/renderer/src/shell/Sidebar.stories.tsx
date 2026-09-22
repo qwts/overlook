@@ -541,7 +541,7 @@ export const AlbumFolderDrag: Story = {
     await expect(handle).toBeEnabled();
     await fireEvent.dragStart(handle, { dataTransfer: transfer });
     await fireEvent.dragOver(destination, { dataTransfer: transfer, clientY: center });
-    await waitFor(() => expect(canvas.getByText('Move Iceland to Archive, position 1.')).toBeVisible());
+    await waitFor(() => expect(within(destination as HTMLElement).getByText('Move Iceland to Archive, position 1.')).toBeVisible());
     await waitFor(() =>
       expect(within(document.body).getByTestId('screen-reader-announcer-polite')).toHaveTextContent('Move Iceland to Archive, position 1.'),
     );
@@ -579,7 +579,7 @@ export const AlbumFolderDrag: Story = {
     const tripsBounds = trips.getBoundingClientRect();
     await fireEvent.dragStart(movedHandle, { dataTransfer: transfer });
     await fireEvent.dragOver(trips, { dataTransfer: transfer, clientY: tripsBounds.top + tripsBounds.height / 2 });
-    await waitFor(() => expect(canvas.getByText('Move Iceland to Trips, position 1.')).toBeVisible());
+    await waitFor(() => expect(within(trips as HTMLElement).getByText('Move Iceland to Trips, position 1.')).toBeVisible());
     await fireEvent.drop(trips, { dataTransfer: transfer, clientY: tripsBounds.top + 1 });
     await fireEvent.dragEnd(movedHandle, { dataTransfer: transfer });
     await waitFor(() => expect(moveAlbum).toHaveBeenLastCalledWith({ albumId: 'a1', parentId: null, position: 0 }));
