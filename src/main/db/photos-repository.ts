@@ -318,13 +318,14 @@ export class PhotosRepository {
   }
 
   /** Background candidates retain their format/debt eligibility. Explicit IDs
-   * select only live rows for the service to recheck custody before decoding. */
+   * select only live image rows for the service to recheck custody before decoding. */
   previewRepairCandidates(contentHashes?: readonly string[], photoIds?: readonly string[]): readonly PhotoRecord[] {
     return queryAll<PhotoRow>(
       this.db,
       `${SELECT}
        WHERE p.deleted_at IS NULL
-         AND ((@photoIds IS NOT NULL AND p.id IN (SELECT value FROM json_each(@photoIds))) OR
+         AND ((@photoIds IS NOT NULL AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic', 'gif', 'webp')
+           AND p.id IN (SELECT value FROM json_each(@photoIds))) OR
            (@photoIds IS NULL AND (EXISTS (SELECT 1 FROM photo_edit_bake_debt d WHERE d.photo_id = p.id) OR p.preview_repair_pending = 1 OR
            ((p.dimension_status = 'legacy' AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic') OR p.file_kind IN ('raw', 'heic'))
              AND COALESCE(l.status, 'local') <> 'offloaded'))))

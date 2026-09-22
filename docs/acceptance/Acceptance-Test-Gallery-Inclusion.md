@@ -23,9 +23,10 @@ library with damaged files for the steps below.
 ## Explicit repair qualification
 
 Backend qualification for explicit repair (#1098) lives in
-`tests/import/targeted-preview-repair.test.ts`: a request selects one live photo,
-including a JPEG outside the background RAW/legacy scan; it does not select
-sibling variants by shared content hash. Recorded dimension failure still
+`tests/import/targeted-preview-repair.test.ts`: a request selects one live image
+(JPEG, PNG, RAW, HEIC, GIF, or WebP), including a JPEG outside the background
+RAW/legacy scan. It leaves video/audio/other media untouched without loading their
+originals and does not select sibling variants by shared content hash. Recorded dimension failure still
 requires decode when old positive dimensions and readable previews remain.
 Requests share the background pass's sequential decode queue; locked,
 offloaded, trashed, absent, and closed-library targets are not decoded. Successful

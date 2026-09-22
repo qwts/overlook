@@ -199,3 +199,28 @@ for (const state of ['locked', 'offloaded', 'trashed', 'missing', 'closed'] as c
     assert.equal(w.repo.get('root')?.previewFailure, 'corrupt');
   });
 }
+
+for (const kind of ['video', 'audio', 'other'] as const) {
+  test(`explicit image repair leaves ${kind} media untouched (#1098)`, async (t) => {
+    const w = world(t);
+    run(w.db, "UPDATE photos SET file_kind = ?, width = 0, height = 0 WHERE id = 'root'", kind);
+    w.repo.setDimensionStatus('root', 'unavailable');
+    const before = w.repo.get('root');
+    assert.deepEqual(w.repo.previewRepairCandidates(undefined, ['root']), []);
+    await w.service({ validThumbs: () => Promise.resolve(false) }).repairPhoto('root');
+    assert.deepEqual(w.plaintext, [], 'non-image originals must never be buffered by the image pipeline');
+    assert.deepEqual(w.regenerated, []);
+    assert.deepEqual(w.changes, []);
+    assert.deepEqual(w.repo.get('root'), before, 'media placeholders retain their original availability state');
+  });
+}
+
+for (const kind of ['jpeg', 'png', 'raw', 'heic', 'gif', 'webp'] as const) {
+  test(`explicit image repair retains ${kind} eligibility (#1098)`, async (t) => {
+    const w = world(t);
+    run(w.db, "UPDATE photos SET file_kind = ? WHERE id = 'root'", kind);
+    await w.service().repairPhoto('root');
+    assert.deepEqual(w.regenerated, ['root']);
+    assert.equal(w.repo.get('root')?.previewFailure, null);
+  });
+}
