@@ -82,12 +82,24 @@ test('200K perf harness: cold start, queries, scroll, import, memory', async () 
   // cold-start metric below measures the PRODUCT case, opening an existing
   // library, not the one-time synthetic insert.
   {
-    const seeder = await electron.launch({ args: ['.'], env: { ...env, OVERLOOK_SEED_SYNTHETIC: String(LIBRARY_SIZE) } });
-    const seedPage = await seeder.firstWindow();
-    await expect(seedPage.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} photos ·`, {
-      timeout: 180_000,
+    // Synthetic rows and semantic vectors are inserted before the first window.
+    // Share the existing setup allowance across launch/window/readiness; none
+    // of this time belongs to the cold-start measurement below (#1221).
+    const deadline = performance.now() + 180_000;
+    const remaining = () => Math.max(1, deadline - performance.now());
+    const seeder = await electron.launch({
+      args: ['.'],
+      env: { ...env, OVERLOOK_SEED_SYNTHETIC: String(LIBRARY_SIZE) },
+      timeout: remaining(),
     });
-    await seeder.close();
+    try {
+      const seedPage = await seeder.firstWindow({ timeout: remaining() });
+      await expect(seedPage.getByTestId('statusbar-left')).toContainText(`${LIBRARY_SIZE.toLocaleString('en-US')} photos ·`, {
+        timeout: remaining(),
+      });
+    } finally {
+      await seeder.close();
+    }
   }
 
   const launchStarted = Date.now();
