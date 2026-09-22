@@ -1,3 +1,4 @@
+import { photoCommandAvailability, LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
@@ -121,6 +122,10 @@ export function Lightbox({
   const { formatCalendarDate } = useFormats();
   const { announce } = useAnnouncer();
   const direction = directionOf(intl.locale);
+  const exportAvailable = photoCommandAvailability('photo.export', photo.locked).enabled;
+  const exportPhoto = (): void => {
+    if (exportAvailable) onExport();
+  };
   const [ephemeralState, setEphemeralState] = useState<{
     readonly photoId: string;
     readonly stage: 'fetching' | 'verifying' | 'ready' | 'released' | 'error';
@@ -257,7 +262,7 @@ export function Lightbox({
           posterSrc={posterSrc ?? thumbUrl(photo.id, 'mid')}
           chromeVisible={chrome}
           onActivity={wakeChrome}
-          onExport={onExport}
+          onExport={exportPhoto}
           onTransfer={onTransfer}
         />
       ) : (
@@ -298,7 +303,13 @@ export function Lightbox({
           {photo.fileName} — {formatCalendarDate(taken)}
         </span>
         <IconButton icon="star" label="Favorite" active={photo.favorite} onClick={onToggleFavorite} />
-        <IconButton icon="share" label="Export" onClick={onExport} />
+        <IconButton
+          icon="share"
+          label="Export"
+          disabled={!exportAvailable}
+          title={exportAvailable ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })}
+          onClick={exportPhoto}
+        />
         {onTransfer === undefined ? null : <IconButton icon="refresh-cw" label="Transfer & Sync" onClick={onTransfer} />}
         {photo.syncState === 'synced' && photo.deletedAt === null ? (
           <IconButton icon="cloud-upload" label="Offload original" onClick={onOffload} />
