@@ -18,6 +18,15 @@ required. This is the executable acceptance companion for #734 and ADR-0028.
   states have distinct actionable copy; routing and ephemeral-original tests
   prove the underlying typed state projection.
 
+Identity capture for purge/offload and the initial legacy lookup each have a
+ten-second deadline. Each reconnect proof shares a ten-second deadline across
+identity, authenticated bootstrap, and identity confirmation, combined with
+library-close/provider-change cancellation. Final handle authentication and
+identity confirmation also share a ten-second deadline. Expiry returns unavailable and
+late provider results cannot create or bind custody. The routing tests inject
+deadline signals to cover non-cooperative providers, later reconnect lookups,
+and successful retries without weakening account or namespace proof.
+
 ## Manual script
 
 1. Back up and offload one original, then open the provider disconnect dialog.
