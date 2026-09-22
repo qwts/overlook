@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { useIntl } from 'react-intl';
 
 import { commandById, type CommandId, type QuickActionCommandId } from '../../../shared/commands/registry.js';
+import { photoCommandAvailability, LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import type { PhotoRecord } from '../../../shared/library/types.js';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import type { IconName } from '../components/Icon';
@@ -59,20 +60,32 @@ export function PhotoContextMenu({
   onQuickAction,
 }: PhotoContextMenuProps): ReactElement {
   const intl = useIntl();
+  const custodyReason = (id: CommandId): string | undefined =>
+    photoCommandAvailability(id, targetCount === 1 && photo.locked).enabled
+      ? undefined
+      : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) });
   const item = (
     id: CommandId,
     icon: IconName,
     action: () => void,
     options?: Pick<ContextMenuItem, 'danger' | 'separatorBefore'>,
-  ): ContextMenuItem => ({ id, label: intl.formatMessage(commandById(id).label), icon, action, ...options });
+  ): ContextMenuItem => ({
+    id,
+    label: intl.formatMessage(commandById(id).label),
+    icon,
+    action,
+    disabledReason: custodyReason(id),
+    detail: custodyReason(id),
+    ...options,
+  });
   const quickActionIds = new Set<CommandId>(quickActions.map(({ id }) => id));
   const quickActionItems: readonly ContextMenuItem[] = quickActions.map((quickAction) => ({
     id: quickAction.id,
     label: quickAction.label,
     icon: quickAction.icon,
     action: () => onQuickAction?.(quickAction.id),
-    detail: quickAction.reason ?? quickAction.targetLabel,
-    disabledReason: quickAction.enabled ? undefined : (quickAction.reason ?? 'Unavailable'),
+    detail: custodyReason(quickAction.id) ?? quickAction.reason ?? quickAction.targetLabel,
+    disabledReason: custodyReason(quickAction.id) ?? (quickAction.enabled ? undefined : (quickAction.reason ?? 'Unavailable')),
     danger: quickAction.id === 'photo.trash',
     separatorBefore: quickAction.id === 'photo.trash',
   }));
