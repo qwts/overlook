@@ -1,6 +1,7 @@
 import { previousEditState } from '../../shared/library/edit-revert.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import { markDirty } from '../backup/sync-ledger.js';
 import { EditRevisionRepository, type EditHead } from '../db/edit-revision-repository.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
@@ -33,7 +34,7 @@ export interface PhotoEditServiceDeps {
   readonly repo: PhotosRepository;
   /** Plaintext original bytes, or null when the original is not local (offloaded). */
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
-  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform) => Promise<ThumbnailOutcome>;
+  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform, headId: string) => Promise<ThumbnailOutcome>;
   readonly appVersion: string;
   readonly newId: () => string;
   readonly now: () => string;
@@ -49,10 +50,12 @@ export interface PhotoEditServiceDeps {
 export type EditMutationKind = 'save' | 'reset' | 'revert';
 
 export class PhotoEditService {
+  private readonly bakeDebt: EditBakeDebtRepository;
   private readonly revisions: EditRevisionRepository;
 
   constructor(private readonly deps: PhotoEditServiceDeps) {
     this.revisions = new EditRevisionRepository(deps.db);
+    this.bakeDebt = new EditBakeDebtRepository(deps.db);
   }
 
   head(photoId: string): EditHead {
@@ -110,21 +113,22 @@ export class PhotoEditService {
       this.revisions.append(photoId, document);
       markDirty(this.deps.db, photoId);
     })();
-    const derivatives = await this.bake(photo, foldOperations(operations));
+    const derivatives = await this.bake(photo, foldOperations(operations), document.id);
     let availabilityChanged = false;
     let previewStateChanged = false;
-    if (derivatives === 'regenerated') {
+    if (derivatives === 'regenerated' && this.revisions.head(photoId).head?.id === document.id) {
       const currentPhoto = this.deps.repo.get(photoId);
       previewStateChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
       availabilityChanged = previewStateChanged && currentPhoto?.dimensionStatus !== 'unavailable';
       this.deps.repo.clearPreviewRepairDebt(photoId);
       this.deps.repo.setPreviewFailure(photoId, null);
+      this.bakeDebt.settle(photoId, document.id);
     }
     this.deps.changed(photoId, derivatives, availabilityChanged ? 'library' : 'none', previewStateChanged);
     return { ...this.revisions.head(photoId), changed: true, derivatives, pendingCount: this.deps.repo.pendingCount() };
   }
 
-  private async bake(photo: PhotoRecord, transform: EditTransform): Promise<EditMutationResult['derivatives']> {
+  private async bake(photo: PhotoRecord, transform: EditTransform, headId: string): Promise<EditMutationResult['derivatives']> {
     let bytes: Buffer | null;
     try {
       bytes = await this.deps.loadOriginal(photo);
@@ -133,7 +137,7 @@ export class PhotoEditService {
     }
     if (bytes === null) return 'deferred';
     try {
-      const outcome = await this.deps.regenerate(photo, bytes, transform);
+      const outcome = await this.deps.regenerate(photo, bytes, transform, headId);
       return outcome.generated ? 'regenerated' : 'failed';
     } catch {
       return 'failed';

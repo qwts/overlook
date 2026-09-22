@@ -127,9 +127,7 @@ function getLibraryService(): LibraryService {
     // blob WRITE key), wrapped by the master key per ADR-0004. A dedicated
     // db-key slot can arrive later via migration if ever needed.
     const dbKey = keyStore.resolver()(1);
-    if (dbKey === undefined) {
-      throw new Error('library key #1 is missing; cannot key the database');
-    }
+    if (dbKey === undefined) throw new Error('library key #1 is missing; cannot key the database');
     const db = openLibraryDatabase({ path: path.join(dataDir, 'library.db'), dbKey });
     registryRuntime.markOpened();
     refreshCustodyHints(db, registryRuntime);
@@ -179,6 +177,7 @@ function getLibraryService(): LibraryService {
       protected: protectedRuntime,
     };
     libraryService = new LibraryService(db, {
+      photosRestored: (hashes) => ensureMaintenanceServices().rawRepair.schedule(hashes),
       libraryChanged: (photoIds, membership, albumIds) => {
         applicationEvents.libraryChanged({
           photoIds: [...photoIds],

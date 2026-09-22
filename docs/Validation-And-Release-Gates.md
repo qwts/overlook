@@ -54,6 +54,13 @@ report timeouts distinctly from clean results, and demonstrate useful results
 within that limit on representative Overlook changes. Dependency setup may
 have a separate bound. The other eight ACA checks remain enabled.
 
+Each enabled check runs through `scripts/run-aca.ts` with a 120-second total
+execution budget. Expiry terminates its process group and exits 124 without
+publishing a partial report. Missing or malformed reports and unavailable
+judges fail the job with exit 78; a bare successful exit is insufficient.
+Complete reports retain advisory pass/warn/fail findings. Dependency setup
+is outside this execution budget.
+
 ## Documentation governance (`docs:gov`)
 
 The deterministic docs-gov check gates `docs/` and the root agent files against

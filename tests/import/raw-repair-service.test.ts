@@ -379,3 +379,27 @@ test('repair refreshes queries that observed a transient missing-preview state',
   assert.equal(missing, false);
   assert.deepEqual(memberships, ['library']);
 });
+
+test('a superseded ordinary repair does not overwrite metadata or availability from a newer edit (#1115)', async () => {
+  const bytes = Buffer.from('original');
+  const unexpected = (): never => {
+    throw new Error('superseded repair wrote stale state');
+  };
+  const repair = new RawRepairService({
+    candidates: () => [raw()],
+    isUnavailable: () => false,
+    validThumbs: () => Promise.resolve(false),
+    loadOriginal: () => Promise.resolve(bytes),
+    extractMetadata: () => Promise.resolve(EMPTY),
+    regenerate: () => Promise.resolve({ generated: false, width: null, height: null, discarded: true }),
+    repairMetadata: unexpected,
+    repairGeneratedDimensions: unexpected,
+    setDimensionStatus: unexpected,
+    setPreviewFailure: unexpected,
+    clearPreviewRepairDebt: unexpected,
+    changed: unexpected,
+  });
+  assert.deepEqual(await repair.repair(), { scanned: 1, repaired: 0, failed: 0, skipped: 1 });
+  assert.deepEqual(bytes, Buffer.alloc(bytes.length));
+  repair.close();
+});

@@ -93,16 +93,18 @@ describe('test lane runner (PR #995)', () => {
     assert.deepEqual(await spawnLane('test:nope', {}), { code: 1, signal: null });
   });
 
-  it('keeps both lanes wired into test:run through this runner', () => {
+  it('keeps unit, DOM, and isolated database-page lanes wired through this runner', () => {
     const scripts =
       (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { readonly scripts?: Record<string, string> }).scripts ?? {};
     const testRun = scripts['test:run'] ?? '';
 
     assert.match(testRun, /scripts\/run-test-lanes\.mjs/u, 'test:run must aggregate lanes, not chain them with &&');
     assert.doesNotMatch(testRun, /&&/u, '&& lets one red lane skip the lanes after it (PR #995)');
-    for (const lane of ['test:unit:run', 'test:dom:run']) {
+    for (const lane of ['test:unit:run', 'test:dom:run', 'test:db-pages:run']) {
       assert.ok(testRun.split(' ').includes(lane), `${lane} must stay in test:run`);
     }
+    assert.match(scripts['test:db-pages:run'] ?? '', /inclusion-page-performance\.bench\.js/u);
+    assert.match(scripts['test:unit:run'] ?? '', /\*\.test\.js/u, 'the parallel lane must not include the benchmark');
   });
 });
 
