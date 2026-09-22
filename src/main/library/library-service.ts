@@ -32,6 +32,7 @@ import { SemanticSearch, type SemanticEmbeddingFacade } from './semantic-search.
 export interface LibraryEvents {
   libraryChanged(photoIds: readonly string[], membership: LibraryMembershipChange, albumIds?: readonly string[]): void;
   originalClassificationChanged?(photoIds: readonly string[]): void;
+  photosRestored?(contentHashes: readonly string[]): void;
   pendingCountChanged(count: number): void;
 }
 
@@ -380,6 +381,13 @@ export class LibraryService {
 
   restorePhotos(photoIds: readonly string[]): { restored: number; changedPhotoIds: readonly string[] } {
     const restored = this.repo.restore(photoIds);
+    if (restored.length > 0) {
+      const hashes = restored.flatMap((id) => {
+        const photo = this.repo.get(id);
+        return photo === undefined ? [] : [photo.contentHash];
+      });
+      this.events.photosRestored?.([...new Set(hashes)]);
+    }
     this.events.libraryChanged(restored, 'library');
     this.events.pendingCountChanged(this.repo.pendingCount());
     return { restored: restored.length, changedPhotoIds: restored };

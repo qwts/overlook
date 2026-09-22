@@ -13,6 +13,7 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryGet, run } from '../../src/main/db/sql.js';
+import { LibraryService } from '../../src/main/library/library-service.js';
 import { PhotoEditService } from '../../src/main/library/photo-edit-service.js';
 import { createRawRepairRuntime } from '../../src/main/import/raw-repair-runtime.js';
 import { ThumbnailPool } from '../../src/main/import/thumbnail-pool.js';
@@ -116,6 +117,7 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       await repair.repair([original.contentHash]);
       assert.equal(bakeDebt.pending(id), headId, 'missing original retains debt across startup');
       assert.equal(repo.get(id)?.previewFailure, null, 'old readable previews stay available');
+      if (fileKind === 'jpeg') repo.softDelete([id]);
       await blobs.putOriginal(Readable.from([bytes]), key, id);
       run(db, "UPDATE sync_ledger SET status = 'synced', dirty = 0 WHERE photo_id = ?", id);
       if (fileKind === 'png') {
@@ -138,14 +140,35 @@ for (const fileKind of ['jpeg', 'png'] as const) {
         assert.equal(repo.previewRepairCandidates([original.contentHash]).length, 1, 'restart must retain the incomplete repair');
         repair = createRepair();
       }
-      await repair.repair([original.contentHash]);
+      if (fileKind === 'jpeg') {
+        const whileTrashed = await repair.repair([original.contentHash]);
+        assert.equal(whileTrashed.scanned, 0);
+        assert.equal(bakeDebt.pending(id), headId, 'Trash retains deferred bake debt');
+        let scheduled: Promise<unknown> | undefined;
+        const library = new LibraryService(db, {
+          libraryChanged: () => undefined,
+          pendingCountChanged: () => undefined,
+          photosRestored: (hashes) => {
+            assert.deepEqual(hashes, [original.contentHash]);
+            scheduled = repair.repair(hashes);
+          },
+        });
+        assert.equal(library.restorePhotos([id]).restored, 1);
+        assert.ok(scheduled, 'restoring from Trash must schedule repair without a restart');
+        await scheduled;
+      } else {
+        await repair.repair([original.contentHash]);
+      }
       const mid = await buffer(blobs.getThumbStream(original.contentHash, 'mid', () => key.key, id));
       const metadata = await sharp(mid).metadata();
       assert.equal(metadata.width, 40);
       assert.equal(metadata.height, 60);
       assert.equal(repo.get(id)?.width, 60, 'edited output dimensions do not replace original dimensions');
       assert.equal(repo.get(id)?.height, 40);
-      assert.equal(queryGet<{ dirty: number }>(db, 'SELECT dirty FROM sync_ledger WHERE photo_id = ?', id)?.dirty, 0);
+      assert.equal(
+        queryGet<{ dirty: number }>(db, 'SELECT dirty FROM sync_ledger WHERE photo_id = ?', id)?.dirty,
+        fileKind === 'jpeg' ? 1 : 0,
+      );
       assert.equal(bakeDebt.pending(id), undefined);
       assert.equal(revisions.head(id).head?.id, headId, 'repair never rewrites the durable edit head');
       assert.equal(revisions.head(id).history.length, 1);
