@@ -86,7 +86,9 @@ provider configured for the steps below.
     must remain unchanged by repair. Missing keys or an unsupported head retain
     debt until they can be rendered. Existing edited libraries receive one
     conservative re-bake after upgrade because earlier versions did not record
-    which head their derivatives represented.
+    which head their derivatives represented. Migration 44 upgrades schema 43
+    without changing the pending-manifest-publication column introduced by 43;
+    `edit-bake-debt.test.ts` verifies this upgrade before checking head backfill.
 
     Automated coverage: `deferred-edit-repair.test.ts` exercises JPEG/PNG
     encrypted previews through offload, save, restart, return, and maintenance;
