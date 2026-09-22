@@ -1,5 +1,15 @@
 # photos
 
+## 0.76.14
+
+### Patch Changes
+
+- f42f6cf: Reduce background duplicate-index candidate scans while retaining per-photo cancellation and yielding.
+- 4154903: Disable single-photo export and duplicate menu actions when the photo key is absent, with a Custody explanation.
+- 28223f2: Allow cloud restore to retain deliberately excluded placeholders without requiring absent original bytes, and keep them out of recovered-photo counts.
+- c01243c: Avoid recounting the embedding index solely to determine semantic-query readiness.
+- f7a205c: Upgrade the localization runtime with generated ICU argument contracts while preserving translated and rich-text messages.
+
 ## 0.76.13
 
 ### Patch Changes
