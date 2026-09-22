@@ -22,7 +22,13 @@ import { serializeBoard, type Board } from '../../src/shared/moodboard/board.js'
 function seededService(): {
   service: LibraryService;
   db: ReturnType<typeof openLibraryDatabase>;
-  events: { changed: string[][]; changedAlbums: (string[] | undefined)[]; originalChanged: string[][]; pending: number[] };
+  events: {
+    changed: string[][];
+    changedAlbums: (string[] | undefined)[];
+    originalChanged: string[][];
+    restored: string[][];
+    pending: number[];
+  };
 } {
   const db = openLibraryDatabase({
     path: join(mkdtempSync(join(tmpdir(), 'overlook-lib-')), 'library.db'),
@@ -73,6 +79,7 @@ function seededService(): {
     changed: [] as string[][],
     changedAlbums: [] as (string[] | undefined)[],
     originalChanged: [] as string[][],
+    restored: [] as string[][],
     pending: [] as number[],
   };
   const service = new LibraryService(db, {
@@ -80,6 +87,7 @@ function seededService(): {
       events.changed.push([...ids]);
       events.changedAlbums.push(albumIds === undefined ? undefined : [...albumIds]);
     },
+    photosRestored: (hashes) => events.restored.push([...hashes]),
     originalClassificationChanged: (ids) => events.originalChanged.push([...ids]),
     pendingCountChanged: (count) => events.pending.push(count),
   });
@@ -448,4 +456,18 @@ describe('LibraryService boards (#694)', () => {
     // Board edits are not photo mutations — they never fire libraryChanged.
     assert.deepEqual(events.changed, []);
   });
+});
+
+test('Trash restore schedules only restored asset hashes, once per asset (#1115)', () => {
+  const { service, db, events } = seededService();
+  try {
+    run(db, "UPDATE photos SET deleted_at = '2026-09-22', content_hash = 'hash-005' WHERE id = '01J8LIB006'");
+    const result = service.restorePhotos(['01J8LIB005', '01J8LIB006', '01J8LIB000', 'missing']);
+    assert.equal(result.restored, 2);
+    assert.deepEqual(events.restored, [['hash-005']]);
+    service.restorePhotos(['01J8LIB005', 'missing']);
+    assert.deepEqual(events.restored, [['hash-005']], 'an empty restore does not schedule maintenance');
+  } finally {
+    db.close();
+  }
 });

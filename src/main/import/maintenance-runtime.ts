@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import type { ImportRuntime } from './import-runtime.js';
@@ -86,6 +87,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     ...shared,
     repo,
     revisions: new EditRevisionRepository(parts.db),
+    bakeDebt: new EditBakeDebtRepository(parts.db),
     changed: (ids, membership) => {
       for (const id of ids) {
         invalidateThumb(id);
