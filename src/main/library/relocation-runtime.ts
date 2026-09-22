@@ -145,6 +145,9 @@ export class RelocationRuntime {
           destPath: this.options.engineDeps.registry.get(id)?.path ?? destPath,
         };
       } catch (error) {
+        // Reactivation can reload the renderer before its IPC response arrives.
+        // Keep the engine refusal available in main-process diagnostics (#1128).
+        if (isActive) console.error('[overlook] active-library relocation failed', error);
         if (error instanceof RelocationError) {
           return { ok: false, reason: error.reason, detail: error.message };
         }
