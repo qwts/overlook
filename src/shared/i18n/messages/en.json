@@ -38,6 +38,12 @@
   "album.context.actions": {
     "defaultMessage": "Actions for {album}"
   },
+  "album.drag.cycleRefused": {
+    "defaultMessage": "a folder cannot be moved into itself"
+  },
+  "album.drag.depthRefused": {
+    "defaultMessage": "albums nest at most {maxDepth} levels deep"
+  },
   "album.drag.destination": {
     "defaultMessage": "Move {name} to {destination}, position {position}."
   },
@@ -49,6 +55,9 @@
   },
   "album.drag.topLevel": {
     "defaultMessage": "top-level Albums"
+  },
+  "album.drag.unexpectedFailure": {
+    "defaultMessage": "please try again"
   },
   "album.folder.create": {
     "defaultMessage": "Create"

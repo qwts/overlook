@@ -23,7 +23,7 @@ children; the upper/lower edges target sibling placement before/after the row.
 Parent and position commit in one transaction. Destination feedback names the
 folder and position. On success the destination expands and focus returns to
 the moved handle. A depth/cycle/placement refusal leaves the tree unchanged,
-announces the main-process reason, and retains source focus. Sole-child handles
+announces the localized, typed main-process refusal reason, and retains source focus. Sole-child handles
 remain available for cross-folder dragging. The grip and its tooltip anchor
 stay inside the collection row, including RTL layouts; they must not overlap the
 next row. The application file-drop capture boundary passes internal collection
@@ -60,5 +60,6 @@ the sibling group.
 - `tests/history/history-service.test.ts`: one-command undo/redo and manifest
   debt for empty-album order changes.
 - `tests/library/album-reorder-drag.test.ts`: dedicated versioned drag payload.
+- `tests/library/album-move-ipc.test.ts`: typed cycle/depth refusals survive validated IPC, unexpected errors remain private, and refused moves publish no manifest success.
 
 - `tests/db/album-folders.test.ts` and `tests/library/album-drop-placement.test.ts`: atomic cross-parent placement/visibility rollback and pointer target resolution.

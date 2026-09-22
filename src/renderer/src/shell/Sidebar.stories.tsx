@@ -24,7 +24,9 @@ const movePhotos = fn((request: { photoIds: readonly string[] }) =>
   Promise.resolve({ moved: request.photoIds.length, alreadyInTarget: 0 }),
 );
 const reorderAlbum = fn((request: { position: number }) => Promise.resolve({ changed: true, position: request.position, total: 2 }));
-const moveAlbum = fn();
+const moveAlbum = fn<(request: Parameters<OverlookApi['albums']['move']>[0]) => Promise<{ refusal: 'cycle' | 'depth' } | undefined>>(() =>
+  Promise.resolve(undefined),
+);
 const deleteFolder = fn();
 
 /** A row reveals its actions button on hover/focus (pointer-events: none
@@ -72,7 +74,7 @@ function installStub(): void {
     movePhotos,
     reorder: reorderAlbum,
     move: (request: { albumId: string; parentId: string | null }) => {
-      moveAlbum(request);
+      void moveAlbum(request);
       return Promise.resolve({ album: listing({ id: request.albumId, name: 'Iceland', count: 214, parentId: request.parentId }) });
     },
   } as unknown as OverlookApi['albums'];
@@ -493,7 +495,8 @@ function FolderDragHarness(args: ComponentProps<typeof Sidebar>) {
   useEffect(() => {
     const previous = window.overlook;
     const move: OverlookApi['albums']['move'] = async (request) => {
-      await moveAlbum(request);
+      const result = await moveAlbum(request);
+      if (result?.refusal !== undefined) return { refusal: result.refusal };
       const source = rows.find((album) => album.id === request.albumId);
       if (source === undefined) throw new Error('missing story album');
       const moved = { ...source, parentId: request.parentId };
@@ -523,7 +526,7 @@ export const AlbumFolderDrag: Story = {
       window.localStorage.removeItem(COLLAPSE_KEY);
       window.localStorage.setItem('overlook.albumFoldersCollapsed', JSON.stringify(['f2']));
       moveAlbum.mockReset();
-      moveAlbum.mockRejectedValueOnce(new Error('albums nest at most 6 levels deep'));
+      moveAlbum.mockResolvedValueOnce({ refusal: 'depth' });
       return Promise.resolve({});
     },
   ],

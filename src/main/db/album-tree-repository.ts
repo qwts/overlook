@@ -86,8 +86,14 @@ function requireFolder(rows: Map<string, AlbumTreeRow>, parentId: string | null)
   if (parent.kind !== 'folder') throw new Error(`${parentId} is not a folder`);
 }
 
+export class AlbumTreeConstraintError extends Error {
+  constructor(readonly reason: 'cycle' | 'depth') {
+    super(reason === 'cycle' ? 'a folder cannot be moved into itself' : `albums nest at most ${String(MAX_ALBUM_DEPTH)} levels deep`);
+  }
+}
+
 function requireDepth(depth: number): void {
-  if (depth > MAX_ALBUM_DEPTH) throw new Error(`albums nest at most ${String(MAX_ALBUM_DEPTH)} levels deep`);
+  if (depth > MAX_ALBUM_DEPTH) throw new AlbumTreeConstraintError('depth');
 }
 
 /** Depth-first order: children after their parent, siblings by position.
@@ -230,8 +236,7 @@ export function moveCollection(db: BetterSqlite3.Database, albumId: string, pare
     if (node === undefined) throw new Error(`album ${albumId} does not exist`);
     requireFolder(rows, parentId);
     if (parentId !== null) {
-      if (parentId === albumId || albumDescendantIds(tree, albumId).includes(parentId))
-        throw new Error('a folder cannot be moved into itself');
+      if (parentId === albumId || albumDescendantIds(tree, albumId).includes(parentId)) throw new AlbumTreeConstraintError('cycle');
       requireDepth(depthOf(rows, parentId) + 1 + subtreeHeight(childrenOf(tree), albumId));
     }
     const parentChanged = node.parentId !== parentId;

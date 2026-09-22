@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
+  AlbumTreeConstraintError,
   deleteFolder,
   moveCollection,
   readAlbumTags,
@@ -129,9 +130,9 @@ describe('album folders (#505)', () => {
     }
     assert.throws(() => repo.createAlbum('too-deep', 'Too deep', { parentId: parent }), /nest at most/u);
     assert.throws(() => moveCollection(db, 'f0', 'f3'), /into itself/u, 'a folder cannot move under its own descendant');
-    assert.throws(() => moveCollection(db, 'f2', 'f2'), /into itself/u);
+    assert.throws(() => moveCollection(db, 'f2', 'f2'), new AlbumTreeConstraintError('cycle'));
     assert.throws(() => moveCollection(db, 'f1', 'album'), /is not a folder/u);
-    assert.throws(() => moveCollection(db, 'album', `f${String(MAX_ALBUM_DEPTH)}`), /nest at most/u);
+    assert.throws(() => moveCollection(db, 'album', `f${String(MAX_ALBUM_DEPTH)}`), new AlbumTreeConstraintError('depth'));
     assert.deepEqual(order().slice(0, 2), ['album', 'f0'], 'a rejected move leaves the tree untouched');
     assert.deepEqual(readAlbumTree(db).find((row) => row.id === 'f3')?.parentId, 'f2');
     db.close();

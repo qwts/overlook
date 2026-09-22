@@ -3,7 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import type { CommandId } from '../../../shared/commands/registry.js';
 import type { AlbumSummary } from '../../../shared/library/types.js';
-import type { CollectionKind } from '../../../shared/library/album-tree.js';
+import { MAX_ALBUM_DEPTH, type CollectionKind } from '../../../shared/library/album-tree.js';
 import { albumDropPlacement } from '../../../shared/library/album-drop-placement.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { beginAlbumReorderDrag, endAlbumReorderDrag, hasAlbumReorderDrag, readAlbumReorderDrag } from './album-reorder-drag-session';
@@ -31,6 +31,9 @@ const messages = defineMessages({
   changed: { id: 'album.reorder.listChanged', defaultMessage: 'Album list changed — move cancelled.' },
   failed: { id: 'album.reorder.failed', defaultMessage: 'Could not reorder {name}.' },
   movedTo: { id: 'album.drag.movedTo', defaultMessage: 'Moved {name} to {destination}.' },
+  cycleRefused: { id: 'album.drag.cycleRefused', defaultMessage: 'a folder cannot be moved into itself' },
+  depthRefused: { id: 'album.drag.depthRefused', defaultMessage: 'albums nest at most {maxDepth} levels deep' },
+  unexpectedFailure: { id: 'album.drag.unexpectedFailure', defaultMessage: 'please try again' },
   moveFailed: { id: 'album.drag.failed', defaultMessage: 'Could not move {name}: {reason}.' },
   destination: { id: 'album.drag.destination', defaultMessage: 'Move {name} to {destination}, position {position}.' },
   topLevel: { id: 'album.drag.topLevel', defaultMessage: 'top-level Albums' },
@@ -404,17 +407,31 @@ export function useAlbumReorder<T extends ReorderableAlbum>(
             const destination = drop.parentId === null ? intl.formatMessage(messages.topLevel) : (byId.get(drop.parentId)?.name ?? '');
             void window.overlook.albums
               .move({ albumId: album.id, parentId: drop.parentId, position: drop.position })
-              .then(({ album: moved }) => {
+              .then((result) => {
+                if ('refusal' in result) {
+                  handles.current.get(album.id)?.focus();
+                  publish(
+                    intl.formatMessage(messages.moveFailed, {
+                      name: album.name,
+                      reason:
+                        result.refusal === 'cycle'
+                          ? intl.formatMessage(messages.cycleRefused)
+                          : intl.formatMessage(messages.depthRefused, { maxDepth: MAX_ALBUM_DEPTH }),
+                    }),
+                  );
+                  return;
+                }
+                const moved = result.album;
                 onMoved?.(moved.parentId);
                 setFocusRequest({ id: moved.id, parentId: moved.parentId });
                 publish(intl.formatMessage(messages.movedTo, { name: album.name, destination }));
               })
-              .catch((error: unknown) => {
+              .catch(() => {
                 handles.current.get(album.id)?.focus();
                 publish(
                   intl.formatMessage(messages.moveFailed, {
                     name: album.name,
-                    reason: error instanceof Error ? error.message : String(error),
+                    reason: intl.formatMessage(messages.unexpectedFailure),
                   }),
                 );
               });
