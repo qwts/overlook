@@ -6,6 +6,7 @@ import { buffer } from 'node:stream/consumers';
 import {
   assertSafeRemotePath,
   ProviderError,
+  prepareProviderMutation,
   type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
@@ -175,39 +176,42 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   async put(path: string, bytes: Readable): Promise<{ bytes: number }> {
-    assertSafeRemotePath(path);
-    const payload = await buffer(bytes);
-    const existing = await this.resolveFile(path);
-    const parentPath = posix.dirname(path) === '.' ? '' : posix.dirname(path);
-    const parentId = await this.resolveFolder(parentPath, true);
-    if (parentId === null) throw new ProviderError('Google Drive could not create the destination folder', 'transient');
-    const name = posix.basename(path);
-    const metadata = {
-      name,
-      mimeType: BINARY_MIME,
-      appProperties: this.properties(googleDriveFileIdentity(this.options.libraryId, path)),
-      ...(existing === null ? { parents: [parentId] } : {}),
-    };
-    const endpoint =
-      existing === null
-        ? `${UPLOAD_API}/files?uploadType=resumable&fields=${encodeURIComponent(FILE_FIELDS)}`
-        : `${UPLOAD_API}/files/${encodeURIComponent(existing.id)}?uploadType=resumable&fields=${encodeURIComponent(FILE_FIELDS)}`;
-    const initiated = await this.authorizedFetch(endpoint, {
-      method: existing === null ? 'POST' : 'PATCH',
-      headers: {
-        'content-type': 'application/json; charset=UTF-8',
-        'x-upload-content-type': BINARY_MIME,
-        'x-upload-content-length': String(payload.length),
-      },
-      body: JSON.stringify(metadata),
+    const { payload, existing, session } = await prepareProviderMutation(async () => {
+      assertSafeRemotePath(path);
+      const payload = await buffer(bytes);
+      const existing = await this.resolveFile(path);
+      const parentPath = posix.dirname(path) === '.' ? '' : posix.dirname(path);
+      const parentId = await this.resolveFolder(parentPath, true);
+      if (parentId === null) throw new ProviderError('Google Drive could not create the destination folder', 'transient');
+      const name = posix.basename(path);
+      const metadata = {
+        name,
+        mimeType: BINARY_MIME,
+        appProperties: this.properties(googleDriveFileIdentity(this.options.libraryId, path)),
+        ...(existing === null ? { parents: [parentId] } : {}),
+      };
+      const endpoint =
+        existing === null
+          ? `${UPLOAD_API}/files?uploadType=resumable&fields=${encodeURIComponent(FILE_FIELDS)}`
+          : `${UPLOAD_API}/files/${encodeURIComponent(existing.id)}?uploadType=resumable&fields=${encodeURIComponent(FILE_FIELDS)}`;
+      const initiated = await this.authorizedFetch(endpoint, {
+        method: existing === null ? 'POST' : 'PATCH',
+        headers: {
+          'content-type': 'application/json; charset=UTF-8',
+          'x-upload-content-type': BINARY_MIME,
+          'x-upload-content-length': String(payload.length),
+        },
+        body: JSON.stringify(metadata),
+      });
+      if (!initiated.ok) throw await this.responseError(initiated, 'start resumable upload');
+      const location = initiated.headers.get('location');
+      if (location === null) throw new ProviderError('Google Drive returned no resumable upload location', 'transient');
+      const session = new URL(location);
+      if (session.protocol !== 'https:' || session.hostname !== 'www.googleapis.com') {
+        throw new ProviderError('Google Drive returned an unsafe resumable upload location', 'corrupt');
+      }
+      return { payload, existing, session };
     });
-    if (!initiated.ok) throw await this.responseError(initiated, 'start resumable upload');
-    const location = initiated.headers.get('location');
-    if (location === null) throw new ProviderError('Google Drive returned no resumable upload location', 'transient');
-    const session = new URL(location);
-    if (session.protocol !== 'https:' || session.hostname !== 'www.googleapis.com') {
-      throw new ProviderError('Google Drive returned an unsafe resumable upload location', 'corrupt');
-    }
     const uploaded = await this.uploadSession(session.toString(), payload);
     const id = idOf(uploaded) ?? existing?.id ?? null;
     const recordedBytes = bytesOf(uploaded.size);
@@ -249,7 +253,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
   async delete(path: string): Promise<void> {
     assertSafeRemotePath(path);
-    const file = await this.resolveFile(path);
+    const file = await prepareProviderMutation(() => this.resolveFile(path));
     if (file === null) return;
     // Trash, never `DELETE /files/{id}` (#750): a permanent delete bypasses
     // Drive's 30-day trash and made the #741 blob wipe unrecoverable. Every
