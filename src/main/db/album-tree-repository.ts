@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { MAX_ALBUM_DEPTH, albumDescendantIds, type CollectionKind } from '../../shared/library/album-tree.js';
+import { MAX_ALBUM_DEPTH, AlbumTreeConstraintError, albumDescendantIds, type CollectionKind } from '../../shared/library/album-tree.js';
 import { markDirty } from '../backup/sync-ledger.js';
 import { refreshAlbumMembersInAllPhotos, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
@@ -84,12 +84,6 @@ function requireFolder(rows: Map<string, AlbumTreeRow>, parentId: string | null)
   const parent = rows.get(parentId);
   if (parent === undefined) throw new Error(`folder ${parentId} does not exist`);
   if (parent.kind !== 'folder') throw new Error(`${parentId} is not a folder`);
-}
-
-export class AlbumTreeConstraintError extends Error {
-  constructor(readonly reason: 'cycle' | 'depth') {
-    super(reason === 'cycle' ? 'a folder cannot be moved into itself' : `albums nest at most ${String(MAX_ALBUM_DEPTH)} levels deep`);
-  }
 }
 
 function requireDepth(depth: number): void {

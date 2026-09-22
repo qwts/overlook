@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AlbumTreeConstraintError } from '../../src/main/db/album-tree-repository.js';
+import { AlbumTreeConstraintError } from '../../src/shared/library/album-tree.js';
 import { registerAlbumIpcHandlers } from '../../src/main/library/album-ipc.js';
 import type { LibraryService } from '../../src/main/library/library-service.js';
 import { channels } from '../../src/shared/ipc/channels.js';

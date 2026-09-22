@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
-  AlbumTreeConstraintError,
   deleteFolder,
   moveCollection,
   readAlbumTags,
@@ -18,7 +17,7 @@ import {
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryAll, run } from '../../src/main/db/sql.js';
-import { MAX_ALBUM_DEPTH } from '../../src/shared/library/album-tree.js';
+import { MAX_ALBUM_DEPTH, AlbumTreeConstraintError } from '../../src/shared/library/album-tree.js';
 import type { PhotoInsert } from '../../src/shared/library/types.js';
 
 // #505 / ADR-0030 §1, §2, §5: one collection table with `kind`, a parent that

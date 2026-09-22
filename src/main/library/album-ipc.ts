@@ -2,7 +2,7 @@ import electron from 'electron';
 
 import { channels } from '../../shared/ipc/channels.js';
 import type { IpcHandlerRegistrar, wrapHandler as createValidatedHandler } from '../../shared/ipc/registry.js';
-import { AlbumTreeConstraintError } from '../db/album-tree-repository.js';
+import { AlbumTreeConstraintError } from '../../shared/library/album-tree.js';
 import { mutateWithActivity } from '../activity/activity-publication.js';
 import type { ActivityFacade } from '../activity/activity-publication.js';
 import { albumMembershipCommand, albumOrderCommand } from '../history/command-drafts.js';
