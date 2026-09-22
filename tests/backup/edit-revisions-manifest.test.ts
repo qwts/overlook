@@ -1,3 +1,4 @@
+import { EditBakeDebtRepository } from '../../src/main/db/edit-bake-debt-repository.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +13,12 @@ import {
   type BackupManifestSnapshotV11,
 } from '../../src/main/backup/backup-manifest.js';
 import type { BackupManifestEditRevisionV11 } from '../../src/main/backup/backup-manifest-edit-revisions.js';
-import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms } from '../../src/main/backup/restore-edit-revisions.js';
+import {
+  editRevisionsMatch,
+  restoreEditRevisions,
+  restoredHeadTransforms,
+  settleRestoredEditBakes,
+} from '../../src/main/backup/restore-edit-revisions.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { EditRevisionRepository } from '../../src/main/db/edit-revision-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
@@ -209,4 +215,36 @@ describe('edit revisions in backup manifests (#493)', () => {
     assert.equal(restoredHeadTransforms(legacy.manifest).size, 0);
     db.close();
   });
+});
+
+test('restore settles only supported heads with authenticated previews, including empty edit heads (#1115)', async () => {
+  for (const operations of [[], [ROTATE]]) {
+    const source = open();
+    const target = open();
+    try {
+      const supported = source.revisions.append('P1', document(null, operations));
+      const foreign = { type: 'curve', version: 9, points: [1, 2] } as unknown as EditOperation;
+      const unsupported = source.revisions.append('P2', document(null, [foreign]));
+      const manifest = buildBackupManifestV11({
+        libraryId: LIBRARY,
+        generatedAt: AT,
+        snapshot: snapshotOf(source.photos, source.revisions.snapshot(new Set(['P1', 'P2']))),
+      });
+      restoreEditRevisions(target.db, manifest);
+      const debt = new EditBakeDebtRepository(target.db);
+      await settleRestoredEditBakes(target.db, manifest, () => Promise.resolve(false));
+      assert.equal(debt.pending('P1'), supported.id, 'a failed/missing preview retains debt');
+      const verified: string[] = [];
+      await settleRestoredEditBakes(target.db, manifest, (id) => {
+        verified.push(id);
+        return Promise.resolve(true);
+      });
+      assert.equal(debt.pending('P1'), undefined);
+      assert.equal(debt.pending('P2'), unsupported.id, 'an identity fallback does not satisfy an unsupported head');
+      assert.deepEqual(verified, ['P1']);
+    } finally {
+      source.db.close();
+      target.db.close();
+    }
+  }
 });
