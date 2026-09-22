@@ -282,9 +282,20 @@ born-dirty scale rows poisoned pending counts and doomed backups; recorded),
 measures the table below, writes `test-results/perf-report.json`, and asserts
 the budgets in `tests/perf/budgets.ts` (the enforced copy of this table).
 Cold start is measured on a RELAUNCH of the already-seeded profile — the
-product case, not the one-time synthetic insert. Budgets are ratchets and are
+product case, not the one-time synthetic insert. The untimed seeding launch,
+first window, and status-bar readiness share one 180-second setup deadline,
+with the seed process closed on success or failure (#1221). This setup allowance
+does not change any measured performance ratchet. Budgets are ratchets and are
 never loosened to absorb variance; CI numbers are indicative, while the
 recorded baselines are the dev machine's.
+
+The keyword-search sample explicitly requests `searchMode: 'keyword'`; the
+separate semantic sample uses `auto` fusion. Query measurements are archived
+before import starts, so a later timeout preserves that evidence. For CPU
+attribution, dispatch the manual workflow with `profile=true`: it profiles
+the main process during those two query samples and uploads a V8 `.cpuprofile`.
+Profiling is off by default. Profiled runs remain subject to every assertion,
+but their timings are diagnostic only and must not establish a baseline.
 
 Scroll measurements run three visible native-BrowserWindow trials at every
 zoom. The report retains each trial's frames, drops, drop rate, and worst frame;
