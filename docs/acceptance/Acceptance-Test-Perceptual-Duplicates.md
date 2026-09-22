@@ -74,3 +74,10 @@ Over the same picture (fixture `summer-landscape.jpg`), with the unrelated
    already-compared photos are not compared again.
 10. Rescan. **Expected:** every fingerprint is dropped and recomputed; the
     review answers again as rows return; the groups are the same.
+
+The background pass reads at most 64 candidate identities per database scan,
+then decodes and yields one photo at a time. Rescheduling after a library or
+derivative change discards the unprocessed batch and reacquires pending rows.
+`duplicate-index-service.test.ts` checks scan reduction, ordered processing,
+per-photo yields, cancellation, and invalidation during a batch. These unit
+contracts do not replace the full 200K performance qualification in #1221.
