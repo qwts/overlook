@@ -268,15 +268,21 @@ not stand in for hardware qualification. This proves
 native integration with a deterministic fixture, not production CLIP quality
 or accelerator performance; packaged payload checks remain separate gates.
 
-To qualify the owner-provided Windows ARM64 hardware, explicitly dispatch CI on
-an inspected commit with `purpose=diagnostics` and `qualify_dml_arm64=true`.
-The policy-gated `Native ARM64 DirectML qualification` job uses labels
-`[self-hosted, Windows, ARM64]` (currently `SURFACE-13`), asserts native ARM64
-Node and Electron, records adapter/driver names, and runs the unchanged strict native-worker
-fixture with CPU fallback disabled and its negative CPU control. It never runs
-on ordinary PR events. A successful job qualifies only that commit, runtime,
-architecture, and adapter; it does not establish x64 adapter availability or
-replace the required hosted CI result. No secret configuration is required.
+The `Native ARM64 DirectML qualification` job runs automatically after the
+reviewed policy authorizes a full suite: ready PRs, merge groups, and manual CI
+runs. It uses labels `[self-hosted, Windows, ARM64]` (currently `SURFACE-13`),
+asserts native ARM64 Node and Electron, records adapter/driver names, and runs
+the strict native-worker fixture with CPU fallback disabled and its negative
+CPU control. The stable required `CI` aggregate requires hardware success in
+each full-suite lifecycle, including PRs that reuse exact-SHA preflight evidence.
+Failed, cancelled, or skipped qualification cannot pass that gate; an offline
+runner leaves it waiting. Failed policy checks and draft PRs never select the
+laptop. Post-merge smoke retains its existing hosted Windows architecture lanes.
+For diagnostics, dispatch CI on an inspected commit with `purpose=diagnostics`;
+no separate hardware opt-in is needed. A successful job qualifies only that
+commit, runtime, architecture, and adapter; it does not establish x64 adapter
+availability or replace the remaining hosted CI results. No secret configuration
+is required.
 
 Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
 and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /

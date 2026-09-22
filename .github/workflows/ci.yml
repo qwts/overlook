@@ -11,11 +11,6 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      qualify_dml_arm64:
-        description: Explicitly qualify DirectML on the owner-provided Windows ARM64 runner
-        required: false
-        type: boolean
-        default: false
       purpose:
         description: Why the complete suite is being run manually
         required: true
@@ -368,14 +363,13 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
-  # Main always executes the source import on both native Windows architectures,
-  # even when exact merge-group evidence lets the Ubuntu suite use its short smoke.
+  # Full-suite policy approval is required before scheduling owner-provided hardware.
   dml-arm64-qualification:
     name: Native ARM64 DirectML qualification
     needs: policy
     if: >-
-      github.event_name == 'workflow_dispatch' && inputs.qualify_dml_arm64 == true &&
-      needs.policy.result == 'success' && needs.policy.outputs.run_full == 'true'
+      !cancelled() && needs.policy.result == 'success' &&
+      needs.policy.outputs.run_full == 'true'
     runs-on: [self-hosted, Windows, ARM64]
     timeout-minutes: 20
     steps:
@@ -414,6 +408,8 @@ jobs:
           OVERLOOK_DML_QUALIFICATION: '1'
         run: npm run test:embedding-native:inner
 
+  # Main always executes the source import on both native Windows architectures,
+  # even when exact merge-group evidence lets the Ubuntu suite use its short smoke.
   windows-main-smoke:
     name: Windows ${{ matrix.arch }} source import
     needs: policy
@@ -690,6 +686,7 @@ jobs:
         ci,
         windows-tests,
         windows-main-smoke,
+        dml-arm64-qualification,
         e2e-gate,
         docs-gov,
         codeql,
@@ -707,6 +704,7 @@ jobs:
           COMPLETE: ${{ needs.ci.result }}
           WINDOWS_TESTS: ${{ needs.windows-tests.result }}
           WINDOWS_MAIN: ${{ needs.windows-main-smoke.result }}
+          DML_ARM64: ${{ needs.dml-arm64-qualification.result }}
           E2E_GATE: ${{ needs.e2e-gate.result }}
           DOCS_GOV: ${{ needs.docs-gov.result }}
           CODEQL: ${{ needs.codeql.result }}
@@ -720,6 +718,7 @@ jobs:
           test "$WORKFLOW_RUNTIME" = success
           case "$MODE" in
             full)
+              test "$DML_ARM64" = success
               if [ "$PREFLIGHT_VALIDATED" = true ]; then
                 test "$PREFLIGHT" = success
               else
@@ -731,6 +730,7 @@ jobs:
               fi
               ;;
             queue|manual)
+              test "$DML_ARM64" = success
               test "$COMPLETE" = success
               test "$WINDOWS_TESTS" = success
               test "$E2E_GATE" = success

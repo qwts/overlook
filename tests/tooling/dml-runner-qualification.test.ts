@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
@@ -9,23 +10,57 @@ assert.ok(job);
 const condition = job.match(/ {4}if: >-\n([\s\S]*?)\n {4}runs-on:/u)?.[1]?.trim();
 assert.ok(condition);
 
-for (const event of ['pull_request', 'push', 'merge_group', 'workflow_dispatch']) {
-  for (const requested of [false, true]) {
-    for (const authorized of [false, true]) {
-      test(`DML runner selection: ${event}, requested=${String(requested)}, authorized=${String(authorized)}`, () => {
+for (const policyResult of ['success', 'failure', 'cancelled', 'skipped']) {
+  for (const runFull of ['true', 'false', '']) {
+    for (const cancelled of [false, true]) {
+      test(`DML runner selection: policy=${policyResult}, full=${runFull}, cancelled=${String(cancelled)}`, () => {
         const selected: unknown = runInNewContext(condition, {
-          github: { event_name: event },
-          inputs: { qualify_dml_arm64: requested },
-          needs: { policy: { result: authorized ? 'success' : 'failure', outputs: { run_full: authorized ? 'true' : 'false' } } },
+          cancelled: () => cancelled,
+          needs: { policy: { result: policyResult, outputs: { run_full: runFull } } },
         });
-        assert.equal(selected, event === 'workflow_dispatch' && requested && authorized);
+        assert.equal(selected, policyResult === 'success' && runFull === 'true' && !cancelled);
       });
     }
   }
 }
 
-test('DML hardware qualification defaults off and retains native strict controls', () => {
-  assert.match(workflow, /qualify_dml_arm64:[\s\S]*?type: boolean\n {8}default: false/u);
+const gate = workflow.split('  gate:\n')[1];
+assert.ok(gate);
+const script = gate.split('      - name: Enforce the selected lifecycle lane\n')[1]?.split('        run: |\n')[1];
+assert.ok(script);
+
+for (const mode of ['full', 'queue', 'manual']) {
+  for (const preflight of ['true', 'false']) {
+    for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+      test(`DML required gate: mode=${mode}, preflight=${preflight}, hardware=${result}`, () => {
+        const verdict = spawnSync('bash', ['-e', '-c', script], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            MODE: mode,
+            POLICY: 'success',
+            WORKFLOW_RUNTIME: 'success',
+            COMPLETE: 'success',
+            WINDOWS_TESTS: 'success',
+            E2E_GATE: 'success',
+            DOCS_GOV: 'success',
+            CODEQL: 'success',
+            PREFLIGHT: 'success',
+            PREFLIGHT_VALIDATED: preflight,
+            DML_ARM64: result,
+          },
+        });
+        assert.ifError(verdict.error);
+        assert.equal(verdict.status === 0, result === 'success', verdict.stderr);
+      });
+    }
+  }
+}
+
+test('DML hardware qualification is required and retains native strict controls', () => {
+  assert.doesNotMatch(workflow, /qualify_dml_arm64/u);
+  assert.match(gate, /needs:[\s\S]*?dml-arm64-qualification,/u);
+  assert.match(gate, /DML_ARM64: \$\{\{ needs\.dml-arm64-qualification\.result \}\}/u);
   assert.match(job, /needs: policy/u);
   assert.match(job, /runs-on: \[self-hosted, Windows, ARM64\]/u);
   assert.match(job, /persist-credentials: false/u);
