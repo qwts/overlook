@@ -371,7 +371,7 @@ describe('sidecar export (#484, ADR-0031 §6)', () => {
       repo: { get: () => photo },
       blobs: { getStream: (hash, resolve, id) => w.store.getStream(hash, resolve, id) },
       resolveKey: () => w.key.key,
-      sidecarsFor: () => [{ fileName: 'IMG_1.xmp', contentHash: sidecarPut.contentHash, bytes: XMP_BYTES.length }],
+      sidecarsFor: () => [{ fileName: 'IMG_1.xmp', contentHash: sidecarPut.contentHash, keyId: w.key.id, bytes: XMP_BYTES.length }],
       sidecarStream: (id, hash) => w.store.getSidecarStream(id, hash, () => w.key.key),
       writeFile: writeFileCleanly,
       exists: (path) => Promise.resolve(existsSync(path)),

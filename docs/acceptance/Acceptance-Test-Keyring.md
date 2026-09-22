@@ -119,3 +119,9 @@ batches in all three modes and successful retry after key availability returns.
 Command availability and bulk filtering/skip feedback remain tracked in #1133;
 this engine boundary alone does not prove those UI acceptance requirements. A
 key removed after preflight still uses the existing per-file custody failures.
+
+Original + sidecars also refuses the whole batch when a companion key is absent,
+even if the original is readable. Importing that key permits a fresh export.
+Baked, Original without companions, and metadata choices that omit imported
+companions do not require their keys. The engine test uses a separately encrypted
+companion and verifies refusal before any original opens or output is written.
