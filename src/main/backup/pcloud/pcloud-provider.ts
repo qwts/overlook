@@ -5,6 +5,7 @@ import { buffer } from 'node:stream/consumers';
 import {
   assertSafeRemotePath,
   ProviderError,
+  prepareProviderMutation,
   type ProviderAccountIdentity,
   type ProviderAuthState,
   type ProviderQuota,
@@ -152,7 +153,7 @@ export class PCloudProvider implements StorageProvider {
   private record(): PCloudAuthRecord {
     const record = this.auth();
     if (record === null) {
-      throw new ProviderError('pCloud is not connected', 'auth');
+      throw new ProviderError('pCloud is not connected', 'auth', 'provider', true);
     }
     return record;
   }
@@ -226,12 +227,15 @@ export class PCloudProvider implements StorageProvider {
   }
 
   async put(path: string, bytes: Readable): Promise<{ bytes: number }> {
-    const remote = this.remotePath(path);
-    const lastSlash = remote.lastIndexOf('/');
-    const folder = remote.slice(0, lastSlash);
-    const filename = remote.slice(lastSlash + 1);
-    await this.ensureFolder(folder);
-    const payload = await buffer(bytes);
+    const { folder, filename, payload } = await prepareProviderMutation(async () => {
+      const remote = this.remotePath(path);
+      const lastSlash = remote.lastIndexOf('/');
+      const folder = remote.slice(0, lastSlash);
+      const filename = remote.slice(lastSlash + 1);
+      await this.ensureFolder(folder);
+      const payload = await buffer(bytes);
+      return { folder, filename, payload };
+    });
     // nopartial: pCloud must never publish a half-received file — the verify
     // step would then fail the whole batch instead of retrying one blob.
     const data = await this.api('uploadfile', { path: folder, filename, nopartial: '1' }, { filename, payload });
