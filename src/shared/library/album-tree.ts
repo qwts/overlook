@@ -12,6 +12,13 @@ export type CollectionKind = 'album' | 'folder' | 'smart';
  * queries the tree relies on. */
 export const MAX_ALBUM_DEPTH = 6;
 
+/** Expected tree-rule refusals, independent of persistence and IPC transport. */
+export class AlbumTreeConstraintError extends Error {
+  constructor(readonly reason: 'cycle' | 'depth') {
+    super(reason === 'cycle' ? 'a folder cannot be moved into itself' : `albums nest at most ${String(MAX_ALBUM_DEPTH)} levels deep`);
+  }
+}
+
 export interface AlbumTreeNode {
   readonly id: string;
   readonly kind: CollectionKind;

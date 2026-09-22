@@ -449,11 +449,15 @@
   padding-inline: 34px;
 }
 
-.ovl-sidebar__album-reorder {
+/* Anchor the tooltip and grip to their row, not an inline box below it. */
+.ovl-sidebar__albumrow > .ovl-tooltip:has(> .ovl-sidebar__album-reorder) {
   position: absolute;
   z-index: 1;
-  inset-inline-start: 4px;
-  top: 2px;
+  inset-inline-start: var(--space-2);
+  top: var(--space-1);
+}
+
+.ovl-sidebar__album-reorder {
   display: flex;
   align-items: center;
   justify-content: center;
