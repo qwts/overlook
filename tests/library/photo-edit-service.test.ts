@@ -256,6 +256,7 @@ describe('photo edit service (#493)', () => {
     deferred.repo.setPreviewMissing('P1', true);
     const deferredResult = await deferred.service.save('P1', [ROTATE]);
     assert.equal(deferredResult.derivatives, 'deferred');
+    assert.equal(deferred.revisions.pendingBake('P1'), deferredResult.head?.id);
     assert.equal(deferred.service.head('P1').head?.id, deferredResult.head?.id);
     assert.equal(deferred.repo.get('P1')?.previewFailure, 'deferred-original');
     assert.equal(deferred.changes.at(-1)?.membership, 'none');
@@ -265,6 +266,7 @@ describe('photo edit service (#493)', () => {
     failing.repo.setPreviewMissing('P1', true);
     const failedResult = await failing.service.save('P1', [ROTATE]);
     assert.equal(failedResult.derivatives, 'failed');
+    assert.equal(failing.revisions.pendingBake('P1'), failedResult.head?.id);
     assert.equal(failedResult.changed, true);
     assert.equal(failing.service.head('P1').head?.id, failedResult.head?.id, 'the revision stays authoritative');
     assert.deepEqual(failing.changes, [{ photoId: 'P1', derivatives: 'failed', membership: 'none' }]);

@@ -146,8 +146,8 @@ for (const fileKind of ['jpeg', 'png'] as const) {
       assert.equal(memberships.at(-1), 'none', 'later verification only clears debt');
       assert.equal(
         await blobs.verifyThumbs(original.contentHash, () => key.key, 'root'),
-        false,
-        'repair never writes the root derivative key',
+        true,
+        'the edited root now also settles its own bake debt under its own authenticated address',
       );
     } finally {
       repair.close();

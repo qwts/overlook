@@ -33,7 +33,7 @@ export interface PhotoEditServiceDeps {
   readonly repo: PhotosRepository;
   /** Plaintext original bytes, or null when the original is not local (offloaded). */
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
-  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform) => Promise<ThumbnailOutcome>;
+  readonly regenerate: (photo: PhotoRecord, bytes: Buffer, transform: EditTransform, headId: string) => Promise<ThumbnailOutcome>;
   readonly appVersion: string;
   readonly newId: () => string;
   readonly now: () => string;
@@ -110,10 +110,11 @@ export class PhotoEditService {
       this.revisions.append(photoId, document);
       markDirty(this.deps.db, photoId);
     })();
-    const derivatives = await this.bake(photo, foldOperations(operations));
+    const derivatives = await this.bake(photo, foldOperations(operations), document.id);
     let availabilityChanged = false;
     let previewStateChanged = false;
-    if (derivatives === 'regenerated') {
+    if (derivatives === 'regenerated' && this.revisions.head(photoId).head?.id === document.id) {
+      this.revisions.settleBake(photoId, document.id);
       const currentPhoto = this.deps.repo.get(photoId);
       previewStateChanged = currentPhoto !== undefined && currentPhoto.previewFailure !== null;
       availabilityChanged = previewStateChanged && currentPhoto?.dimensionStatus !== 'unavailable';
@@ -124,7 +125,7 @@ export class PhotoEditService {
     return { ...this.revisions.head(photoId), changed: true, derivatives, pendingCount: this.deps.repo.pendingCount() };
   }
 
-  private async bake(photo: PhotoRecord, transform: EditTransform): Promise<EditMutationResult['derivatives']> {
+  private async bake(photo: PhotoRecord, transform: EditTransform, headId: string): Promise<EditMutationResult['derivatives']> {
     let bytes: Buffer | null;
     try {
       bytes = await this.deps.loadOriginal(photo);
@@ -133,7 +134,7 @@ export class PhotoEditService {
     }
     if (bytes === null) return 'deferred';
     try {
-      const outcome = await this.deps.regenerate(photo, bytes, transform);
+      const outcome = await this.deps.regenerate(photo, bytes, transform, headId);
       return outcome.generated ? 'regenerated' : 'failed';
     } catch {
       return 'failed';

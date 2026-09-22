@@ -12,7 +12,7 @@ import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 
 export interface RawRepairRuntimeOptions {
   readonly repo: PhotosRepository;
-  readonly revisions: Pick<EditRevisionRepository, 'head'>;
+  readonly revisions: Pick<EditRevisionRepository, 'head' | 'pendingBake' | 'settleBake'>;
   readonly blobs: BlobStore;
   readonly blobsReady: Promise<void>;
   readonly thumbnails: ThumbnailService;
@@ -28,6 +28,7 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
       const photo = options.repo.get(photoId);
       return photo !== undefined && (photo.previewFailure !== null || photo.dimensionStatus === 'unavailable');
     },
+    needsEditBake: (photoId) => options.revisions.pendingBake(photoId) !== undefined,
     validThumbs: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
     setPreviewMissing: (photoId, missing) => options.repo.setPreviewMissing(photoId, missing),
     loadOriginal: async (photo) => {
@@ -45,7 +46,7 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
     regenerate: async (photo, bytes, signal) => {
       const head = options.revisions.head(photo.id).head;
       if (head !== null && head.unsupported !== null) throw new Error('unsupported edit head');
-      return options.thumbnails.regenerateFor({
+      const outcome = await options.thumbnails.regenerateFor({
         photoId: photo.id,
         bytes,
         contentHash: photo.contentHash,
@@ -56,7 +57,10 @@ export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRep
         fileKind: photo.fileKind,
         transform: head?.transform ?? IDENTITY_TRANSFORM,
         signal,
+        isCurrent: () => options.revisions.head(photo.id).head?.id === head?.id,
       });
+      if (outcome.generated && head !== null) options.revisions.settleBake(photo.id, head.id);
+      return outcome;
     },
     clearPreviewRepairDebt: (photoId) => options.repo.clearPreviewRepairDebt(photoId),
     repairMetadata: (photoId, metadata) => options.repo.repairPreviewMetadata(photoId, metadata),

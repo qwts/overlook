@@ -80,7 +80,21 @@ provider configured for the steps below.
 15. Offload a photo's original, open it, rotate, and save. Confirm the amber
     toast says the thumbnails update once the original is local again, the
     revision is still saved (reopen shows the rotation), and after the
-    original returns the tile re-bakes.
+    original returns the tile re-bakes **without another save**. Repeat with valid
+    old previews, restart before bringing the original back, and confirm an
+    identical save remains a no-op while repair still happens. The history/head
+    must remain unchanged by repair. Missing keys or an unsupported head retain
+    debt until they can be rendered. Existing edited libraries receive one
+    conservative re-bake after upgrade because earlier versions did not record
+    which head their derivatives represented.
+
+    Automated coverage: `deferred-edit-repair.test.ts` exercises JPEG/PNG
+    encrypted previews through offload, save, restart, return, and maintenance;
+    `thumbnail-replacement-order.test.ts` forces an older publication to overlap
+    a newer edit and proves that both final derivative files represent the newer
+    request. The migration's local-only debt is keyed by the expected edit head;
+    successful old completions cannot clear a newer head's debt.
+
 16. Newer format: with the app closed, insert an `edit_revisions` row whose
     document carries an operation of a type or version this build does not
     know, pointed to by the photo's `edit_head`. Open the photo: confirm the

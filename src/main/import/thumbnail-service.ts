@@ -35,11 +35,18 @@ export interface ThumbnailRequest {
   /** Persisted edits baked into the derivatives (#493); absent = as imported. */
   readonly transform?: EditTransform | undefined;
   readonly signal?: AbortSignal | undefined;
+  /** Superseded edits may decode, but must not replace a newer head. */
+  readonly isCurrent?: (() => boolean) | undefined;
+}
+
+function canPublish(request: ThumbnailRequest): boolean {
+  return request.signal?.aborted !== true && request.isCurrent?.() !== false;
 }
 
 export class ThumbnailService {
+  private readonly replacements = new Map<string, Promise<unknown>>();
   constructor(
-    private readonly pool: ThumbnailPool,
+    private readonly pool: Pick<ThumbnailPool, 'generate'>,
     private readonly blobStore: BlobStore,
   ) {}
 
@@ -56,10 +63,18 @@ export class ThumbnailService {
   /** Repair path: new encrypted derivatives atomically replace missing or
    * corrupt legacy envelopes only after decode succeeds. */
   async regenerateFor(request: ThumbnailRequest): Promise<ThumbnailOutcome> {
-    return this.generateAndStore(request, true);
+    const previous = this.replacements.get(request.photoId) ?? Promise.resolve();
+    const pending = previous.catch(() => undefined).then(() => this.generateAndStore(request, true));
+    this.replacements.set(request.photoId, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.replacements.get(request.photoId) === pending) this.replacements.delete(request.photoId);
+    }
   }
 
   private async generateAndStore(request: ThumbnailRequest, replace: boolean): Promise<ThumbnailOutcome> {
+    if (!canPublish(request)) return { generated: false, width: null, height: null };
     const derivatives = await this.pool.generate(request.bytes, request.signal, request.fileKind, request.transform);
     if (derivatives === null) {
       return { generated: false, width: null, height: null };
@@ -68,7 +83,9 @@ export class ThumbnailService {
       return { generated: false, width: null, height: null, failure: derivatives.failure };
     }
     try {
+      if (!canPublish(request)) return { generated: false, width: null, height: null };
       await this.store(request, derivatives, replace);
+      if (request.isCurrent?.() === false) return { generated: false, width: null, height: null };
       return { generated: true, width: derivatives.width, height: derivatives.height };
     } finally {
       derivatives.thumb.fill(0);

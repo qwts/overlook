@@ -1,6 +1,7 @@
 import { buffer } from 'node:stream/consumers';
 
 import { BlobStoreError } from '../blobs/blob-store.js';
+import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
 import type { ImportRuntime } from '../import/import-runtime.js';
 import { ulid } from '../import/ulid.js';
@@ -27,6 +28,7 @@ export interface PhotoEditRuntimeContext {
 
 export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditService {
   const repo = new PhotosRepository(ctx.parts.db);
+  const revisions = new EditRevisionRepository(ctx.parts.db);
   return new PhotoEditService({
     db: ctx.parts.db,
     repo,
@@ -39,7 +41,7 @@ export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditS
         throw error;
       }
     },
-    regenerate: async (photo, bytes, transform) =>
+    regenerate: async (photo, bytes, transform, headId) =>
       ctx.runtime.thumbnails.regenerateFor({
         photoId: photo.id,
         bytes,
@@ -48,6 +50,7 @@ export function createPhotoEditRuntime(ctx: PhotoEditRuntimeContext): PhotoEditS
         key: ctx.parts.keyStore.currentKey(),
         fileKind: photo.fileKind,
         transform,
+        isCurrent: () => revisions.head(photo.id).head?.id === headId,
       }),
     appVersion: ctx.appVersion,
     newId: () => ulid(),

@@ -12,6 +12,7 @@ export interface RawRepairSummary {
 export interface RawRepairServiceOptions {
   readonly candidates: (contentHashes?: readonly string[]) => readonly PhotoRecord[];
   readonly isUnavailable: (photoId: string) => boolean;
+  readonly needsEditBake?: ((photoId: string) => boolean) | undefined;
   readonly validThumbs: (photo: PhotoRecord) => Promise<boolean>;
   readonly loadOriginal: (photo: PhotoRecord) => Promise<Buffer | null>;
   readonly extractMetadata: (bytes: Buffer, fileKind: PhotoRecord['fileKind']) => Promise<ExtractedMetadata>;
@@ -91,13 +92,14 @@ export class RawRepairService {
       const wasUnavailable = this.options.isUnavailable(photo.id);
       let bytes: Buffer | null = null;
       try {
+        const needsEditBake = this.options.needsEditBake?.(photo.id) ?? false;
         const thumbsReady = await this.options.validThumbs(photo);
         if (this.controller.signal.aborted) break;
         if (this.options.setPreviewMissing?.(photo.id, !thumbsReady) === true) {
           changed.add(photo.id);
           if (wasUnavailable !== this.options.isUnavailable(photo.id)) membershipChanged = true;
         }
-        if (thumbsReady && photo.width > 0 && photo.height > 0 && photo.dimensionStatus !== 'legacy') {
+        if (!needsEditBake && thumbsReady && photo.width > 0 && photo.height > 0 && photo.dimensionStatus !== 'legacy') {
           const failureChanged = this.options.setPreviewFailure(photo.id, null);
           const debtCleared = this.options.clearPreviewRepairDebt?.(photo.id) ?? false;
           if (failureChanged || debtCleared) {
@@ -117,16 +119,20 @@ export class RawRepairService {
         if (this.controller.signal.aborted) break;
         let outcome: ThumbnailOutcome | null = null;
         const needsDimensionRepair = photo.dimensionStatus === 'legacy' || photo.width <= 0 || photo.height <= 0;
-        if (!thumbsReady || needsDimensionRepair) {
+        if (!thumbsReady || needsDimensionRepair || needsEditBake) {
           outcome = await this.options.regenerate(photo, bytes, this.controller.signal);
         }
         if (this.controller.signal.aborted) break;
+        if (needsEditBake && outcome?.generated !== true) {
+          failed += 1;
+          continue; // Keep the current availability and durable debt on failure/supersession.
+        }
         const repairedMetadata = this.options.repairMetadata(photo.id, metadata);
         const repairedDimensions =
           outcome?.width !== null && outcome?.width !== undefined && outcome.height !== null
             ? this.options.repairGeneratedDimensions(photo.id, outcome.width, outcome.height)
             : this.options.setDimensionStatus(photo.id, 'unavailable');
-        const repairedThumbs = (!thumbsReady || needsDimensionRepair) && outcome?.generated === true;
+        const repairedThumbs = (!thumbsReady || needsDimensionRepair || needsEditBake) && outcome?.generated === true;
         const failure = !thumbsReady && outcome?.generated !== true ? (outcome?.failure ?? 'decode-failed') : null;
         const debtCleared = outcome?.generated === true ? (this.options.clearPreviewRepairDebt?.(photo.id) ?? false) : false;
         const failureChanged = this.options.setPreviewFailure(photo.id, failure);
