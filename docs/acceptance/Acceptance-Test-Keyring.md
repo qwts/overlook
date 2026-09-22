@@ -145,3 +145,17 @@ single-photo policy. A locked photo shows its Custody reason and neither
 callback starts pixel work. Lightbox Favorite and Inspector Promote remain
 metadata actions. Coverage: `LightboxCustody.stories.tsx` → `LockedExport` and
 `Inspector.stories.tsx` → `LockedDuplicate`.
+
+## Complete selection custody query (#1235 prerequisite)
+
+`library:photo-key-selection` resolves every requested ID against the active
+ordinary-library view, independent of renderer paging. It preserves requested
+order, deduplicates IDs, and returns readable IDs with distinct locked and
+unavailable counts. It reads key-presence facts in one query without loading
+photo metadata. Unknown and protected-migration-hidden IDs are unavailable.
+This is a read-only snapshot, not authorization for a later pixel operation.
+
+`tests/library/library-service.test.ts` exercises its schema-validated boundary,
+mixed offscreen IDs, duplicate skip counting, missing IDs, and key return.
+Native-menu and selection-pill integration, invocation revalidation, and skip
+feedback remain required by #1235; this query alone does not complete #1133.
