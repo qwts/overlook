@@ -564,7 +564,8 @@ export const LockedDuplicate: Story = {
     const action = section.getByRole('button', { name: 'Duplicate' });
     await expect(action).toBeDisabled();
     await expect(section.getByText('LOCKED — KEY #7 IS NOT ON THIS DEVICE')).toBeVisible();
-    await userEvent.click(action);
+    // Native activation verifies disabled semantics without a pointer helper rejecting the CSS guard.
+    action.click();
     await expect(duplicate).not.toHaveBeenCalled();
     await expect(section.getByRole('button', { name: /Promote/u })).toBeEnabled();
   },

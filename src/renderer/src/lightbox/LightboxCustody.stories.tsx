@@ -17,7 +17,8 @@ export const LockedExport: Story = {
     const action = canvas.getByRole('button', { name: 'Export' });
     await expect(action).toBeDisabled();
     await expect(action).toHaveAttribute('title', 'LOCKED — KEY #7 IS NOT ON THIS DEVICE');
-    await userEvent.click(action);
+    // Native activation verifies disabled semantics without a pointer helper rejecting the CSS guard.
+    action.click();
     await expect(args.onExport).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole('button', { name: 'Favorite' }));
     await expect(args.onToggleFavorite).toHaveBeenCalledOnce();
