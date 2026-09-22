@@ -32,6 +32,7 @@ test('DML hardware qualification defaults off and retains native strict controls
   assert.match(job, /architecture: arm64/u);
   assert.match(job, /node scripts\/assert-platform\.mjs win32 arm64/u);
   assert.match(job, /run: npm run test:embedding-native:inner/u);
+  assert.match(job, /OVERLOOK_DML_QUALIFICATION: '1'/u);
   const tests = readFileSync('tests/embedding/native-worker.test.ts', 'utf8');
   assert.match(tests, /CPU rejection with fallback disabled/u);
   assert.match(tests, /CPU fallback cannot qualify a platform accelerator/u);

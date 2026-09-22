@@ -410,6 +410,8 @@ jobs:
         run: npx --no-install electron scripts/assert-platform.mjs win32 arm64
       - name: Qualify native worker without CPU substitution
         timeout-minutes: 5
+        env:
+          OVERLOOK_DML_QUALIFICATION: '1'
         run: npm run test:embedding-native:inner
 
   windows-main-smoke:

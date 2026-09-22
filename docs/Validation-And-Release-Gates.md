@@ -259,7 +259,12 @@ cannot qualify an accelerator. Accelerator qualification sets ONNX Runtime's
 `session.disable_cpu_ep_fallback` so CPU-assigned graph nodes fail session
 creation; a negative CPU control proves the native binding enforces it. Normal
 application sessions retain fallback. This runs through
-the normal unit-test lane on local macOS and hosted Linux/Windows. It proves
+the normal unit-test lane on local macOS and hosted Linux/Windows. Ordinary
+Windows coverage verifies CPU inference and normal provider fallback; its strict
+DML case reports an explicit hardware-lane skip. The dedicated hardware job sets
+`OVERLOOK_DML_QUALIFICATION=1`, requiring DML inference without CPU substitution
+and running that strict case. Hosted display-adapter availability therefore does
+not stand in for hardware qualification. This proves
 native integration with a deterministic fixture, not production CLIP quality
 or accelerator performance; packaged payload checks remain separate gates.
 

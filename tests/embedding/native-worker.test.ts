@@ -10,6 +10,9 @@ import { EMBEDDING_DIMENSIONS } from '../../src/main/db/embedding-repository.js'
 import { EmbeddingPool } from '../../src/main/embedding/embedding-pool.js';
 import { executionProviders } from '../../src/main/embedding/embedding-runtime.js';
 
+const qualifyDml = process.env['OVERLOOK_DML_QUALIFICATION'] === '1';
+if (qualifyDml) assert.equal(process.platform, 'win32', 'DML qualification requires a Windows runtime');
+
 async function solidImage(value: number): Promise<Buffer> {
   return sharp({ create: { width: 4, height: 4, channels: 3, background: { r: value, g: value, b: value } } })
     .png()
@@ -26,7 +29,7 @@ for (const [name, providers] of [
       workerUrl: new URL('../../src/main/embedding/embedding-worker.js', import.meta.url),
       modelPath: resolve('tests/fixtures/embedding/native-embedding.onnx'),
       providers,
-      disableCpuFallback: name === 'platform provider preference' && process.platform !== 'linux',
+      disableCpuFallback: name === 'platform provider preference' && (process.platform === 'darwin' || qualifyDml),
     });
     try {
       const expected = new Int8Array(EMBEDDING_DIMENSIONS);
@@ -56,33 +59,43 @@ for (const [name, providers, expected, disableCpuFallback] of [
   ['unavailable provider fallback', ['overlook-unavailable-test-provider', 'cpu'], 'cpu', false],
   ['CPU rejection with fallback disabled', ['cpu'], null, true],
 ] as const) {
-  test(`native embedding worker reports the selected ${name} (#1170)`, { timeout: 20_000 }, async () => {
-    const worker = new Worker(new URL('../../src/main/embedding/embedding-worker.js', import.meta.url), {
-      workerData: {
-        modelPath: resolve('tests/fixtures/embedding/native-embedding.onnx'),
-        providers,
-        disableCpuFallback,
-      } satisfies EmbeddingWorkerData,
-    });
-    const exited = once(worker, 'exit');
-    try {
-      const response = new Promise<EmbeddingWorkerResponse>((resolveResponse, reject) => {
-        worker.once('message', resolveResponse);
-        worker.once('error', reject);
-        worker.once('exit', (code) => reject(new Error(`worker exited before its response: ${String(code)}`)));
+  test(
+    `native embedding worker reports the selected ${name} (#1170)`,
+    {
+      timeout: 20_000,
+      skip:
+        name === 'platform provider' && process.platform === 'win32' && !qualifyDml
+          ? 'Strict DML qualification runs on the hardware runner with OVERLOOK_DML_QUALIFICATION=1'
+          : false,
+    },
+    async () => {
+      const worker = new Worker(new URL('../../src/main/embedding/embedding-worker.js', import.meta.url), {
+        workerData: {
+          modelPath: resolve('tests/fixtures/embedding/native-embedding.onnx'),
+          providers,
+          disableCpuFallback,
+        } satisfies EmbeddingWorkerData,
       });
-      worker.postMessage({ jobId: 1, kind: 'image', bytes: new Uint8Array(await solidImage(255)) } satisfies EmbeddingWorkerRequest);
-      const result = await response;
-      if (expected === null) {
-        assert.equal(result.ok, false, 'the native binding must enforce the CPU fallback option');
-        if (!result.ok) assert.match(result.error, /CPU EP.*(?:disabled fallback|fallback.*disabled)/su);
-      } else {
-        assert.equal(result.ok, true, result.ok ? undefined : result.error);
-        if (result.ok) assert.equal(result.provider, expected, 'CPU fallback cannot qualify a platform accelerator');
+      const exited = once(worker, 'exit');
+      try {
+        const response = new Promise<EmbeddingWorkerResponse>((resolveResponse, reject) => {
+          worker.once('message', resolveResponse);
+          worker.once('error', reject);
+          worker.once('exit', (code) => reject(new Error(`worker exited before its response: ${String(code)}`)));
+        });
+        worker.postMessage({ jobId: 1, kind: 'image', bytes: new Uint8Array(await solidImage(255)) } satisfies EmbeddingWorkerRequest);
+        const result = await response;
+        if (expected === null) {
+          assert.equal(result.ok, false, 'the native binding must enforce the CPU fallback option');
+          if (!result.ok) assert.match(result.error, /CPU EP.*(?:disabled fallback|fallback.*disabled)/su);
+        } else {
+          assert.equal(result.ok, true, result.ok ? undefined : result.error);
+          if (result.ok) assert.equal(result.provider, expected, 'CPU fallback cannot qualify a platform accelerator');
+        }
+      } finally {
+        worker.postMessage({ shutdown: true });
+        await exited;
       }
-    } finally {
-      worker.postMessage({ shutdown: true });
-      await exited;
-    }
-  });
+    },
+  );
 }
