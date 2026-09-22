@@ -25,7 +25,7 @@ export interface RawRepairRuntimeOptions {
 
 export function createRawRepairRuntime(options: RawRepairRuntimeOptions): RawRepairService {
   return new RawRepairService({
-    candidates: (hashes) => options.repo.previewRepairCandidates(hashes),
+    candidates: (hashes, photoIds) => options.repo.previewRepairCandidates(hashes, photoIds),
     isUnavailable: (photoId) => {
       const photo = options.repo.get(photoId);
       return photo !== undefined && (photo.previewFailure !== null || photo.dimensionStatus === 'unavailable');
