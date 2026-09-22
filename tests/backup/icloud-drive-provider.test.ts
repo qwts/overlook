@@ -33,6 +33,31 @@ function providerError(kind: ProviderError['kind']): (error: unknown) => boolean
   return (error) => error instanceof ProviderError && error.kind === kind;
 }
 
+test('iCloud preparation refusal differs from an interrupted native replacement', async () => {
+  const state = world();
+  try {
+    state.bridge.setAvailable(false);
+    await assert.rejects(
+      state.provider.put('recovery/bootstrap.ovrb', Readable.from([PAYLOAD])),
+      (error: unknown) => error instanceof ProviderError && error.kind === 'auth' && error.mutationNotStarted,
+    );
+    assert.equal(
+      state.bridge.calls.some((call) => call.startsWith('replace:')),
+      false,
+    );
+    state.bridge.setAvailable(true);
+    assert.deepEqual(await state.provider.put('recovery/bootstrap.ovrb', Readable.from([PAYLOAD])), { bytes: PAYLOAD.length });
+    state.bridge.arm('interrupt-after-replace');
+    await assert.rejects(
+      state.provider.put('recovery/bootstrap.ovrb', Readable.from([PAYLOAD])),
+      (error: unknown) => error instanceof ProviderError && !error.mutationNotStarted,
+    );
+    assert.ok([...state.bridge.objects.values()].some((object) => object.bytes.equals(PAYLOAD)));
+  } finally {
+    rmSync(state.temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 describe('iCloud Drive StorageProvider adapter (#657)', () => {
   test('captures the pinned account subject, detects replacement, and rejects unavailable identity', async () => {
     const state = world();
