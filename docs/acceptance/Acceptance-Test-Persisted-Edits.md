@@ -80,7 +80,29 @@ provider configured for the steps below.
 15. Offload a photo's original, open it, rotate, and save. Confirm the amber
     toast says the thumbnails update once the original is local again, the
     revision is still saved (reopen shows the rotation), and after the
-    original returns the tile re-bakes.
+    original returns the tile re-bakes **without another save**. Repeat with valid
+    old previews, restart before bringing the original back, and confirm an
+    identical save remains a no-op while repair still happens. The history/head
+    must remain unchanged by repair. Missing keys or an unsupported head retain
+    debt until they can be rendered. Existing edited libraries receive one
+    conservative re-bake after upgrade because earlier versions did not record
+    which head their derivatives represented. Repeat with a deferred photo in
+    Trash when its original returns: restoring it (including Undo Trash) must
+    schedule the bake without restarting; while trashed it must retain debt.
+    Migration 44 upgrades schema 43
+    without changing the pending-manifest-publication column introduced by 43;
+    `edit-bake-debt.test.ts` verifies this upgrade before checking head backfill.
+
+    Automated coverage: `deferred-edit-repair.test.ts` exercises JPEG/PNG
+    encrypted previews through offload, save, restart, return, and maintenance;
+    `thumbnail-replacement-order.test.ts` forces an older publication to overlap
+    a newer edit and proves that both final derivative files represent the newer
+    request. The migration's local-only debt is keyed by the expected edit head;
+    successful old completions cannot clear a newer head's debt. Re-baking only
+    local derivatives must preserve original dimensions and must not queue an
+    unchanged original for backup. Successful duplicate and restore bakes settle
+    their supported head's debt immediately; failed or unsupported bakes retain it.
+
 16. Newer format: with the app closed, insert an `edit_revisions` row whose
     document carries an operation of a type or version this build does not
     know, pointed to by the photo's `edit_head`. Open the photo: confirm the

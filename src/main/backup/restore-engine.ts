@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 
 import { BlobStore, BlobStoreError } from '../blobs/blob-store.js';
 import { ProtectedBlobStore, ProtectedBlobStoreError } from '../blobs/protected-blob-store.js';
-import { KeyStore, type SafeStorageLike, type WrappedKeyRecord } from '../crypto/keystore.js';
+import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
 import { installRecoveredMaster } from '../crypto/recovery.js';
 import { createDecryptStream } from '../crypto/envelope.js';
 import { openLibraryDatabase } from '../db/database.js';
@@ -17,7 +17,7 @@ import { PhotosRepository } from '../db/photos-repository.js';
 import { boardsSnapshot, restoreBoards } from '../db/board-repository.js';
 import { galleryPolicyMatches, restoreGalleryPolicy } from './restore-gallery-policy.js';
 import { albumVisibilityMatches, restoreAlbumVisibility } from './restore-album-visibility.js';
-import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms } from './restore-edit-revisions.js';
+import { editRevisionsMatch, restoreEditRevisions, restoredHeadTransforms, settleRestoredEditBakes } from './restore-edit-revisions.js';
 import { provenanceMatches, restoreProvenance } from './restore-provenance.js';
 import { bakeRestoredDerivatives, manifestDerivativeKey, restoreVariantFamilies, variantFamiliesMatch } from './restore-variants.js';
 import { ProtectedRecoveryRepository } from '../db/protected-recovery-repository.js';
@@ -419,7 +419,7 @@ export class RestoreEngine {
     try {
       await this.restoreThumbnails(paths, store, recoveredKeys, discovery, candidate, checkpoint, missing, request.signal);
       this.emit('rebuilding', 0, restoreCandidate.manifest.photos.length, null);
-      await this.rebuildCatalog(paths, store, protectedStore, recoveredKeys.exportWrappedKeys(), discovery, restoreCandidate, missing);
+      await this.rebuildCatalog(paths, store, protectedStore, recoveredKeys, discovery, restoreCandidate, missing);
     } finally {
       recoveredKeys.close();
     }
@@ -772,7 +772,7 @@ export class RestoreEngine {
     paths: RestorePaths,
     store: BlobStore,
     protectedStore: ProtectedBlobStore,
-    recoveredKeys: readonly WrappedKeyRecord[],
+    recoveredKeys: KeyStore,
     discovery: RestoreDiscovery,
     candidate: RestoreCandidate,
     missing: MissingObjects,
@@ -786,7 +786,7 @@ export class RestoreEngine {
     const db = openLibraryDatabase({ path: dbPath, dbKey });
     try {
       const repo = new PhotosRepository(db);
-      repo.restoreManifest(candidate.manifest, recoveredKeys);
+      repo.restoreManifest(candidate.manifest, recoveredKeys.exportWrappedKeys());
       // The restored library starts owing a manifest generation (#741): the
       // provider selected after relaunch may not be the restore source, and
       // the first run's publication preflight reconciles the difference —
@@ -872,6 +872,10 @@ export class RestoreEngine {
           throw new RestoreError('corrupt', 'rebuilt activity history does not match the verified projection');
         }
       }
+      await settleRestoredEditBakes(db, candidate.manifest, async (photoId) => {
+        const photo = repo.get(photoId);
+        return photo !== undefined && (await store.verifyThumbs(photo.derivativeKey, recoveredKeys.resolver(), photoId));
+      });
       if (!galleryPolicyMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored gallery policy mismatch');
       if (!albumVisibilityMatches(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored album visibility mismatch');
       if (!editRevisionsMatch(db, candidate.manifest)) throw new RestoreError('corrupt', 'restored edit revisions mismatch');

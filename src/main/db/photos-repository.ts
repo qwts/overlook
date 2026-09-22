@@ -324,7 +324,7 @@ export class PhotosRepository {
       this.db,
       `${SELECT}
        WHERE p.deleted_at IS NULL
-         AND (p.preview_repair_pending = 1 OR
+         AND (EXISTS (SELECT 1 FROM photo_edit_bake_debt d WHERE d.photo_id = p.id) OR p.preview_repair_pending = 1 OR
            ((p.dimension_status = 'legacy' AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic') OR p.file_kind IN ('raw', 'heic'))
              AND COALESCE(l.status, 'local') <> 'offloaded'))
          AND (@hashes IS NULL OR p.content_hash IN (SELECT value FROM json_each(@hashes)))
