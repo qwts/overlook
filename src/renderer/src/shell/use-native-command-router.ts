@@ -214,7 +214,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         }
         case 'photo.export':
-          onExport(targetIds);
+          onExport(targetIds, 'live');
           return;
         case 'photo.duplicate':
           duplicatePhotos(dispatch, targetIds, intl);

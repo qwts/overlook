@@ -1191,6 +1191,7 @@ interface InterpolatedMessageArguments {
   "album.tags.title": { "name": MessageValue };
   "album.visibility.elsewhere": { "count": number };
   "album.visibility.open": { "album": MessageValue };
+  "commands.photo.keys.skipped": { "locked": number; "missing": number };
   "copyableValue.copied": { "label": MessageValue };
   "copyableValue.copy": { "label": MessageValue };
   "copyableValue.failed": { "label": MessageValue };

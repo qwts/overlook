@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactElement } from 'react';
+import { useState, useRef, useLayoutEffect, type ReactElement } from 'react';
 import { useIntl } from 'react-intl';
 import { photoCommandTargets } from '../commands/photo-command-targets.js';
 
@@ -15,7 +15,7 @@ export interface BoardExportSelection {
 
 export interface ExportDialogController {
   readonly dialog: ReactElement | null;
-  readonly openPhotos: (photoIds: readonly string[]) => void;
+  readonly openPhotos: (photoIds: readonly string[], target?: 'snapshot' | 'live') => void;
   readonly openBoard: (request: BoardExportSelection) => void;
   readonly setPhotoIds: (photoIds: readonly string[] | null) => void;
   readonly setAllPhotos: (allPhotos: boolean) => void;
@@ -24,33 +24,41 @@ export interface ExportDialogController {
 export function useExportDialog(): ExportDialogController {
   const state = useAppState();
   const intl = useIntl();
-  const request = useRef(0);
-  useEffect(
+  const requestRef = useRef(0);
+  const targetKey = JSON.stringify(state.lightboxId === null ? [...state.selection] : [state.lightboxId]);
+  const liveTargetRevisionRef = useRef(0);
+  useLayoutEffect(() => {
+    liveTargetRevisionRef.current++;
+  }, [targetKey]);
+  useLayoutEffect(
     () => () => {
-      request.current++;
+      requestRef.current++;
     },
-    [state.selection, state.lightboxId, state.protectedAlbum],
+    [state.protectedAlbum],
   );
   const dispatch = useAppDispatch();
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<readonly string[] | null>(null);
   const [allPhotos, setAllPhotos] = useState(false);
   const [boardSelection, setBoardSelection] = useState<BoardExportSelection | null>(null);
   const close = (): void => {
-    request.current++;
+    requestRef.current++;
     setAllPhotos(false);
     setSelectedPhotoIds(null);
     setBoardSelection(null);
     dispatch({ type: 'dialog/set', dialog: 'export', open: false });
   };
   const setPhotoIds = (next: readonly string[] | null): void => {
-    request.current++;
+    requestRef.current++;
     setBoardSelection(null);
     setSelectedPhotoIds(next);
   };
-  const openPhotos = (next: readonly string[]): void => {
-    const invocation = ++request.current;
+  const openPhotos = (next: readonly string[], target: 'snapshot' | 'live' = 'snapshot'): void => {
+    const invocation = ++requestRef.current;
+    const targetRevision = liveTargetRevisionRef.current;
     void photoCommandTargets('photo.export', next, intl).then(({ photoIds: eligible, notice }) => {
-      if (request.current !== invocation) return;
+      // Context menus restore the prior selection after invoking their captured
+      // targets. Only selection-bound commands follow later selection changes.
+      if (requestRef.current !== invocation || (target === 'live' && liveTargetRevisionRef.current !== targetRevision)) return;
       if (notice !== null) dispatch({ type: 'toast/shown', toast: { title: notice, tone: 'amber' } });
       if (eligible.length === 0) return;
       setPhotoIds(eligible);
@@ -59,7 +67,7 @@ export function useExportDialog(): ExportDialogController {
     });
   };
   const openBoard = (selection: BoardExportSelection): void => {
-    request.current++;
+    requestRef.current++;
     setSelectedPhotoIds(null);
     setAllPhotos(false);
     setBoardSelection(selection);

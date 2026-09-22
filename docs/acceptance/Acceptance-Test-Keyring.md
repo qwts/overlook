@@ -172,8 +172,12 @@ message alongside the completion result. Repeated IDs count once. Unknown or
 protected-migration-hidden IDs are unavailable, not readable ordinary photos.
 Native dispatch targets the focused lightbox photo before the grid selection.
 
-Change selection or open another workflow while the custody query is pending:
-its stale result must not open Export. An earlier enabled snapshot cannot bypass
+Change the live selection or open another workflow while its custody query is
+pending: the stale result must not open Export. Context-menu Export instead
+retains the menu's explicit target snapshot when the grid restores its prior
+selection. Verify this with an unselected photo while another photo is selected;
+Export must open for the context target, without replacing the prior selection.
+A newer export request or protected-scope transition cancels an older request. An earlier enabled snapshot cannot bypass
 the invocation-time query; query failure keeps pixel operations closed. The
 main export preflight remains authoritative if custody changes again afterward.
 

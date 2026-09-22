@@ -76,7 +76,7 @@ export function LibraryGridView({
   readonly knownTotal: number | null;
   readonly activeAlbum: AlbumSummary | null;
   readonly platform: CommandPlatform;
-  readonly onExport: (photoIds: readonly string[]) => void;
+  readonly onExport: (photoIds: readonly string[], target?: 'snapshot' | 'live') => void;
   readonly onOffload: (photoIds: readonly string[], clearSelection?: boolean) => void;
   readonly onKeepOnDevice: (photoIds: readonly string[]) => void;
   readonly onBackUpAgain: (photoIds: readonly string[]) => void;
@@ -541,7 +541,7 @@ export function LibraryGridView({
             dispatch({ type: 'selection/cleared' });
           }}
           onExport={() => {
-            onExport([...state.selection]);
+            onExport([...state.selection], 'live');
           }}
           onOffload={() => onOffload([...state.selection], true)}
           onTransfer={onTransfer === undefined ? undefined : () => onTransfer('selection', [...state.selection])}

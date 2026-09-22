@@ -136,8 +136,74 @@ test('export discards an in-flight result after the target selection changes (#1
   act(() => dispatch({ type: 'selection/replaced', photoIds: ['old'] }));
   act(() => runCommand('photo.export'));
   act(() => dispatch({ type: 'selection/replaced', photoIds: ['new'] }));
+  // Returning to the old IDs must not revive a superseded invocation.
+  act(() => dispatch({ type: 'selection/replaced', photoIds: ['old'] }));
   await act(async () => {
     finish?.({ photoIds: ['old'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  assert.equal(state.exportOpen, false);
+});
+
+test('context export preserves captured targets when the menu restores selection (#1235)', async () => {
+  setup();
+  let finish: ((result: PhotoKeySelection) => void) | undefined;
+  const requested: string[][] = [];
+  query = (ids) =>
+    new Promise((resolve) => {
+      requested.push([...ids]);
+      finish = resolve;
+    });
+  renderNative();
+  act(() => dispatch({ type: 'selection/replaced', photoIds: ['previous'] }));
+  const selectionBeforeOpen = [...state.selection];
+  act(() => dispatch({ type: 'selection/replaced', photoIds: ['context-photo'] }));
+  act(() => {
+    exportDialog.openPhotos(['context-photo']);
+    dispatch({ type: 'selection/replaced', photoIds: selectionBeforeOpen });
+  });
+  await act(async () => {
+    finish?.({ photoIds: ['context-photo'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  assert.deepEqual(requested, [['context-photo']]);
+  assert.deepEqual([...state.selection], ['previous']);
+  assert.equal(state.exportOpen, true);
+  const dialog = exportDialog.dialog;
+  assert.ok(dialog);
+  assert.deepEqual((dialog.props as { photoIds: readonly string[] }).photoIds, ['context-photo']);
+});
+
+test('a newer export invocation supersedes a captured context target (#1235)', async () => {
+  setup();
+  const pending: ((result: PhotoKeySelection) => void)[] = [];
+  query = () => new Promise((resolve) => pending.push(resolve));
+  renderNative();
+  act(() => exportDialog.openPhotos(['old']));
+  act(() => exportDialog.openPhotos(['new']));
+  await act(async () => {
+    pending[1]?.({ photoIds: ['new'], locked: 0, missing: 0 });
+    await Promise.resolve();
+    pending[0]?.({ photoIds: ['old'], locked: 0, missing: 0 });
+    await Promise.resolve();
+  });
+  const dialog = exportDialog.dialog;
+  assert.ok(dialog);
+  assert.deepEqual((dialog.props as { photoIds: readonly string[] }).photoIds, ['new']);
+});
+
+test('changing protected scope cancels a pending explicit export (#1235)', async () => {
+  setup();
+  let finish: ((result: PhotoKeySelection) => void) | undefined;
+  query = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  renderNative();
+  act(() => exportDialog.openPhotos(['ordinary']));
+  act(() => dispatch({ type: 'protectedAlbum/set', albumId: 'protected' }));
+  await act(async () => {
+    finish?.({ photoIds: ['ordinary'], locked: 0, missing: 0 });
     await Promise.resolve();
   });
   assert.equal(state.exportOpen, false);
