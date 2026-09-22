@@ -23,6 +23,7 @@ interface Row {
 }
 
 class MemoryStore implements FingerprintStore {
+  readonly pendingLimits: number[] = [];
   readonly rows = new Map<string, Row>();
   readonly photos = new Map<string, { candidate: FingerprintCandidate; isOriginal: boolean; variantSourceId: string | null }>();
 
@@ -42,6 +43,7 @@ class MemoryStore implements FingerprintStore {
   }
 
   pending(version: string, limit: number): readonly FingerprintCandidate[] {
+    this.pendingLimits.push(limit);
     return [...this.photos.values()]
       .filter(({ candidate }) => this.fresh(candidate.photoId, version) === undefined)
       .slice(0, limit)
@@ -300,4 +302,70 @@ describe('duplicate index service (#650)', () => {
     await service.close();
     await stale.service.close();
   });
+});
+
+test('candidate batching reduces scans while yielding for every photo (#1221)', async () => {
+  let yields = 0;
+  const { store, service, loads } = harness({
+    yieldTurn: () => {
+      yields += 1;
+      return Promise.resolve();
+    },
+  });
+  const ids = Array.from({ length: 129 }, (_, index) => `P${String(index)}`);
+  for (const id of ids) store.add(id);
+  service.schedule();
+  await settle();
+  assert.deepEqual(loads, ids);
+  assert.equal(yields, ids.length);
+  assert.equal(store.pendingLimits.length, 4, 'three bounded batches plus the exhausted-cursor check');
+  assert.ok(store.pendingLimits.every((limit) => limit <= 64));
+  assert.equal(service.status().pending, 0);
+  await service.close();
+});
+
+test('rescheduling discards queued candidates and revisits invalidated photos (#1221)', async () => {
+  let changed = false;
+  const identities: string[] = [];
+  const h = harness({
+    load: (candidate) => {
+      identities.push(candidate.contentHash);
+      return Promise.resolve(Buffer.from([1]));
+    },
+    yieldTurn: () => {
+      if (!changed) {
+        changed = true;
+        h.store.add('P2', { contentHash: 'replacement' });
+        h.store.photos.delete('P3');
+        h.service.notifyEligibilityChanged(['P1', 'P2', 'P3']);
+      }
+      return Promise.resolve();
+    },
+  });
+  for (const id of ['P1', 'P2', 'P3']) h.store.add(id);
+  h.service.schedule();
+  await settle();
+  assert.deepEqual(h.loads, ['P1', 'P1', 'P2']);
+  assert.deepEqual(identities, ['hash-P1', 'hash-P1', 'replacement']);
+  assert.equal(h.service.status().pending, 0);
+  await h.service.close();
+});
+
+test('progress-driven review reads retain candidate batches and do not restart the pass (#1221)', async () => {
+  let reviews = 0;
+  const h = harness({
+    notifyEvery: 25,
+    changed: () => {
+      reviews += 1;
+      h.service.review();
+    },
+  });
+  for (let index = 0; index < 129; index += 1) h.store.add(`P${String(index)}`);
+  h.service.schedule();
+  await settle();
+  assert.equal(h.loads.length, 129);
+  assert.equal(reviews, 6, 'five progress notifications plus completion, without a redundant pass');
+  assert.equal(h.store.pendingLimits.length, 4, 'read-only progress refreshes keep all three bounded batches');
+  assert.equal(h.service.status().pending, 0);
+  await h.service.close();
 });

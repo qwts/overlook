@@ -44,6 +44,8 @@ export interface DuplicateIndexServiceOptions {
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
 
+const CANDIDATE_BATCH_SIZE = 64;
+
 const yieldTurn = async (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 export class DuplicateIndexService {
@@ -52,17 +54,15 @@ export class DuplicateIndexService {
   private restartRequested = false;
   private closed = false;
   private epoch = 0;
+  private candidateEpoch = 0;
   private cache: { readonly epoch: number; readonly review: DuplicateReview } | null = null;
 
   constructor(private readonly options: DuplicateIndexServiceOptions) {}
 
-  /** Starts (or queues a restart of) the background pass. */
+  /** Starts an idle background pass; read-only refreshes do not restart work. */
   schedule(): void {
     if (this.closed) return;
-    if (this.running !== undefined) {
-      this.restartRequested = true;
-      return;
-    }
+    if (this.running !== undefined) return;
     const work = this.run();
     this.running = work;
     void work.finally(() => {
@@ -80,13 +80,13 @@ export class DuplicateIndexService {
     if (this.closed) return;
     if (photoIds.length > 0) this.options.repository.invalidate(photoIds);
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
   }
 
   /** A row appeared, vanished or moved (import, trash, restore): the review is stale. */
   notifyLibraryChanged(): void {
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
   }
 
   /** #482 invalidation seam: the policy is applied at grouping time, so the
@@ -104,7 +104,7 @@ export class DuplicateIndexService {
   rescan(): FingerprintIndexStatus {
     this.options.repository.invalidateAll();
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
     return this.status();
   }
 
@@ -150,6 +150,12 @@ export class DuplicateIndexService {
     await this.running?.catch(() => undefined);
   }
 
+  private scheduleChangedCandidates(): void {
+    this.candidateEpoch += 1;
+    if (this.running !== undefined) this.restartRequested = true;
+    this.schedule();
+  }
+
   private bump(): void {
     this.epoch += 1;
     this.cache = null;
@@ -162,16 +168,22 @@ export class DuplicateIndexService {
     try {
       this.options.repository.deleteOtherVersions(FINGERPRINT_VERSION);
       while (!controller.signal.aborted) {
-        const candidate = this.options.repository.pending(FINGERPRINT_VERSION, 1)[0];
-        if (candidate === undefined) break;
-        const stored = await this.index(candidate, controller.signal);
-        if (controller.signal.aborted) break;
-        if (stored) {
-          written += 1;
-          this.bump();
-          if (written % (this.options.notifyEvery ?? 25) === 0) this.options.changed?.(this.status());
+        const candidateEpoch = this.candidateEpoch;
+        const candidates = this.options.repository.pending(FINGERPRINT_VERSION, CANDIDATE_BATCH_SIZE);
+        if (candidates.length === 0) break;
+        for (const candidate of candidates) {
+          // Invalidation/rescan can change rows while the pass yields. Reacquire
+          // the remaining candidates instead of retaining their old identity.
+          if (controller.signal.aborted || candidateEpoch !== this.candidateEpoch) break;
+          const stored = await this.index(candidate, controller.signal);
+          if (controller.signal.aborted) break;
+          if (stored) {
+            written += 1;
+            this.bump();
+            if (written % (this.options.notifyEvery ?? 25) === 0) this.options.changed?.(this.status());
+          }
+          await (this.options.yieldTurn ?? yieldTurn)();
         }
-        await (this.options.yieldTurn ?? yieldTurn)();
       }
     } finally {
       if (this.controller === controller) this.controller = undefined;
