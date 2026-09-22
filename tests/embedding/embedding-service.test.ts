@@ -301,17 +301,24 @@ describe('EmbeddingService', () => {
   });
 
   test('query reports every readiness and worker-contention outcome', async () => {
+    const query = (subject: ServiceWorld): ReturnType<EmbeddingService['query']> => {
+      const reads = subject.statusReads();
+      const result = subject.service.query('tram');
+      assert.equal(subject.statusReads(), reads, 'query readiness must not scan repository status');
+      return result;
+    };
+
     const disabled = world();
-    assert.deepEqual(await disabled.service.query('tram'), { embedding: null, fallback: 'disabled' });
+    assert.deepEqual(await query(disabled), { embedding: null, fallback: 'disabled' });
     await disabled.service.close();
 
     const unavailable = world({ available: false, embedText: () => Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS)) });
-    assert.deepEqual(await unavailable.service.query('tram'), { embedding: null, fallback: 'unavailable' });
+    assert.deepEqual(await query(unavailable), { embedding: null, fallback: 'unavailable' });
     await unavailable.service.close();
 
     const indexing = world({ installed: false, embedText: () => Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS)) });
     indexing.service.enable();
-    assert.deepEqual(await indexing.service.query('tram'), { embedding: null, fallback: 'indexing' });
+    assert.deepEqual(await query(indexing), { embedding: null, fallback: 'indexing' });
     await indexing.service.close();
 
     const ready = world({
@@ -321,10 +328,28 @@ describe('EmbeddingService', () => {
     });
     ready.service.start();
     await waitFor(ready, 'ready');
-    const result = await ready.service.query('tram');
+    const result = await query(ready);
     assert.equal(result.fallback, null);
     assert.deepEqual(result.embedding, new Int8Array([4]));
+    ready.service.pause();
+    assert.deepEqual(await query(ready), { embedding: null, fallback: 'indexing' });
     await ready.service.close();
+
+    const missingWorker = world({ candidates: [], initiallyEnabled: true });
+    missingWorker.service.start();
+    await waitFor(missingWorker, 'ready');
+    assert.deepEqual(await query(missingWorker), { embedding: null, fallback: 'unavailable' });
+    await missingWorker.service.close();
+
+    const indexFailed = world({
+      initiallyEnabled: true,
+      embed: () => Promise.reject(new Error('index failed')),
+      embedText: () => Promise.resolve(new Int8Array(EMBEDDING_DIMENSIONS)),
+    });
+    indexFailed.service.start();
+    await waitFor(indexFailed, 'error');
+    assert.deepEqual(await query(indexFailed), { embedding: null, fallback: 'error' });
+    await indexFailed.service.close();
 
     const busy = world({
       candidates: [],
@@ -333,13 +358,13 @@ describe('EmbeddingService', () => {
     });
     busy.service.start();
     await waitFor(busy, 'ready');
-    assert.deepEqual(await busy.service.query('tram'), { embedding: null, fallback: 'busy' });
+    assert.deepEqual(await query(busy), { embedding: null, fallback: 'busy' });
     await busy.service.close();
 
     const failed = world({ candidates: [], initiallyEnabled: true, embedText: () => Promise.reject(new Error('fixture failed')) });
     failed.service.start();
     await waitFor(failed, 'ready');
-    assert.deepEqual(await failed.service.query('tram'), { embedding: null, fallback: 'error' });
+    assert.deepEqual(await query(failed), { embedding: null, fallback: 'error' });
     await failed.service.close();
   });
 });

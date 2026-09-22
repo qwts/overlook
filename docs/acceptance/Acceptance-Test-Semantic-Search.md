@@ -30,6 +30,12 @@ ADR-0018 query path on top of [#391](https://github.com/qwts/overlook/issues/391
    checked against the ADR-0018 900 ms median ratchet without downloading model
    assets in routine CI.
 
+Query readiness uses the service phase and platform availability without recounting
+the embedding repository. Disabled, unavailable, paused/indexing, failed-index,
+busy-worker, and failed-worker fallbacks retain their existing meaning. Public
+index status still reads accurate counts; this optimization does not waive the
+200K search or import performance ratchets (#1221).
+
 Evidence:
 
 - `tests/e2e/semantic-search.spec.ts`
@@ -37,6 +43,7 @@ Evidence:
 - `tests/db/embedding-repository.test.ts`
 - `tests/embedding/clip-tokenizer.test.ts`
 - `tests/embedding/embedding-pool.test.ts`
+- `tests/embedding/embedding-service.test.ts` (readiness outcomes without query-time status scans)
 - `tests/library/semantic-search.test.ts`
 - `tests/library/app-state.test.ts`
 - `tests/perf/perf-harness.spec.ts`
