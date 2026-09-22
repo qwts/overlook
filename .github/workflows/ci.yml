@@ -372,9 +372,19 @@ jobs:
       needs.policy.outputs.run_full == 'true'
     runs-on: [self-hosted, Windows, ARM64]
     timeout-minutes: 20
+    # Command-scope config covers checkout and cleanup without changing the laptop.
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
     steps:
-      - name: Configure LF checkout
-        run: git config --global core.autocrlf false
+      - name: Verify command-scoped LF checkout
+        shell: pwsh
+        run: |
+          $setting = git config --show-scope --get core.autocrlf
+          if ($LASTEXITCODE -ne 0 -or $setting -notmatch '^command\s+false$') {
+            throw 'DirectML checkout requires command-scoped core.autocrlf=false'
+          }
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

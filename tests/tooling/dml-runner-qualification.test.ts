@@ -64,6 +64,11 @@ test('DML hardware qualification is required and retains native strict controls'
   assert.match(job, /needs: policy/u);
   assert.match(job, /runs-on: \[self-hosted, Windows, ARM64\]/u);
   assert.match(job, /persist-credentials: false/u);
+  assert.doesNotMatch(job, /git config --global/u);
+  assert.match(job, /GIT_CONFIG_COUNT: '1'/u);
+  assert.match(job, /GIT_CONFIG_KEY_0: core\.autocrlf/u);
+  assert.match(job, /GIT_CONFIG_VALUE_0: 'false'/u);
+  assert.match(job, /git config --show-scope --get core\.autocrlf/u);
   assert.match(job, /architecture: arm64/u);
   assert.match(job, /node scripts\/assert-platform\.mjs win32 arm64/u);
   assert.match(job, /run: npm run test:embedding-native:inner/u);

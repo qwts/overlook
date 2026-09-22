@@ -271,7 +271,8 @@ or accelerator performance; packaged payload checks remain separate gates.
 The `Native ARM64 DirectML qualification` job runs automatically after the
 reviewed policy authorizes a full suite: ready PRs, merge groups, and manual CI
 runs. It uses labels `[self-hosted, Windows, ARM64]` (currently `SURFACE-13`),
-asserts native ARM64 Node and Electron, records adapter/driver names, and runs
+uses command-scoped Git configuration for LF checkout, asserts native ARM64
+Node and Electron, records adapter/driver names, and runs
 the strict native-worker fixture with CPU fallback disabled and its negative
 CPU control. The stable required `CI` aggregate requires hardware success in
 each full-suite lifecycle, including PRs that reuse exact-SHA preflight evidence.
