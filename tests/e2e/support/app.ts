@@ -34,6 +34,7 @@ const CONSOLE_TAIL = 20;
  */
 class AppDiagnostics {
   private readonly entries: ConsoleEntry[] = [];
+  private readonly applicationEntries: ConsoleEntry[] = [];
 
   constructor(private readonly app: ElectronApplication) {
     app.on('window', (page) => this.wire(page));
@@ -51,6 +52,11 @@ class AppDiagnostics {
   private push(entry: ConsoleEntry): void {
     this.entries.push(entry);
     if (this.entries.length > CONSOLE_TAIL) this.entries.shift();
+    // GTK/DBus bursts must not evict the application failure preceding a reload.
+    if (entry.text.includes('[overlook]') || entry.kind === 'pageerror' || entry.kind === 'error') {
+      this.applicationEntries.push(entry);
+      if (this.applicationEntries.length > CONSOLE_TAIL) this.applicationEntries.shift();
+    }
   }
 
   private pushProcessOutput(kind: string, chunk: Buffer | string): void {
@@ -68,7 +74,13 @@ class AppDiagnostics {
       // dead app handle — the process state line below still tells the story
     }
     const consoleTail = this.entries.map((entry) => `[${entry.kind}] ${entry.text}`).join('\n      ') || '<empty>';
-    return [`windows=${windows}`, `process=${exited ? 'exited' : 'running'}`, `console tail:\n      ${consoleTail}`].join('\n    ');
+    const applicationTail = this.applicationEntries.map((entry) => `[${entry.kind}] ${entry.text}`).join('\n      ') || '<empty>';
+    return [
+      `windows=${windows}`,
+      `process=${exited ? 'exited' : 'running'}`,
+      `application tail:\n      ${applicationTail}`,
+      `console tail:\n      ${consoleTail}`,
+    ].join('\n    ');
   }
 }
 
