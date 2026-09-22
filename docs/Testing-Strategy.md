@@ -303,6 +303,26 @@ semantic-search and import values outside their existing bounds, tracked in
 is not evidence that the complete performance lane passed. Existing ratchets
 are unchanged, and no local heavy-lane run is claimed.
 
+### Fingerprint progress count cost (#1221)
+
+The post-batching diagnostic [run 35771446566](https://github.com/qwts/overlook/actions/runs/35771446566)
+at `c55de382` attributed about 17.77 seconds of a 30.26-second import capture to
+full-library fingerprint status queries. Candidate batching alone did not bound
+the progress-count scans, which ran after every 25 stored rows.
+
+Background progress now requires both the row threshold and a minimum one-second
+interval after the preceding count/notification finishes. Fast deferral bursts
+therefore do not recount the whole library every 25 photos. Explicit `status()`
+and review reads remain fresh, and every non-cancelled completed pass publishes
+its final counts. No fingerprint write, per-photo yield, invalidation, or
+cancellation rule changes. Deterministic clock tests cover burst coalescing,
+elapsed progress, slow count callbacks, completion, and cancellation.
+
+This bounds one measured source of work; it does not establish full performance
+qualification. The unprofiled run 35770607316 still missed cold-start,
+semantic-search, and import-throughput budgets. A fresh complete unprofiled run
+is required after this change; all existing ratchets remain unchanged.
+
 ### Perf budgets (#123 — RATCHETS: tighten, never loosen)
 
 The harness: `npm run test:perf` (own Playwright config, ~90 s;
