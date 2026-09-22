@@ -139,8 +139,8 @@ describe('governed CI lifecycle (ENG-0004)', () => {
     assert.doesNotMatch(codeql, /^ {2}(?:pull_request|push|workflow_dispatch|schedule):$/mu);
     assert.match(codeql, /language: \[actions, javascript-typescript\]/u);
     assert.match(codeql, /security-events: write/u);
-    assert.match(codeql, /github\/codeql-action\/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63/u);
-    assert.match(codeql, /github\/codeql-action\/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63/u);
+    assert.match(codeql, /github\/codeql-action\/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd/u);
+    assert.match(codeql, /github\/codeql-action\/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd/u);
   });
 
   test('keeps main on smoke-or-complete fallback while CodeQL owns default-branch alerts', () => {
