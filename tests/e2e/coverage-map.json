@@ -1792,6 +1792,7 @@
     },
     {
       "id": "m10-album-reorder",
+      "$note": "Folder drag verifies handle containment, native drag start, target feedback, atomic placement, refusal, focus, and persistence (#1104).",
       "wiki": "User-Story-M10-Albums-organization-deletion",
       "coverage": [
         {
@@ -1805,6 +1806,18 @@
         {
           "type": "unit-dom",
           "path": "tests/db/album-order.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/db/album-folders.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/library/album-drop-placement.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/external-file-drop.test.ts"
         }
       ]
     },

@@ -33,6 +33,21 @@ below.
    depth bound is six levels below the top) and that a folder cannot be moved
    into itself or into any folder inside it.
 
+## Pointer moves (#1104)
+
+Drag a sole child's handle to the center of a collapsed folder. Confirm the
+folder expands, the child appears last inside it, the destination is announced,
+and the moved handle has focus. Drag another album to the upper edge of a child
+in that folder and confirm it lands immediately before that child. Drag a folder
+with descendants and confirm the whole subtree follows. Reload to verify order
+and expansion persistence.
+
+Try a cycle and a depth-seven placement. Confirm the drop reports the reason,
+source focus returns, and parent/order/visibility stay unchanged. Hover a valid
+destination then cancel the drag; confirm no move occurred. Keyboard and menu
+reordering continue to stay within siblings. See the complete
+[reorder matrix](Acceptance-Test-Album-Reorder.md).
+
 ## Visibility
 
 1. Choose **Hide from All Photos** on a folder. Confirm every album inside it

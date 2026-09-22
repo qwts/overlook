@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { MAX_ALBUM_DEPTH, albumDescendantIds, type CollectionKind } from '../../shared/library/album-tree.js';
+import { MAX_ALBUM_DEPTH, AlbumTreeConstraintError, albumDescendantIds, type CollectionKind } from '../../shared/library/album-tree.js';
 import { markDirty } from '../backup/sync-ledger.js';
 import { refreshAlbumMembersInAllPhotos, refreshInAllPhotos, writeAlbumVisibility } from './album-visibility-repository.js';
 import { queryAll, queryGet, run, runNamed } from './sql.js';
@@ -87,7 +87,7 @@ function requireFolder(rows: Map<string, AlbumTreeRow>, parentId: string | null)
 }
 
 function requireDepth(depth: number): void {
-  if (depth > MAX_ALBUM_DEPTH) throw new Error(`albums nest at most ${String(MAX_ALBUM_DEPTH)} levels deep`);
+  if (depth > MAX_ALBUM_DEPTH) throw new AlbumTreeConstraintError('depth');
 }
 
 /** Depth-first order: children after their parent, siblings by position.
@@ -115,10 +115,14 @@ export function depthFirstOrder(rows: readonly AlbumTreeRow[], override?: { pare
   return out;
 }
 
-export function normalizeAlbumPositions(db: BetterSqlite3.Database): void {
-  for (const [position, id] of depthFirstOrder(readAlbumTree(db)).entries()) {
+function writePositions(db: BetterSqlite3.Database, order: readonly string[]): void {
+  for (const [position, id] of order.entries()) {
     runNamed(db, 'UPDATE albums SET position = @position WHERE id = @id AND position != @position', { id, position });
   }
+}
+
+export function normalizeAlbumPositions(db: BetterSqlite3.Database): void {
+  writePositions(db, depthFirstOrder(readAlbumTree(db)));
 }
 
 /** Sibling order for a reorder of `albumId` to `position` among its
@@ -213,11 +217,12 @@ export function createCollection(db: BetterSqlite3.Database, input: CreateCollec
   })();
 }
 
-/** Moves a collection under `parentId` (null = top level) as its last
- * child. Cycles and the depth bound are rejected here, inside the write. A
+/** Moves a collection under `parentId` (null = top level), optionally at a
+ * sibling position, otherwise last. Placement, cycles and depth are validated
+ * in the same transaction, so a refused drop cannot leave a partial move. A
  * visible album entering a folder adopts the folder's policy; an explicitly
  * hidden one keeps its own. Returns the photos that changed sides. */
-export function moveCollection(db: BetterSqlite3.Database, albumId: string, parentId: string | null): string[] {
+export function moveCollection(db: BetterSqlite3.Database, albumId: string, parentId: string | null, position?: number): string[] {
   return db.transaction(() => {
     const tree = readAlbumTree(db);
     const rows = byId(tree);
@@ -225,20 +230,22 @@ export function moveCollection(db: BetterSqlite3.Database, albumId: string, pare
     if (node === undefined) throw new Error(`album ${albumId} does not exist`);
     requireFolder(rows, parentId);
     if (parentId !== null) {
-      if (parentId === albumId || albumDescendantIds(tree, albumId).includes(parentId))
-        throw new Error('a folder cannot be moved into itself');
+      if (parentId === albumId || albumDescendantIds(tree, albumId).includes(parentId)) throw new AlbumTreeConstraintError('cycle');
       requireDepth(depthOf(rows, parentId) + 1 + subtreeHeight(childrenOf(tree), albumId));
     }
-    if (node.parentId === parentId) return [];
-    runNamed(
-      db,
-      `UPDATE albums SET parent_id = @parentId, inherits_visibility = @inherits,
+    const parentChanged = node.parentId !== parentId;
+    if (!parentChanged && position === undefined) return [];
+    if (parentChanged)
+      runNamed(
+        db,
+        `UPDATE albums SET parent_id = @parentId, inherits_visibility = @inherits,
               position = (SELECT max(position) + 1 FROM albums)
         WHERE id = @albumId`,
-      { albumId, parentId, inherits: parentId !== null && node.showInAllPhotos ? 1 : 0 },
-    );
-    normalizeAlbumPositions(db);
-    return refreshInheritedVisibility(db);
+        { albumId, parentId, inherits: parentId !== null && node.showInAllPhotos ? 1 : 0 },
+      );
+    if (position === undefined) normalizeAlbumPositions(db);
+    else writePositions(db, siblingReorderedOrder(db, albumId, position).order);
+    return parentChanged ? refreshInheritedVisibility(db) : [];
   })();
 }
 
