@@ -1,3 +1,4 @@
+import { photoCommandAvailability } from '../../../shared/commands/photo-availability.js';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
@@ -61,7 +62,7 @@ export function usePhotoVariants(photo: PhotoRecord, api?: PhotoVariantsApi): Ph
   }, [photo, photoId, resolvedApi, epoch]);
 
   const duplicate = useCallback(async () => {
-    if (resolvedApi === undefined) return null;
+    if (resolvedApi === undefined || !photoCommandAvailability('photo.duplicate', photo.locked).enabled) return null;
     setBusy(true);
     try {
       const result = await resolvedApi.duplicate({ photoIds: [photoId] });
@@ -72,7 +73,7 @@ export function usePhotoVariants(photo: PhotoRecord, api?: PhotoVariantsApi): Ph
     } finally {
       setBusy(false);
     }
-  }, [photoId, resolvedApi]);
+  }, [photoId, photo.locked, resolvedApi]);
 
   const promote = useCallback(
     async (targetId: string) => {
