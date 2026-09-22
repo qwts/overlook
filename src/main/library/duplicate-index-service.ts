@@ -59,14 +59,10 @@ export class DuplicateIndexService {
 
   constructor(private readonly options: DuplicateIndexServiceOptions) {}
 
-  /** Starts (or queues a restart of) the background pass. */
+  /** Starts an idle background pass; read-only refreshes do not restart work. */
   schedule(): void {
     if (this.closed) return;
-    this.candidateEpoch += 1;
-    if (this.running !== undefined) {
-      this.restartRequested = true;
-      return;
-    }
+    if (this.running !== undefined) return;
     const work = this.run();
     this.running = work;
     void work.finally(() => {
@@ -84,13 +80,13 @@ export class DuplicateIndexService {
     if (this.closed) return;
     if (photoIds.length > 0) this.options.repository.invalidate(photoIds);
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
   }
 
   /** A row appeared, vanished or moved (import, trash, restore): the review is stale. */
   notifyLibraryChanged(): void {
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
   }
 
   /** #482 invalidation seam: the policy is applied at grouping time, so the
@@ -108,7 +104,7 @@ export class DuplicateIndexService {
   rescan(): FingerprintIndexStatus {
     this.options.repository.invalidateAll();
     this.bump();
-    this.schedule();
+    this.scheduleChangedCandidates();
     return this.status();
   }
 
@@ -152,6 +148,12 @@ export class DuplicateIndexService {
     this.closed = true;
     this.controller?.abort();
     await this.running?.catch(() => undefined);
+  }
+
+  private scheduleChangedCandidates(): void {
+    this.candidateEpoch += 1;
+    if (this.running !== undefined) this.restartRequested = true;
+    this.schedule();
   }
 
   private bump(): void {

@@ -350,3 +350,22 @@ test('rescheduling discards queued candidates and revisits invalidated photos (#
   assert.equal(h.service.status().pending, 0);
   await h.service.close();
 });
+
+test('progress-driven review reads retain candidate batches and do not restart the pass (#1221)', async () => {
+  let reviews = 0;
+  const h = harness({
+    notifyEvery: 25,
+    changed: () => {
+      reviews += 1;
+      h.service.review();
+    },
+  });
+  for (let index = 0; index < 129; index += 1) h.store.add(`P${String(index)}`);
+  h.service.schedule();
+  await settle();
+  assert.equal(h.loads.length, 129);
+  assert.equal(reviews, 6, 'five progress notifications plus completion, without a redundant pass');
+  assert.equal(h.store.pendingLimits.length, 4, 'read-only progress refreshes keep all three bounded batches');
+  assert.equal(h.service.status().pending, 0);
+  await h.service.close();
+});
