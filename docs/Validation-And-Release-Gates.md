@@ -245,7 +245,10 @@ ONNX upgrades update the exact `allowScripts` entry with the runtime version
 and regenerate third-party notices. `tests/embedding/native-worker.test.ts`
 runs a small, locally generated ONNX graph through the real embedding worker:
 CPU inference, platform-provider preference, unavailable-provider fallback,
-image preprocessing, quantization, and cooperative shutdown. This runs through
+image preprocessing, quantization, and cooperative shutdown. Direct worker
+responses must identify the platform provider (CoreML on macOS, DML on Windows)
+and CPU for the deliberately unavailable-provider case; silent CPU fallback
+cannot qualify an accelerator. This runs through
 the normal unit-test lane on local macOS and hosted Linux/Windows. It proves
 native integration with a deterministic fixture, not production CLIP quality
 or accelerator performance; packaged payload checks remain separate gates.

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
+import { once } from 'node:events';
+import { Worker } from 'node:worker_threads';
+import type { EmbeddingWorkerData, EmbeddingWorkerRequest, EmbeddingWorkerResponse } from '../../src/main/embedding/embedding-worker.js';
 import sharp from 'sharp';
 
 import { EMBEDDING_DIMENSIONS } from '../../src/main/db/embedding-repository.js';
@@ -38,6 +41,32 @@ for (const [name, providers] of [
       await assert.rejects(pool.embed(Buffer.from([1])), /closed/u);
     } finally {
       await pool.close();
+    }
+  });
+}
+
+for (const [name, providers, expected] of [
+  ['platform provider', executionProviders(process.platform), executionProviders(process.platform)[0]],
+  ['unavailable provider fallback', ['overlook-unavailable-test-provider', 'cpu'], 'cpu'],
+] as const) {
+  test(`native embedding worker reports the selected ${name} (#1170)`, { timeout: 20_000 }, async () => {
+    const worker = new Worker(new URL('../../src/main/embedding/embedding-worker.js', import.meta.url), {
+      workerData: { modelPath: resolve('tests/fixtures/embedding/native-embedding.onnx'), providers } satisfies EmbeddingWorkerData,
+    });
+    const exited = once(worker, 'exit');
+    try {
+      const response = new Promise<EmbeddingWorkerResponse>((resolveResponse, reject) => {
+        worker.once('message', resolveResponse);
+        worker.once('error', reject);
+        worker.once('exit', (code) => reject(new Error(`worker exited before its response: ${String(code)}`)));
+      });
+      worker.postMessage({ jobId: 1, kind: 'image', bytes: new Uint8Array(await solidImage(255)) } satisfies EmbeddingWorkerRequest);
+      const result = await response;
+      assert.equal(result.ok, true, result.ok ? undefined : result.error);
+      if (result.ok) assert.equal(result.provider, expected, 'CPU fallback cannot qualify a platform accelerator');
+    } finally {
+      worker.postMessage({ shutdown: true });
+      await exited;
     }
   });
 }
