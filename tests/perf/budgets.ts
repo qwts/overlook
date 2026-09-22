@@ -48,3 +48,11 @@ export interface PerfReport {
   readonly mainRssMb: number;
   readonly rendererHeapMb: number;
 }
+
+/** #1105: twice each slowest calibration sample, rounded up to 25 ms. */
+export const COLLECTION_BUDGETS = {
+  listMs: 275,
+  reorderMs: 25,
+  moveMs: 100,
+  sidebarExpandMs: 150,
+} as const;
