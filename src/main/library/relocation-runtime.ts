@@ -238,6 +238,7 @@ export class RelocationRuntime {
         });
         return { ok: true, ...result, sourcePath: journal.sourcePath, destPath: journal.destPath };
       } catch (error) {
+        if (isActive) console.error('[overlook] active-library relocation resume failed', error);
         if (error instanceof RelocationError) return { ok: false, reason: error.reason, detail: error.message };
         throw error;
       } finally {

@@ -53,7 +53,7 @@ class AppDiagnostics {
     this.entries.push(entry);
     if (this.entries.length > CONSOLE_TAIL) this.entries.shift();
     // GTK/DBus bursts must not evict the application failure preceding a reload.
-    if (entry.text.includes('[overlook]') || entry.kind === 'pageerror') {
+    if (entry.text.includes('[overlook]') || entry.kind === 'pageerror' || entry.kind === 'error') {
       this.applicationEntries.push(entry);
       if (this.applicationEntries.length > CONSOLE_TAIL) this.applicationEntries.shift();
     }
