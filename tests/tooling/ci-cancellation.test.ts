@@ -86,6 +86,7 @@ const success = {
   MERGE_VALIDATED: 'false',
   COMPLETE: 'success',
   WINDOWS_TESTS: 'success',
+  DML_ARM64: 'success',
   WINDOWS_MAIN: 'success',
   E2E_GATE: 'success',
   DOCS_GOV: 'success',
@@ -114,6 +115,12 @@ test('aggregate verdict fails closed for cancelled workflows and required jobs',
     }
   }
   assert.equal(verdict({ PREFLIGHT: 'success', PREFLIGHT_VALIDATED: 'true', COMPLETE: 'skipped' }), 0);
+  for (const MODE of ['full', 'manual', 'queue']) {
+    for (const DML_ARM64 of ['failure', 'cancelled', 'skipped', '']) {
+      assert.notEqual(verdict({ MODE, DML_ARM64 }), 0, `${MODE}: DirectML ${DML_ARM64}`);
+    }
+  }
+  assert.notEqual(verdict({ PREFLIGHT: 'success', PREFLIGHT_VALIDATED: 'true', DML_ARM64: 'skipped' }), 0);
   assert.notEqual(verdict({ PREFLIGHT: 'cancelled', PREFLIGHT_VALIDATED: 'true' }), 0);
   assert.notEqual(verdict({ CANCELLED: 'true', PREFLIGHT: 'success', PREFLIGHT_VALIDATED: 'true' }), 0);
 });
