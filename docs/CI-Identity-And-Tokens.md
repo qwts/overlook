@@ -82,6 +82,27 @@ default-branch CodeQL. The `merge_group` lane and the shared policy action's
 narrow merge-queue actor exception remain dormant compatibility for a future
 transfer to an organization; they do not justify skipping exact-commit checks.
 
+Worker jobs use explicit `!cancelled()` status conditions so skipped evidence
+jobs still permit required fallback work, while superseded runs release their
+runners. The bounded aggregate gates retain `always()` to inspect unsuccessful
+dependencies; the CI verdict explicitly rejects a cancelled workflow before and after its
+ordinary verdict step. The final rejection covers cancellation arriving after
+the first rejection was skipped; it cannot retroactively reject a completed job. A cancelled
+run is never reusable exact-SHA evidence. GitHub documents the distinction in its
+[workflow cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
+
+Keep status functions such as `cancelled()` in job or step `if` conditions, not
+step `env`: the latter cannot evaluate status functions and rejects the workflow
+before jobs start. The cancelled-workflow rejection and the ordinary CI verdict
+therefore use separate step conditions.
+
+To qualify changes to these conditions, observe an active worker in a run on the
+PR, then publish a validated follow-up commit on that PR. Record both head SHAs,
+run IDs, old worker conclusions, and when the replacement starts. Require normal
+concurrency cancellation without force-cancel, no successful old-run CI verdict,
+and a passing complete suite on the final head. A manual cancellation alone does
+not demonstrate that PR supersession released the concurrency group.
+
 Consequences worth knowing before touching a branch:
 
 - **Never manually rebase, merge `main` in, or "update" a branch that is merely
