@@ -324,6 +324,25 @@
       ]
     },
     {
+      "id": "1098-explicit-photo-repair",
+      "wiki": "Acceptance-Test-Gallery-Inclusion",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/gallery-inclusion.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/library/photo-repair-ipc.test.ts",
+            "tests/dom/photo-repair-action.test.tsx",
+            "tests/dom/inspector-thumbnail.test.tsx",
+            "tests/import/targeted-preview-repair.test.ts"
+          ]
+        }
+      ]
+    },
+    {
       "id": "494-album-visibility",
       "wiki": "Acceptance-Test-Album-Visibility",
       "coverage": [

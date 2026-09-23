@@ -1,3 +1,5 @@
+import { needsPhotoRepair } from '../../../shared/commands/photo-repair.js';
+import { repairDisabledReason } from '../inspector/photo-repair-action.js';
 import type { ReactElement } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -19,6 +21,7 @@ export interface PhotoContextMenuProps {
   readonly onSetOriginal: (isOriginal: boolean) => void;
   readonly onExport: () => void;
   readonly onDuplicate: () => void;
+  readonly onRepair?: (() => void) | undefined;
   readonly onAddToAlbum: () => void;
   readonly onRemoveFromAlbum: () => void;
   readonly onOffload: () => void;
@@ -45,6 +48,7 @@ export function PhotoContextMenu({
   onSetOriginal,
   onExport,
   onDuplicate,
+  onRepair,
   onAddToAlbum,
   onRemoveFromAlbum,
   onOffload,
@@ -107,6 +111,15 @@ export function PhotoContextMenu({
           : item('photo.original.mark', 'shield-check', () => onSetOriginal(true)),
         ...(quickActionIds.has('photo.export') ? [] : [item('photo.export', 'share', onExport)]),
         item('photo.duplicate', 'copy', onDuplicate),
+        ...(needsPhotoRepair(photo) && targetCount === 1 && onRepair !== undefined
+          ? [
+              {
+                ...item('photo.repair', 'refresh-cw', onRepair),
+                disabledReason: repairDisabledReason(photo, intl),
+                detail: repairDisabledReason(photo, intl),
+              },
+            ]
+          : []),
         ...(quickActionIds.has('album.membership.add') ? [] : [item('album.membership.add', 'album', onAddToAlbum)]),
         ...(inAlbum ? [item('album.membership.remove', 'x', onRemoveFromAlbum)] : []),
         // Backup coverage (#506): a row kept on this device only has no cloud

@@ -107,6 +107,7 @@ const meta: Meta<typeof Inspector> = {
   decorators: [
     (Story, context) => {
       const library = {
+        onChanged: () => () => undefined,
         metadataSummary: () =>
           Promise.resolve({
             found: 1,

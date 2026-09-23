@@ -82,6 +82,7 @@ export interface OverlookApi {
     readonly onLocalChanged: (listener: (payload: z.output<typeof events.interopLocalStatusChanged.payload>) => void) => () => void;
   };
   readonly library: {
+    readonly repairPhoto: (request: Req<typeof channels.photoRepair>) => Promise<Res<typeof channels.photoRepair>>;
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;
     readonly photoKeySelection: (
       request: Req<typeof channels.libraryPhotoKeySelection>,

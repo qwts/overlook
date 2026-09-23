@@ -1,5 +1,13 @@
 # photos
 
+## 0.76.21
+
+### Patch Changes
+
+- 4a87afc: Update the FormatJS localization runtime dependencies.
+- 4156ef5: Add per-photo preview and dimension repair actions to the Inspector and context menu.
+- 3348bf5: Prepare exact-photo video poster repair through the existing bounded decoder queue.
+
 ## 0.76.20
 
 ### Patch Changes

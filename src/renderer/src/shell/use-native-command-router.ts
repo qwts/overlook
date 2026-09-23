@@ -277,6 +277,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
         case 'album.smart.edit':
         case 'album.duplicate':
         case 'photo.open':
+        case 'photo.repair':
         case 'photo.offload':
         case 'photo.restoreOriginal':
         case 'photo.coverage.exclude':
