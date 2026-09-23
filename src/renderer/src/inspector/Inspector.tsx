@@ -233,7 +233,7 @@ export function Inspector({
         {photo.locked ? (
           <MetadataRow
             label="Custody"
-            value={intl.formatMessage(messages.custodyLocked, { id: String(photo.keyId) })}
+            value={intl.formatMessage(messages.custodyLocked, { id: String(photo.missingKeyId ?? photo.keyId) })}
             tone="var(--accent-amber)"
           />
         ) : null}

@@ -260,6 +260,7 @@ const photoRecordSchema = z.object({
   syncState: syncStatusSchema,
   coverage: z.enum(['included', 'excluding', 'excluded']),
   locked: z.boolean(),
+  missingKeyId: z.number().int().positive().optional(),
 });
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
@@ -274,6 +275,7 @@ const protectedPhotoRecordSchema = photoRecordSchema.omit({
   syncState: true,
   coverage: true,
   locked: true,
+  missingKeyId: true,
 });
 const protectedPageCursorSchema = z.object({ position: z.number().int().nonnegative(), id: z.string().min(1) });
 

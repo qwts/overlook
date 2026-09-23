@@ -16,3 +16,10 @@ export const PHOTO_KEY_PRESENT_SQL = `CASE WHEN EXISTS (
   SELECT 1 FROM retained_photo_keys r JOIN keys rk ON rk.id = r.key_id
   WHERE r.photo_id = p.id AND rk.material_present = 0
 ) THEN 0 ELSE k.material_present END`;
+
+/** Name one absent required key; importing it lets the next read expose any
+ * remaining missing key without confusing it with the current write key. */
+export const PHOTO_MISSING_KEY_SQL = `CASE WHEN k.material_present = 0 THEN p.key_id ELSE (
+  SELECT MIN(r.key_id) FROM retained_photo_keys r JOIN keys rk ON rk.id = r.key_id
+  WHERE r.photo_id = p.id AND rk.material_present = 0
+) END`;

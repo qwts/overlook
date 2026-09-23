@@ -18,7 +18,7 @@ const messages = defineMessages({
 
 export async function recoverOriginalWithMessage(photo: PhotoRecord, intl: IntlShape): Promise<string | null> {
   if (!photoCommandAvailability('photo.recoverOriginal', photo.locked).enabled) {
-    return intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) });
+    return intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) });
   }
   try {
     const { status } = await window.overlook.library.recoverOriginal({ photoId: photo.id });
@@ -40,7 +40,7 @@ export function OriginalRecoveryAction({ photo }: { readonly photo: PhotoRecord 
   const [result, setResult] = useState<string | null>(null);
   if (photo.originalFailure !== 'missing-original' || photo.deletedAt !== null) return null;
   const enabled = photoCommandAvailability('photo.recoverOriginal', photo.locked).enabled;
-  const reason = enabled ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) });
+  const reason = enabled ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) });
   return (
     <div>
       <p className="mono-data">{intl.formatMessage(messages.missing)}</p>

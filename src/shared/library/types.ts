@@ -80,6 +80,8 @@ export interface PhotoRecord extends PhotoMetadataFields {
   /** ADR-0032 §2 first-class state: this device lacks the key the original
    * (or a sidecar) is sealed under. Only key-independent facts are shown. */
   readonly locked: boolean;
+  /** One absent original or retained key required by this photo on this device. */
+  readonly missingKeyId?: number | undefined;
 }
 
 export type PhotoInsert = Omit<
@@ -92,6 +94,7 @@ export type PhotoInsert = Omit<
   | 'syncState'
   | 'coverage'
   | 'locked'
+  | 'missingKeyId'
   | 'mediaInfo'
   | 'derivativeKey'
   | 'variantSourceId'

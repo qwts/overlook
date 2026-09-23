@@ -159,8 +159,11 @@ describe('keyring service (#517)', () => {
     assert.throws(() => w.service.remove(retired.id), KeyringAuthorizationError);
     assert.equal(w.service.remove(retired.id, REMOVE_KEY_AUTHORIZATION).locked, 1);
     assert.equal(w.photos.get(photo.id)?.locked, true);
+    assert.equal(w.photos.get(photo.id)?.missingKeyId, retired.id);
+    assert.ok(!('missingKeyId' in w.photos.manifestSnapshot().photos[0]!));
     assert.equal((await w.service.importKey(w.exportPath, PASSWORD)).outcome, 'imported');
     assert.equal(w.photos.get(photo.id)?.locked, false);
+    assert.equal(w.photos.get(photo.id)?.missingKeyId, undefined);
     assert.deepEqual(await buffer(w.blobStore.getThumbStream(photo.derivativeKey, 'thumb', w.keyStore().resolver(), photo.id)), bytes);
     w.db.close();
   });

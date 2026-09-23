@@ -69,7 +69,7 @@ export function PhotoContextMenu({
   const custodyReason = (id: CommandId): string | undefined =>
     photoCommandAvailability(id, targetCount === 1 && photo.locked).enabled
       ? undefined
-      : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) });
+      : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) });
   const item = (
     id: CommandId,
     icon: IconName,

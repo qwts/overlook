@@ -145,6 +145,12 @@ the actual original, even when the catalog names the newer local key. It must
 also retain the write key used for rebuilt previews. Neither key may appear
 unused and permit ordinary removal. The bootstrap must still hold their material.
 
+When a retained key is removed after original recovery, the locked-photo reason
+in Inspector, context menus, grid actions, and Lightbox names that absent key,
+not the present original key. Re-import clears that reason; if another required
+key is still missing, the next read names it. Device-local missing-key reasons
+are not serialized into backup manifests.
+
 ## Explicit per-photo repair (#1098)
 
 For a supported image with a recorded preview or dimension failure, open its

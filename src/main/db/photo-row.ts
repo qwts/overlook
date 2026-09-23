@@ -44,6 +44,7 @@ export interface PhotoRow {
   coverage: string | null;
   /** keys.material_present through the keyring join (#517); null = no row. */
   key_present: number | null;
+  missing_key_id?: number | null;
   user_title: string | null;
   user_description: string | null;
   imported_keywords: string;
@@ -110,5 +111,6 @@ export function toRecord(row: PhotoRow): PhotoRecord {
     coverage: (row.coverage ?? 'included') as PhotoRecord['coverage'],
     // ADR-0032 §2: locked is a fact about the key row, never about the photo.
     locked: row.key_present === 0,
+    ...(row.missing_key_id == null ? {} : { missingKeyId: row.missing_key_id }),
   };
 }

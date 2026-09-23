@@ -347,7 +347,7 @@ export function LibraryGridView({
             : availability.reason === 'trash-only'
               ? intl.formatMessage(quickActionMessages.availableOnlyInTrash)
               : availability.reason === 'locked'
-                ? intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })
+                ? intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) })
                 : null,
         targetLabel:
           targetIds.length === 1
