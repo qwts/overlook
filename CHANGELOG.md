@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.18
+
+### Patch Changes
+
+- 89232a3: Update the Electron runtime and build-toolchain dependencies, including the shipped third-party notices.
+
 ## 0.76.17
 
 ### Patch Changes
