@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.17
+
+### Patch Changes
+
+- 92f5786: Disclose deliberately excluded photo counts and bytes throughout recovery and on completion and preserve them separately from missing objects in the restore report.
+
 ## 0.76.16
 
 ### Patch Changes
