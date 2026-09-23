@@ -132,7 +132,13 @@ export class PhotosRepository {
       const ordering = ORDERINGS[request.order ?? 'date'];
       fromClause = plan.fromClause;
       orderByClause = plan.orderByClause;
-      cursorClause = request.cursor === undefined ? '' : `AND (${ordering.expr}, p.id) ${ordering.cmp} (@cursorKey, @cursorId)`;
+      // SQLite scans expression indexes for the tuple alone. The implied
+      // scalar bound enables a seek; the tuple still orders equal-key IDs.
+      cursorClause =
+        request.cursor === undefined
+          ? ''
+          : `AND ${ordering.expr} ${ordering.cmp}= @cursorKey
+             AND (${ordering.expr}, p.id) ${ordering.cmp} (@cursorKey, @cursorId)`;
     }
     const rows = queryAll<PhotoRow>(
       this.db,
