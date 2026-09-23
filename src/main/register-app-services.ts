@@ -82,8 +82,11 @@ import type { CoverageService } from './backup/coverage-service.js';
 import type { DuplicateIndexService } from './library/duplicate-index-service.js';
 import type { HistogramService } from './library/histogram-service.js';
 import type { VariantService } from './library/variant-service.js';
+import { registerOriginalRecoveryHandlers } from './library/original-recovery-ipc.js';
+import type { OriginalRecoveryService } from './library/original-recovery-service.js';
 
 export interface AppServicesOptions {
+  readonly getOriginalRecovery: () => OriginalRecoveryService;
   readonly dataDir: () => string;
   readonly harnessEnv: (name: string) => string | undefined;
   readonly requireContentAccess: () => void;
@@ -223,6 +226,12 @@ async function pickDiagnosticsExport(options: AppServicesOptions): Promise<strin
 }
 
 export function registerAppServices(options: AppServicesOptions): void {
+  registerOriginalRecoveryHandlers(options.getOriginalRecovery, options.requireContentAccess, options.authorizationEpoch, async () => {
+    const fixture = options.harnessEnv('OVERLOOK_RECOVER_ORIGINAL_SOURCE');
+    if (fixture !== undefined && fixture !== '') return fixture;
+    const selected = await dialog.showOpenDialog({ title: 'Recover original', properties: ['openFile'] });
+    return selected.canceled ? null : (selected.filePaths[0] ?? null);
+  });
   const exportDestinationAuthority = new ExportDestinationAuthority();
   const originalDeletion = new OriginalDeletionService({
     getPhoto: (photoId) => options.getLibrary().get(photoId),

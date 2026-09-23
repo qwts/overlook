@@ -1,6 +1,7 @@
 import { photoRepairChannels } from './photo-repair-channels.js';
 /* eslint-disable max-lines -- central channel registry is intentionally large */
 import { z } from 'zod';
+import { originalRecoveryChannels } from './original-recovery-channels.js';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
 import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
@@ -372,6 +373,7 @@ export const channels = {
     }),
   ),
   // Library contract (#71) — the renderer's typed window into the library.
+  ...originalRecoveryChannels,
   libraryPage: defineChannel(
     'library:page',
     libraryQuerySchema.extend({

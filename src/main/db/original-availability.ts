@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { queryAll, queryGet, run } from './sql.js';
+import { markDirty } from '../backup/sync-ledger.js';
 
 /** Device-local evidence, independent of previews and transient upload errors. */
 export function migrateOriginalAvailability(db: BetterSqlite3.Database): void {
@@ -49,6 +50,23 @@ export class OriginalAvailabilityRepository {
       'UPDATE photos SET original_failure = NULL WHERE content_hash = @contentHash AND original_failure IS NOT NULL RETURNING id',
       { contentHash },
     ).map((row) => row.id);
+  }
+
+  /** A matching local file restores local custody, without claiming a remote
+   * backup or re-including a deliberately excluded photo. */
+  recoveredLocal(contentHash: string, keyId: number): readonly string[] {
+    return this.db.transaction(() => {
+      const ids = queryAll<{ id: string }>(
+        this.db,
+        'UPDATE photos SET original_failure = NULL, key_id = @keyId WHERE content_hash = @contentHash RETURNING id',
+        { contentHash, keyId },
+      ).map((row) => row.id);
+      for (const id of ids) {
+        run(this.db, "UPDATE sync_ledger SET status = 'local', custody_authority_id = NULL WHERE photo_id = ?", id);
+        markDirty(this.db, id);
+      }
+      return ids;
+    })();
   }
 }
 
