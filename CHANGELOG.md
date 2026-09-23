@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.20
+
+### Patch Changes
+
+- 7949ee8: Update the shipped Anthropic and OpenAI SDKs and Zod, with refreshed third-party notices.
+
 ## 0.76.19
 
 ### Patch Changes
