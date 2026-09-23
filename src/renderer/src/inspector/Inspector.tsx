@@ -163,8 +163,8 @@ export function Inspector({
           {previewFailureLabel(intl, photo.previewFailure)}
         </p>
       ) : null}
-      <PhotoRepairAction key={photo.id} photo={photo} />
-      <OriginalRecoveryAction key={photo.id} photo={photo} />
+      <PhotoRepairAction key={`repair:${photo.id}`} photo={photo} />
+      <OriginalRecoveryAction key={`recover:${photo.id}`} photo={photo} />
       <div className="ovl-inspector__header">
         {photo.locked ? (
           <div
