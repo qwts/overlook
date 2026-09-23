@@ -344,7 +344,6 @@ test('shared companions survive root purge, export byte-exactly, and remain in b
     repo: w.repo,
     blobStore: w.store,
     provider: w.provider,
-    setStatus: () => undefined,
     libraryChanged: () => undefined,
     audit: () => undefined,
   });

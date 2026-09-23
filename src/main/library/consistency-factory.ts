@@ -2,6 +2,7 @@ import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { ConsistencyChecker, type ConsistencyDeps } from './consistency.js';
+import { OriginalAvailabilityRepository } from '../db/original-availability.js';
 import { SidecarRepository } from '../db/sidecar-repository.js';
 import type { PhotosRepository } from '../db/photos-repository.js';
 import type { BlobStore } from '../blobs/blob-store.js';
@@ -9,7 +10,7 @@ import type { StorageProvider } from '../backup/provider.js';
 
 // Consistency-scan composition, extracted from the composition root
 // (index.ts sits at the 800-line budget): the repo/blob seams are
-// mechanical; policy deps (status repair, events, audit) stay with the
+// mechanical; presentation deps (events and audit) stay with the
 // caller.
 
 export interface ConsistencyFactoryDeps {
@@ -17,7 +18,6 @@ export interface ConsistencyFactoryDeps {
   readonly repo: PhotosRepository;
   readonly blobStore: BlobStore;
   readonly provider: StorageProvider;
-  readonly setStatus: ConsistencyDeps['setStatus'];
   readonly libraryChanged: ConsistencyDeps['libraryChanged'];
   readonly audit: ConsistencyDeps['audit'];
 }
@@ -47,7 +47,7 @@ export function createConsistencyChecker(deps: ConsistencyFactoryDeps): Consiste
         return false;
       }
     },
-    setStatus: deps.setStatus,
+    setStatus: (photoId, status) => new OriginalAvailabilityRepository(deps.db).repair(photoId, status),
     libraryChanged: deps.libraryChanged,
     audit: deps.audit,
   });

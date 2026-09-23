@@ -3,6 +3,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { Readable } from 'node:stream';
+import type { OriginalCustodyRuntimeOptions } from '../../src/main/backup/original-custody-runtime.js';
+import type { StorageProvider } from '../../src/main/backup/provider.js';
 
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { createOriginalCustodyRuntime } from '../../src/main/backup/original-custody-runtime.js';
@@ -11,7 +14,7 @@ import type { BlobStore } from '../../src/main/blobs/blob-store.js';
 import type { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import type { CustodyAuthority } from '../../src/main/backup/custody-authority-repository.js';
 
-test('original custody runtime composes offload and ephemeral policy around one provider (#306)', () => {
+function runtimeWith(overrides: Partial<OriginalCustodyRuntimeOptions> = {}) {
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-custody-runtime-')) });
   const authority: CustodyAuthority = {
     id: 1,
@@ -58,8 +61,39 @@ test('original custody runtime composes offload and ephemeral policy around one 
     stateChanged: () => undefined,
     invalidateFull: () => undefined,
     audit: () => undefined,
+    ...overrides,
   });
 
+  return runtime;
+}
+
+test('original custody runtime composes offload and ephemeral policy around one provider (#306)', () => {
+  const runtime = runtimeWith();
   assert.equal(runtime.offload.status('P0'), 'offloaded');
   assert.deepEqual(runtime.ephemeral.stats(), { cachedBytes: 0, entries: 0, inFlight: 0 });
 });
+
+for (const outcome of ['verified', 'rejected', 'already-present'] as const) {
+  test(`original availability clears only on verified publication: ${outcome} (#1101)`, async () => {
+    const verified: string[] = [];
+    const provider = { getStream: () => Promise.resolve(Readable.from(['ciphertext'])) } as unknown as StorageProvider;
+    const runtime = runtimeWith({
+      custody: { resolve: () => Promise.resolve({ authority: {} as CustodyAuthority, provider }) },
+      repo: {
+        get: () => ({ id: 'P0', contentHash: 'hash', assetOwnerId: 'owner' }),
+        countByContentHash: () => 1,
+      } as unknown as PhotosRepository,
+      blobs: {
+        hasOriginal: () => outcome === 'already-present',
+        restoreOriginal: (_hash: string, ciphertext: Readable) => {
+          ciphertext.destroy();
+          return outcome === 'rejected' ? Promise.reject(new Error('invalid ciphertext')) : Promise.resolve();
+        },
+      } as unknown as BlobStore,
+      originalVerified: (hash) => verified.push(hash),
+    });
+    if (outcome === 'rejected') await assert.rejects(runtime.offload.rehydrate('P0'), /invalid ciphertext/);
+    else await runtime.offload.rehydrate('P0');
+    assert.deepEqual(verified, outcome === 'verified' ? ['hash'] : []);
+  });
+}

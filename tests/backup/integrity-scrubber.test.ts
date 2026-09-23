@@ -20,6 +20,8 @@ import { MockProvider } from '../../src/main/backup/mock-provider.js';
 import { createEncryptStream, type EnvelopeKey } from '../../src/main/crypto/envelope.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
+import { createIntegrityAvailabilityNotifications } from '../../src/main/db/original-availability.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { run } from '../../src/main/db/sql.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
@@ -87,6 +89,7 @@ test('bounded scrub repairs local-backed remote damage and resumes from its pers
   ]);
   const items: BackupIntegrityItem[] = [HASH_A, HASH_B, HASH_C].map((contentHash, index) => ({
     id: `P${String(index + 1)}`,
+    assetOwnerId: null,
     contentHash,
     syncState: 'synced',
   }));
@@ -130,8 +133,8 @@ test('bounded scrub repairs local-backed remote damage and resumes from its pers
 test('remote-only missing or corrupt objects become explicit unrecoverable errors (#302)', async () => {
   const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-offloaded-')) });
   const items: BackupIntegrityItem[] = [
-    { id: 'P1', contentHash: HASH_A, syncState: 'offloaded' },
-    { id: 'P2', contentHash: HASH_B, syncState: 'offloaded' },
+    { id: 'P1', assetOwnerId: null, contentHash: HASH_A, syncState: 'offloaded' },
+    { id: 'P2', assetOwnerId: null, contentHash: HASH_B, syncState: 'offloaded' },
   ];
   await provider.put(remotePath(HASH_B), Readable.from([Buffer.from('corrupt envelope')]));
   const marked: string[] = [];
@@ -199,9 +202,17 @@ test('remote-only verification authenticates the envelope and plaintext content 
   const contentHash = createHash('sha256').update(plaintext).digest('hex');
   const key: EnvelopeKey = { id: 1, key: randomBytes(32) };
   const ciphertext = await buffer(Readable.from([plaintext]).pipe(createEncryptStream(key, { photoId: 'P1' })));
-  const item: BackupIntegrityItem = { id: 'P1', contentHash, syncState: 'offloaded' };
+  const item: BackupIntegrityItem = { id: 'P1', assetOwnerId: null, contentHash, syncState: 'offloaded' };
 
   assert.equal(await verifyRemoteOriginalCiphertext(item, Readable.from([ciphertext]), () => key.key), true);
+  assert.equal(
+    await verifyRemoteOriginalCiphertext({ ...item, id: 'P2', assetOwnerId: 'P1' }, Readable.from([ciphertext]), () => key.key),
+    true,
+  );
+  assert.equal(
+    await verifyRemoteOriginalCiphertext({ ...item, assetOwnerId: 'wrong-owner' }, Readable.from([ciphertext]), () => key.key),
+    false,
+  );
   assert.equal(await verifyRemoteOriginalCiphertext({ ...item, id: 'P2' }, Readable.from([ciphertext]), () => key.key), false);
   assert.equal(await verifyRemoteOriginalCiphertext({ ...item, contentHash: HASH_A }, Readable.from([ciphertext]), () => key.key), false);
 
@@ -219,6 +230,73 @@ test('remote-only verification authenticates the envelope and plaintext content 
     /connection reset during download/u,
     'transport failures propagate for retry instead of becoming corruption',
   );
+});
+
+test('remote-only variants authenticate their original owner before recording loss (#1101)', async () => {
+  const db = openLibraryDatabase({
+    path: join(mkdtempSync(join(tmpdir(), 'overlook-integrity-variants-')), 'library.db'),
+    dbKey: randomBytes(32),
+  });
+  const repo = new PhotosRepository(db);
+  const ledger = new SyncLedger(db);
+  const variants = new VariantRepository(db);
+  const provider = new MockProvider({ rootDir: mkdtempSync(join(tmpdir(), 'overlook-integrity-variants-remote-')) });
+  const key: EnvelopeKey = { id: 1, key: randomBytes(32) };
+  run(db, `INSERT INTO keys (id, wrapped_key, created_at) VALUES (1, 'test', '2026-09-22T00:00:00.000Z')`);
+  try {
+    await insertLegacyItem({ repo, ledger, provider, key, id: 'P1', plaintext: Buffer.from('shared original'), remote: true });
+    for (const [sourceId, id] of [
+      ['P1', 'P2'],
+      ['P2', 'P3'],
+    ] as const) {
+      const source = repo.get(sourceId);
+      assert.ok(source);
+      variants.duplicate(source, id, '2026-09-22T00:00:00.000Z');
+      ledger.setStatus(id, 'syncing');
+      ledger.markBackedUp(id, '2026-09-22T00:00:00.000Z');
+      ledger.setStatus(id, 'offloaded');
+    }
+    const items = repo.integrityItems({ afterId: null, limit: 10 });
+    assert.deepEqual(
+      items.map(({ id, assetOwnerId }) => ({ id, assetOwnerId })),
+      [
+        { id: 'P1', assetOwnerId: null },
+        { id: 'P2', assetOwnerId: 'P1' },
+        { id: 'P3', assetOwnerId: 'P1' },
+      ],
+    );
+    const scrubber = new BackupIntegrityScrubber({
+      provider,
+      batchSize: 10,
+      items: () => items,
+      hasLocal: () => false,
+      encryptedStream: () => {
+        throw new Error('remote-only fixture');
+      },
+      verifyRemoteCiphertext: (item, ciphertext) => verifyRemoteOriginalCiphertext(item, ciphertext, () => key.key),
+      ...createIntegrityAvailabilityNotifications(
+        db,
+        () => undefined,
+        () => undefined,
+      ),
+      cursor: { load: () => Promise.resolve({ version: 1, afterId: null, completedAt: null }), save: () => Promise.resolve() },
+      audit: () => undefined,
+      now: () => new Date('2026-09-22T00:00:00.000Z'),
+    });
+    assert.equal((await scrubber.scrub()).unrecoverable, 0);
+    for (const item of items) {
+      assert.equal(ledger.status(item.id), 'offloaded');
+      assert.equal(repo.get(item.id)?.originalFailure, null);
+    }
+    await provider.put(remotePath(items[0]?.contentHash ?? ''), Readable.from([Buffer.from('damaged envelope')]));
+    assert.equal((await scrubber.scrub()).unrecoverable, 3);
+    for (const item of items) {
+      assert.equal(ledger.status(item.id), 'error');
+      assert.equal(repo.get(item.id)?.originalFailure, 'missing-original');
+    }
+  } finally {
+    db.close();
+  }
 });
 
 test('catalog paging includes only stable synced and offloaded recovery claims (#302)', () => {
@@ -259,8 +337,12 @@ test('catalog paging includes only stable synced and offloaded recovery claims (
   }
   ledger.setStatus('P2', 'offloaded');
 
-  assert.deepEqual(repo.integrityItems({ afterId: null, limit: 1 }), [{ id: 'P1', contentHash: '1'.repeat(64), syncState: 'synced' }]);
-  assert.deepEqual(repo.integrityItems({ afterId: 'P1', limit: 10 }), [{ id: 'P2', contentHash: '2'.repeat(64), syncState: 'offloaded' }]);
+  assert.deepEqual(repo.integrityItems({ afterId: null, limit: 1 }), [
+    { id: 'P1', assetOwnerId: null, contentHash: '1'.repeat(64), syncState: 'synced' },
+  ]);
+  assert.deepEqual(repo.integrityItems({ afterId: 'P1', limit: 10 }), [
+    { id: 'P2', assetOwnerId: null, contentHash: '2'.repeat(64), syncState: 'offloaded' },
+  ]);
   db.close();
 });
 
@@ -288,7 +370,9 @@ test('runtime composition persists progress and marks missing remote-only rows (
     custody: { resolveAuthority: () => Promise.resolve({ authority, provider }) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+        scope !== undefined && 'custodyAuthorityId' in scope
+          ? [{ id: 'P1', assetOwnerId: null, contentHash: HASH_A, syncState: 'offloaded' }]
+          : [],
     },
     blobs: {
       hasOriginal: () => false,
@@ -414,7 +498,9 @@ test('a custody identity failure neither reads the backup target nor marks the b
     custody: { resolveAuthority: () => Promise.reject(new CustodyResolutionError('custody-wrong-account')) },
     repo: {
       integrityItems: (_page, scope) =>
-        scope !== undefined && 'custodyAuthorityId' in scope ? [{ id: 'P1', contentHash: HASH_A, syncState: 'offloaded' }] : [],
+        scope !== undefined && 'custodyAuthorityId' in scope
+          ? [{ id: 'P1', assetOwnerId: null, contentHash: HASH_A, syncState: 'offloaded' }]
+          : [],
     },
     blobs: {
       hasOriginal: () => false,
@@ -529,7 +615,7 @@ test('removal during integrity IO cannot mark a locked row corrupt or repair its
     const scrubber = new BackupIntegrityScrubber({
       provider,
       batchSize: 10,
-      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: local ? 'synced' : 'offloaded' }],
+      items: () => [{ id: 'locked', assetOwnerId: null, contentHash: HASH_A, syncState: local ? 'synced' : 'offloaded' }],
       isAvailable: () => available,
       hasLocal: () => local,
       encryptedStream: () => Readable.from([Buffer.from('local')]),
@@ -572,7 +658,7 @@ test('key removal during repair suppresses its result or error and starts no lat
     const scrubber = new BackupIntegrityScrubber({
       provider,
       batchSize: 10,
-      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      items: () => [{ id: 'locked', assetOwnerId: null, contentHash: HASH_A, syncState: 'synced' }],
       isAvailable: () => available,
       hasLocal: () => true,
       encryptedStream: () => Readable.from([Buffer.from('local')]),
@@ -607,7 +693,7 @@ test('key removal during local hashing stops before any remote request (#1134)',
     const scrubber = new BackupIntegrityScrubber({
       provider,
       batchSize: 10,
-      items: () => [{ id: 'locked', contentHash: HASH_A, syncState: 'synced' }],
+      items: () => [{ id: 'locked', assetOwnerId: null, contentHash: HASH_A, syncState: 'synced' }],
       isAvailable: () => available,
       hasLocal: () => true,
       encryptedStream: () =>
