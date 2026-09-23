@@ -1,5 +1,25 @@
 # photos
 
+## 0.76.17
+
+### Patch Changes
+
+- 92f5786: Disclose deliberately excluded photo counts and bytes throughout recovery and on completion and preserve them separately from missing objects in the restore report.
+
+## 0.76.16
+
+### Patch Changes
+
+- c5cab5b: Coalesce background fingerprint progress counts so fast indexing and deferral bursts do not repeatedly scan the entire library. Explicit status reads and final completion counts remain current.
+- 3983127: Add an exact-photo repair path that preserves sibling variants and retries recorded preview and dimension failures through the existing repair queue.
+
+## 0.76.15
+
+### Patch Changes
+
+- 851d412: Expose a typed read-only query for key availability across a complete ordinary-photo selection, including offscreen rows and distinct locked or unavailable counts.
+- bd9f72a: Restore focus to the new-album button after successful creation commits its enabled state.
+
 ## 0.76.14
 
 ### Patch Changes

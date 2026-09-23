@@ -178,6 +178,7 @@ const overlook: OverlookApi = {
   }),
   library: Object.freeze({
     page: createInvoker(channels.libraryPage, invokeTransport),
+    photoKeySelection: createInvoker(channels.libraryPhotoKeySelection, invokeTransport),
     selectAll: createInvoker(channels.librarySelectAll, invokeTransport),
     selectionRange: createInvoker(channels.librarySelectionRange, invokeTransport),
     get: createInvoker(channels.libraryGet, invokeTransport),

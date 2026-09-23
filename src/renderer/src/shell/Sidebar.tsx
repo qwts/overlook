@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 import type { MessageDescriptor } from 'react-intl';
@@ -208,6 +208,12 @@ export function Sidebar({
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const newAlbumRef = useRef<HTMLButtonElement>(null);
   const albumNameRef = useRef<HTMLInputElement>(null);
+  const restoreNewAlbumFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (creatingAlbum || namingAlbum || !restoreNewAlbumFocus.current) return;
+    restoreNewAlbumFocus.current = false;
+    newAlbumRef.current?.focus();
+  }, [creatingAlbum, namingAlbum]);
   const [albumMenu, setAlbumMenu] = useState<{ readonly album: AlbumListing; readonly x: number; readonly y: number } | null>(null);
   const [dialog, setDialog] = useState<CollectionDialog | null>(null);
   const allPhotosRef = useRef<HTMLButtonElement>(null);
@@ -400,11 +406,10 @@ export function Sidebar({
                 // The albums list refreshes off the library:changed push.
                 void window.overlook.albums.create({ name }).then(
                   () => {
-                    const restoreFocus = input.ownerDocument.activeElement === input;
+                    restoreNewAlbumFocus.current = input.ownerDocument.activeElement === input;
                     setCreatingAlbum(false);
                     setNamingAlbum(false);
                     setAlbumName('');
-                    if (restoreFocus) requestAnimationFrame(() => newAlbumRef.current?.focus());
                   },
                   () => {
                     setCreatingAlbum(false);

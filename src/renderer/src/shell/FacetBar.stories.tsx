@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
 import type { SmartPredicate } from '../../../shared/library/smart-album.js';
@@ -138,7 +138,7 @@ export const EditingSmartAlbum: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('status')).toHaveTextContent('1 facet · Editing Fuji RAW');
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('1 facet · Editing Fuji RAW'));
     await expect(canvas.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: 'Favorite' }));
     await userEvent.click(within(canvas.getByRole('group', { name: 'Favorite values' })).getByRole('button', { name: 'Favorite' }));

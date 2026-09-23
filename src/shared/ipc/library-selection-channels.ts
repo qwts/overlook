@@ -11,7 +11,19 @@ function channel<TRequest extends z.ZodType, TResponse extends z.ZodType>(
   return { name, request, response };
 }
 
+const photoKeySelectionSchema = z.object({
+  photoIds: z.array(z.string()).readonly(),
+  locked: z.number().int().nonnegative(),
+  missing: z.number().int().nonnegative(),
+});
+export type PhotoKeySelection = z.output<typeof photoKeySelectionSchema>;
+
 export const librarySelectionChannels = {
+  libraryPhotoKeySelection: channel(
+    'library:photo-key-selection',
+    z.object({ photoIds: z.array(z.string().min(1)) }),
+    photoKeySelectionSchema,
+  ),
   librarySelectAll: channel('library:select-all', libraryQuerySchema, z.object({ photoIds: z.array(z.string()).readonly() })),
   librarySelectionRange: channel(
     'library:selection-range',

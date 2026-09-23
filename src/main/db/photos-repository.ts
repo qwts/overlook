@@ -317,19 +317,24 @@ export class PhotosRepository {
     return changed !== undefined;
   }
 
-  /** Live, locally readable rows needing one format-neutral dimension check,
-   * plus RAW/HEIC rows eligible for background preview repair. */
-  previewRepairCandidates(contentHashes?: readonly string[]): readonly PhotoRecord[] {
+  /** Background candidates retain their format/debt eligibility. Explicit IDs
+   * select only live image rows for the service to recheck custody before decoding. */
+  previewRepairCandidates(contentHashes?: readonly string[], photoIds?: readonly string[]): readonly PhotoRecord[] {
     return queryAll<PhotoRow>(
       this.db,
       `${SELECT}
        WHERE p.deleted_at IS NULL
-         AND (EXISTS (SELECT 1 FROM photo_edit_bake_debt d WHERE d.photo_id = p.id) OR p.preview_repair_pending = 1 OR
+         AND ((@photoIds IS NOT NULL AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic', 'gif', 'webp')
+           AND p.id IN (SELECT value FROM json_each(@photoIds))) OR
+           (@photoIds IS NULL AND (EXISTS (SELECT 1 FROM photo_edit_bake_debt d WHERE d.photo_id = p.id) OR p.preview_repair_pending = 1 OR
            ((p.dimension_status = 'legacy' AND p.file_kind IN ('jpeg', 'png', 'raw', 'heic') OR p.file_kind IN ('raw', 'heic'))
-             AND COALESCE(l.status, 'local') <> 'offloaded'))
+             AND COALESCE(l.status, 'local') <> 'offloaded'))))
          AND (@hashes IS NULL OR p.content_hash IN (SELECT value FROM json_each(@hashes)))
        ORDER BY p.imported_at, p.id`,
-      { hashes: contentHashes === undefined ? null : JSON.stringify(contentHashes) },
+      {
+        hashes: contentHashes === undefined ? null : JSON.stringify(contentHashes),
+        photoIds: photoIds === undefined ? null : JSON.stringify(photoIds),
+      },
     ).map(toRecord);
   }
 

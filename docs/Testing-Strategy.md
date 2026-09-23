@@ -303,6 +303,26 @@ semantic-search and import values outside their existing bounds, tracked in
 is not evidence that the complete performance lane passed. Existing ratchets
 are unchanged, and no local heavy-lane run is claimed.
 
+### Fingerprint progress count cost (#1221)
+
+The post-batching diagnostic [run 35771446566](https://github.com/qwts/overlook/actions/runs/35771446566)
+at `c55de382` attributed about 17.77 seconds of a 30.26-second import capture to
+full-library fingerprint status queries. Candidate batching alone did not bound
+the progress-count scans, which ran after every 25 stored rows.
+
+Background progress now requires both the row threshold and a minimum one-second
+interval after the preceding count/notification finishes. Fast deferral bursts
+therefore do not recount the whole library every 25 photos. Explicit `status()`
+and review reads remain fresh, and every non-cancelled completed pass publishes
+its final counts. No fingerprint write, per-photo yield, invalidation, or
+cancellation rule changes. Deterministic clock tests cover burst coalescing,
+elapsed progress, slow count callbacks, completion, and cancellation.
+
+This bounds one measured source of work; it does not establish full performance
+qualification. The unprofiled run 35770607316 still missed cold-start,
+semantic-search, and import-throughput budgets. A fresh complete unprofiled run
+is required after this change; all existing ratchets remain unchanged.
+
 ### Perf budgets (#123 — RATCHETS: tighten, never loosen)
 
 The harness: `npm run test:perf` (own Playwright config, ~90 s;
@@ -323,7 +343,12 @@ The keyword-search sample explicitly requests `searchMode: 'keyword'`; the
 separate semantic sample uses `auto` fusion. Query measurements are archived
 before import starts, so a later timeout preserves that evidence. For CPU
 attribution, dispatch the manual workflow with `profile=true`: it profiles
-the main process during those two query samples and uploads a V8 `.cpuprofile`.
+the main process during those two query samples and separately during import,
+uploading `perf-query-profile.cpuprofile` and `perf-import-profile.cpuprofile`.
+Each capture is requested after 30 seconds or when its operation finishes,
+whichever comes first, so an import that remains pending can still leave CPU
+evidence. A busy main thread may delay the inspector response. Profiling does
+not cancel or shorten the measured operation.
 Profiling is off by default. Profiled runs remain subject to every assertion,
 but their timings are diagnostic only and must not establish a baseline.
 

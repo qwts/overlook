@@ -320,6 +320,8 @@ function installStub(options?: {
             generatedAt: '2026-07-14T23:00:00.000Z',
             photos: 1542,
             totalBytes: 48_000_000_000,
+            excludedCount: 0,
+            excludedBytes: 0,
             albums: 12,
             compatibility: 'compatible',
             validation: 'valid',
