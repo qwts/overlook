@@ -103,11 +103,15 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     ...shared,
     db: parts.db,
     captureFrame: captureVideoPosterFrame,
-    changed: (ids) => {
+    changed: (ids, membership) => {
       for (const id of ids) invalidateThumb(id);
-      // Poster capture only regenerates a derivative — refresh the tiles, never
-      // refetch the page (#744 review).
-      ctx.emitThumbsChanged(ids);
+      // Background capture refreshes tiles only (#744); an explicit repair may
+      // change Unavailable membership and therefore needs a page refresh.
+      if (membership === 'library') {
+        ctx.emitChanged(ids, membership);
+        ctx.emitPending(repo.stats().pending);
+        ctx.scheduleAutoBackup();
+      } else ctx.emitThumbsChanged(ids);
       ctx.embeddingEligible(ids);
     },
   });
