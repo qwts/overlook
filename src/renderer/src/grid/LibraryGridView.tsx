@@ -638,11 +638,9 @@ export function LibraryGridView({
       ) : null}
       {contextPhoto === null ? null : (
         <PhotoContextMenu
-          photo={contextPhoto.photo}
-          targetCount={contextPhoto.targetIds.length}
+          {...{ photo: contextPhoto.photo, targetCount: contextPhoto.targetIds.length }}
           inAlbum={state.album !== null}
-          x={contextPhoto.x}
-          y={contextPhoto.y}
+          {...{ x: contextPhoto.x, y: contextPhoto.y }}
           onClose={() => {
             setContextPhoto(null);
             restoreContextFocus(contextPhoto.origin);
