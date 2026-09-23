@@ -8,6 +8,7 @@ import type { SyncStatus } from '../../shared/library/types.js';
 
 export interface BackupIntegrityItem {
   readonly id: string;
+  readonly assetOwnerId: string | null;
   readonly contentHash: string;
   readonly syncState: Extract<SyncStatus, 'synced' | 'offloaded' | 'error'>;
 }
@@ -72,7 +73,7 @@ export async function verifyRemoteOriginalCiphertext(
 ): Promise<boolean> {
   const hasher = createHash('sha256');
   try {
-    await pipeline(ciphertext, createDecryptStream(resolveKey, { photoId: item.id }), hasher);
+    await pipeline(ciphertext, createDecryptStream(resolveKey, { photoId: item.assetOwnerId ?? item.id }), hasher);
   } catch (error) {
     if (error instanceof EnvelopeError) {
       return false;

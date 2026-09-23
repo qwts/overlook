@@ -146,11 +146,36 @@ describe('backup coverage in the manifest (#506, schema 14)', () => {
     target.photos.restoreManifest(manifest, KEYS);
     const restored = target.photos.get('P2');
     assert.equal(restored?.coverage, 'excluded');
+    assert.equal(restored?.originalFailure, 'missing-original');
+    assert.equal(target.photos.get('P1')?.originalFailure, null);
+    target.photos.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    const request = { limit: 10, recentSince: AT };
+    assert.deepEqual(
+      target.photos.page({ ...request, source: 'unavailable' }).photos.map((row) => row.id),
+      ['P2'],
+    );
+    assert.deepEqual(
+      target.photos.page({ ...request, source: 'all' }).photos.map((row) => row.id),
+      ['P1'],
+    );
     assert.equal(restored?.syncState, 'error', 'no original anywhere: the row cannot claim a backup');
     assert.deepEqual(target.ledger.coverage('P2'), { coverage: 'excluded', origin: 'user', since: AT });
     assert.equal(target.photos.get('P1')?.coverage, 'included');
     assert.equal(target.photos.stats().excludedCount, 1);
     assert.equal(target.photos.pendingCount(), 0, 'a restored placeholder is not backup work');
+  });
+
+  test('partial restore initializes missing-original evidence for known missing included rows', () => {
+    const source = open(true);
+    const manifest = buildBackupManifestV14({ libraryId: LIBRARY, generatedAt: AT, snapshot: snapshotOf(source.photos) });
+    const target = open(false);
+    target.photos.restoreManifest(manifest, KEYS, new Set(['P1']));
+    assert.equal(target.photos.get('P1')?.coverage, 'included');
+    assert.equal(target.photos.get('P1')?.originalFailure, 'missing-original');
+    assert.equal(target.photos.get('P1')?.syncState, 'error');
+    target.photos.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    assert.equal(target.photos.page({ source: 'all', limit: 10, recentSince: AT }).photos.length, 0);
+    assert.equal(target.photos.counts(AT).unavailable, 2);
   });
 
   test('a verified-only projection keeps the excluded rows and recomputes the totals', () => {

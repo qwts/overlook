@@ -5,8 +5,8 @@
 //   - staging leftovers (crash mid-put, AGE-GATED) → removed
 //   - lying rows (original missing, status not offloaded):
 //       remote copy verified present → status 'offloaded' (rehydratable)
-//       remote absent                → status 'error' (surfaced in the UI
-//         as the red glyph — the honest v1 of the repair prompt; recorded)
+//       remote absent                → status 'error' plus independent
+//         missing-original evidence for the Unavailable source.
 
 /** Anything younger than this is presumed a LIVE write, never reaped —
  * imports publish blobs before inserting rows, and puts stage in tmp/
@@ -97,7 +97,7 @@ export class ConsistencyChecker {
     for (const row of rows) {
       // Offloaded rows are SUPPOSED to have no local original; anything
       // else claiming one it doesn't have is lying to the grid/lightbox.
-      if (row.syncState !== 'offloaded' && row.syncState !== 'error' && !this.deps.blobs.hasOriginal(row.contentHash)) {
+      if (row.syncState !== 'offloaded' && !this.deps.blobs.hasOriginal(row.contentHash)) {
         lyingRows.push({ photoId: row.id, contentHash: row.contentHash, remoteBacked: await this.deps.remoteHas(row.contentHash) });
       }
     }
@@ -133,6 +133,8 @@ export class ConsistencyChecker {
     let markedError = 0;
     const changed: string[] = [];
     for (const row of report.lyingRows) {
+      // Scanning awaited the provider; a recovery may have published meanwhile.
+      if (this.deps.blobs.hasOriginal(row.contentHash)) continue;
       if (row.remoteBacked) {
         // The verified remote copy makes this an offload in disguise —
         // rehydrate-on-touch (#107) brings it back on demand.

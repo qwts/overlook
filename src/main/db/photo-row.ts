@@ -37,6 +37,7 @@ export interface PhotoRow {
   deleted_at: string | null;
   preview_failure: string | null;
   preview_missing?: number;
+  original_failure?: 'missing-original' | null;
   dimension_status: string;
   media_info: string | null;
   sync_state: string | null;
@@ -101,6 +102,7 @@ export function toRecord(row: PhotoRow): PhotoRecord {
     keyId: row.key_id,
     deletedAt: row.deleted_at,
     previewFailure: (row.preview_failure ?? (row.preview_missing === 1 ? 'deferred-original' : null)) as PreviewFailureReason | null,
+    originalFailure: row.original_failure ?? null,
     dimensionStatus: row.dimension_status as DimensionStatus,
     mediaInfo: parseMediaInfo(row.media_info),
     // New rows always get a ledger row; LEFT JOIN keeps reads total anyway.

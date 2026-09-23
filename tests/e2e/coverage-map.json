@@ -2928,6 +2928,32 @@
           "path": "src/renderer/src/shell/SidebarFailures.stories.tsx"
         }
       ]
+    },
+    {
+      "id": "1235-native-bulk-key-custody",
+      "wiki": "Acceptance-Test-Keyring",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/photo-command-targets.test.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/library/library-service.test.ts"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/main/application-menu-model.test.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/grid/SelectionPill.stories.tsx"
+        },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/context-menus.spec.ts"
+        }
+      ]
     }
   ]
 }

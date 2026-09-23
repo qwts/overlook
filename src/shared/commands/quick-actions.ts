@@ -53,6 +53,15 @@ export function quickActionTargetIds(
   return exposure.target === 'selection-if-included' && selection.includes(surfacedPhotoId) ? selection : [surfacedPhotoId];
 }
 
+/** Hover follows selection changes; context menus retain their captured targets. */
+export function quickActionExportTarget(
+  surfacedPhotoId: string,
+  selection: ReadonlySet<string>,
+  origin: 'hover' | 'context',
+): 'live' | 'snapshot' {
+  return origin === 'hover' && selection.has(surfacedPhotoId) ? 'live' : 'snapshot';
+}
+
 function quickActionExposure(commandId: QuickActionCommandId): QuickActionExposure {
   const exposure = commandById(commandId).quickAction;
   if (exposure === undefined) throw new Error(`command is not a Quick Action: ${commandId}`);

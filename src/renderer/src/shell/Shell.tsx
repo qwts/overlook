@@ -23,6 +23,7 @@ import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { commandPlatform, useCommandDispatcher } from '../state/use-command-dispatcher';
 import { useSelectAll } from '../state/use-select-all';
 import { commandMenuDialogClass } from '../state/command-menu-dialog';
+import { usePhotoKeyTarget } from '../commands/use-photo-key-selection.js';
 import { useNativeCommandRouter } from './use-native-command-router';
 import { AlbumPicker } from '../grid/AlbumPicker';
 import { RECENT_WINDOW_MS } from '../state/use-library-photos';
@@ -234,8 +235,7 @@ export function Shell({
     onSelectAll: selectAll,
     setShortcutSurface,
     setSettingsSection,
-    setExportPhotoIds: exportDialog.setPhotoIds,
-    setExportAllPhotos: exportDialog.setAllPhotos,
+    exportDialog,
     setAlbumPickerIds: setMenuAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry: () => setInteropEntry(null),
@@ -245,6 +245,7 @@ export function Shell({
     pcloudEnabled,
   });
 
+  const hasKey = usePhotoKeyTarget(state);
   const inspectorSelectionPosition = useDetachedInspector(state, dispatch);
   const inspectorPhotoIds = useMemo(() => (state.selection.size === 0 ? [] : [...state.selection]), [state.selection]);
 
@@ -265,6 +266,7 @@ export function Shell({
       targetTrashable: target?.deletedAt === null,
       inAlbum: state.album !== null,
       protectedAlbumOpen: state.protectedAlbum !== null,
+      hasPhotoKeyTarget: hasKey,
       selectionCount: state.selection.size,
       appLockConfigured: lockConfigured,
       providerBusy: false,
@@ -274,7 +276,7 @@ export function Shell({
       source: state.source,
     };
     void window.overlook.commands.updateContext(context);
-  }, [editableFocus, interopEntry, lockConfigured, offload.activePhotoIds, pcloudEnabled, shortcutSurface, state, unlockAlbumId]);
+  }, [hasKey, editableFocus, interopEntry, lockConfigured, offload.activePhotoIds, pcloudEnabled, shortcutSurface, state, unlockAlbumId]);
 
   const refreshProtected = useCallback((): void => {
     void window.overlook.protectedAlbums.list().then(async ({ albums: opaque }) => {

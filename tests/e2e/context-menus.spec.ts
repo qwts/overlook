@@ -32,3 +32,21 @@ test('context menus preserve selection, support keyboard focus, and empty Trash 
   await expect(page.locator('.ovl-toast-host')).toContainText('Deleted 2 photos permanently');
   await expect(page.getByTestId('empty-state')).toBeVisible();
 });
+
+test('context Export survives restoring a different prior selection (#1235)', async ({ launchOverlook }) => {
+  const { page } = await launchOverlook({ prefix: 'overlook-e2e-context-export-', env: { OVERLOOK_SEED: '3' } });
+  await page.locator('.ovl-tile__img').first().waitFor();
+  const selectors = page.locator('.ovl-tile__select');
+  await selectors.nth(1).click();
+  await page
+    .getByRole('button', { name: /^Open IMG_/u })
+    .nth(0)
+    .click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: /Actions for IMG_/u });
+  await menu.getByRole('menuitem', { name: /Export/u }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(selectors.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(selectors.nth(0)).toHaveAttribute('aria-pressed', 'false');
+});

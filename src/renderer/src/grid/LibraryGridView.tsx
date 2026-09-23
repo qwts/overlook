@@ -20,6 +20,7 @@ import { glyphStateOf } from '../components/StatusGlyph';
 import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
 import { PurgeConfirm } from './PurgeConfirm';
+import { useSelectionExportAvailability } from '../commands/use-photo-key-selection.js';
 import { SelectionPill } from './SelectionPill';
 import { OriginalDeleteDialog } from './OriginalDeleteDialog';
 import { VirtualGrid, type VirtualGridItemKeyboard } from './VirtualGrid';
@@ -30,6 +31,7 @@ import {
   configuredQuickActions,
   initialQuickActionVisibility,
   quickActionAvailability,
+  quickActionExportTarget,
   quickActionTargetIds,
   reduceQuickActionVisibility,
 } from '../../../shared/commands/quick-actions.js';
@@ -75,7 +77,7 @@ export function LibraryGridView({
   readonly knownTotal: number | null;
   readonly activeAlbum: AlbumSummary | null;
   readonly platform: CommandPlatform;
-  readonly onExport: (photoIds: readonly string[]) => void;
+  readonly onExport: (photoIds: readonly string[], target?: 'snapshot' | 'live') => void;
   readonly onOffload: (photoIds: readonly string[], clearSelection?: boolean) => void;
   readonly onKeepOnDevice: (photoIds: readonly string[]) => void;
   readonly onBackUpAgain: (photoIds: readonly string[]) => void;
@@ -85,6 +87,7 @@ export function LibraryGridView({
   const { formatCalendarDate, formatCount } = useFormats();
   const state = useAppState();
   const dispatch = useAppDispatch();
+  const exportAvailability = useSelectionExportAvailability(state.selection);
   const { announce } = useAnnouncer();
   const { loadMore, exhausted } = useLibraryPhotos();
   const facetsActive = activePredicate(state) !== undefined;
@@ -352,7 +355,7 @@ export function LibraryGridView({
     });
   };
 
-  const invokeQuickAction = (commandId: QuickActionCommandId, photo: PhotoRecord): void => {
+  const invokeQuickAction = (commandId: QuickActionCommandId, photo: PhotoRecord, origin: 'hover' | 'context' = 'hover'): void => {
     const photoIds = quickActionTargetIds(commandId, photo.id, [...state.selection]);
     if (!quickActionAvailability(commandId, inTrash ? 'trash' : 'library', photoIds.length === 1 && photo.locked).enabled) return;
     dispatchQuickActionVisibility({ type: 'dismiss' });
@@ -362,7 +365,7 @@ export function LibraryGridView({
         else toggleFavorites(photoIds);
         return;
       case 'photo.export':
-        onExport(photoIds);
+        onExport(photoIds, quickActionExportTarget(photo.id, state.selection, origin));
         return;
       case 'album.membership.add':
         setQuickAlbumIds(photoIds);
@@ -534,11 +537,13 @@ export function LibraryGridView({
       {state.selection.size > 0 ? (
         <SelectionPill
           count={state.selection.size}
+          exportDisabledReason={exportAvailability.disabledReason}
+          onRetryExport={exportAvailability.retry}
           onClear={() => {
             dispatch({ type: 'selection/cleared' });
           }}
           onExport={() => {
-            onExport([...state.selection]);
+            onExport([...state.selection], 'live');
           }}
           onOffload={() => onOffload([...state.selection], true)}
           onTransfer={onTransfer === undefined ? undefined : () => onTransfer('selection', [...state.selection])}
@@ -686,7 +691,7 @@ export function LibraryGridView({
               });
             });
           }}
-          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds)}
+          onDuplicate={() => duplicatePhotos(dispatch, contextPhoto.targetIds, intl)}
           onTransfer={
             onTransfer === undefined
               ? undefined
@@ -728,7 +733,7 @@ export function LibraryGridView({
               });
               return;
             }
-            invokeQuickAction(id, contextPhoto.photo);
+            invokeQuickAction(id, contextPhoto.photo, 'context');
             if (id === 'photo.export') {
               dispatch({ type: 'selection/replaced', photoIds: contextPhoto.selectionBeforeOpen });
             }

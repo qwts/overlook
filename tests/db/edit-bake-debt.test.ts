@@ -47,7 +47,7 @@ test('edit bake debt backfills old heads and only settles the current revision, 
     const rolledBack = '01J8EDT000000000000000000C';
     revisions.append('edited', revision(old, null));
     migrate(db);
-    assert.equal(queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version, 44);
+    assert.equal(queryGet<{ version: number }>(db, 'SELECT max(version) AS version FROM schema_migrations')?.version, 45);
     const debt = new EditBakeDebtRepository(db);
     assert.equal(debt.pending('edited'), old, 'legacy edited previews have no trusted bake identity');
     assert.equal(debt.pending('unedited'), undefined);

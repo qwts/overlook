@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 
 import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { MockProvider } from '../../src/main/backup/mock-provider.js';
+import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
 import { SyncLedger } from '../../src/main/backup/sync-ledger.js';
 import { ConsistencyChecker } from '../../src/main/library/consistency.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
@@ -86,7 +87,7 @@ async function world(count: number) {
       }
     },
     setStatus: (photoId, status) => {
-      ledger.repairStatus(photoId, status);
+      new OriginalAvailabilityRepository(db).repair(photoId, status);
     },
     libraryChanged: (ids) => changed.push([...ids]),
     audit: (line) => audits.push(line),
@@ -209,7 +210,8 @@ describe('consistency scan + repair (#125)', () => {
 
     await w.checker.repair();
     const after = await w.checker.scan();
-    assert.equal(emptyReport(after), true, 'every category reconciled');
+    assert.equal(emptyReport({ ...after, lyingRows: [] }), true, 'repairable categories reconciled');
+    assert.equal(after.lyingRows.length, 1, 'known missing originals remain observable on later scans');
     assert.deepEqual(
       (await w.store.listStaged()).map((entry) => entry.name),
       ['live.tmp'],
@@ -221,4 +223,26 @@ describe('consistency scan + repair (#125)', () => {
     assert.equal(w.store.hasOriginal(w.hashes[1] ?? ''), true);
     w.db.close();
   });
+});
+
+test('legacy error rows are inspected while ordinary upload errors stay available (#1101)', async () => {
+  const w = await world(2);
+  try {
+    w.ledger.repairStatus('P0', 'error');
+    w.ledger.repairStatus('P1', 'error');
+    await w.store.deleteOriginal(w.hashes[0] ?? '');
+    const result = await w.checker.repair();
+    assert.equal(result.markedError, 1);
+    assert.equal(w.repo.get('P0')?.originalFailure, 'missing-original');
+    assert.equal(w.repo.get('P1')?.originalFailure, null);
+    assert.deepEqual(w.changed, [['P0']]);
+    // A bare file appearing cannot clear durable evidence; recovery must
+    // authenticate and verify its content address before clearing it.
+    const hash = w.hashes[0] ?? '';
+    writeFileSync(join(w.dataDir, 'blobs', hash.slice(0, 2), hash.slice(2, 4), hash), 'not an authenticated original');
+    await w.checker.repair();
+    assert.equal(w.repo.get('P0')?.originalFailure, 'missing-original');
+  } finally {
+    w.db.close();
+  }
 });
