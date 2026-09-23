@@ -111,6 +111,16 @@ test('explicit preview and dimension repair leave Unavailable without restarting
 test('Inspector reloads a repaired preview while its All Photos selection remains (#1098)', async () => {
   const { app, page } = await launchSeeded(true);
   try {
+    // The repair fixture hides unavailable photos so the other scenario can
+    // prove All Photos membership changes. This scenario keeps the row selected.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('tab', { name: 'General' }).click();
+    const showUnavailable = page.getByRole('switch', { name: 'Show unavailable items in All Photos' });
+    await expect(showUnavailable).toHaveAttribute('aria-checked', 'false');
+    await showUnavailable.click();
+    await expect(showUnavailable).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'All Photos 12', exact: true })).toBeVisible();
     const id = '01J8SEEDPHOTO0001';
     const selected = page.locator(`[data-quick-action-photo-id="${id}"]`);
     await selected.click();
