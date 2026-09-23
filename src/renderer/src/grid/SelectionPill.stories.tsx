@@ -130,7 +130,13 @@ export const AlbumPickerFlow: Story = {
 };
 
 export const LockedSelection: Story = {
-  args: { count: 1, onClear: fn(), onExport: fn(), exportDisabledReason: 'The selected photos need keys that are not on this device.' },
+  args: {
+    count: 1,
+    onClear: fn(),
+    onExport: fn(),
+    onMarkOriginal: fn(),
+    exportDisabledReason: 'The selected photos need keys that are not on this device.',
+  },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Export…' })).toBeDisabled();
