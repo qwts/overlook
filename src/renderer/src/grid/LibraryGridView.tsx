@@ -17,6 +17,7 @@ import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
+import { recoverOriginalWithToast } from '../inspector/original-recovery-action.js';
 import { glyphStateOf } from '../components/StatusGlyph';
 import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
@@ -675,6 +676,7 @@ export function LibraryGridView({
             });
           }}
           onOffload={() => onOffload(contextPhoto.targetIds)}
+          onRecoverOriginal={() => recoverOriginalWithToast(contextPhoto.photo, intl, dispatch)}
           onKeepOnDevice={() => onKeepOnDevice(contextPhoto.targetIds)}
           onBackUpAgain={() => onBackUpAgain(contextPhoto.targetIds)}
           onRestoreOriginal={() => {

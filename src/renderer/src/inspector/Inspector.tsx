@@ -21,6 +21,7 @@ import { ProvenanceSection } from './ProvenanceSection.js';
 import { VariantsSection } from './VariantsSection.js';
 import { custodyPresentation } from '../backup/custody-presentation.js';
 import { usePhotoCustodyStatus } from '../backup/use-photo-custody-status.js';
+import { OriginalRecoveryAction } from './original-recovery-action.js';
 
 import './inspector.css';
 
@@ -163,6 +164,7 @@ export function Inspector({
         </p>
       ) : null}
       <PhotoRepairAction key={photo.id} photo={photo} />
+      <OriginalRecoveryAction key={photo.id} photo={photo} />
       <div className="ovl-inspector__header">
         {photo.locked ? (
           <div

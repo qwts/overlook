@@ -134,6 +134,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'photo.repair':
     case 'photo.offload':
     case 'photo.restoreOriginal':
+    case 'photo.recoverOriginal':
     case 'photo.coverage.exclude':
     case 'photo.coverage.include':
     case 'photo.transfer':

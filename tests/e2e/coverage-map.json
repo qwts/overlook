@@ -2973,6 +2973,20 @@
           "path": "tests/e2e/context-menus.spec.ts"
         }
       ]
+    },
+    {
+      "id": "1101-original-recovery",
+      "wiki": "Acceptance-Test-Gallery-Inclusion",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/original-recovery.spec.ts"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/original-recovery.test.ts", "tests/library/original-recovery-ipc.test.ts"]
+        }
+      ]
     }
   ]
 }
