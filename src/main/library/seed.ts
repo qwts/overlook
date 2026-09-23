@@ -213,3 +213,16 @@ export function seedSemanticIndex(db: BetterSqlite3.Database, queryDimension: nu
   })();
   return candidates.length;
 }
+
+/** Recorded failures over healthy encrypted originals, only selected by the E2E harness. */
+export function seedRepairFailures(db: BetterSqlite3.Database): void {
+  run(
+    db,
+    `UPDATE photos SET dimension_status = 'verified', preview_failure = 'corrupt', preview_repair_pending = 0 WHERE id = '01J8SEEDPHOTO0001'`,
+  );
+  run(
+    db,
+    `UPDATE photos SET dimension_status = 'unavailable', preview_failure = NULL, preview_repair_pending = 0 WHERE id = '01J8SEEDPHOTO0002'`,
+  );
+  new PhotosRepository(db).setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+}

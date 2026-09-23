@@ -14,7 +14,7 @@ import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryAll } from '../../src/main/db/sql.js';
 import { EMBEDDING_DIMENSIONS, EmbeddingRepository } from '../../src/main/db/embedding-repository.js';
 import { EMBEDDING_MODEL_MANIFEST } from '../../src/main/embedding/model-manifest.js';
-import { sampleJpeg, SEED_ALBUMS, seedLibrary, seedSemanticIndex, seedSynthetic } from '../../src/main/library/seed.js';
+import { sampleJpeg, SEED_ALBUMS, seedLibrary, seedRepairFailures, seedSemanticIndex, seedSynthetic } from '../../src/main/library/seed.js';
 import { SemanticSearch } from '../../src/main/library/semantic-search.js';
 
 const KEY: EnvelopeKey = { id: 1, key: randomBytes(32) };
@@ -33,6 +33,24 @@ async function seeded(count: number): Promise<{
 }
 
 describe('dev seed', () => {
+  test('repair fixtures keep real originals and are not consumed by startup repair (#1098)', async (t) => {
+    const { db, repo, store } = await seeded(3);
+    t.after(() => db.close());
+    seedRepairFailures(db);
+    const failures = repo.page({ source: 'unavailable', limit: 50 }).photos;
+    assert.deepEqual(failures.map((photo) => photo.id).sort(), ['01J8SEEDPHOTO0001', '01J8SEEDPHOTO0002']);
+    const startupIds = repo.previewRepairCandidates().map((photo) => photo.id);
+    for (const [index, id] of [
+      [1, '01J8SEEDPHOTO0001'],
+      [2, '01J8SEEDPHOTO0002'],
+    ] as const) {
+      assert.equal(startupIds.includes(id), false);
+      const photo = repo.get(id);
+      assert.ok(photo);
+      assert.deepEqual(await buffer(store.getStream(photo.contentHash, () => KEY.key, id)), sampleJpeg(index));
+    }
+  });
+
   test('generated sample JPEGs are valid-shaped and unique per index', () => {
     const a = sampleJpeg(1);
     const b = sampleJpeg(2);

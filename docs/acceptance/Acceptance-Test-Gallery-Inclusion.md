@@ -86,3 +86,23 @@ rows available; damaged ciphertext must still record missing-original evidence.
 Restored excluded placeholders and explicitly missing partial-restore rows enter
 Unavailable immediately when the catalog is created. Included originals without
 absence evidence remain available; no later consistency scan is required.
+
+## Explicit per-photo repair (#1098)
+
+For a supported image with a recorded preview or dimension failure, open its
+context menu in Unavailable and choose **Retry repair**, or use the same command
+in the Inspector. The action targets only that photo, including when siblings
+share the original. A successful repair leaves Unavailable and returns to All
+Photos without restarting; a decode failure stays visible and can be retried.
+Locked photos explain the missing key; offloaded photos require original
+restoration; unsupported media never enter the image decoder.
+
+While a repair is pending, changing libraries or authorization scope must not
+report success against a different library. Another queued photo's success is
+not evidence for the requested photo. The IPC rereads its requested row after
+the shared repair queue drains.
+
+Coverage: `tests/e2e/gallery-inclusion.spec.ts` repairs one preview failure via
+context menu and one dimension failure via Inspector over real encrypted seed
+originals. IPC and DOM tests cover refusal, stale scope, pending state, and
+retryable failure. Browser validation runs in hosted CI.
