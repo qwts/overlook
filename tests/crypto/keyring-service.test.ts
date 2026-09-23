@@ -187,6 +187,31 @@ describe('keyring service (#517)', () => {
     }
   });
 
+  test('key re-import reaches retained derivatives beyond stale candidate pages (#1101)', async () => {
+    const w = await world();
+    try {
+      const retired = w.keyStore().rotate();
+      await w.seal('Z-retained-owner', retired);
+      const active = w.keyStore().rotate();
+      for (const id of ['A-stale', 'B-stale', 'C-stale', 'D-stale']) {
+        await w.seal(id, active);
+        run(w.db, 'INSERT INTO retained_photo_keys (photo_id, key_id) VALUES (?, ?)', id, retired.id);
+      }
+      run(w.db, 'UPDATE photos SET key_id = ? WHERE id = ?', active.id, 'Z-retained-owner');
+      run(w.db, 'INSERT INTO retained_photo_keys (photo_id, key_id) VALUES (?, ?)', 'Z-retained-owner', retired.id);
+      await w.blobStore.deleteOriginal(w.photos.get('Z-retained-owner')!.contentHash);
+      w.service.reconcile();
+      await w.service.exportKey(retired.id, PASSWORD);
+      w.service.remove(retired.id, REMOVE_KEY_AUTHORIZATION);
+      assert.equal(w.photos.get('Z-retained-owner')?.locked, true);
+      assert.equal(await probeKeyAgainstStore(w.db, w.blobStore, retired.id, randomBytes(32)), false);
+      assert.equal((await w.service.importKey(w.exportPath, PASSWORD)).outcome, 'imported');
+      assert.equal(w.photos.get('Z-retained-owner')?.locked, false);
+    } finally {
+      w.db.close();
+    }
+  });
+
   test('production custody notifications refresh pending counts and schedule unlocked preview repair', async () => {
     const w = await world();
     await w.seal('P1', w.keyStore().currentKey());
