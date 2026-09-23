@@ -165,3 +165,16 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     },
   };
 }
+
+/** Keep service creation lazy when registering the application IPC surface. */
+export function maintenanceServiceAccessors(getServices: () => MaintenanceServices) {
+  return {
+    getEdits: () => getServices().photoEdits,
+    getProvenance: () => getServices().provenance,
+    getVariants: () => getServices().variants,
+    getPhotoRepair: () => getServices().rawRepair,
+    getOriginalRecovery: () => getServices().originalRecovery,
+    getHistogram: () => getServices().histogram.service,
+    getDuplicates: () => getServices().duplicates.service,
+  };
+}

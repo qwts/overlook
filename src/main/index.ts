@@ -23,7 +23,7 @@ import { createFullRuntime } from './fullres/full-runtime.js';
 import { createExternalOpenRuntime, createHeadlessExternalOpenRuntime } from './import/external-open-runtime.js';
 import type { ImportRuntime, ImportService } from './import/import-runtime.js';
 import { createImportApplicationRuntime } from './import/import-application-runtime.js';
-import { buildMaintenanceServices, type MaintenanceServices } from './import/maintenance-runtime.js';
+import { buildMaintenanceServices, maintenanceServiceAccessors, type MaintenanceServices } from './import/maintenance-runtime.js';
 import { ulid } from './import/ulid.js';
 import { createAutoBackupScheduler } from './backup/auto-backup.js';
 import { BackupEngine, sidecarBackupDeps, type BackupRunResult } from './backup/backup-engine.js';
@@ -827,12 +827,7 @@ void externalOpen.whenReady().then(async () => {
     },
     getProtected: getProtectedRuntime,
     getThumbs: getThumbService,
-    getEdits: () => ensureMaintenanceServices().photoEdits,
-    getProvenance: () => ensureMaintenanceServices().provenance,
-    ...{ getVariants: () => ensureMaintenanceServices().variants, getPhotoRepair: () => ensureMaintenanceServices().rawRepair },
-    getOriginalRecovery: () => ensureMaintenanceServices().originalRecovery,
-    getHistogram: () => ensureMaintenanceServices().histogram.service,
-    getDuplicates: () => ensureMaintenanceServices().duplicates.service,
+    ...maintenanceServiceAccessors(ensureMaintenanceServices),
     getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
     getKeyring: () => requireKeyringService(getLibraryService, () => keyringService),
     getFull: getFullService,
