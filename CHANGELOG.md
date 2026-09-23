@@ -1,5 +1,14 @@
 # photos
 
+## 0.76.19
+
+### Patch Changes
+
+- 680298e: Recheck the complete selection before Export and Duplicate, skip photos whose keys are absent with an accurate count, and disable native and selection-pill pixel actions when no selected photo can be opened.
+- 5939368: Track missing originals independently from preview failures and upload errors so consistency repair updates Unavailable membership accurately.
+- c1c955a: Update the native ONNX runtime with matching install-script authorization and third-party notices.
+- 72e8379: Seek directly into date and name indexes when paging large libraries, preserving cursor tie-breaking and gallery inclusion rules.
+
 ## 0.76.18
 
 ### Patch Changes
