@@ -138,6 +138,13 @@ prompt must disappear without changing selection or reopening the window. Rapid
 selection changes or older in-flight reads must not replace the current record.
 DOM coverage: `tests/dom/detached-inspector-photo.test.tsx`.
 
+For an excluded live photo sharing an original with backed-up Trash, local
+recovery need not replace provider ciphertext. Publish a later catalog and
+disaster-restore it: the rebuilt keyring must retain the key that authenticates
+the actual original, even when the catalog names the newer local key. It must
+also retain the write key used for rebuilt previews. Neither key may appear
+unused and permit ordinary removal. The bootstrap must still hold their material.
+
 ## Explicit per-photo repair (#1098)
 
 For a supported image with a recorded preview or dimension failure, open its

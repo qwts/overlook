@@ -1,3 +1,4 @@
+import { assetOwnerOf } from '../../shared/library/asset-owner.js';
 import { readFile, stat } from 'node:fs/promises';
 
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
@@ -31,9 +32,9 @@ export async function probeKeyAgainstStore(
   const resolveKey = (candidate: number): Buffer | undefined => (candidate === keyId ? key : undefined);
   // Retained references can outlive regenerated derivatives. They must not
   // crowd current envelope owners out of the bounded authentication probes.
-  const rows = queryAll<{ id: string; content_hash: string; derivative_key: string }>(
+  const rows = queryAll<{ id: string; content_hash: string; derivative_key: string; assetOwnerId: string | null }>(
     db,
-    `SELECT id, content_hash, derivative_key FROM photos p WHERE key_id = @keyId
+    `SELECT id, content_hash, derivative_key, asset_owner_id AS assetOwnerId FROM photos p WHERE key_id = @keyId
       OR EXISTS (SELECT 1 FROM retained_photo_keys r WHERE r.photo_id = p.id AND r.key_id = @keyId)
       ORDER BY (p.key_id = @keyId) DESC, id LIMIT @limit`,
     { keyId, limit: PROBE_CANDIDATES },
@@ -42,7 +43,7 @@ export async function probeKeyAgainstStore(
     const openers = [
       () => blobStore.getThumbStream(row.derivative_key, 'thumb', resolveKey, row.id),
       () => blobStore.getThumbStream(row.derivative_key, 'mid', resolveKey, row.id),
-      () => (blobStore.hasOriginal(row.content_hash) ? blobStore.getStream(row.content_hash, resolveKey, row.id) : null),
+      () => (blobStore.hasOriginal(row.content_hash) ? blobStore.getStream(row.content_hash, resolveKey, assetOwnerOf(row)) : null),
     ];
     for (const open of openers) {
       try {

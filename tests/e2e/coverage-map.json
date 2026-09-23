@@ -2987,6 +2987,7 @@
           "paths": [
             "tests/library/original-recovery.test.ts",
             "tests/library/original-recovery-ipc.test.ts",
+            "tests/backup/original-recovery-manifest.test.ts",
             "tests/dom/detached-inspector-photo.test.tsx"
           ]
         }

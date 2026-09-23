@@ -1,3 +1,4 @@
+import { verifyRestoredCustody } from './restore-key-custody.js';
 import { sidecarOwnerOf } from '../../shared/library/sidecar-files.js';
 import { isDeepStrictEqual } from 'node:util';
 import { existsSync } from 'node:fs';
@@ -851,12 +852,7 @@ export class RestoreEngine {
         boards: boardsSnapshot(db),
       };
       if (!isDeepStrictEqual(actual, expected)) throw new RestoreError('corrupt', 'rebuilt catalog does not match the verified projection');
-      for (const photo of blobPhotos(candidate.manifest.photos)) {
-        if (skip.has(photo.id)) continue;
-        if (!(await store.verifyOriginal(photo.contentHash, discovery.resolveKey, assetOwnerOf(photo)))) {
-          throw new RestoreError('corrupt', `final verification failed for ${photo.id}`);
-        }
-      }
+      await verifyRestoredCustody(db, store, discovery.resolveKey, recoveredKeys, blobPhotos(candidate.manifest.photos), skip);
       if (candidate.manifest.schema !== 2) {
         const protectedRepo = new ProtectedRecoveryRepository(db);
         const protectedExpected = {
