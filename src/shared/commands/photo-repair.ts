@@ -10,7 +10,7 @@ export function needsPhotoRepair(photo: RepairablePhoto): boolean {
   return photo.previewFailure !== null || photo.dimensionStatus === 'unavailable';
 }
 
-/** Shared presentation and main-side admission for the image repair queue. */
+/** Shared presentation and main-side admission for the image and video repair queues. */
 export function photoRepairBlocker(
   photo: RepairablePhoto | undefined,
 ): 'missing' | 'deleted' | 'locked' | 'offloaded' | 'unsupported' | 'healthy' | null {
@@ -18,6 +18,6 @@ export function photoRepairBlocker(
   if (photo.deletedAt !== null) return 'deleted';
   if (!photoCommandAvailability('photo.repair', photo.locked).enabled) return 'locked';
   if (photo.syncState === 'offloaded') return 'offloaded';
-  if (!['jpeg', 'png', 'raw', 'heic', 'gif', 'webp'].includes(photo.fileKind)) return 'unsupported';
+  if (!['jpeg', 'png', 'raw', 'heic', 'gif', 'webp', 'video'].includes(photo.fileKind)) return 'unsupported';
   return needsPhotoRepair(photo) ? null : 'healthy';
 }

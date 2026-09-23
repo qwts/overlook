@@ -46,7 +46,13 @@ for (const reason of ['preview', 'dimensions'] as const) {
   });
 }
 
-for (const patch of [{ locked: true }, { syncState: 'offloaded' }, { deletedAt: '2026-09-22' }, { fileKind: 'video' }] as const) {
+for (const patch of [
+  { locked: true },
+  { syncState: 'offloaded' },
+  { deletedAt: '2026-09-22' },
+  { fileKind: 'audio' },
+  { fileKind: 'other' },
+] as const) {
   test(`repair refuses ${JSON.stringify(patch)} without opening the original (#1098)`, async () => {
     assert.deepEqual(
       await retryPhotoRepair(

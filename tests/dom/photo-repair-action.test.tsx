@@ -25,50 +25,52 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test('Inspector repair is bounded to one request and failure remains retryable (#1098)', async () => {
-  let finish: ((value: PhotoRepairResult) => void) | undefined;
-  const requests: string[] = [];
-  Reflect.set(window, 'overlook', {
-    library: {
-      repairPhoto: ({ photoId }: { photoId: string }) => {
-        requests.push(photoId);
-        return new Promise<PhotoRepairResult>((resolve) => {
-          finish = resolve;
-        });
+for (const fileKind of ['jpeg', 'video'] as const) {
+  test(`Inspector ${fileKind} repair is bounded to one request and failure remains retryable (#1098)`, async () => {
+    let finish: ((value: PhotoRepairResult) => void) | undefined;
+    const requests: string[] = [];
+    Reflect.set(window, 'overlook', {
+      library: {
+        repairPhoto: ({ photoId }: { photoId: string }) => {
+          requests.push(photoId);
+          return new Promise<PhotoRepairResult>((resolve) => {
+            finish = resolve;
+          });
+        },
       },
-    },
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() =>
+      root?.render(
+        <IntlProvider locale="en">
+          <PhotoRepairAction photo={{ ...photo, fileKind }} />
+        </IntlProvider>,
+      ),
+    );
+    const button = container.querySelector('button');
+    assert.ok(button);
+    act(() => button.click());
+    assert.equal(button.disabled, true);
+    act(() => button.click());
+    assert.deepEqual(requests, ['broken']);
+    await act(async () => {
+      finish?.({ status: 'failed' });
+      await Promise.resolve();
+    });
+    assert.match(container.textContent ?? '', /could not be repaired/);
+    assert.equal(button.disabled, false);
+    act(() => button.click());
+    await act(async () => {
+      finish?.({ status: 'repaired' });
+      await Promise.resolve();
+    });
+    assert.match(container.textContent ?? '', /Photo repaired/);
   });
-  const container = document.createElement('div');
-  document.body.append(container);
-  root = createRoot(container);
-  act(() =>
-    root?.render(
-      <IntlProvider locale="en">
-        <PhotoRepairAction photo={photo} />
-      </IntlProvider>,
-    ),
-  );
-  const button = container.querySelector('button');
-  assert.ok(button);
-  act(() => button.click());
-  assert.equal(button.disabled, true);
-  act(() => button.click());
-  assert.deepEqual(requests, ['broken']);
-  await act(async () => {
-    finish?.({ status: 'failed' });
-    await Promise.resolve();
-  });
-  assert.match(container.textContent ?? '', /could not be repaired/);
-  assert.equal(button.disabled, false);
-  act(() => button.click());
-  await act(async () => {
-    finish?.({ status: 'repaired' });
-    await Promise.resolve();
-  });
-  assert.match(container.textContent ?? '', /Photo repaired/);
-});
+}
 
-for (const patch of [{ locked: true }, { syncState: 'offloaded' }, { fileKind: 'video' }] as const) {
+for (const patch of [{ locked: true }, { syncState: 'offloaded' }, { fileKind: 'audio' }] as const) {
   test(`Inspector explains unavailable repair ${JSON.stringify(patch)} (#1098)`, () => {
     const container = document.createElement('div');
     document.body.append(container);
