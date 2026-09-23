@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, type Dispatch } from 'react';
+import { useIntl } from 'react-intl';
+import type { ExportDialogController } from '../export/use-export-dialog.js';
 import { duplicatePhotos } from '../grid/duplicate-photos.js';
 
 import type { CommandId, CommandSurface } from '../../../shared/commands/registry.js';
@@ -26,8 +28,7 @@ export interface NativeCommandRouterDeps {
   readonly onSelectAll: () => void;
   readonly setShortcutSurface: (surface: CommandSurface | null) => void;
   readonly setSettingsSection: (section: SettingsSection | undefined) => void;
-  readonly setExportPhotoIds: (ids: readonly string[] | null) => void;
-  readonly setExportAllPhotos: (allPhotos: boolean) => void;
+  readonly exportDialog: Pick<ExportDialogController, 'openPhotos' | 'setPhotoIds' | 'setAllPhotos'>;
   readonly setAlbumPickerIds: (ids: readonly string[] | null) => void;
   readonly setLibrariesCreating: (creating: boolean) => void;
   readonly resetInteropEntry: () => void;
@@ -45,8 +46,7 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     onSelectAll,
     setShortcutSurface,
     setSettingsSection,
-    setExportPhotoIds,
-    setExportAllPhotos,
+    exportDialog,
     setAlbumPickerIds,
     setLibrariesCreating,
     resetInteropEntry,
@@ -55,6 +55,8 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     closeOffload,
     pcloudEnabled,
   } = deps;
+  const { openPhotos: onExport, setPhotoIds: setExportPhotoIds, setAllPhotos: setExportAllPhotos } = exportDialog;
+  const intl = useIntl();
   const handledSequenceRef = useRef(0);
 
   const runCommand = useCallback(
@@ -212,12 +214,10 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
           return;
         }
         case 'photo.export':
-          setExportAllPhotos(false);
-          setExportPhotoIds(targetIds);
-          dispatch({ type: 'dialog/set', dialog: 'export', open: true });
+          onExport(targetIds, 'live');
           return;
         case 'photo.duplicate':
-          duplicatePhotos(dispatch, targetIds);
+          duplicatePhotos(dispatch, targetIds, intl);
           return;
         case 'photo.restore':
           if (targetIds.length === 0) return;
@@ -311,10 +311,12 @@ export function useNativeCommandRouter(deps: NativeCommandRouterDeps): (command:
     },
     [
       dispatch,
+      intl,
       state,
       onSelectAll,
       setShortcutSurface,
       setSettingsSection,
+      onExport,
       setExportPhotoIds,
       setExportAllPhotos,
       setAlbumPickerIds,

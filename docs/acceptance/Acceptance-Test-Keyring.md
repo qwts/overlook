@@ -116,9 +116,9 @@ to Original, Baked, and Original + sidecars. Reimporting the missing key permits
 a fresh export. `tests/export/export-engine.test.ts` exercises mixed/all-locked
 batches in all three modes and successful retry after key availability returns.
 
-Command availability and bulk filtering/skip feedback remain tracked in #1133;
-this engine boundary alone does not prove those UI acceptance requirements. A
-key removed after preflight still uses the existing per-file custody failures.
+The [selection adapters](#native-and-bulk-selection-custody-1235) filter locked rows before opening an
+export. This engine boundary independently checks the submitted batch; a key
+removed after preflight still uses the existing per-file custody failures.
 
 Original + sidecars also refuses the whole batch when a companion key is absent,
 even if the original is readable. Importing that key permits a fresh export.
@@ -157,5 +157,44 @@ This is a read-only snapshot, not authorization for a later pixel operation.
 
 `tests/library/library-service.test.ts` exercises its schema-validated boundary,
 mixed offscreen IDs, duplicate skip counting, missing IDs, and key return.
-Native-menu and selection-pill integration, invocation revalidation, and skip
-feedback remain required by #1235; this query alone does not complete #1133.
+
+## Native and bulk selection custody (#1235)
+
+Select a locked photo, including one outside the loaded grid page. Native
+File → Export and the selection pill's wide and overflow Export controls must
+remain disabled. Favorite and album membership remain usable. Reimport its key:
+the library change event refreshes availability without changing the selection.
+If the custody lookup fails, both pill layouts show “Retry photo keys” with the
+failure reason instead of remaining in “Checking photo keys…”. Retry must restore
+normal Export after a successful lookup without starting an export itself.
+Native Export can retry a failed presentation lookup through its invocation-time
+query; another failure or a locked result must still leave Export closed.
+
+Select readable and locked photos together, including offscreen IDs. Export
+opens for only the readable IDs and reports the exact locked/unavailable skip
+counts. Duplicate uses the same registry policy and retains its skipped-count
+message alongside the completion result. Repeated IDs count once. Unknown or
+protected-migration-hidden IDs are unavailable, not readable ordinary photos.
+Native dispatch targets the focused lightbox photo before the grid selection.
+
+Command-hover Export follows the live selection when the hovered photo belongs
+to it; hovering an unselected photo captures only that photo. Verify that changing
+selection cancels the former pending export but preserves the latter.
+Change the live selection or open another workflow while its custody query is
+pending: the stale result must not open Export or publish a skipped-photo toast.
+Exercise Import, Settings, library switching, activity, duplicate review, and
+shell overlays such as shortcut help or offload. Closing the newer workflow
+before the old query completes must not revive the request. Context-menu Export instead
+retains the menu's explicit target snapshot when the grid restores its prior
+selection. Verify this with an unselected photo while another photo is selected;
+Export must open for the context target, without replacing the prior selection.
+A newer export request or protected-scope transition cancels an older request. An earlier enabled snapshot cannot bypass
+the invocation-time query; query failure keeps pixel operations closed. The
+main export preflight remains authoritative if custody changes again afterward.
+
+Coverage: `tests/library/library-service.test.ts` exercises the typed boundary
+against real SQLite and key return; `tests/dom/photo-command-targets.test.tsx`
+exercises native routing, offscreen and mixed targets, stale responses, key-return
+refresh, and both pill layouts; `tests/main/application-menu-model.test.ts`
+checks native enablement and metadata availability. Storybook
+`SelectionPill.stories.tsx` → `LockedSelection` covers the browser controls.

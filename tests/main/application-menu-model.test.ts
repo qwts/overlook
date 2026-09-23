@@ -31,6 +31,7 @@ const grid: CommandMenuContext = {
   surface: 'grid',
   hasLibrary: true,
   hasPhotos: true,
+  hasPhotoKeyTarget: true,
   appLockConfigured: true,
   pcloudEnabled: true,
 };
@@ -261,4 +262,18 @@ test('macOS Help menu mirrors the shared HELP_MENU_ITEMS list with a separator (
   // Privacy keeps its distinct Help id so it does not collide with the app-menu
   // Privacy item — native ids stay unique.
   assert.equal(new Set(ids(template)).size, ids(template).length);
+});
+
+test('native pixel commands require an authoritative key target; metadata remains available (#1235)', () => {
+  for (const context of [
+    { ...grid, selectionCount: 1 },
+    { ...grid, surface: 'lightbox' as const, hasTarget: true, targetTrashable: true },
+  ]) {
+    const locked = { ...context, hasPhotoKeyTarget: false };
+    assert.equal(commandEnabled('photo.export', locked), false);
+    assert.equal(commandEnabled('photo.duplicate', locked), false);
+    assert.equal(commandEnabled('photo.favorite.toggle', locked), true);
+    assert.equal(commandEnabled('album.membership.add', locked), true);
+    assert.equal(commandEnabled('photo.export', { ...locked, hasPhotoKeyTarget: true }), true);
+  }
 });

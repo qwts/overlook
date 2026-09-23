@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, useId, type ReactElement } from 'react';
 import { useIntl } from 'react-intl';
 
 import './pill.css';
+import { photoKeyMessages } from '../commands/photo-command-targets.js';
 import { commandById } from '../../../shared/commands/registry.js';
 import { useFormats } from '../i18n/use-formats.js';
 import { Button } from '../components/Button';
@@ -14,7 +15,9 @@ export interface SelectionPillProps {
   readonly count: number;
   readonly onClear: () => void;
   /** Opens the ExportDialog with the selection set (#100). */
+  readonly exportDisabledReason?: string | undefined;
   readonly onExport?: (() => void) | undefined;
+  readonly onRetryExport?: (() => void) | undefined;
   readonly onOffload?: (() => void) | undefined;
   readonly onTransfer?: (() => void) | undefined;
   /** Soft-deletes the selection (#120) into reversible Trash custody. */
@@ -37,6 +40,8 @@ export function SelectionPill({
   count,
   onClear,
   onExport,
+  exportDisabledReason,
+  onRetryExport,
   onOffload,
   onTransfer,
   onDelete,
@@ -48,6 +53,7 @@ export function SelectionPill({
   onUnmarkOriginal,
 }: SelectionPillProps): ReactElement {
   const intl = useIntl();
+  const exportReasonId = useId();
   const { formatCount } = useFormats();
   const actions = destructiveActions;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -55,7 +61,7 @@ export function SelectionPill({
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (moreOpen) moreMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    if (moreOpen) moreMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
   }, [moreOpen]);
   const closeMore = (): void => {
     setMoreOpen(false);
@@ -75,6 +81,11 @@ export function SelectionPill({
             }}
           />
         ) : null}
+        {exportDisabledReason === undefined ? null : (
+          <span id={exportReasonId} hidden>
+            {exportDisabledReason}
+          </span>
+        )}
         <span className="ovl-pill__count mono-data">{formatCount(count)} selected</span>
         {onRestore !== undefined ? (
           // Trash mode: restore is the headline; purge is the destructive
@@ -98,8 +109,16 @@ export function SelectionPill({
                   Transfer &amp; Sync
                 </Button>
               )}
-              <Button size="sm" variant="secondary" icon="share" onClick={onExport}>
-                Export
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="share"
+                onClick={onRetryExport ?? onExport}
+                disabled={exportDisabledReason !== undefined && onRetryExport === undefined}
+                title={exportDisabledReason}
+                aria-describedby={exportDisabledReason === undefined ? undefined : exportReasonId}
+              >
+                {intl.formatMessage(onRetryExport === undefined ? commandById('photo.export').label : photoKeyMessages.retry)}
               </Button>
               <Button
                 size="sm"
@@ -141,7 +160,7 @@ export function SelectionPill({
                   tabIndex={-1}
                   aria-label="Selection actions"
                   onKeyDown={(event) => {
-                    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+                    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'));
                     const current = items.findIndex((item) => item === document.activeElement);
                     const next =
                       event.key === 'Home'
@@ -167,8 +186,15 @@ export function SelectionPill({
                       Transfer &amp; Sync
                     </button>
                   )}
-                  <button type="button" role="menuitem" onClick={onExport}>
-                    Export
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onRetryExport ?? onExport}
+                    disabled={exportDisabledReason !== undefined && onRetryExport === undefined}
+                    title={exportDisabledReason}
+                    aria-describedby={exportDisabledReason === undefined ? undefined : exportReasonId}
+                  >
+                    {intl.formatMessage(onRetryExport === undefined ? commandById('photo.export').label : photoKeyMessages.retry)}
                   </button>
                   {onMarkOriginal === undefined ? null : (
                     <button

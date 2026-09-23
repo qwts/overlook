@@ -65,6 +65,8 @@ export interface AppState {
   /** Stable cursor for paging through the visible selection. */
   readonly inspectorPhotoId: string | null;
   readonly importOpen: boolean;
+  /** Every dialog-open intent supersedes asynchronous work for an older workflow. */
+  readonly dialogRevision: number;
   readonly exportOpen: boolean;
   readonly settingsOpen: boolean;
   readonly activityOpen: boolean;
@@ -112,6 +114,7 @@ export const initialAppState: AppState = {
   inspectorSource: null,
   inspectorPhotoId: null,
   importOpen: false,
+  dialogRevision: 0,
   exportOpen: false,
   settingsOpen: false,
   activityOpen: false,
@@ -436,6 +439,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (action.open) {
         return {
           ...state,
+          dialogRevision: state.dialogRevision + 1,
           importOpen: action.dialog === 'import',
           exportOpen: action.dialog === 'export',
           settingsOpen: action.dialog === 'settings',

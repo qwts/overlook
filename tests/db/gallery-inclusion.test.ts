@@ -8,7 +8,10 @@ import { describe, test } from 'node:test';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { readGalleryPolicy, writeGalleryPolicy } from '../../src/main/db/gallery-policy-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryAll, run } from '../../src/main/db/sql.js';
+import { createIntegrityAvailabilityNotifications, OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
+import { VariantRepository } from '../../src/main/db/variant-repository.js';
+import { UNAVAILABLE_WHERE } from '../../src/main/db/photo-clauses.js';
 import { DEFAULT_GALLERY_POLICY } from '../../src/shared/library/gallery-policy.js';
 import type { PageCursor, PhotoInsert, SourceFilter } from '../../src/shared/library/types.js';
 
@@ -170,4 +173,155 @@ describe('gallery inclusion rules (#512, ADR-0030 §4)', () => {
     assert.deepEqual(repo.galleryPolicy(), { showUnavailable: false, minimumMegapixels: 4 });
     db.close();
   });
+});
+
+test('missing originals are independent of previews, sync errors, and sibling recovery (#1101)', () => {
+  const w = world();
+  try {
+    const availability = new OriginalAvailabilityRepository(w.db);
+    const missing = w.ids.large;
+    const transient = w.ids.tiny;
+    run(w.db, "UPDATE sync_ledger SET status = 'error' WHERE photo_id = ?", transient);
+    availability.repair(missing, 'error');
+    w.repo.setGalleryPolicy({ showUnavailable: false, minimumMegapixels: null });
+    assert.equal(w.repo.get(missing)?.originalFailure, 'missing-original');
+    assert.ok(
+      w.repo.manifestSnapshot().photos.every((photo) => !('originalFailure' in photo)),
+      'local absence never enters backup metadata',
+    );
+    assert.ok(walk(w.repo, 'unavailable').includes(missing));
+    assert.ok(!walk(w.repo, 'all').includes(missing));
+    assert.ok(walk(w.repo, 'all').includes(transient), 'upload failures retain availability');
+    w.repo.setPreviewFailure(missing, null);
+    w.repo.clearPreviewRepairDebt(missing);
+    assert.ok(walk(w.repo, 'unavailable').includes(missing), 'preview repair cannot clear original absence');
+    const original = w.repo.get(missing);
+    assert.ok(original);
+    new VariantRepository(w.db).duplicate(original, 'missing-sibling', '2026-09-22');
+    assert.equal(w.repo.get('missing-sibling')?.originalFailure, 'missing-original');
+    assert.deepEqual(new Set(availability.verifiedRestored(original.contentHash)), new Set([missing, 'missing-sibling']));
+    assert.ok(!walk(w.repo, 'unavailable').includes(missing));
+    assert.ok(walk(w.repo, 'all').includes(missing), 'verified recovery changes membership without restart');
+    assert.equal(w.repo.get('missing-sibling')?.previewFailure, 'deferred-original', 'independent preview debt remains');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('consistency evidence and ledger repair commit together (#1101)', () => {
+  const w = world();
+  try {
+    w.db.exec("CREATE TRIGGER fail_ledger BEFORE UPDATE OF status ON sync_ledger BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error'), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'local');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('remote-backed consistency repair clears local absence and retains the Unavailable index (#1101)', () => {
+  const w = world();
+  try {
+    const availability = new OriginalAvailabilityRepository(w.db);
+    availability.repair(w.ids.large, 'error');
+    availability.repair(w.ids.large, 'offloaded');
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'offloaded');
+    assert.ok(!walk(w.repo, 'unavailable').includes(w.ids.large));
+    const plan = queryAll<{ detail: string }>(w.db, `EXPLAIN QUERY PLAN SELECT p.id FROM photos p WHERE ${UNAVAILABLE_WHERE}`);
+    assert.ok(plan.some((row) => row.detail.includes('idx_photos_unavailable')));
+  } finally {
+    w.db.close();
+  }
+});
+
+test('integrity loss and authenticated healing publish committed availability, including legacy binding (#1101)', () => {
+  const w = world();
+  const observed: string[] = [];
+  const notify = createIntegrityAvailabilityNotifications(
+    w.db,
+    ({ photoIds, membership }) => {
+      assert.equal(w.db.inTransaction, false, 'membership is published after commit');
+      assert.equal(membership, 'library');
+      const row = w.repo.get(photoIds[0] ?? '');
+      observed.push(`${row?.syncState}:${String(row?.originalFailure)}`);
+    },
+    () => {},
+    (id, authorityId) => {
+      assert.equal(authorityId, 7);
+      run(w.db, "UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = ?", id);
+      return true;
+    },
+  );
+  try {
+    run(w.db, "UPDATE sync_ledger SET status = 'error' WHERE photo_id = ?", w.ids.tiny);
+    notify.markVerified(w.ids.large);
+    assert.deepEqual(observed, [], 'ordinary local rows are not reclassified');
+    notify.markUnrecoverable(w.ids.large);
+    assert.ok(walk(w.repo, 'unavailable').includes(w.ids.large));
+    assert.equal(w.repo.get(w.ids.tiny)?.originalFailure, null, 'unrelated upload errors stay available');
+    notify.markVerified(w.ids.large);
+    assert.ok(!walk(w.repo, 'unavailable').includes(w.ids.large));
+    notify.markVerified(w.ids.large);
+    assert.deepEqual(observed, ['error:missing-original', 'offloaded:null']);
+    notify.markUnrecoverable(w.ids.large);
+    assert.equal(notify.bindLegacyPhoto?.(w.ids.large, 7), true);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null, 'legacy binding clears stale evidence');
+    assert.equal(observed.at(-1), 'offloaded:null');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('failed integrity healing rolls back evidence and emits no membership change (#1101)', () => {
+  const w = world();
+  try {
+    new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error');
+    let notified = false;
+    const notify = createIntegrityAvailabilityNotifications(
+      w.db,
+      () => {
+        notified = true;
+      },
+      () => {
+        notified = true;
+      },
+    );
+    w.db.exec("CREATE TRIGGER fail_integrity BEFORE UPDATE OF status ON sync_ledger BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => notify.markVerified(w.ids.large), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, 'missing-original');
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'error');
+    assert.equal(notified, false);
+  } finally {
+    w.db.close();
+  }
+});
+
+test('legacy integrity binding and evidence recovery roll back together (#1101)', () => {
+  const w = world();
+  try {
+    new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error');
+    let notified = false;
+    const notify = createIntegrityAvailabilityNotifications(
+      w.db,
+      () => {
+        notified = true;
+      },
+      () => {
+        notified = true;
+      },
+      (id) => {
+        run(w.db, "UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = ?", id);
+        return true;
+      },
+    );
+    w.db.exec("CREATE TRIGGER fail_evidence BEFORE UPDATE OF original_failure ON photos BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => notify.bindLegacyPhoto?.(w.ids.large, 7), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'error');
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, 'missing-original');
+    assert.equal(notified, false);
+  } finally {
+    w.db.close();
+  }
 });
