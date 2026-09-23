@@ -55,7 +55,7 @@ function build(overrides: Partial<PosterCaptureServiceOptions>): { service: Post
   const service = new PosterCaptureService({
     candidates: () => [videoPhoto('a'), videoPhoto('b')],
     hasPoster: () => Promise.resolve(false),
-    captureFrame: () => Promise.resolve(Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+    captureFrame: () => Promise.resolve({ bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]), sourceDimensions: { width: 3840, height: 2160 } }),
     storePoster: () => Promise.resolve({ generated: true, width: 512, height: 288 }),
     changed: (ids) => changed.push([...ids]),
     ...noYield,
@@ -65,6 +65,84 @@ function build(overrides: Partial<PosterCaptureServiceOptions>): { service: Post
 }
 
 describe('PosterCaptureService (ADR-0026 §6)', () => {
+  test('an exact-photo retry bypasses an existing poster without decoding siblings', async () => {
+    const captured: string[] = [];
+    const repaired: string[] = [];
+    const { service, changed } = build({
+      hasPoster: () => Promise.resolve(true),
+      captureFrame: (photo) => {
+        captured.push(photo.id);
+        return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
+      },
+      repaired: (photo) => repaired.push(photo.id),
+    });
+    await service.capturePhoto('b');
+    assert.deepEqual(captured, ['b']);
+    assert.deepEqual(repaired, ['b']);
+    assert.deepEqual(changed, [['b']]);
+  });
+
+  test('targeted retry waits behind background capture and never overlaps it', async () => {
+    let release: (() => void) | undefined;
+    const started: string[] = [];
+    let busy = 0;
+    const { service } = build({
+      candidates: (ids) => [videoPhoto(ids?.[0] ?? 'a')],
+      captureFrame: async (photo) => {
+        assert.equal(busy++, 0);
+        started.push(photo.id);
+        if (photo.id === 'a')
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        busy--;
+        return { bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } };
+      },
+    });
+    const background = service.capture();
+    await Promise.resolve();
+    let completed = false;
+    const target = service.capturePhoto('b').then(() => {
+      completed = true;
+    });
+    await Promise.resolve();
+    assert.equal(completed, false);
+    assert.deepEqual(started, ['a']);
+    release?.();
+    await Promise.all([background, target]);
+    assert.deepEqual(started, ['a', 'b']);
+  });
+
+  test('targeted capture refuses unavailable custody and cannot publish after close', async () => {
+    for (const patch of [{ locked: true }, { syncState: 'offloaded' as const }, { deletedAt: 'deleted' }, { fileKind: 'audio' as const }]) {
+      let decoded = false;
+      const { service, changed } = build({
+        candidates: () => [{ ...videoPhoto('a'), ...patch }],
+        captureFrame: () => {
+          decoded = true;
+          return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
+        },
+      });
+      await service.capturePhoto('a');
+      assert.equal(decoded, false);
+      assert.deepEqual(changed, []);
+    }
+    let stored = false;
+    const { service, changed } = build({
+      captureFrame: () => {
+        service.close();
+        return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
+      },
+      storePoster: () => {
+        stored = true;
+        return Promise.resolve({ generated: true, width: 1, height: 1 });
+      },
+    });
+    await service.capturePhoto('a');
+    assert.equal(stored, false);
+    assert.deepEqual(changed, []);
+  });
+
   test('captures a poster for each candidate and reports the changed ids', async () => {
     const { service, changed } = build({});
     assert.deepEqual(await service.capture(), { scanned: 2, captured: 2, failed: 0, skipped: 0 });
@@ -111,7 +189,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
         capturing -= 1;
         captured.push(photo.id);
         if (captured.includes('a') && captured.includes('b')) resolveAllDone();
-        return Buffer.from([0x89]);
+        return { bytes: Buffer.from([0x89]), sourceDimensions: { width: 3840, height: 2160 } };
       },
       storePoster: () => Promise.resolve({ generated: true, width: 1, height: 1 }),
       changed: () => undefined,

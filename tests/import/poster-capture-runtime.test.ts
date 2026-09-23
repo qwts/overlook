@@ -58,17 +58,61 @@ function runtime(overrides: Partial<PosterCaptureRuntimeOptions>): PosterCapture
     blobs: { verifyThumbs: () => Promise.resolve(false) } as unknown as PosterCaptureRuntimeOptions['blobs'],
     blobsReady: Promise.resolve(),
     thumbnails: {
-      regenerateFor: () => Promise.resolve({ generated: true, width: 1, height: 1 }),
+      regenerateFor: () => Promise.resolve({ generated: true, width: 2048, height: 1152 }),
     } as unknown as PosterCaptureRuntimeOptions['thumbnails'],
     currentKey: () => ({}) as unknown as ReturnType<PosterCaptureRuntimeOptions['currentKey']>,
     resolveKey: (() => Promise.resolve({})) as unknown as PosterCaptureRuntimeOptions['resolveKey'],
     changed: () => undefined,
-    captureFrame: () => Promise.resolve(Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+    captureFrame: () => Promise.resolve({ bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]), sourceDimensions: { width: 3840, height: 2160 } }),
     ...overrides,
   };
 }
 
 describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
+  test('explicit successful capture repairs dimensions and Unavailable membership for only its row', async () => {
+    const options = runtime({});
+    const repo = new PhotosRepository(options.db);
+    repo.insert({ ...videoInsert(), id: 'sibling', derivativeKey: 'sibling-derivative', variantSourceId: VIDEO_ID });
+    for (const id of [VIDEO_ID, 'sibling']) {
+      repo.setDimensionStatus(id, 'unavailable');
+      repo.setPreviewMissing(id, true);
+    }
+    const events: string[] = [];
+    const service = createPosterCaptureRuntime({ ...options, changed: (_ids, membership) => events.push(membership) });
+    try {
+      await service.capturePhoto(VIDEO_ID);
+      assert.equal(repo.get(VIDEO_ID)?.dimensionStatus, 'verified');
+      assert.equal(repo.get(VIDEO_ID)?.width, 3840);
+      assert.equal(repo.get(VIDEO_ID)?.height, 2160);
+      assert.equal(repo.get(VIDEO_ID)?.previewFailure, null);
+      assert.equal(repo.get('sibling')?.dimensionStatus, 'unavailable');
+      assert.equal(repo.get('sibling')?.previewFailure, 'deferred-original');
+      assert.deepEqual(events, ['library']);
+    } finally {
+      service.close();
+      options.db.close();
+    }
+  });
+
+  test('a capped poster preserves known 4K metadata and missing decoder dimensions cannot repair evidence', async () => {
+    for (const sourceDimensions of [{ width: 3840, height: 2160 }, null]) {
+      const options = runtime({ captureFrame: () => Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions }) });
+      const repo = new PhotosRepository(options.db);
+      repo.repairGeneratedDimensions(VIDEO_ID, 3840, 2160);
+      if (sourceDimensions === null) repo.setDimensionStatus(VIDEO_ID, 'unavailable');
+      const service = createPosterCaptureRuntime(options);
+      try {
+        await service.capturePhoto(VIDEO_ID);
+        assert.equal(repo.get(VIDEO_ID)?.width, 3840);
+        assert.equal(repo.get(VIDEO_ID)?.height, 2160);
+        assert.equal(repo.get(VIDEO_ID)?.dimensionStatus, sourceDimensions === null ? 'unavailable' : 'verified');
+      } finally {
+        service.close();
+        options.db.close();
+      }
+    }
+  });
+
   test('captures the injected frame and stores it as a PNG poster for a local video row', async () => {
     const stored: Array<{ photoId: string; derivativeKey: string; fileKind: string; bytes: Buffer }> = [];
     const changed: string[][] = [];
@@ -86,7 +130,7 @@ describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
         changed: (ids) => changed.push([...ids]),
         captureFrame: () => {
           captureCalls += 1;
-          return Promise.resolve(frame);
+          return Promise.resolve({ bytes: frame, sourceDimensions: { width: 3840, height: 2160 } });
         },
       }),
     );
@@ -106,7 +150,7 @@ describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
         blobs: { verifyThumbs: () => Promise.resolve(true) } as unknown as PosterCaptureRuntimeOptions['blobs'],
         captureFrame: () => {
           captureCalls += 1;
-          return Promise.resolve(Buffer.from([1]));
+          return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
         },
       }),
     );

@@ -33,6 +33,21 @@ offloaded, trashed, absent, and closed-library targets are not decoded. Successf
 repair updates Unavailable/All Photos membership without restart. The encrypted
 deferred-edit test also exercises this path with a persisted rotated edit.
 
+Video retries use `PosterCaptureService.capturePhoto` and the same bounded
+offscreen queue as background poster generation. Service/runtime tests verify
+exact-row selection, waiting behind background work, custody refusal, abort
+before publication, and successful dimension repair without changing siblings.
+An explicit successful repair refreshes membership; background capture remains
+a derivative-only refresh. Audio remains preserved-only under ADR-0026.
+
+Video repair retains uncapped decoder dimensions: a 3840×2160 source with a
+2048×1152 poster must remain 3840×2160 without a false metadata mismatch. A
+poster without valid decoder dimensions cannot clear unavailable dimension evidence.
+
+With automatic backup disabled, explicitly repair a video with unknown dimensions.
+Its pending-backup count updates immediately after metadata repair, without waiting
+for a backup run. Background poster generation still refreshes thumbnails only.
+
 The Inspector/context-menu entry point, typed IPC, and browser acceptance cases
 remain tracked by #1098; these backend checks alone do not establish that the
 user-visible action is delivered.

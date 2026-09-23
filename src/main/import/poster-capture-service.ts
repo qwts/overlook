@@ -9,6 +9,11 @@ import type { PhotoRecord } from '../../shared/library/types.js';
 // failed import (§6). Capture never touches the stored original — the frame
 // feeds the existing sharp derivative chain and the poster is regenerable cache.
 
+export interface CapturedPosterFrame {
+  readonly bytes: Buffer;
+  readonly sourceDimensions: { readonly width: number; readonly height: number } | null;
+}
+
 export interface PosterCaptureSummary {
   readonly scanned: number;
   readonly captured: number;
@@ -18,17 +23,18 @@ export interface PosterCaptureSummary {
 
 export interface PosterCaptureServiceOptions {
   /** Video/animated candidates that may still need a poster. */
-  readonly candidates: () => readonly PhotoRecord[];
+  readonly candidates: (photoIds?: readonly string[]) => readonly PhotoRecord[];
   /** True when a valid poster derivative already exists (skip). */
   readonly hasPoster: (photo: PhotoRecord) => Promise<boolean>;
-  /** Captures the first decodable frame as encoded image bytes, or null when no
+  /** Captures encoded image bytes and source dimensions, or null when no
    * frame decodes within the wall-clock/pixel budget (§9). Never throws for a
    * decode miss — that is a null, so the placeholder simply stays. */
-  readonly captureFrame: (photo: PhotoRecord, signal: AbortSignal) => Promise<Buffer | null>;
+  readonly captureFrame: (photo: PhotoRecord, signal: AbortSignal) => Promise<CapturedPosterFrame | null>;
   /** Feeds a captured frame to the sharp derivative chain and stores the poster. */
   readonly storePoster: (photo: PhotoRecord, frame: Buffer, signal: AbortSignal) => Promise<ThumbnailOutcome>;
   /** Notifies the renderer that these items gained a poster (grid refresh). */
-  readonly changed: (photoIds: readonly string[]) => void;
+  readonly repaired?: ((photo: PhotoRecord, frame: CapturedPosterFrame) => void) | undefined;
+  readonly changed: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
 
@@ -40,6 +46,7 @@ export class PosterCaptureService {
   private readonly controller = new AbortController();
   private active: Promise<PosterCaptureSummary> | null = null;
   private queued = false;
+  private readonly queuedPhotos = new Set<string>();
 
   constructor(private readonly options: PosterCaptureServiceOptions) {}
 
@@ -53,22 +60,43 @@ export class PosterCaptureService {
    * concurrent offscreen decode), so a video imported mid-pass still gets its
    * poster on the trailing pass. */
   capture(): Promise<PosterCaptureSummary> {
-    if (this.active !== null) {
-      this.queued = true;
-      return this.active;
-    }
-    const pass = this.runPass().finally(() => {
-      this.active = null;
-      if (this.queued && !this.controller.signal.aborted) {
-        this.queued = false;
-        void this.capture();
-      }
-    });
-    this.active = pass;
-    return pass;
+    this.queued = true;
+    return this.runQueued();
   }
 
-  private async runPass(): Promise<PosterCaptureSummary> {
+  /** Explicit retries share the background decoder and wait for their own pass. */
+  async capturePhoto(photoId: string): Promise<void> {
+    this.queuedPhotos.add(photoId);
+    await this.runQueued();
+  }
+
+  private runQueued(): Promise<PosterCaptureSummary> {
+    this.active ??= this.drain().finally(() => {
+      this.active = null;
+    });
+    return this.active;
+  }
+
+  private async drain(): Promise<PosterCaptureSummary> {
+    const total = { scanned: 0, captured: 0, failed: 0, skipped: 0 };
+    while ((this.queued || this.queuedPhotos.size > 0) && !this.controller.signal.aborted) {
+      let ids: readonly string[] | undefined;
+      if (this.queued) {
+        this.queued = false;
+      } else {
+        ids = [...this.queuedPhotos];
+        this.queuedPhotos.clear();
+      }
+      const pass = await this.runPass(ids);
+      total.scanned += pass.scanned;
+      total.captured += pass.captured;
+      total.failed += pass.failed;
+      total.skipped += pass.skipped;
+    }
+    return total;
+  }
+
+  private async runPass(photoIds?: readonly string[]): Promise<PosterCaptureSummary> {
     let scanned = 0;
     let captured = 0;
     let failed = 0;
@@ -76,22 +104,30 @@ export class PosterCaptureService {
     const changed: string[] = [];
     const yieldTurn = this.options.yieldTurn ?? defaultYield;
 
-    for (const photo of this.options.candidates()) {
+    for (const photo of this.options.candidates(photoIds)) {
       if (this.controller.signal.aborted) break;
+      if (photoIds !== undefined && !photoIds.includes(photo.id)) continue;
       scanned += 1;
       try {
-        if (await this.options.hasPoster(photo)) {
+        if (photo.locked || photo.deletedAt !== null || photo.syncState === 'offloaded' || photo.fileKind !== 'video') {
+          skipped += 1;
+          continue;
+        }
+        if (photoIds === undefined && (await this.options.hasPoster(photo))) {
           skipped += 1;
           continue;
         }
         const frame = await this.options.captureFrame(photo, this.controller.signal);
+        if (this.controller.signal.aborted) break;
         if (frame === null) {
           // No decodable frame within budget — keep the placeholder tile.
           failed += 1;
           continue;
         }
-        const outcome = await this.options.storePoster(photo, frame, this.controller.signal);
+        const outcome = await this.options.storePoster(photo, frame.bytes, this.controller.signal);
+        if (this.controller.signal.aborted) break;
         if (outcome.generated) {
+          if (photoIds !== undefined) this.options.repaired?.(photo, frame);
           captured += 1;
           changed.push(photo.id);
         } else {
@@ -105,7 +141,9 @@ export class PosterCaptureService {
       await yieldTurn();
     }
 
-    if (changed.length > 0) this.options.changed(changed);
+    if (changed.length > 0 && !this.controller.signal.aborted) {
+      this.options.changed(changed, photoIds === undefined ? 'none' : 'library');
+    }
     return { scanned, captured, failed, skipped };
   }
 }
