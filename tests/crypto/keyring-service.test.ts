@@ -1,3 +1,6 @@
+import { buffer } from 'node:stream/consumers';
+import { OriginalRecoveryService } from '../../src/main/library/original-recovery-service.js';
+import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -125,6 +128,43 @@ async function world() {
 }
 
 describe('keyring service (#517)', () => {
+  test('recovered originals retain derivative custody through removal and key re-import (#1101)', async () => {
+    const w = await world();
+    const retired = w.keyStore().rotate();
+    await w.seal('recovered', retired);
+    const photo = w.photos.get('recovered')!;
+    const bytes = await buffer(w.blobStore.getStream(photo.contentHash, w.keyStore().resolver(), photo.id));
+    const source = join(w.dataDir, 'recovery-source.jpg');
+    await writeFile(source, bytes);
+    await w.blobStore.deleteOriginal(photo.contentHash);
+    const availability = new OriginalAvailabilityRepository(w.db);
+    availability.repair(photo.id, 'error');
+    const active = w.keyStore().rotate();
+    w.service.reconcile();
+    await w.service.exportKey(retired.id, PASSWORD);
+    const recovery = new OriginalRecoveryService({
+      getPhoto: (id) => w.photos.get(id),
+      blobs: w.blobStore,
+      ready: Promise.resolve(),
+      writeKey: () => ({ ...active, key: Buffer.from(active.key) }),
+      resolveKey: w.keyStore().resolver(),
+      restored: (hash, keyId) => {
+        availability.recoveredLocal(hash, keyId);
+      },
+    });
+    assert.equal(await recovery.recover(photo.id, source), 'recovered');
+    assert.equal(w.photos.get(photo.id)?.keyId, active.id);
+    assert.deepEqual(await buffer(w.blobStore.getThumbStream(photo.derivativeKey, 'thumb', w.keyStore().resolver(), photo.id)), bytes);
+    assert.equal(w.service.removePreflight(retired.id).tier, 'irreversible');
+    assert.throws(() => w.service.remove(retired.id), KeyringAuthorizationError);
+    assert.equal(w.service.remove(retired.id, REMOVE_KEY_AUTHORIZATION).locked, 1);
+    assert.equal(w.photos.get(photo.id)?.locked, true);
+    assert.equal((await w.service.importKey(w.exportPath, PASSWORD)).outcome, 'imported');
+    assert.equal(w.photos.get(photo.id)?.locked, false);
+    assert.deepEqual(await buffer(w.blobStore.getThumbStream(photo.derivativeKey, 'thumb', w.keyStore().resolver(), photo.id)), bytes);
+    w.db.close();
+  });
+
   test('production custody notifications refresh pending counts and schedule unlocked preview repair', async () => {
     const w = await world();
     await w.seal('P1', w.keyStore().currentKey());

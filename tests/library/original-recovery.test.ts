@@ -1,3 +1,6 @@
+import { KeyringRepository } from '../../src/main/db/keyring-repository.js';
+import { photoKeySelection } from '../../src/main/db/photo-key-selection.js';
+import { unavailableKeyIdsForPhoto, lockedDirtySnapshot } from '../../src/main/db/backup-key-availability.js';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -10,7 +13,7 @@ import { BlobStore } from '../../src/main/blobs/blob-store.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryAll, run } from '../../src/main/db/sql.js';
 import { OriginalRecoveryService, type OriginalRecoveryOptions } from '../../src/main/library/original-recovery-service.js';
 
 async function world(t: TestContext) {
@@ -104,6 +107,16 @@ test('recovery publishes with the active write key and commits the verified key 
   assert.equal(w.repo.get('root')?.keyId, 2);
   assert.equal(w.repo.get('sibling')?.keyId, 2);
   assert.equal(w.repo.get('sibling')?.coverage, 'excluded');
+  const keyring = new KeyringRepository(w.db);
+  assert.equal(keyring.usage(1).photos, 2);
+  assert.deepEqual(keyring.photoIds(1), ['root', 'sibling']);
+  keyring.setPresent(1, false);
+  assert.equal(w.repo.get('root')?.locked, true);
+  assert.deepEqual(photoKeySelection(w.db, ['root', 'sibling']), { photoIds: [], locked: 2, missing: 0 });
+  assert.deepEqual(unavailableKeyIdsForPhoto(w.db, 'root'), [1]);
+  assert.deepEqual(lockedDirtySnapshot(w.db), { photoIds: ['root'], keyIds: [1] });
+  keyring.setPresent(1, true);
+  assert.equal(w.repo.get('root')?.locked, false);
 });
 
 test('failed ledger update rolls back evidence and can reconcile an already-published original on retry (#1101)', async (t) => {
@@ -192,4 +205,29 @@ test('close drains an in-flight verification without clearing evidence or admitt
   await service.drain();
   assert.deepEqual(w.changed, []);
   assert.equal(w.repo.get('root')?.originalFailure, 'missing-original');
+});
+
+test('retained recovery keys commit atomically, deduplicate, and follow photo purge (#1101)', async (t) => {
+  const w = await world(t);
+  run(w.db, "INSERT INTO keys (id, wrapped_key, created_at) VALUES (2, 'test', '2026-01-02')");
+  const availability = new OriginalAvailabilityRepository(w.db);
+  const references = () =>
+    queryAll<{ photo_id: string; key_id: number }>(w.db, 'SELECT * FROM retained_photo_keys ORDER BY photo_id, key_id');
+  w.db.exec("CREATE TRIGGER reject_recovery BEFORE UPDATE ON sync_ledger BEGIN SELECT RAISE(ABORT, 'injected'); END");
+  assert.throws(() => availability.recoveredLocal(w.hash, 2), /injected/u);
+  assert.deepEqual(references(), []);
+  assert.equal(w.repo.get('root')?.keyId, 1);
+  assert.equal(w.repo.get('root')?.originalFailure, 'missing-original');
+  w.db.exec('DROP TRIGGER reject_recovery');
+  availability.recoveredLocal(w.hash, 2);
+  availability.recoveredLocal(w.hash, 2);
+  assert.deepEqual(references(), [
+    { photo_id: 'root', key_id: 1 },
+    { photo_id: 'sibling', key_id: 1 },
+  ]);
+  run(w.db, "DELETE FROM photos WHERE id = 'root'");
+  assert.equal(new KeyringRepository(w.db).usage(1).photos, 1);
+  run(w.db, "DELETE FROM photos WHERE id = 'sibling'");
+  assert.deepEqual(references(), []);
+  assert.equal(new KeyringRepository(w.db).usage(1).photos, 0);
 });

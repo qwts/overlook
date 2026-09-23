@@ -1,3 +1,4 @@
+import { migrateRetainedPhotoKeys } from './retained-photo-keys.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { migrateOriginalAvailability } from './original-availability.js';
@@ -59,4 +60,5 @@ export const COLLECTION_MIGRATIONS: readonly {
   },
   { version: 44, name: 'deferred-edit-bakes', up: migrateEditBakeDebt },
   { version: 45, name: 'original-availability', up: migrateOriginalAvailability },
+  { version: 46, name: 'retained-photo-keys', up: migrateRetainedPhotoKeys },
 ];

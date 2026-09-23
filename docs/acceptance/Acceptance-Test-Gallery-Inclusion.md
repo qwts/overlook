@@ -120,6 +120,14 @@ Restored excluded placeholders and explicitly missing partial-restore rows enter
 Unavailable immediately when the catalog is created. Included originals without
 absence evidence remain available; no later consistency scan is required.
 
+When recovery changes the original key, existing derivative envelopes retain their
+prior key reference. Verify that the old key still counts the affected photos,
+requires the destructive removal ceremony, and locks those photos if removed.
+Re-importing the key must authenticate an existing derivative and unlock them.
+References are conservatively retained until photo purge; preview regeneration
+alone does not prove every old-key envelope is gone. Failed catalog publication
+rolls back key references together with availability evidence.
+
 ## Explicit per-photo repair (#1098)
 
 For a supported image with a recorded preview or dimension failure, open its

@@ -56,6 +56,13 @@ export class OriginalAvailabilityRepository {
    * backup or re-including a deliberately excluded photo. */
   recoveredLocal(contentHash: string, keyId: number): readonly string[] {
     return this.db.transaction(() => {
+      run(
+        this.db,
+        `INSERT OR IGNORE INTO retained_photo_keys (photo_id, key_id)
+        SELECT id, key_id FROM photos WHERE content_hash = ? AND key_id != ?`,
+        contentHash,
+        keyId,
+      );
       const ids = queryAll<{ id: string }>(
         this.db,
         'UPDATE photos SET original_failure = NULL, key_id = @keyId WHERE content_hash = @contentHash RETURNING id',

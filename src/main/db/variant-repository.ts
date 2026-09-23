@@ -1,3 +1,4 @@
+import { PHOTO_KEY_PRESENT_SQL } from './retained-photo-keys.js';
 import { createHash } from 'node:crypto';
 
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
@@ -61,7 +62,7 @@ export class VariantRepository {
   family(contentHash: string): VariantFamily {
     const rows = queryAll<PhotoRow>(
       this.db,
-      `SELECT p.*, l.status AS sync_state, l.coverage AS coverage, k.material_present AS key_present, p.imported_at AS sort_key
+      `SELECT p.*, l.status AS sync_state, l.coverage AS coverage, ${PHOTO_KEY_PRESENT_SQL} AS key_present, p.imported_at AS sort_key
          FROM ordinary_visible_photos p LEFT JOIN sync_ledger l ON l.photo_id = p.id LEFT JOIN keys k ON k.id = p.key_id
         WHERE p.content_hash = @contentHash AND p.deleted_at IS NULL
         ORDER BY p.imported_at, p.id`,

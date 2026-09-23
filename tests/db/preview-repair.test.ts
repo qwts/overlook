@@ -1,3 +1,4 @@
+import { toRecord, type PhotoRow } from '../../src/main/db/photo-row.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
@@ -41,14 +42,20 @@ test('schemas 41/42 queue older variants without declaring them unavailable befo
       keyId: 1,
     });
     repo.setDimensionStatus('root', 'verified');
-    const root = repo.get('root');
-    assert.ok(root);
+    // Build the legacy fixture before current repository reads require later tables.
+    const row = queryGet<PhotoRow>(
+      db,
+      `SELECT p.*, 'local' AS sync_state, 'included' AS coverage,
+      1 AS key_present, p.imported_at AS sort_key FROM photos p WHERE id = 'root'`,
+    );
+    assert.ok(row);
+    const root = toRecord(row);
     const variants = new VariantRepository(db);
     variants.duplicate(root, 'sibling', '2026-09-21');
     variants.duplicate(root, 'trashed', '2026-09-21');
     repo.softDelete(['root', 'trashed']);
     run(db, "UPDATE sync_ledger SET dirty = 0, status = 'offloaded'");
-    assert.equal(migrate(db), 5);
+    assert.equal(migrate(db), 6);
     assert.equal(migrate(db), 0);
     // INDEXED BY fails preparation if the partial index cannot serve this predicate.
     const plan = queryAll<{ detail: string }>(

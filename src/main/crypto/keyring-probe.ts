@@ -31,12 +31,15 @@ export async function probeKeyAgainstStore(
   const resolveKey = (candidate: number): Buffer | undefined => (candidate === keyId ? key : undefined);
   const rows = queryAll<{ id: string; content_hash: string; derivative_key: string }>(
     db,
-    `SELECT id, content_hash, derivative_key FROM photos WHERE key_id = @keyId ORDER BY id LIMIT @limit`,
+    `SELECT id, content_hash, derivative_key FROM photos p WHERE key_id = @keyId
+      OR EXISTS (SELECT 1 FROM retained_photo_keys r WHERE r.photo_id = p.id AND r.key_id = @keyId)
+      ORDER BY id LIMIT @limit`,
     { keyId, limit: PROBE_CANDIDATES },
   );
   for (const row of rows) {
     const openers = [
       () => blobStore.getThumbStream(row.derivative_key, 'thumb', resolveKey, row.id),
+      () => blobStore.getThumbStream(row.derivative_key, 'mid', resolveKey, row.id),
       () => (blobStore.hasOriginal(row.content_hash) ? blobStore.getStream(row.content_hash, resolveKey, row.id) : null),
     ];
     for (const open of openers) {

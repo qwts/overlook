@@ -104,7 +104,11 @@ describe('shared companion references (#1120)', () => {
             phase,
           );
           const photos = new PhotosRepository(db);
-          assert.equal(photos.get(hiddenId), undefined, 'the ordinary view really hides the journaled row');
+          assert.equal(
+            queryGet<{ id: string }>(db, 'SELECT id FROM ordinary_visible_photos WHERE id = ?', hiddenId),
+            undefined,
+            'the legacy ordinary view really hides the journaled row',
+          );
           migrate(db);
           new ProtectedPhotoMigrationRepository(db).rollbackPrecommit('interrupted');
           assert.ok(photos.get(hiddenId), 'startup rollback restores ordinary visibility');
