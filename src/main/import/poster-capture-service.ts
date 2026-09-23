@@ -9,6 +9,11 @@ import type { PhotoRecord } from '../../shared/library/types.js';
 // failed import (§6). Capture never touches the stored original — the frame
 // feeds the existing sharp derivative chain and the poster is regenerable cache.
 
+export interface CapturedPosterFrame {
+  readonly bytes: Buffer;
+  readonly sourceDimensions: { readonly width: number; readonly height: number } | null;
+}
+
 export interface PosterCaptureSummary {
   readonly scanned: number;
   readonly captured: number;
@@ -21,14 +26,14 @@ export interface PosterCaptureServiceOptions {
   readonly candidates: (photoIds?: readonly string[]) => readonly PhotoRecord[];
   /** True when a valid poster derivative already exists (skip). */
   readonly hasPoster: (photo: PhotoRecord) => Promise<boolean>;
-  /** Captures the first decodable frame as encoded image bytes, or null when no
+  /** Captures encoded image bytes and source dimensions, or null when no
    * frame decodes within the wall-clock/pixel budget (§9). Never throws for a
    * decode miss — that is a null, so the placeholder simply stays. */
-  readonly captureFrame: (photo: PhotoRecord, signal: AbortSignal) => Promise<Buffer | null>;
+  readonly captureFrame: (photo: PhotoRecord, signal: AbortSignal) => Promise<CapturedPosterFrame | null>;
   /** Feeds a captured frame to the sharp derivative chain and stores the poster. */
   readonly storePoster: (photo: PhotoRecord, frame: Buffer, signal: AbortSignal) => Promise<ThumbnailOutcome>;
   /** Notifies the renderer that these items gained a poster (grid refresh). */
-  readonly repaired?: ((photo: PhotoRecord, outcome: ThumbnailOutcome) => void) | undefined;
+  readonly repaired?: ((photo: PhotoRecord, frame: CapturedPosterFrame) => void) | undefined;
   readonly changed: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   readonly yieldTurn?: (() => Promise<void>) | undefined;
 }
@@ -119,10 +124,10 @@ export class PosterCaptureService {
           failed += 1;
           continue;
         }
-        const outcome = await this.options.storePoster(photo, frame, this.controller.signal);
+        const outcome = await this.options.storePoster(photo, frame.bytes, this.controller.signal);
         if (this.controller.signal.aborted) break;
         if (outcome.generated) {
-          if (photoIds !== undefined) this.options.repaired?.(photo, outcome);
+          if (photoIds !== undefined) this.options.repaired?.(photo, frame);
           captured += 1;
           changed.push(photo.id);
         } else {

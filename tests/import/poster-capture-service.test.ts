@@ -55,7 +55,7 @@ function build(overrides: Partial<PosterCaptureServiceOptions>): { service: Post
   const service = new PosterCaptureService({
     candidates: () => [videoPhoto('a'), videoPhoto('b')],
     hasPoster: () => Promise.resolve(false),
-    captureFrame: () => Promise.resolve(Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+    captureFrame: () => Promise.resolve({ bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]), sourceDimensions: { width: 3840, height: 2160 } }),
     storePoster: () => Promise.resolve({ generated: true, width: 512, height: 288 }),
     changed: (ids) => changed.push([...ids]),
     ...noYield,
@@ -72,7 +72,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
       hasPoster: () => Promise.resolve(true),
       captureFrame: (photo) => {
         captured.push(photo.id);
-        return Promise.resolve(Buffer.from([1]));
+        return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
       },
       repaired: (photo) => repaired.push(photo.id),
     });
@@ -96,7 +96,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
             release = resolve;
           });
         busy--;
-        return Buffer.from([1]);
+        return { bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } };
       },
     });
     const background = service.capture();
@@ -120,7 +120,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
         candidates: () => [{ ...videoPhoto('a'), ...patch }],
         captureFrame: () => {
           decoded = true;
-          return Promise.resolve(Buffer.from([1]));
+          return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
         },
       });
       await service.capturePhoto('a');
@@ -131,7 +131,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
     const { service, changed } = build({
       captureFrame: () => {
         service.close();
-        return Promise.resolve(Buffer.from([1]));
+        return Promise.resolve({ bytes: Buffer.from([1]), sourceDimensions: { width: 3840, height: 2160 } });
       },
       storePoster: () => {
         stored = true;
@@ -189,7 +189,7 @@ describe('PosterCaptureService (ADR-0026 §6)', () => {
         capturing -= 1;
         captured.push(photo.id);
         if (captured.includes('a') && captured.includes('b')) resolveAllDone();
-        return Buffer.from([0x89]);
+        return { bytes: Buffer.from([0x89]), sourceDimensions: { width: 3840, height: 2160 } };
       },
       storePoster: () => Promise.resolve({ generated: true, width: 1, height: 1 }),
       changed: () => undefined,

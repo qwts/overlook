@@ -93,3 +93,7 @@ rows available; damaged ciphertext must still record missing-original evidence.
 Restored excluded placeholders and explicitly missing partial-restore rows enter
 Unavailable immediately when the catalog is created. Included originals without
 absence evidence remain available; no later consistency scan is required.
+
+Video repair retains uncapped decoder dimensions: a 3840×2160 source with a
+2048×1152 poster must remain 3840×2160 without a false metadata mismatch. A
+poster without valid decoder dimensions cannot clear unavailable dimension evidence.
