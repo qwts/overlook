@@ -269,6 +269,10 @@ outlier illustrates why maximum latency is diagnostic rather than the
 full-walk gate. Filtered latency does not justify a pixel-area schema/index
 change from this evidence.
 
+Cursor-seek regressions (#1257) check SQLCipher index searches and strict cursor
+ordering across ties, null dates, and inclusion filters. Windows qualification
+retains the 200K fixture and 250 ms p95 budget.
+
 The E2E lane keeps a fast 2,000-row variant of the same path
 (`tests/e2e/grid.spec.ts`) so windowing + cursor paging stay covered per-PR;
 the 200K run is manual because seeding takes ~17 s.
