@@ -867,7 +867,7 @@ export class PhotosRepository {
   ): readonly BackupIntegrityItem[] {
     return queryAll<BackupIntegrityItem>(
       this.db,
-      `SELECT p.id, p.content_hash AS contentHash, l.status AS syncState
+      `SELECT p.id, p.asset_owner_id AS assetOwnerId, p.content_hash AS contentHash, l.status AS syncState
          FROM ordinary_visible_photos p
          JOIN sync_ledger l ON l.photo_id = p.id
         WHERE (

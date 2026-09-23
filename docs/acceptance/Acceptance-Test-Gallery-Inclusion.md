@@ -78,3 +78,7 @@ at the original path cannot clear it. Independent preview debt remains.
 `gallery-inclusion.test.ts` and `consistency.test.ts` cover these boundaries.
 The explicit local-file Recover original command, UI, and browser acceptance
 remain required follow-up work under #1101.
+
+Remote-only duplicate variants authenticate shared originals against their retained
+asset owner. Valid ciphertext must leave root, duplicate, and duplicate-of-duplicate
+rows available; damaged ciphertext must still record missing-original evidence.
