@@ -133,6 +133,11 @@ manifest must retain that sibling and its deletion timestamp. Its prior synced
 or offloaded custody remains intact; a never-backed-up Trash sibling must not
 be newly advertised as recoverable merely because a live sibling recovered.
 
+Launch recovery from a detached Inspector. After success, its missing-original
+prompt must disappear without changing selection or reopening the window. Rapid
+selection changes or older in-flight reads must not replace the current record.
+DOM coverage: `tests/dom/detached-inspector-photo.test.tsx`.
+
 ## Explicit per-photo repair (#1098)
 
 For a supported image with a recorded preview or dimension failure, open its

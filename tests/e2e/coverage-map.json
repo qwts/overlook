@@ -2984,7 +2984,11 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/library/original-recovery.test.ts", "tests/library/original-recovery-ipc.test.ts"]
+          "paths": [
+            "tests/library/original-recovery.test.ts",
+            "tests/library/original-recovery-ipc.test.ts",
+            "tests/dom/detached-inspector-photo.test.tsx"
+          ]
         }
       ]
     }

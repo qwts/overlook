@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import type { PhotoRecord } from '../../../shared/library/types.js';
+import { useDetachedInspectorPhoto } from './use-detached-inspector-photo';
 import { Inspector } from './Inspector';
 
 import './detached-inspector-window.css';
@@ -15,27 +15,12 @@ const messages = defineMessages({
 export function DetachedInspectorWindow(): ReactElement {
   const intl = useIntl();
   const [state, setState] = useState<InspectorWindowState>({ photoId: null, providerLabel: 'Cloud', selectionPosition: null });
-  const [photo, setPhoto] = useState<PhotoRecord | null>(null);
+  const photo = useDetachedInspectorPhoto(state);
 
   useEffect(() => {
     void window.overlook.inspectorWindow.snapshot().then(setState);
     return window.overlook.inspectorWindow.onChanged(setState);
   }, []);
-
-  useEffect(() => {
-    let current = true;
-    if (state.photoId === null) {
-      return () => {
-        current = false;
-      };
-    }
-    void window.overlook.library.get({ id: state.photoId }).then(({ photo: next }) => {
-      if (current) setPhoto(next);
-    });
-    return () => {
-      current = false;
-    };
-  }, [state]);
 
   const step = useCallback((delta: 1 | -1) => {
     void window.overlook.inspectorWindow.step(delta);
