@@ -48,7 +48,7 @@ test('schemas 41/42 queue older variants without declaring them unavailable befo
     variants.duplicate(root, 'trashed', '2026-09-21');
     repo.softDelete(['root', 'trashed']);
     run(db, "UPDATE sync_ledger SET dirty = 0, status = 'offloaded'");
-    assert.equal(migrate(db), 5);
+    assert.equal(migrate(db), MIGRATIONS.filter(({ version }) => version >= 41).length);
     assert.equal(migrate(db), 0);
     // INDEXED BY fails preparation if the partial index cannot serve this predicate.
     const plan = queryAll<{ detail: string }>(
