@@ -165,6 +165,7 @@ export function restoreManifest(
     }
     for (const photo of manifest.photos) {
       const excluded = isExcludedManifestPhoto(photo);
+      const absent = excluded || missingPhotoIds.has(photo.id);
       runNamed(
         db,
         `INSERT INTO photos (
@@ -173,17 +174,18 @@ export function restoreManifest(
            gps_lat, gps_lon, place, imported_at, import_source, favorite,
            is_original, key_id, deleted_at, media_info, user_title, user_description,
            imported_keywords, user_tags, suppressed_keywords, metadata_tags_search, metadata_version,
-           derivative_key, variant_source_id, asset_owner_id
+           derivative_key, variant_source_id, asset_owner_id, original_failure
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite,
            @isOriginal, @keyId, @deletedAt, @mediaInfoJson, @title, @description,
            @importedKeywordsJson, @userTagsJson, @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion,
-           @derivativeKey, @variantSourceId, @assetOwnerId
+           @derivativeKey, @variantSourceId, @assetOwnerId, @originalFailure
          )`,
         {
           ...photo,
+          originalFailure: absent ? 'missing-original' : null,
           coverage: null,
           blobPath: null,
           derivativeKey: ('derivativeKey' in photo ? photo.derivativeKey : undefined) ?? photo.contentHash,
@@ -210,7 +212,6 @@ export function restoreManifest(
       // (ADR-0033 §4) restores the same way as a "not in this backup"
       // placeholder: the row and its metadata return, the original does not,
       // and the placeholder stays excluded so nothing pretends to upload it.
-      const absent = excluded || missingPhotoIds.has(photo.id);
       run(
         db,
         `INSERT INTO sync_ledger (photo_id, status, last_backup_at, dirty, coverage, coverage_origin, coverage_since)

@@ -82,3 +82,7 @@ remain required follow-up work under #1101.
 Remote-only duplicate variants authenticate shared originals against their retained
 asset owner. Valid ciphertext must leave root, duplicate, and duplicate-of-duplicate
 rows available; damaged ciphertext must still record missing-original evidence.
+
+Restored excluded placeholders and explicitly missing partial-restore rows enter
+Unavailable immediately when the catalog is created. Included originals without
+absence evidence remain available; no later consistency scan is required.
