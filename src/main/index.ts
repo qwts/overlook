@@ -830,6 +830,7 @@ void externalOpen.whenReady().then(async () => {
     getEdits: () => ensureMaintenanceServices().photoEdits,
     getProvenance: () => ensureMaintenanceServices().provenance,
     getVariants: () => ensureMaintenanceServices().variants,
+    getPhotoRepair: () => ensureMaintenanceServices().rawRepair,
     getHistogram: () => ensureMaintenanceServices().histogram.service,
     getDuplicates: () => ensureMaintenanceServices().duplicates.service,
     getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
