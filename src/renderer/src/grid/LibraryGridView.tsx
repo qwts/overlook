@@ -1,3 +1,4 @@
+import { repairPhotoWithToast } from '../inspector/photo-repair-action.js';
 import { quickActionMessages } from './quick-action-messages.js';
 import { LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
@@ -647,6 +648,7 @@ export function LibraryGridView({
             restoreContextFocus(contextPhoto.origin);
           }}
           onOpen={() => dispatch({ type: 'lightbox/opened', photoId: contextPhoto.photo.id })}
+          onRepair={() => repairPhotoWithToast(dispatch, contextPhoto.photo, intl)}
           onToggleFavorite={() => {
             if (contextPhoto.targetIds.length === 1) toggleFavorite(contextPhoto.photo);
             else toggleFavorites(contextPhoto.targetIds);

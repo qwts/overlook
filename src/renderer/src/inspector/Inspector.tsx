@@ -1,3 +1,4 @@
+import { PhotoRepairAction } from './photo-repair-action.js';
 import { useEffect, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -160,6 +161,7 @@ export function Inspector({
           {previewFailureLabel(intl, photo.previewFailure)}
         </p>
       ) : null}
+      <PhotoRepairAction key={photo.id} photo={photo} />
       <div className="ovl-inspector__header">
         {photo.locked ? (
           <div
