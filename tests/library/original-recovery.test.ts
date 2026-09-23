@@ -176,9 +176,8 @@ test('key removal during streaming cannot corrupt the envelope or clear absence 
   saved.fill(0);
 });
 
-test('close drains an in-flight verification without clearing evidence or admitting queued recovery (#1101)', async (t) => {
+test('close aborts in-flight verification without clearing evidence or admitting queued recovery (#1101)', { timeout: 2000 }, async (t) => {
   const w = await world(t);
-  let release = (_valid: boolean): void => {};
   let started = (): void => {};
   const verifying = new Promise<void>((resolve) => {
     started = resolve;
@@ -187,10 +186,11 @@ test('close drains an in-flight verification without clearing evidence or admitt
     ...w.options,
     blobs: {
       putOriginal: (...args) => w.blobs.putOriginal(...args),
-      verifyOriginal: () => {
-        started();
+      verifyOriginal: (_hash, _resolveKey, _owner, signal) => {
+        assert.ok(signal);
         return new Promise<boolean>((resolve) => {
-          release = resolve;
+          signal.addEventListener('abort', () => resolve(false), { once: true });
+          started();
         });
       },
     },
@@ -199,7 +199,6 @@ test('close drains an in-flight verification without clearing evidence or admitt
   const second = service.recover('sibling', w.source);
   await verifying;
   service.close();
-  release(true);
   assert.equal(await first, 'cancelled');
   assert.equal(await second, 'cancelled');
   await service.drain();

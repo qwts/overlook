@@ -175,3 +175,7 @@ Keep an unavailable image selected in All Photos and retry repair from Inspector
 After success, its thumbnail must reload the regenerated derivative immediately,
 without navigating away or reopening Inspector. Unrelated photo changes must not
 reload it; the same event-driven thumbnail invalidation applies to detached Inspectors.
+
+Close, lock, or switch libraries while original recovery is verifying the
+published envelope. Both the source read and the verification read must cancel
+and drain; absence evidence must remain until a later verified recovery succeeds.

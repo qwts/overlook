@@ -79,8 +79,14 @@ export class OriginalRecoveryService {
         // No-replace publication may have found an existing envelope. Its
         // presence (and even its readable header) is not proof of recovery.
         if (!current()) return 'cancelled';
-        if (!(await this.options.blobs.verifyOriginal(photo.contentHash, this.options.resolveKey, assetOwnerOf(photo)))) return 'failed';
+        const verified = await this.options.blobs.verifyOriginal(
+          photo.contentHash,
+          this.options.resolveKey,
+          assetOwnerOf(photo),
+          controller.signal,
+        );
         if (!current()) return 'cancelled';
+        if (!verified) return 'failed';
         this.options.restored(photo.contentHash, stored.keyId);
         return 'recovered';
       } finally {
