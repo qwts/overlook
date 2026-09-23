@@ -69,6 +69,29 @@ function runtime(overrides: Partial<PosterCaptureRuntimeOptions>): PosterCapture
 }
 
 describe('createPosterCaptureRuntime (#548, ADR-0026 §6)', () => {
+  test('explicit successful capture repairs dimensions and Unavailable membership for only its row', async () => {
+    const options = runtime({});
+    const repo = new PhotosRepository(options.db);
+    repo.insert({ ...videoInsert(), id: 'sibling', derivativeKey: 'sibling-derivative', variantSourceId: VIDEO_ID });
+    for (const id of [VIDEO_ID, 'sibling']) {
+      repo.setDimensionStatus(id, 'unavailable');
+      repo.setPreviewMissing(id, true);
+    }
+    const events: string[] = [];
+    const service = createPosterCaptureRuntime({ ...options, changed: (_ids, membership) => events.push(membership) });
+    try {
+      await service.capturePhoto(VIDEO_ID);
+      assert.equal(repo.get(VIDEO_ID)?.dimensionStatus, 'verified');
+      assert.equal(repo.get(VIDEO_ID)?.previewFailure, null);
+      assert.equal(repo.get('sibling')?.dimensionStatus, 'unavailable');
+      assert.equal(repo.get('sibling')?.previewFailure, 'deferred-original');
+      assert.deepEqual(events, ['library']);
+    } finally {
+      service.close();
+      options.db.close();
+    }
+  });
+
   test('captures the injected frame and stores it as a PNG poster for a local video row', async () => {
     const stored: Array<{ photoId: string; derivativeKey: string; fileKind: string; bytes: Buffer }> = [];
     const changed: string[][] = [];

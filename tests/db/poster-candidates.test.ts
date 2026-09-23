@@ -66,5 +66,10 @@ describe('posterCaptureCandidates (#548, ADR-0026 §6)', () => {
       posterCaptureCandidates(db).map(({ id }) => id),
       [local.id],
     );
+    assert.deepEqual(posterCaptureCandidates(db, [offloaded.id, deleted.id, still.id]), []);
+    assert.deepEqual(
+      posterCaptureCandidates(db, [local.id]).map(({ id }) => id),
+      [local.id],
+    );
   });
 });

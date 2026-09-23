@@ -33,6 +33,13 @@ offloaded, trashed, absent, and closed-library targets are not decoded. Successf
 repair updates Unavailable/All Photos membership without restart. The encrypted
 deferred-edit test also exercises this path with a persisted rotated edit.
 
+Video retries use `PosterCaptureService.capturePhoto` and the same bounded
+offscreen queue as background poster generation. Service/runtime tests verify
+exact-row selection, waiting behind background work, custody refusal, abort
+before publication, and successful dimension repair without changing siblings.
+An explicit successful repair refreshes membership; background capture remains
+a derivative-only refresh. Audio remains preserved-only under ADR-0026.
+
 The Inspector/context-menu entry point, typed IPC, and browser acceptance cases
 remain tracked by #1098; these backend checks alone do not establish that the
 user-visible action is delivered.
