@@ -75,7 +75,10 @@ test('failed evidence lookup still runs fallback work instead of implicitly skip
 });
 
 const gate = jobSource('gate');
-const script = gate.split('        run: |\n')[1]?.replace(/^ {10}/gmu, '');
+const script = gate
+  .split('        run: |\n')[1]
+  ?.split('\n      - name:')[0]
+  ?.replace(/^ {10}/gmu, '');
 assert.ok(script, 'aggregate gate script must exist');
 const success = {
   POLICY: 'success',
@@ -97,19 +100,24 @@ function verdict(overrides: Record<string, string>): number | null {
   const cancelled = overrides['CANCELLED'] === 'true';
   const reject = /name: Reject cancelled workflow\n {8}if: \$\{\{ cancelled\(\) \}\}\n {8}run: (.+)/u.exec(gate)?.[1];
   assert.ok(reject);
-  const command = cancelled ? reject : script;
+  const lateReject = /name: Reject cancellation after verdict\n {8}if: \$\{\{ cancelled\(\) \}\}\n {8}run: (.+)/u.exec(gate)?.[1];
+  assert.ok(lateReject);
+  const command = cancelled ? reject : overrides['CANCELLED_AFTER_VERDICT'] === 'true' ? `${script}\n${lateReject}` : script;
   return spawnSync('bash', ['-e', '-c', command ?? 'exit 99'], { env: { ...process.env, ...success, ...overrides } }).status;
 }
 
 test('aggregate verdict fails closed for cancelled workflows and required jobs', () => {
   assert.match(gate, /if: always\(\)/u);
   assert.match(jobSource('e2e-gate'), /always\(\)/u);
+  assert.ok(gate.indexOf('Reject cancellation after verdict') > gate.indexOf('Enforce the selected lifecycle lane'));
+  assert.match(gate.trimEnd(), /name: Reject cancellation after verdict[\s\S]*run: exit 1$/u);
   // Status functions are valid in step conditions, not in env expressions.
   assert.match(gate, /name: Enforce the selected lifecycle lane\n {8}if: \$\{\{ !cancelled\(\) \}\}/u);
   assert.doesNotMatch(gate, /[A-Z_]+: \$\{\{ (?:cancelled|always|success|failure)\(\)/u);
   for (const MODE of ['full', 'manual', 'queue', 'post-merge']) {
     assert.equal(verdict({ MODE }), 0, MODE);
     assert.notEqual(verdict({ MODE, CANCELLED: 'true' }), 0, MODE);
+    assert.notEqual(verdict({ MODE, CANCELLED_AFTER_VERDICT: 'true' }), 0, `${MODE}: cancellation after a successful verdict`);
     for (const result of ['failure', 'cancelled', 'skipped', '']) {
       assert.notEqual(verdict({ MODE, COMPLETE: result }), 0, `${MODE}: ${result}`);
     }

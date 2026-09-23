@@ -85,7 +85,9 @@ transfer to an organization; they do not justify skipping exact-commit checks.
 Worker jobs use explicit `!cancelled()` status conditions so skipped evidence
 jobs still permit required fallback work, while superseded runs release their
 runners. The bounded aggregate gates retain `always()` to inspect unsuccessful
-dependencies; the CI verdict explicitly rejects a cancelled workflow. A cancelled
+dependencies; the CI verdict explicitly rejects a cancelled workflow before and after its
+ordinary verdict step. The final rejection covers cancellation arriving after
+the first rejection was skipped; it cannot retroactively reject a completed job. A cancelled
 run is never reusable exact-SHA evidence. GitHub documents the distinction in its
 [workflow cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
 

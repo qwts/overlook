@@ -766,3 +766,6 @@ jobs:
               ;;
             *) exit 1 ;;
           esac
+      - name: Reject cancellation after verdict
+        if: ${{ cancelled() }}
+        run: exit 1
