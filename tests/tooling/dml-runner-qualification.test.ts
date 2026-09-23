@@ -26,7 +26,10 @@ for (const policyResult of ['success', 'failure', 'cancelled', 'skipped']) {
 
 const gate = workflow.split('  gate:\n')[1];
 assert.ok(gate);
-const script = gate.split('      - name: Enforce the selected lifecycle lane\n')[1]?.split('        run: |\n')[1];
+const script = gate
+  .split('      - name: Enforce the selected lifecycle lane\n')[1]
+  ?.split('        run: |\n')[1]
+  ?.split('\n      - name:')[0];
 assert.ok(script);
 
 for (const mode of ['full', 'queue', 'manual']) {
