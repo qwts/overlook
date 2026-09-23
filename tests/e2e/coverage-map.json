@@ -336,6 +336,7 @@
           "paths": [
             "tests/library/photo-repair-ipc.test.ts",
             "tests/dom/photo-repair-action.test.tsx",
+            "tests/dom/inspector-thumbnail.test.tsx",
             "tests/import/targeted-preview-repair.test.ts"
           ]
         }

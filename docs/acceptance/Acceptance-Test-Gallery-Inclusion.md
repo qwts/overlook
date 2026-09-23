@@ -106,3 +106,8 @@ Coverage: `tests/e2e/gallery-inclusion.spec.ts` repairs one preview failure via
 context menu and one dimension failure via Inspector over real encrypted seed
 originals. IPC and DOM tests cover refusal, stale scope, pending state, and
 retryable failure. Browser validation runs in hosted CI.
+
+Keep an unavailable image selected in All Photos and retry repair from Inspector.
+After success, its thumbnail must reload the regenerated derivative immediately,
+without navigating away or reopening Inspector. Unrelated photo changes must not
+reload it; the same event-driven thumbnail invalidation applies to detached Inspectors.

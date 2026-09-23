@@ -3,7 +3,7 @@ import { useEffect, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useFormats } from '../i18n/use-formats.js';
-import { thumbUrl } from '../../../shared/library/thumb-url.js';
+import { usePhotoThumbnailUrl } from './use-photo-thumbnail-url';
 import { mediaInfoRows } from '../../../shared/library/media-info-format.js';
 import { previewFailureLabel } from '../components/previewFailureLabel.js';
 import { Badge } from '../components/Badge';
@@ -88,6 +88,7 @@ export function Inspector({
   onShowPhoto,
 }: InspectorProps): ReactElement {
   const intl = useIntl();
+  const thumbnailUrl = usePhotoThumbnailUrl(photo?.id ?? null);
   const { announce } = useAnnouncer();
   const { formatBytes, formatCalendarDate } = useFormats();
   const custodyStatus = usePhotoCustodyStatus(photo?.id ?? '', photo?.syncState === 'offloaded' || photo?.syncState === 'error');
@@ -172,7 +173,7 @@ export function Inspector({
             <Icon name="lock" size={18} strokeWidth={1.75} />
           </div>
         ) : (
-          <img className="ovl-inspector__thumb" src={thumbUrl(photo.id)} alt="" />
+          <img className="ovl-inspector__thumb" src={thumbnailUrl} alt="" />
         )}
         <div className="ovl-inspector__headText">
           <CopyableValue

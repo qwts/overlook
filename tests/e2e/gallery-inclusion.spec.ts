@@ -107,3 +107,27 @@ test('explicit preview and dimension repair leave Unavailable without restarting
     await app.close();
   }
 });
+
+test('Inspector reloads a repaired preview while its All Photos selection remains (#1098)', async () => {
+  const { app, page } = await launchSeeded(true);
+  try {
+    const id = '01J8SEEDPHOTO0001';
+    const selected = page.locator(`[data-quick-action-photo-id="${id}"]`);
+    await selected.click();
+    await page.keyboard.press('i');
+    const inspector = page.getByRole('complementary', { name: 'Inspector' });
+    const thumbnail = inspector.locator('.ovl-inspector__thumb');
+    const before = await thumbnail.getAttribute('src');
+    await inspector.getByRole('button', { name: 'Retry repair', exact: true }).click();
+    await expect(inspector.getByRole('button', { name: 'Retry repair', exact: true })).toHaveCount(0);
+    await expect(thumbnail).not.toHaveAttribute('src', before ?? '');
+    await expect(thumbnail).toHaveAttribute('src', new RegExp(id, 'u'));
+    await expect
+      .poll(() => thumbnail.evaluate((element) => (element as unknown as { readonly naturalWidth: number }).naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(selected).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'All Photos' })).toBeAttached();
+  } finally {
+    await app.close();
+  }
+});
