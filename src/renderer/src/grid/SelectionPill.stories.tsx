@@ -128,3 +128,40 @@ export const AlbumPickerFlow: Story = {
     await expect(canvas.queryByTestId('album-picker')).toBeNull();
   },
 };
+
+export const LockedSelection: Story = {
+  args: {
+    count: 1,
+    onClear: fn(),
+    onExport: fn(),
+    onMarkOriginal: fn(),
+    exportDisabledReason: 'The selected photos need keys that are not on this device.',
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Export…' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Add to album' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'More selection actions' }));
+    await expect(canvas.getByRole('menuitem', { name: 'Export…' })).toBeDisabled();
+    await expect(args.onExport).not.toHaveBeenCalled();
+  },
+};
+
+export const FailedCustodyLookup: Story = {
+  args: {
+    count: 1,
+    onClear: fn(),
+    onExport: fn(),
+    onRetryExport: fn(),
+    exportDisabledReason: 'Could not verify photo keys. Try again.',
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const retry = canvas.getByRole('button', { name: 'Retry photo keys' });
+    await expect(retry).toBeEnabled();
+    await expect(retry).toHaveAccessibleDescription('Could not verify photo keys. Try again.');
+    await userEvent.click(retry);
+    await expect(args.onRetryExport).toHaveBeenCalledOnce();
+    await expect(args.onExport).not.toHaveBeenCalled();
+  },
+};

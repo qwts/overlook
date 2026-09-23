@@ -1,3 +1,5 @@
+import type { IntlShape } from 'react-intl';
+import { photoCommandTargets } from '../commands/photo-command-targets.js';
 import type { Dispatch } from 'react';
 
 import type { DuplicateResult } from '../../../shared/ipc/variant-channels.js';
@@ -25,10 +27,16 @@ export function duplicateToast(result: DuplicateResult): NonNullable<AppState['t
   return { title: parts.join(' · '), tone: deferred > 0 || failed > 0 ? 'amber' : 'green' };
 }
 
-export function duplicatePhotos(dispatch: Dispatch<AppAction>, photoIds: readonly string[]): void {
+export function duplicatePhotos(dispatch: Dispatch<AppAction>, photoIds: readonly string[], intl: IntlShape): void {
   if (photoIds.length === 0) return;
-  void window.overlook.variants.duplicate({ photoIds: [...photoIds] }).then((result) => {
+  void photoCommandTargets('photo.duplicate', photoIds, intl).then(async ({ photoIds: eligible, notice }) => {
+    if (eligible.length === 0) {
+      if (notice !== null) dispatch({ type: 'toast/shown', toast: { title: notice, tone: 'amber' } });
+      return;
+    }
+    const result = await window.overlook.variants.duplicate({ photoIds: [...eligible] });
     dispatch({ type: 'pendingCount/set', count: result.pendingCount });
-    dispatch({ type: 'toast/shown', toast: duplicateToast(result) });
+    const toast = duplicateToast(result);
+    dispatch({ type: 'toast/shown', toast: notice === null ? toast : { title: `${toast.title} · ${notice}`, tone: 'amber' } });
   });
 }
