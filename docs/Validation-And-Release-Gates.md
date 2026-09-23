@@ -248,6 +248,43 @@ onnxruntime-node's nested directories and better-sqlite3-multiple-ciphers v13's
 flat `prebuilds/<platform>-<arch>.node` set. Universal macOS keeps both Darwin
 slices; unmapped targets fail safe by pruning nothing.
 
+ONNX upgrades update the exact `allowScripts` entry with the runtime version
+and regenerate third-party notices. `tests/embedding/native-worker.test.ts`
+runs a small, locally generated ONNX graph through the real embedding worker:
+CPU inference, platform-provider preference, unavailable-provider fallback,
+image preprocessing, quantization, and cooperative shutdown. Direct worker
+responses must identify the platform provider (CoreML on macOS, DML on Windows)
+and CPU for the deliberately unavailable-provider case; silent CPU fallback
+cannot qualify an accelerator. Accelerator qualification sets ONNX Runtime's
+`session.disable_cpu_ep_fallback` so CPU-assigned graph nodes fail session
+creation; a negative CPU control proves the native binding enforces it. Normal
+application sessions retain fallback. This runs through
+the normal unit-test lane on local macOS and hosted Linux/Windows. Ordinary
+Windows coverage verifies CPU inference and normal provider fallback; its strict
+DML case reports an explicit hardware-lane skip. The dedicated hardware job sets
+`OVERLOOK_DML_QUALIFICATION=1`, requiring DML inference without CPU substitution
+and running that strict case. Hosted display-adapter availability therefore does
+not stand in for hardware qualification. This proves
+native integration with a deterministic fixture, not production CLIP quality
+or accelerator performance; packaged payload checks remain separate gates.
+
+The `Native ARM64 DirectML qualification` job runs automatically after the
+reviewed policy authorizes a full suite: ready PRs, merge groups, and manual CI
+runs. It uses labels `[self-hosted, Windows, ARM64]` (currently `SURFACE-13`),
+uses command-scoped Git configuration for LF checkout, asserts native ARM64
+Node and Electron, records adapter/driver names, and runs
+the strict native-worker fixture with CPU fallback disabled and its negative
+CPU control. The stable required `CI` aggregate requires hardware success in
+each full-suite lifecycle, including PRs that reuse exact-SHA preflight evidence.
+Failed, cancelled, or skipped qualification cannot pass that gate; an offline
+runner leaves it waiting. Failed policy checks and draft PRs never select the
+laptop. Post-merge smoke retains its existing hosted Windows architecture lanes.
+For diagnostics, dispatch CI on an inspected commit with `purpose=diagnostics`;
+no separate hardware opt-in is needed. A successful job qualifies only that
+commit, runtime, architecture, and adapter; it does not establish x64 adapter
+availability or replace the remaining hosted CI results. No secret configuration
+is required.
+
 Signing is env-gated on repository secrets: `CSC_LINK` plus `APPLE_API_KEY` signs
 and notarizes the mac build; `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
 `AZURE_CLIENT_SECRET` drive Azure Trusted Signing for the Windows installers

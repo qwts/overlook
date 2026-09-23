@@ -20,6 +20,23 @@ library with damaged files for the steps below.
    it. Confirm the item leaves Unavailable and its count drops without a
    restart or re-import.
 
+## Explicit repair qualification
+
+Backend qualification for explicit repair (#1098) lives in
+`tests/import/targeted-preview-repair.test.ts`: a request selects one live image
+(JPEG, PNG, RAW, HEIC, GIF, or WebP), including a JPEG outside the background
+RAW/legacy scan. It leaves video/audio/other media untouched without loading their
+originals and does not select sibling variants by shared content hash. Recorded dimension failure still
+requires decode when old positive dimensions and readable previews remain.
+Requests share the background pass's sequential decode queue; locked,
+offloaded, trashed, absent, and closed-library targets are not decoded. Successful
+repair updates Unavailable/All Photos membership without restart. The encrypted
+deferred-edit test also exercises this path with a persisted rotated edit.
+
+The Inspector/context-menu entry point, typed IPC, and browser acceptance cases
+remain tracked by #1098; these backend checks alone do not establish that the
+user-visible action is delivered.
+
 ## Inclusion rules
 
 1. In **Settings → General → All Photos**, set **Minimum size** to 1 MP.

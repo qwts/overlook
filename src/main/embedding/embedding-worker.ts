@@ -12,6 +12,8 @@ export interface EmbeddingWorkerData {
   readonly textModelPath?: string;
   readonly tokenizerPath?: string;
   readonly providers: readonly string[];
+  /** Qualification only: reject graphs that assign any nodes to the CPU EP. */
+  readonly disableCpuFallback?: boolean;
 }
 
 export type EmbeddingWorkerPayload =
@@ -48,7 +50,10 @@ async function createSession(modelPath: string): Promise<{ readonly session: ort
   for (const provider of options.providers) {
     try {
       return {
-        session: await ort.InferenceSession.create(modelPath, { executionProviders: [provider] }),
+        session: await ort.InferenceSession.create(modelPath, {
+          executionProviders: [provider],
+          ...(options.disableCpuFallback === true ? { extra: { session: { disable_cpu_ep_fallback: '1' } } } : {}),
+        }),
         provider,
       };
     } catch (error) {

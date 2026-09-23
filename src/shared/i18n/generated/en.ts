@@ -811,6 +811,7 @@ export const en = {
   "restore.copy.libraryId": "library ID",
   "restore.copy.remotePath": "remote path {path}",
   "restore.error.details": "Details",
+  "restore.library.excluded": "{count, plural, one {# photo} other {# photos}} ({bytes}) deliberately not held by this backup; kept as placeholders when restored.",
   "restore.local.error.alreadyRegistered": "That library is already registered.",
   "restore.local.error.alreadyRegisteredHelp": "Choose the registered library from the library switcher.",
   "restore.local.error.notLibrary": "That folder isn't an Overlook library.",
@@ -1321,6 +1322,7 @@ interface InterpolatedMessageArguments {
   "purge.keptLocal.some": { "count": number };
   "purge.removalPending": { "count": number };
   "restore.copy.remotePath": { "path": MessageValue };
+  "restore.library.excluded": { "bytes": MessageValue; "count": number };
   "restore.missing.count": { "count": number };
   "restore.restored.count": { "count": number };
   "restore.select.library": { "libraryId": MessageValue };

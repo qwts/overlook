@@ -31,6 +31,8 @@ export const restoreLibrarySummarySchema = z.object({
   generatedAt: z.string().datetime().nullable(),
   photos: z.number().int().nonnegative().nullable(),
   totalBytes: z.number().int().nonnegative().nullable(),
+  excludedCount: z.number().int().nonnegative().nullable(),
+  excludedBytes: z.number().int().nonnegative().nullable(),
   albums: z.number().int().nonnegative().nullable(),
   compatibility: z.enum(['compatible', 'unsupported', 'unknown']),
   validation: z.enum(['valid', 'wrong-key', 'corrupt', 'unsupported']),
@@ -54,12 +56,19 @@ export const restoreMissingObjectSchema = z.object({
   reason: z.enum(['not-found', 'failed-verification']),
 });
 
+export const restoreCoverageSchema = z.object({
+  excludedCount: z.number().int().nonnegative(),
+  excludedBytes: z.number().int().nonnegative(),
+});
+export type RestoreCoverage = z.output<typeof restoreCoverageSchema>;
+
 export const restoreRunResponseSchema = z.object({
   result: z
     .object({
       libraryId: z.string().min(1),
       generation: z.number().int().positive(),
       photos: z.number().int().nonnegative(),
+      coverage: restoreCoverageSchema.optional(),
       resumed: z.boolean(),
       fallbackFromGeneration: z.number().int().positive().nullable(),
       relaunching: z.boolean(),
@@ -76,6 +85,7 @@ export const restoreVerifyResponseSchema = z.object({
       libraryId: z.string().min(1),
       generation: z.number().int().positive(),
       photos: z.number().int().nonnegative(),
+      coverage: restoreCoverageSchema.optional(),
       verifiedCount: z.number().int().nonnegative(),
       missingCount: z.number().int().nonnegative(),
       corruptCount: z.number().int().nonnegative(),
@@ -111,6 +121,7 @@ export const restoreStatusSchema = z.object({
       libraryId: z.string().min(1),
       generation: z.number().int().positive(),
       photos: z.number().int().nonnegative(),
+      coverage: restoreCoverageSchema.optional(),
       resumed: z.boolean(),
       missing: z.array(restoreMissingObjectSchema).readonly(),
     })
