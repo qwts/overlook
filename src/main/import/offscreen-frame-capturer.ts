@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { BrowserWindow } from 'electron';
 
+import type { CapturedPosterFrame } from './poster-capture-service.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 
 // The §6 offscreen frame capturer: one hidden offscreen renderer decodes a
@@ -42,11 +43,11 @@ function captureUrl(photo: PhotoRecord): { dev: string | null; query: Record<str
 }
 
 /**
- * Captures the first decodable frame of `photo` as PNG bytes, or null when no
+ * Captures PNG bytes and uncapped decoder dimensions, or null when no
  * frame decodes within the wall-clock budget (the caller keeps the placeholder).
  * Never throws.
  */
-export async function captureVideoPosterFrame(photo: PhotoRecord, signal: AbortSignal): Promise<Buffer | null> {
+export async function captureVideoPosterFrame(photo: PhotoRecord, signal: AbortSignal): Promise<CapturedPosterFrame | null> {
   if (signal.aborted) return null;
   const win = new BrowserWindow({
     show: false,
@@ -55,9 +56,9 @@ export async function captureVideoPosterFrame(photo: PhotoRecord, signal: AbortS
     webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, backgroundThrottling: false },
   });
 
-  return await new Promise<Buffer | null>((resolve) => {
+  return await new Promise<CapturedPosterFrame | null>((resolve) => {
     let settled = false;
-    const finish = (value: Buffer | null): void => {
+    const finish = (value: CapturedPosterFrame | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -86,7 +87,17 @@ export async function captureVideoPosterFrame(photo: PhotoRecord, signal: AbortS
           await delay(PAINT_SETTLE_MS);
           if (settled || win.isDestroyed()) return;
           const image = await win.webContents.capturePage();
-          finish(image.isEmpty() ? null : image.toPNG());
+          finish(
+            image.isEmpty()
+              ? null
+              : {
+                  bytes: image.toPNG(),
+                  sourceDimensions:
+                    w !== undefined && h !== undefined && Number.isSafeInteger(w) && Number.isSafeInteger(h) && w > 0 && h > 0
+                      ? { width: w, height: h }
+                      : null,
+                },
+          );
         } catch {
           finish(null);
         }
