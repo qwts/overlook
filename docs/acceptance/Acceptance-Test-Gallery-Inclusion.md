@@ -58,3 +58,31 @@ user-visible action is delivered.
    the restored library applies the same rules before any Settings visit.
 2. Switch to a second library. Confirm its own rules apply and switching back
    restores the first library's rules.
+
+### Missing-original evidence (#1101)
+
+Consistency repair records confirmed local-original absence independently from
+preview failures and transient upload errors. Legacy error rows are inspected;
+a present original with an upload error remains available. The absence reason
+and ledger repair commit together, and membership notifications refresh the
+Unavailable and All Photos sources without restarting. The predicate remains
+join-free and uses the Unavailable partial index.
+
+Integrity scrubs use the same atomic evidence transition for verified remote
+loss and healing, including legacy custody binding. Membership events occur
+after commit; a failed evidence update rolls back the ledger/binding changes.
+
+Verified original restoration clears this evidence for all sibling variants
+sharing that original. Thumbnail success and an unauthenticated file appearing
+at the original path cannot clear it. Independent preview debt remains.
+`gallery-inclusion.test.ts` and `consistency.test.ts` cover these boundaries.
+The explicit local-file Recover original command, UI, and browser acceptance
+remain required follow-up work under #1101.
+
+Remote-only duplicate variants authenticate shared originals against their retained
+asset owner. Valid ciphertext must leave root, duplicate, and duplicate-of-duplicate
+rows available; damaged ciphertext must still record missing-original evidence.
+
+Restored excluded placeholders and explicitly missing partial-restore rows enter
+Unavailable immediately when the catalog is created. Included originals without
+absence evidence remain available; no later consistency scan is required.

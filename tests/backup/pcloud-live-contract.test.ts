@@ -67,7 +67,7 @@ test('LIVE pCloud provider and fresh-profile disaster-recovery contracts (#291)'
   const integrityBytes = Buffer.from('OVLK-live-integrity-ciphertext');
   const integrityHash = createHash('sha256').update(integrityBytes).digest('hex');
   const integrityPath = `blobs/${integrityHash.slice(0, 2)}/${integrityHash}`;
-  let integrityItem: BackupIntegrityItem = { id: 'LIVE-P1', contentHash: integrityHash, syncState: 'synced' };
+  let integrityItem: BackupIntegrityItem = { id: 'LIVE-P1', assetOwnerId: null, contentHash: integrityHash, syncState: 'synced' };
   let localExists = true;
   let cursor: BackupIntegrityCursor = { version: 1, afterId: null, completedAt: null };
   const marked: string[] = [];

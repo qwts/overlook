@@ -252,6 +252,7 @@ const photoRecordSchema = z.object({
   keyId: z.number(),
   deletedAt: z.string().nullable(),
   previewFailure: z.enum(['corrupt', 'unsupported-codec', 'decode-failed', 'deferred-original']).nullable(),
+  originalFailure: z.literal('missing-original').nullable().optional(),
   dimensionStatus: z.enum(['legacy', 'verified', 'metadata-mismatch', 'unavailable']),
   mediaInfo: mediaInfoSchema.nullable(),
   syncState: syncStatusSchema,

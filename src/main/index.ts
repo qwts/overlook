@@ -15,6 +15,7 @@ import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/li
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
 import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
+import { createIntegrityAvailabilityNotifications, createOriginalRecoveryNotification } from './db/original-availability.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifyInAllPhotosAsync, verifySearchIndexAsync } from './db/photos-repository.js';
 import type { FullService } from './fullres/full-service.js';
@@ -459,12 +460,12 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
-      markVerified: (photoId) =>
-        ledger.healIntegrityError(photoId) ? emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'offloaded' }] }) : undefined,
-      markUnrecoverable: (photoId) => {
-        ledger.repairStatus(photoId, 'error');
-        emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });
-      },
+      ...createIntegrityAvailabilityNotifications(
+        parts.db,
+        applicationEvents.libraryChanged,
+        (id, syncState) => emitSyncStateChanged({ updates: [{ id, syncState }] }),
+        custodyRouting.integrity.bindLegacyPhoto,
+      ),
       audit,
     });
     backupEngine = new BackupEngine({
@@ -511,6 +512,7 @@ function getBackupEngine(): BackupEngine {
       workChanged: changeProviderWork,
       syncStateChanged: (updates) => emitSyncStateChanged({ updates: [...updates] }),
       storageChanged: () => broadcast((win) => win.webContents.send(events.storageChanged.name, {})),
+      originalVerified: createOriginalRecoveryNotification(parts.db, applicationEvents.libraryChanged),
       originalsRestored: (hashes) => ensureMaintenanceServices().rawRepair.schedule(hashes),
       stateChanged: createEmitter(events.ephemeralOriginalState, send),
       invalidateFull: (photoId) => fullService?.invalidate(photoId),
@@ -552,8 +554,7 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobStore: parts.blobStore,
       provider,
-      setStatus: (photoId, status) => ledger.repairStatus(photoId, status),
-      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'none' }),
+      libraryChanged: (photoIds) => applicationEvents.libraryChanged({ photoIds: [...photoIds], membership: 'library' }),
       audit,
     });
     // Completion events drive the toasts (#106) and the card's bar clear

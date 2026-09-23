@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
+import { migrateOriginalAvailability } from './original-availability.js';
 import { migrateAlbumFolders } from './album-folder-migration.js';
 import { migrateAlbumVisibility } from './album-visibility-migration.js';
 import { migrateGalleryPolicy } from './gallery-policy-migration.js';
@@ -57,4 +58,5 @@ export const COLLECTION_MIGRATIONS: readonly {
     up: migratePendingManifestPublication,
   },
   { version: 44, name: 'deferred-edit-bakes', up: migrateEditBakeDebt },
+  { version: 45, name: 'original-availability', up: migrateOriginalAvailability },
 ];

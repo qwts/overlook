@@ -26,6 +26,7 @@ export interface OriginalCustodyRuntimeOptions {
   readonly workChanged: (delta: 1 | -1) => void;
   readonly syncStateChanged: (updates: readonly { readonly id: string; readonly syncState: SyncStatus }[]) => void;
   readonly storageChanged: () => void;
+  readonly originalVerified?: ((contentHash: string) => void) | undefined;
   readonly originalsRestored?: ((contentHashes: readonly string[]) => void) | undefined;
   readonly stateChanged: (state: { readonly photoId: string; readonly stage: EphemeralStage }) => void;
   readonly invalidateFull: (photoId: string) => void;
@@ -58,7 +59,10 @@ export function createOriginalCustodyRuntime(options: OriginalCustodyRuntimeOpti
       deleteOriginal: (hash) => options.blobs.deleteOriginal(hash),
       hasOriginal: (hash) => options.blobs.hasOriginal(hash),
       encryptedStream: (hash) => options.blobs.getEncryptedStream(hash),
-      restoreOriginal: (hash, ciphertext, photoId) => options.blobs.restoreOriginal(hash, ciphertext, options.resolveKey, photoId),
+      restoreOriginal: async (hash, ciphertext, photoId) => {
+        await options.blobs.restoreOriginal(hash, ciphertext, options.resolveKey, photoId);
+        options.originalVerified?.(hash);
+      },
     },
     syncStateChanged,
     storageChanged: options.storageChanged,

@@ -111,7 +111,6 @@ describe('custody composition factories (#484)', () => {
       repo: w.repo,
       blobStore: w.store,
       provider: w.provider,
-      setStatus: () => undefined,
       libraryChanged: () => undefined,
       audit: () => undefined,
     });
