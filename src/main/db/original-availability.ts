@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
-import { queryAll, run } from './sql.js';
+import { queryAll, queryGet, run } from './sql.js';
 
 /** Device-local evidence, independent of previews and transient upload errors. */
 export function migrateOriginalAvailability(db: BetterSqlite3.Database): void {
@@ -16,11 +16,28 @@ export function migrateOriginalAvailability(db: BetterSqlite3.Database): void {
 export class OriginalAvailabilityRepository {
   constructor(private readonly db: BetterSqlite3.Database) {}
 
-  /** Only consistency repair may pair absence evidence with its ledger repair. */
+  /** Verified loss or remote recovery pairs absence evidence with ledger repair. */
   repair(photoId: string, status: 'offloaded' | 'error'): void {
     this.db.transaction(() => {
       run(this.db, 'UPDATE photos SET original_failure = ? WHERE id = ?', status === 'error' ? 'missing-original' : null, photoId);
       run(this.db, 'UPDATE sync_ledger SET status = ? WHERE photo_id = ?', status, photoId);
+    })();
+  }
+
+  /** Integrity has authenticated remote custody; a bound legacy row may already
+   * be offloaded while still carrying earlier local absence evidence. */
+  verifiedRemote(photoId: string): boolean {
+    return this.db.transaction(() => {
+      const row = queryGet<{ id: string }>(
+        this.db,
+        `SELECT p.id FROM photos p JOIN sync_ledger l ON l.photo_id = p.id
+         WHERE p.id = ? AND l.status IN ('error', 'offloaded')
+           AND (l.status = 'error' OR p.original_failure IS NOT NULL)`,
+        photoId,
+      );
+      if (row === undefined) return false;
+      this.repair(photoId, 'offloaded');
+      return true;
     })();
   }
 
@@ -33,6 +50,46 @@ export class OriginalAvailabilityRepository {
       { contentHash },
     ).map((row) => row.id);
   }
+}
+
+/** Publish only after the evidence and ledger transaction has committed. */
+export function createIntegrityAvailabilityNotifications(
+  db: BetterSqlite3.Database,
+  changed: (event: { photoIds: string[]; membership: 'library' }) => void,
+  syncChanged: (photoId: string, status: 'error' | 'offloaded') => void,
+  bindLegacyPhoto?: (photoId: string, authorityId: number) => boolean,
+): {
+  markUnrecoverable: (photoId: string) => void;
+  markVerified: (photoId: string) => void;
+  bindLegacyPhoto?: (photoId: string, authorityId: number) => boolean;
+} {
+  const availability = new OriginalAvailabilityRepository(db);
+  const notify = (photoId: string, status: 'error' | 'offloaded'): void => {
+    syncChanged(photoId, status);
+    changed({ photoIds: [photoId], membership: 'library' });
+  };
+  return {
+    ...(bindLegacyPhoto === undefined
+      ? {}
+      : {
+          bindLegacyPhoto: (photoId: string, authorityId: number): boolean => {
+            const bound = db.transaction(() => {
+              if (!bindLegacyPhoto(photoId, authorityId)) return false;
+              availability.verifiedRemote(photoId);
+              return true;
+            })();
+            if (bound) notify(photoId, 'offloaded');
+            return bound;
+          },
+        }),
+    markUnrecoverable: (photoId) => {
+      availability.repair(photoId, 'error');
+      notify(photoId, 'error');
+    },
+    markVerified: (photoId) => {
+      if (availability.verifiedRemote(photoId)) notify(photoId, 'offloaded');
+    },
+  };
 }
 
 /** Composition callback for successful authenticated original publication. */

@@ -68,6 +68,10 @@ and ledger repair commit together, and membership notifications refresh the
 Unavailable and All Photos sources without restarting. The predicate remains
 join-free and uses the Unavailable partial index.
 
+Integrity scrubs use the same atomic evidence transition for verified remote
+loss and healing, including legacy custody binding. Membership events occur
+after commit; a failed evidence update rolls back the ledger/binding changes.
+
 Verified original restoration clears this evidence for all sibling variants
 sharing that original. Thumbnail success and an unauthenticated file appearing
 at the original path cannot clear it. Independent preview debt remains.

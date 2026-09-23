@@ -9,7 +9,7 @@ import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { readGalleryPolicy, writeGalleryPolicy } from '../../src/main/db/gallery-policy-repository.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
 import { queryAll, run } from '../../src/main/db/sql.js';
-import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
+import { createIntegrityAvailabilityNotifications, OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
 import { VariantRepository } from '../../src/main/db/variant-repository.js';
 import { UNAVAILABLE_WHERE } from '../../src/main/db/photo-clauses.js';
 import { DEFAULT_GALLERY_POLICY } from '../../src/shared/library/gallery-policy.js';
@@ -231,6 +231,96 @@ test('remote-backed consistency repair clears local absence and retains the Unav
     assert.ok(!walk(w.repo, 'unavailable').includes(w.ids.large));
     const plan = queryAll<{ detail: string }>(w.db, `EXPLAIN QUERY PLAN SELECT p.id FROM photos p WHERE ${UNAVAILABLE_WHERE}`);
     assert.ok(plan.some((row) => row.detail.includes('idx_photos_unavailable')));
+  } finally {
+    w.db.close();
+  }
+});
+
+test('integrity loss and authenticated healing publish committed availability, including legacy binding (#1101)', () => {
+  const w = world();
+  const observed: string[] = [];
+  const notify = createIntegrityAvailabilityNotifications(
+    w.db,
+    ({ photoIds, membership }) => {
+      assert.equal(w.db.inTransaction, false, 'membership is published after commit');
+      assert.equal(membership, 'library');
+      const row = w.repo.get(photoIds[0] ?? '');
+      observed.push(`${row?.syncState}:${String(row?.originalFailure)}`);
+    },
+    () => {},
+    (id, authorityId) => {
+      assert.equal(authorityId, 7);
+      run(w.db, "UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = ?", id);
+      return true;
+    },
+  );
+  try {
+    run(w.db, "UPDATE sync_ledger SET status = 'error' WHERE photo_id = ?", w.ids.tiny);
+    notify.markVerified(w.ids.large);
+    assert.deepEqual(observed, [], 'ordinary local rows are not reclassified');
+    notify.markUnrecoverable(w.ids.large);
+    assert.ok(walk(w.repo, 'unavailable').includes(w.ids.large));
+    assert.equal(w.repo.get(w.ids.tiny)?.originalFailure, null, 'unrelated upload errors stay available');
+    notify.markVerified(w.ids.large);
+    assert.ok(!walk(w.repo, 'unavailable').includes(w.ids.large));
+    notify.markVerified(w.ids.large);
+    assert.deepEqual(observed, ['error:missing-original', 'offloaded:null']);
+    notify.markUnrecoverable(w.ids.large);
+    assert.equal(notify.bindLegacyPhoto?.(w.ids.large, 7), true);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, null, 'legacy binding clears stale evidence');
+    assert.equal(observed.at(-1), 'offloaded:null');
+  } finally {
+    w.db.close();
+  }
+});
+
+test('failed integrity healing rolls back evidence and emits no membership change (#1101)', () => {
+  const w = world();
+  try {
+    new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error');
+    let notified = false;
+    const notify = createIntegrityAvailabilityNotifications(
+      w.db,
+      () => {
+        notified = true;
+      },
+      () => {
+        notified = true;
+      },
+    );
+    w.db.exec("CREATE TRIGGER fail_integrity BEFORE UPDATE OF status ON sync_ledger BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => notify.markVerified(w.ids.large), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, 'missing-original');
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'error');
+    assert.equal(notified, false);
+  } finally {
+    w.db.close();
+  }
+});
+
+test('legacy integrity binding and evidence recovery roll back together (#1101)', () => {
+  const w = world();
+  try {
+    new OriginalAvailabilityRepository(w.db).repair(w.ids.large, 'error');
+    let notified = false;
+    const notify = createIntegrityAvailabilityNotifications(
+      w.db,
+      () => {
+        notified = true;
+      },
+      () => {
+        notified = true;
+      },
+      (id) => {
+        run(w.db, "UPDATE sync_ledger SET status = 'offloaded' WHERE photo_id = ?", id);
+        return true;
+      },
+    );
+    w.db.exec("CREATE TRIGGER fail_evidence BEFORE UPDATE OF original_failure ON photos BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    assert.throws(() => notify.bindLegacyPhoto?.(w.ids.large, 7), /injected/);
+    assert.equal(w.repo.get(w.ids.large)?.syncState, 'error');
+    assert.equal(w.repo.get(w.ids.large)?.originalFailure, 'missing-original');
+    assert.equal(notified, false);
   } finally {
     w.db.close();
   }

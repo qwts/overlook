@@ -15,7 +15,7 @@ import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/li
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
 import { RecoveryExportReceipt } from './crypto/recovery-export-receipt.js';
 import { pickSafeStorage } from './crypto/safe-storage-runtime.js';
-import { createOriginalRecoveryNotification } from './db/original-availability.js';
+import { createIntegrityAvailabilityNotifications, createOriginalRecoveryNotification } from './db/original-availability.js';
 import { openLibraryDatabase } from './db/database.js';
 import { PhotosRepository, verifyInAllPhotosAsync, verifySearchIndexAsync } from './db/photos-repository.js';
 import type { FullService } from './fullres/full-service.js';
@@ -460,12 +460,12 @@ function getBackupEngine(): BackupEngine {
       repo,
       blobs: parts.blobStore,
       resolveKey: parts.keyStore.resolver(),
-      markVerified: (photoId) =>
-        ledger.healIntegrityError(photoId) ? emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'offloaded' }] }) : undefined,
-      markUnrecoverable: (photoId) => {
-        ledger.repairStatus(photoId, 'error');
-        emitSyncStateChanged({ updates: [{ id: photoId, syncState: 'error' }] });
-      },
+      ...createIntegrityAvailabilityNotifications(
+        parts.db,
+        applicationEvents.libraryChanged,
+        (id, syncState) => emitSyncStateChanged({ updates: [{ id, syncState }] }),
+        custodyRouting.integrity.bindLegacyPhoto,
+      ),
       audit,
     });
     backupEngine = new BackupEngine({
