@@ -109,6 +109,7 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
       // change Unavailable membership and therefore needs a page refresh.
       if (membership === 'library') {
         ctx.emitChanged(ids, membership);
+        ctx.emitPending(repo.stats().pending);
         ctx.scheduleAutoBackup();
       } else ctx.emitThumbsChanged(ids);
       ctx.embeddingEligible(ids);

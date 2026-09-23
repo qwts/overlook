@@ -97,3 +97,7 @@ absence evidence remain available; no later consistency scan is required.
 Video repair retains uncapped decoder dimensions: a 3840×2160 source with a
 2048×1152 poster must remain 3840×2160 without a false metadata mismatch. A
 poster without valid decoder dimensions cannot clear unavailable dimension evidence.
+
+With automatic backup disabled, explicitly repair a video with unknown dimensions.
+Its pending-backup count updates immediately after metadata repair, without waiting
+for a backup run. Background poster generation still refreshes thumbnails only.
