@@ -29,11 +29,13 @@ export async function probeKeyAgainstStore(
   key: Buffer,
 ): Promise<boolean> {
   const resolveKey = (candidate: number): Buffer | undefined => (candidate === keyId ? key : undefined);
+  // Retained references can outlive regenerated derivatives. They must not
+  // crowd current envelope owners out of the bounded authentication probes.
   const rows = queryAll<{ id: string; content_hash: string; derivative_key: string }>(
     db,
     `SELECT id, content_hash, derivative_key FROM photos p WHERE key_id = @keyId
       OR EXISTS (SELECT 1 FROM retained_photo_keys r WHERE r.photo_id = p.id AND r.key_id = @keyId)
-      ORDER BY id LIMIT @limit`,
+      ORDER BY (p.key_id = @keyId) DESC, id LIMIT @limit`,
     { keyId, limit: PROBE_CANDIDATES },
   );
   for (const row of rows) {

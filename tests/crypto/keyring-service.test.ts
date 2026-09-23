@@ -165,6 +165,28 @@ describe('keyring service (#517)', () => {
     w.db.close();
   });
 
+  test('stale retained references cannot hide a current-key photo during key re-import (#1101)', async () => {
+    const w = await world();
+    try {
+      const oldKey = w.keyStore().rotate();
+      await w.seal('Z-current-owner', oldKey);
+      const active = w.keyStore().rotate();
+      for (const id of ['A-stale', 'B-stale', 'C-stale', 'D-stale']) {
+        await w.seal(id, active);
+        run(w.db, 'INSERT INTO retained_photo_keys (photo_id, key_id) VALUES (?, ?)', id, oldKey.id);
+      }
+      w.service.reconcile();
+      await w.service.exportKey(oldKey.id, PASSWORD);
+      w.service.remove(oldKey.id, REMOVE_KEY_AUTHORIZATION);
+      assert.equal(w.photos.get('Z-current-owner')?.locked, true);
+      const result = await w.service.importKey(w.exportPath, PASSWORD);
+      assert.equal(result.outcome, 'imported');
+      assert.equal(w.photos.get('Z-current-owner')?.locked, false);
+    } finally {
+      w.db.close();
+    }
+  });
+
   test('production custody notifications refresh pending counts and schedule unlocked preview repair', async () => {
     const w = await world();
     await w.seal('P1', w.keyStore().currentKey());
