@@ -3,6 +3,7 @@ import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 import type { BlobStore } from '../blobs/blob-store.js';
 import type { EnvelopeKey, KeyResolver } from '../crypto/envelope.js';
 import { posterCaptureCandidates } from '../db/poster-candidates.js';
+import { PhotosRepository } from '../db/photos-repository.js';
 import type { PhotoRecord } from '../../shared/library/types.js';
 import { PosterCaptureService } from './poster-capture-service.js';
 import type { ThumbnailService } from './thumbnail-service.js';
@@ -14,7 +15,7 @@ export interface PosterCaptureRuntimeOptions {
   readonly thumbnails: ThumbnailService;
   readonly currentKey: () => EnvelopeKey;
   readonly resolveKey: KeyResolver;
-  readonly changed: (photoIds: readonly string[]) => void;
+  readonly changed: (photoIds: readonly string[], membership: 'none' | 'library') => void;
   /** The offscreen decoder, injected by the wiring layer. Kept out of this
    * module (no static Electron import) so the runtime is unit-testable and
    * coverage-enforced; only the composition root pulls in the real capturer. */
@@ -22,8 +23,9 @@ export interface PosterCaptureRuntimeOptions {
 }
 
 export function createPosterCaptureRuntime(options: PosterCaptureRuntimeOptions): PosterCaptureService {
+  const repo = new PhotosRepository(options.db);
   return new PosterCaptureService({
-    candidates: () => posterCaptureCandidates(options.db),
+    candidates: (ids) => posterCaptureCandidates(options.db, ids),
     hasPoster: async (photo) => options.blobs.verifyThumbs(photo.derivativeKey, options.resolveKey, photo.id),
     captureFrame: async (photo, signal) => {
       await options.blobsReady;
@@ -43,6 +45,11 @@ export function createPosterCaptureRuntime(options: PosterCaptureRuntimeOptions)
         fileKind: 'png',
         signal,
       }),
+    repaired: (photo, outcome) => {
+      if (outcome.width !== null && outcome.height !== null) repo.repairGeneratedDimensions(photo.id, outcome.width, outcome.height);
+      repo.setPreviewFailure(photo.id, null);
+      repo.setPreviewMissing(photo.id, false);
+    },
     changed: options.changed,
   });
 }
