@@ -1,4 +1,4 @@
-import { seedLibrary, seedSemanticIndex, seedSynthetic } from './seed.js';
+import { seedLibrary, seedSemanticIndex, seedSynthetic, seedRepairFailures } from './seed.js';
 import type { LibraryService } from './library-service.js';
 import type { LibraryParts } from './library-parts.js';
 
@@ -59,6 +59,9 @@ export async function runDevSeeds(options: DevSeedOptions): Promise<void> {
         if (plan && index === retiredFrom) sealing = parts.rotate();
         return sealing;
       });
+      if (seeded.photos >= 3 && options.harnessEnv('OVERLOOK_E2E') === '1' && options.harnessEnv('OVERLOOK_SEED_REPAIR_FAILURES') === '1') {
+        seedRepairFailures(parts.db);
+      }
       if (plan && seeded.photos > 0) {
         parts.rotate();
         parts.reconcileKeyring();

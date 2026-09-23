@@ -1,3 +1,4 @@
+import { photoRepairChannels } from './photo-repair-channels.js';
 /* eslint-disable max-lines -- central channel registry is intentionally large */
 import { z } from 'zod';
 
@@ -390,6 +391,7 @@ export const channels = {
     }),
   ),
   ...librarySelection.librarySelectionChannels,
+  ...photoRepairChannels,
   libraryGet: defineChannel('library:get', z.object({ id: z.string() }), z.object({ photo: photoRecordSchema.nullable() })),
   ...photoMetadataChannels,
   ...nativeDragChannels,

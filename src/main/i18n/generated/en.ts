@@ -75,6 +75,7 @@ export const en: Readonly<Record<string, string>> = {
   "commands.photo.original.mark": "Mark as Original",
   "commands.photo.original.unmark": "Remove Original protection",
   "commands.photo.purge": "Delete permanently…",
+  "commands.photo.repair": "Retry repair",
   "commands.photo.restore": "Restore photo",
   "commands.photo.restoreOriginal": "Restore original",
   "commands.photo.transfer": "Transfer & Sync…",

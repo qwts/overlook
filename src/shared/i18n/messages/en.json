@@ -467,6 +467,9 @@
   "commands.photo.purge": {
     "defaultMessage": "Delete permanently…"
   },
+  "commands.photo.repair": {
+    "defaultMessage": "Retry repair"
+  },
   "commands.photo.restore": {
     "defaultMessage": "Restore photo"
   },
@@ -2374,6 +2377,27 @@
   },
   "photo.context.actions": {
     "defaultMessage": "Actions for {target}"
+  },
+  "photo.repair.failed": {
+    "defaultMessage": "The photo could not be repaired. Check its original and try again."
+  },
+  "photo.repair.locked": {
+    "defaultMessage": "Return the photo key before retrying repair."
+  },
+  "photo.repair.offloaded": {
+    "defaultMessage": "Restore the original before retrying repair."
+  },
+  "photo.repair.repaired": {
+    "defaultMessage": "Photo repaired."
+  },
+  "photo.repair.unavailable": {
+    "defaultMessage": "Repair is unavailable for this photo."
+  },
+  "photo.repair.unchanged": {
+    "defaultMessage": "This photo no longer needs repair."
+  },
+  "photo.repair.unsupported": {
+    "defaultMessage": "Repair is not available for this media type."
   },
   "preview.pending.original": {
     "defaultMessage": "PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE"

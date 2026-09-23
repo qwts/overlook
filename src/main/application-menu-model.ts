@@ -131,6 +131,7 @@ export function commandEnabled(id: CommandId, context: CommandMenuContext): bool
     case 'album.reorder.bottom':
     case 'board.layout':
     case 'photo.open':
+    case 'photo.repair':
     case 'photo.offload':
     case 'photo.restoreOriginal':
     case 'photo.coverage.exclude':

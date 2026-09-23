@@ -1,3 +1,5 @@
+import { registerPhotoRepairHandlers } from './library/photo-repair-ipc.js';
+import type { RawRepairService } from './import/raw-repair-service.js';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -88,6 +90,7 @@ export interface AppServicesOptions {
   readonly allowKeyImport: () => boolean;
   readonly onRecoveryKeyExported?: (() => void) | undefined;
   readonly getLibrary: () => LibraryService;
+  readonly getPhotoRepair: () => Pick<RawRepairService, 'repairPhoto'>;
   readonly getActivity: () => ActivityFacade;
   readonly getHistory: () => HistoryService;
   readonly libraries: LibraryRegistryFacade;
@@ -235,6 +238,17 @@ export function registerAppServices(options: AppServicesOptions): void {
   registerPhotoEditHandlers(options.getEdits, options.requireContentAccess, options.getActivity, options.onManifestChanged);
   registerProvenanceHandlers(options.getProvenance, options.requireContentAccess, options.onManifestChanged);
   registerVariantHandlers(options.getVariants, options.requireContentAccess, options.onManifestChanged);
+  registerPhotoRepairHandlers(() => {
+    const library = options.getLibrary();
+    const repair = options.getPhotoRepair();
+    const libraryId = options.activeLibraryId();
+    const epoch = options.authorizationEpoch();
+    return {
+      getPhoto: (photoId) => library.get(photoId),
+      repairPhoto: (photoId) => repair.repairPhoto(photoId),
+      isCurrent: () => options.activeLibraryId() === libraryId && options.authorizationEpoch() === epoch,
+    };
+  }, options.requireContentAccess);
   registerHistogramHandlers(options.getHistogram, options.requireContentAccess);
   registerDuplicateHandlers(options.getDuplicates, options.requireContentAccess);
   registerActivityHandlers(options.getActivity, options.requireContentAccess);

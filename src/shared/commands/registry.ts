@@ -120,6 +120,7 @@ const commandLabels = defineMessages({
   'photo.original.unmark': { id: 'commands.photo.original.unmark', defaultMessage: 'Remove Original protection' },
   'photo.open': { id: 'commands.photo.open', defaultMessage: 'Open' },
   'photo.export': { id: 'commands.photo.export', defaultMessage: 'Export…' },
+  'photo.repair': { id: 'commands.photo.repair', defaultMessage: 'Retry repair' },
   'photo.duplicate': { id: 'commands.photo.duplicate', defaultMessage: 'Duplicate' },
   'photo.offload': { id: 'commands.photo.offload', defaultMessage: 'Offload original…' },
   'photo.restoreOriginal': { id: 'commands.photo.restoreOriginal', defaultMessage: 'Restore original' },
@@ -515,6 +516,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   },
   { id: 'photo.open', label: label('photo.open', 'Open'), surfaces: [], target: 'focused-item' },
   // Variants (#496, ADR-0031 §3): a sibling variant over the same original.
+  { id: 'photo.repair', label: label('photo.repair', 'Retry repair'), surfaces: [], target: 'focused-item', requiresPhotoKey: true },
   { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection', requiresPhotoKey: true },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
