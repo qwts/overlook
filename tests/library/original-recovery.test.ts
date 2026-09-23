@@ -231,3 +231,34 @@ test('retained recovery keys commit atomically, deduplicate, and follow photo pu
   assert.deepEqual(references(), []);
   assert.equal(new KeyringRepository(w.db).usage(1).photos, 0);
 });
+
+for (const status of ['synced', 'offloaded', 'local'] as const) {
+  test(`recovery preserves ${status} Trash sibling custody and manifest membership (#1101)`, async (t) => {
+    const w = await world(t);
+    const active = { id: 2, key: randomBytes(32) };
+    run(w.db, "INSERT INTO keys (id, wrapped_key, created_at) VALUES (2, 'test', '2026-01-02')");
+    run(w.db, "UPDATE photos SET deleted_at = '2026-01-02' WHERE id = 'sibling'");
+    run(w.db, "UPDATE sync_ledger SET status = ?, coverage = 'included', dirty = 0 WHERE photo_id = 'sibling'", status);
+    const before = w.repo.manifestSnapshot().photos.map((photo) => photo.id);
+    const service = new OriginalRecoveryService({
+      ...w.options,
+      resolveKey: (id) => (id === active.id ? active.key : w.options.resolveKey(id)),
+      writeKey: () => ({ ...active, key: Buffer.from(active.key) }),
+    });
+    assert.equal(await service.recover('root', w.source), 'recovered');
+    assert.equal(w.repo.get('root')?.syncState, 'local');
+    assert.equal(w.repo.get('sibling')?.syncState, status);
+    assert.equal(w.repo.get('sibling')?.keyId, active.id);
+    assert.equal(w.repo.get('sibling')?.originalFailure, null);
+    const after = w.repo.manifestSnapshot().photos;
+    assert.deepEqual(
+      after.map((photo) => photo.id),
+      before,
+    );
+    assert.equal(
+      after.some((photo) => photo.id === 'sibling'),
+      status !== 'local',
+    );
+    assert.equal(queryAll<{ dirty: number }>(w.db, "SELECT dirty FROM sync_ledger WHERE photo_id = 'sibling'")[0]?.dirty, 1);
+  });
+}

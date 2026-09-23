@@ -128,6 +128,11 @@ References are conservatively retained until photo purge; preview regeneration
 alone does not prove every old-key envelope is gone. Failed catalog publication
 rolls back key references together with availability evidence.
 
+Recover an original shared with a backed-up, unpurged Trash sibling. The next
+manifest must retain that sibling and its deletion timestamp. Its prior synced
+or offloaded custody remains intact; a never-backed-up Trash sibling must not
+be newly advertised as recoverable merely because a live sibling recovered.
+
 ## Explicit per-photo repair (#1098)
 
 For a supported image with a recorded preview or dimension failure, open its

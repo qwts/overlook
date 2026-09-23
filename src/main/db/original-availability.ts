@@ -69,7 +69,15 @@ export class OriginalAvailabilityRepository {
         { contentHash, keyId },
       ).map((row) => row.id);
       for (const id of ids) {
-        run(this.db, "UPDATE sync_ledger SET status = 'local', custody_authority_id = NULL WHERE photo_id = ?", id);
+        // Trash remains restorable only while its prior remote-custody status
+        // survives. Recovering a live sibling must not unpublish that record.
+        run(
+          this.db,
+          `UPDATE sync_ledger SET status = 'local', custody_authority_id = NULL
+          WHERE photo_id = ? AND EXISTS (SELECT 1 FROM photos WHERE id = ? AND deleted_at IS NULL)`,
+          id,
+          id,
+        );
         markDirty(this.db, id);
       }
       return ids;
