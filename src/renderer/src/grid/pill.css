@@ -57,6 +57,7 @@
 }
 
 .ovl-pill__menu button {
+  min-height: var(--interactive-target-min);
   display: block;
   width: 100%;
   padding: var(--space-2);
