@@ -2653,6 +2653,8 @@
           "type": "unit-dom",
           "paths": [
             "tests/backup/restore-coverage-disclosure.test.ts",
+            "tests/backup/restore-excluded-placeholders.test.ts",
+            "tests/db/restored-exclusion-migration.test.ts",
             "tests/dom/restore-workflow-missing.test.tsx",
             "tests/dom/restore-workflow-reopen.test.tsx"
           ]

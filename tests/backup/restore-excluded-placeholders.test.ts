@@ -17,7 +17,8 @@ import { createEncryptStream } from '../../src/main/crypto/envelope.js';
 import { KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 import { openLibraryDatabase } from '../../src/main/db/database.js';
 import { PhotosRepository } from '../../src/main/db/photos-repository.js';
-import { run } from '../../src/main/db/sql.js';
+import { queryGet, run } from '../../src/main/db/sql.js';
+import { OriginalAvailabilityRepository } from '../../src/main/db/original-availability.js';
 
 const safeStorage: SafeStorageLike = {
   isEncryptionAvailable: () => true,
@@ -65,6 +66,10 @@ for (const mode of ['excluded-only', 'mixed', 'missing-included'] as const) {
     const ledger = new SyncLedger(db);
     ledger.markExcluding('P1', 'user', AT);
     ledger.markExcluded('P1');
+    assert.equal(
+      queryGet<{ origin: string | null }>(db, 'SELECT restored_exclusion_at AS origin FROM photos WHERE id = @id', { id: 'P1' })?.origin,
+      null,
+    );
     const manifest = buildBackupManifestV14({
       libraryId: LIBRARY_ID,
       generatedAt: AT,
@@ -140,6 +145,16 @@ for (const mode of ['excluded-only', 'mixed', 'missing-included'] as const) {
     const restoredDb = openLibraryDatabase({ path: join(targetDir, 'library.db'), dbKey: restoredDbKey });
     assert.equal(new PhotosRepository(restoredDb).get('P1')?.coverage, 'excluded', 'keep the placeholder by default');
     assert.equal(new PhotosRepository(restoredDb).get('P2') !== undefined, mode === 'mixed');
+    const origin = () =>
+      queryGet<{ value: string | null }>(restoredDb, "SELECT restored_exclusion_at AS value FROM photos WHERE id = 'P1'")?.value;
+    assert.equal(origin(), AT, 'restore records the excluded placeholder origin');
+    const availability = new OriginalAvailabilityRepository(restoredDb);
+    availability.repair('P1', 'error');
+    assert.equal(origin(), AT, 'an error does not erase restore provenance');
+    availability.verifiedRestored(excludedPhoto.contentHash);
+    assert.equal(origin(), null, 'verified return of the original ends placeholder status');
+    availability.repair('P1', 'error');
+    assert.equal(origin(), null, 'later loss must not resurrect the restored exclusion marker');
     restoredDb.close();
     db.close();
     restoredKeys.close();

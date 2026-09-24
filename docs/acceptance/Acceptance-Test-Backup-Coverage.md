@@ -134,3 +134,12 @@ completion uses the activated generation, including after fallback or UI reopen.
 The durable report records exclusions separately from missing objects.
 Bulk placeholder cleanup and origin-specific tile/Inspector copy remain
 tracked in #1125; excluded rows are kept by default.
+
+Restore-origin provenance (#1125): a new excluded placeholder records the
+manifest generation timestamp in device-local `restored_exclusion_at`. Ordinary
+local-only rows and older restored rows remain unmarked; coverage and error
+status cannot safely reconstruct that history. The marker survives unrelated
+errors and reopen, and clears when verified custody clears original absence.
+Later loss must not turn a recovered photo back into a restored placeholder.
+This metadata does not enter the backup manifest. The reviewed bulk Trash
+action and origin-specific tile/Inspector copy remain follow-on acceptance work.
