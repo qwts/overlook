@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.22
+
+### Patch Changes
+
+- 364d2f9: Preserve device-local provenance for excluded placeholders created by disaster restore.
+- ded89d8: Route explicit video preview and dimension repair to the video poster decoder.
+
 ## 0.76.21
 
 ### Patch Changes
