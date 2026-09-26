@@ -13,7 +13,7 @@ components; their full license texts ship inside the Electron distribution at
 
 | Package | Version | License |
 | ------- | ------- | ------- |
-| `@anthropic-ai/sdk` | 0.127.0 | MIT |
+| `@anthropic-ai/sdk` | 0.128.0 | MIT |
 | `@babel/runtime` | 7.29.7 | MIT |
 | `@emnapi/runtime` | 1.11.3 | MIT |
 | `@img/colour` | 1.1.0 | MIT |
@@ -68,7 +68,7 @@ components; their full license texts ship inside the Electron distribution at
 | `object-keys` | 1.1.1 | MIT |
 | `onnxruntime-common` | 1.30.0 | MIT |
 | `onnxruntime-node` | 1.30.0 | MIT |
-| `openai` | 7.20.0 | Apache-2.0 |
+| `openai` | 7.23.0 | Apache-2.0 |
 | `semver` | 7.8.5 | ISC |
 | `serialize-error` | 8.1.0 | MIT |
 | `sharp` | 0.35.4 | Apache-2.0 |
@@ -88,7 +88,7 @@ components; their full license texts ship inside the Electron distribution at
 
 ---
 
-## @anthropic-ai/sdk 0.127.0
+## @anthropic-ai/sdk 0.128.0
 
 License: MIT
 
@@ -1478,7 +1478,7 @@ _Optional/platform-specific package; its full license text ships alongside the b
 
 ---
 
-## openai 7.20.0
+## openai 7.23.0
 
 License: Apache-2.0
 
