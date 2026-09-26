@@ -1,5 +1,14 @@
 # photos
 
+## 0.76.23
+
+### Patch Changes
+
+- 585138f: Recover a missing original from a matching local file while preserving shared ownership and backup coverage.
+- e2c0a1a: Update the Electron runtime and the ESLint React plugin, with refreshed third-party notices.
+- 85ba837: Update the shipped Anthropic and OpenAI SDKs, with refreshed third-party notices.
+- 150416f: Update the TypeScript ESLint lint tooling.
+
 ## 0.76.22
 
 ### Patch Changes
