@@ -100,9 +100,41 @@ stays a Help affordance, never a sidebar row (#690). The `Cmd+,` Settings
 accelerator and the About box are accepted macOS-only conveniences (Settings
 stays reachable from the sidebar gear).
 
-The **Windows/Linux** template is unchanged (still File/Tools/Help placement per
-ADR-0024 §5). Removing it to match the design — which specs no non-mac menu bar
-— needs an ADR-0024 amendment and is tracked separately.
+> Superseded in part by the [#1293 amendment](#windowslinux-overlook-menu-1293):
+> the keyboard dispatcher no longer counts as reachability, and Transfer & Sync
+> leaves the toolbar.
+
+### Windows/Linux: Overlook menu (#1293)
+
+ADR-0024 §5, amended 2026-09-26: **a keyboard shortcut is an accelerator, not a
+surface.** Every non-Photo command in the macOS template needs a visible,
+keyboard-operable control on Windows/Linux. Commands the #699 list left
+shortcut-only (Undo/Redo, Select All, inspector and sidebar toggles) move into a
+second titlebar menu, the **Overlook menu** (⋯), left of Help. It projects
+`APP_MENU_ITEMS` (`shared/commands/app-menu.ts`) through the same `TitlebarMenu`
+component as Help, with labels, enablement, and shortcut display from the
+registry. A parity test fails if a non-Photo macOS command is in neither
+`APP_MENU_ITEMS`, `HELP_MENU_ITEMS`, nor the allow-list of surfaces below.
+
+| Command                                                             | macOS    | Windows/Linux                                                                |
+| ------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| Import Photos…                                                      | File     | Toolbar + ⋯ File                                                             |
+| Export All Unencrypted…                                             | File     | ⋯ File (no longer in the toolbar)                                            |
+| Review Duplicates…                                                  | File     | ⋯ File                                                                       |
+| Export Selection…                                                   | File     | Selection pill, context menu                                                 |
+| Switch / New / Move Library…                                        | File     | Titlebar library switcher                                                    |
+| Undo, Redo, Select All                                              | Edit     | ⋯ Edit                                                                       |
+| Clear Selection                                                     | Edit     | Pill close, `Esc`                                                            |
+| Sources (All Photos, Favorites, Recent Imports, Trash)              | View     | Sidebar                                                                      |
+| View modes                                                          | View     | Toolbar                                                                      |
+| Inspector toggle and detach, Sidebar toggle, Reset Appearance       | View     | ⋯ View                                                                       |
+| Photo menu (favorite, albums, export, trash, restore)               | Photo    | Selection pill, context menu                                                 |
+| Settings…, Storage & Backup…, Transfer & Sync…, Lock Now            | Overlook | ⋯ Overlook (Settings also on the sidebar card; Lock Now also in the toolbar) |
+| Keyboard Shortcuts, Activity…, Privacy & Diagnostics, Overlook Help | Help     | Titlebar Help (#699, unchanged)                                              |
+
+`Cmd+,` stays macOS-only. Transfer & Sync… appears in ⋯ only when pCloud is
+enabled, and Lock Now only when app lock is configured. Spec: Overlook Design
+System → _Toolbar and Window Chrome_ (Pass B).
 
 ## Command exposure matrix
 
