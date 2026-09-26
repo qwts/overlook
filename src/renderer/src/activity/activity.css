@@ -16,7 +16,7 @@
 
 .ovl-activity__history-reason {
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .ovl-activity__state {
@@ -57,13 +57,13 @@
 }
 
 .ovl-activity__summary {
-  color: var(--text-primary);
+  color: var(--text-body);
 }
 
 .ovl-activity__time,
 .ovl-activity__partial {
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .ovl-activity__machineData {
