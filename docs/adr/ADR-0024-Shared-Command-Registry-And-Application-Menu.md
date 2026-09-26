@@ -16,6 +16,17 @@ sidebar, titlebar, and keyboard, with the two otherwise menu-only Help commands
 served by a titlebar Help menu. Command identity, handlers, and parity are
 unchanged — only placement differs by platform. Split out of #689 / PR #698.
 
+**Amended 2026-09-26 on issue
+[#1293](https://github.com/qwts/overlook/issues/1293)** (UI-09) — §5 revised
+again: Windows and Linux keep no native menu bar, but a keyboard shortcut no
+longer counts as a command's only surface. A second titlebar menu, the
+**Overlook menu** (⋯), projects the app-level commands that otherwise had only
+a shortcut or no surface. The titlebar Help menu from #699 is unchanged.
+Transfer & Sync and Export All Unencrypted leave the toolbar on every platform.
+Command identity, handlers, and parity are unchanged. Spec: Overlook Design
+System → _Toolbar and Window Chrome_ (Pass B), mirrored on
+[#1310](https://github.com/qwts/overlook/issues/1310#issuecomment-5849085818).
+
 ## Context
 
 Overlook currently has no native application menu and no command registry.
@@ -98,38 +109,58 @@ unlock boundaries.
 
 ### 5. The native application menu is macOS-only
 
-_Amended 2026-07-22 (#699); supersedes the original "native hierarchy follows
-each platform" text._
+_Amended 2026-07-22 (#699) and 2026-09-26 (#1293, UI-09); supersedes the
+original "native hierarchy follows each platform" text._
 
 macOS owns a native application menu — the six-menu design-system spec
 (Overlook, File, Edit, View, Photo, Help; #689). **Windows and Linux draw no
-native menu bar** — the design system (`components/app/MenuBar.jsx`) specs the
-menu for macOS only, and a frameless window has no OS menu to project into. On
-those platforms `buildApplicationMenuTemplate` returns an empty template and the
-controller calls `Menu.setApplicationMenu(null)`.
+native menu bar.** On those platforms `buildApplicationMenuTemplate` returns an
+empty template and the controller calls `Menu.setApplicationMenu(null)`.
 
-Removing the menu bar must leave **no command unreachable**. Every registry
-command is projected onto a non-menu surface on Windows/Linux — the toolbar
-(Import, view modes, Lock Now, Transfer & Sync), the sidebar (Settings, sources,
-albums), the titlebar (Switch Library), and the keyboard dispatcher (Undo/Redo,
-Select All, inspector, favorite, trash, lightbox, shortcuts). The only commands
-whose _sole_ entry point was the native menu are the two Help commands with no
-other surface, **`help.activity`** and **`help.open`**; they are served by a
-**titlebar Help menu** (`TitlebarHelpMenu`) — a no-drag button left of the
-window controls that opens the shared APG `ContextMenu`, mirroring the macOS
-Help menu (Keyboard Shortcuts, Activity…, Privacy & Diagnostics, Overlook Help)
-from one shared registry list (`HELP_MENU_ITEMS`) so the two Help surfaces
-cannot drift. Activity remains a Help affordance, never a sidebar source or
-album row (#690). Two OS conveniences do not carry over and are accepted as
-macOS-only: the `Cmd+,` Settings accelerator (Settings stays reachable from the
-sidebar) and the `role: 'about'` box (not a registry command).
+Removing the menu bar must leave **no command without a visible surface**. A
+keyboard shortcut is an accelerator, not a surface: every command reachable from
+the macOS menu bar must also be reachable on Windows/Linux from a visible,
+keyboard-operable control. The Windows/Linux placement is:
+
+- **Toolbar:** Import, view modes, zoom, Back up, Lock Now. The toolbar holds
+  library work only and never wraps (Pass B).
+- **Sidebar:** sources, albums, Settings (sidebar card).
+- **Titlebar library switcher:** Switch, New, and Move Library.
+- **Selection pill and photo context menu:** every Photo-menu command
+  (favorite, albums, export selection, trash, restore). Per §2 rule 5, object
+  commands stay out of app-level menus.
+- **Titlebar Overlook menu (⋯):** a no-drag button left of Help that opens the
+  shared APG `ContextMenu`, projected from one shared list, `APP_MENU_ITEMS`
+  (`shared/commands/app-menu.ts`). It is grouped the same way as the macOS
+  menus, with visible group headings:
+  - File: Import Photos…, Export All Unencrypted…, Review Duplicates…
+  - Edit: Undo, Redo, Select All
+  - View: Show/Hide Sidebar, Show/Hide Inspector, Open Inspector in Window,
+    Reset Appearance
+  - Overlook: Settings…, Storage & Backup…, Transfer & Sync… (pCloud enabled),
+    Lock Now (app lock configured)
+- **Titlebar Help menu (#699, unchanged):** Keyboard Shortcuts, Activity…,
+  Privacy & Diagnostics, Overlook Help, from `HELP_MENU_ITEMS`.
+
+Both titlebar menus share one `TitlebarMenu` component. Labels, enablement
+(`commandEnabled`), and shortcut display (`formatShortcut`) come from the
+registry. Disabled items stay present with `aria-disabled` and their reason. A
+parity test fails if a non-Photo command in the macOS template is in neither
+`APP_MENU_ITEMS`, `HELP_MENU_ITEMS`, nor an explicit allow-list of the other
+surfaces above. Activity remains a Help affordance, never a sidebar source or
+album row (#690).
+
+Two OS conveniences stay macOS-only: the `Cmd+,` Settings accelerator (Settings
+is on the sidebar card and in ⋯ on Windows/Linux) and the `role: 'about'` box
+(not a registry command). Adding a `Ctrl+,` accelerator later needs the conflict
+tests below.
 
 Command identity, handlers, labels, and enablement stay constant across
 platforms; only placement and OS roles vary. Application menu labels use
-ADR-0020's ICU catalogs in main. Shortcut display and native accelerators are
-generated from registry bindings. Non-US layout, editable-field precedence,
-modal precedence, and conflict tests are required before assigning an
-application accelerator.
+ADR-0020's ICU catalogs in main, and the renderer titlebar menus use the same
+catalog ids. Shortcut display and native accelerators are generated from
+registry bindings. Non-US layout, editable-field precedence, modal precedence,
+and conflict tests are required before assigning an application accelerator.
 
 ### 6. Lock, privacy, and telemetry fail closed
 
