@@ -9,7 +9,6 @@ import { createEmitter } from '../shared/ipc/registry.js';
 import { configureAppProfile } from './app-profile.js';
 import { BlobStore, BlobStoreError } from './blobs/blob-store.js';
 import { broadcast, registerWindowAllClosedQuit, reloadContentWindowsForLock, relaunchLocked } from './app-window.js';
-import { KeyStore } from './crypto/keystore.js';
 import { createAppLockRuntime, registerAppLockIpc } from './crypto/app-lock-runtime.js';
 import { drainWithCancellationFence, releaseLibraryLockAfter } from './crypto/library-shutdown.js';
 import { TestFileCredentialAnchorStore } from './crypto/test-credential-anchor.js';
@@ -61,6 +60,7 @@ import { activateSettingsLibrary, configureSettingsLibrary, getSettingsStore } f
 import { backupSettingsOf } from '../shared/settings/settings.js';
 import { LibraryService } from './library/library-service.js';
 import { LibraryRegistryRuntime } from './library/library-registry-runtime.js';
+import { clearLibraryCustodyBlock, takeLibraryKeyStore } from './library/library-custody.js';
 import { acquireLibraryLock, readLockHolder } from './library/library-lock.js';
 import { createLibraryLifecycle } from './library/library-lifecycle-wiring.js';
 import { pickLibraryCreateLocation, pickLibraryDirectory } from './library/library-picker.js';
@@ -119,11 +119,9 @@ function getLibraryService(): LibraryService {
   if (libraryService === undefined) {
     const dataDir = registryRuntime.healActiveId().path;
     activateSettingsLibrary();
-    releaseLibraryLock ??= acquireLibraryLock(dataDir, instanceId);
-    const keyStore =
-      releasedMaster === undefined
-        ? KeyStore.open({ safeStorage: pickSafeStorage(), dataDir })
-        : KeyStore.openWithMaster({ safeStorage: pickSafeStorage(), dataDir }, releasedMaster);
+    const opened = takeLibraryKeyStore(dataDir, instanceId, pickSafeStorage(), releasedMaster, releaseLibraryLock, acquireLibraryLock);
+    releaseLibraryLock = opened.release;
+    const keyStore = opened.keyStore;
     // The DB key is KEY #1: stable across rotation (rotation only moves the
     // blob WRITE key), wrapped by the master key per ADR-0004. A dedicated
     // db-key slot can arrive later via migration if ever needed.
@@ -807,9 +805,11 @@ void externalOpen.whenReady().then(async () => {
   registerAppServices({
     dataDir: () => libraryDataDir(),
     harnessEnv,
+    libraryOpen: () => libraryService !== undefined,
     requireContentAccess: () => lock.requireContentAccess(),
     allowKeyImport: () => lock.snapshot().state === 'unconfigured-unlocked',
     onRecoveryKeyExported: () => recoveryExportReceipt.mark(registryRuntime.resolveActive().id),
+    onRecoveryKeyImported: clearLibraryCustodyBlock,
     getLibrary: getLibraryService,
     getActivity: () => createActivityFacade(requireParts('activity').db, () => manifestSyncTrigger?.()),
     getHistory: () =>

@@ -57,7 +57,7 @@ function useSyncStatePatches(localOnly: boolean, fetchFirstPage: (invalidateComp
 // visible-set change bumps the request id, so a late response from the
 // previous set is dropped instead of appended. `exhausted` tells the grid
 // the loaded count IS the filtered total (counts can't answer for filters).
-export function useLibraryPhotos(): { readonly loadMore: () => void; readonly exhausted: boolean } {
+export function useLibraryPhotos(): { readonly loadMore: () => void; readonly exhausted: boolean; readonly pageFailed: boolean } {
   const { source, query, searchMode, chips, sortOrder, album, facets, smartAlbum, photos } = useAppState();
   const dispatch = useAppDispatch();
   const cursorRef = useRef<PageCursor | null>(null);
@@ -68,6 +68,7 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
   const facetsActive = activePredicate({ facets, smartAlbum }) !== undefined;
   const setKey = `${source}|${query}|${searchMode}|${JSON.stringify(chips)}|${sortOrder}|${album ?? ''}|${facetsActive ? JSON.stringify(facets) : ''}`;
   const [exhaustedKey, setExhaustedKey] = useState<string | null>(null);
+  const [pageFailed, setPageFailed] = useState(false);
   const exhausted = exhaustedKey === setKey;
 
   const baseRequest = useCallback(
@@ -90,6 +91,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       const requestId = (requestRef.current += 1);
       inFlightRef.current = true;
       cursorRef.current = null;
+      queueMicrotask(() => {
+        if (requestRef.current === requestId) setPageFailed(false);
+      });
       void window.overlook.library
         .page(baseRequest())
         .then(({ photos, nextCursor, search }) => {
@@ -98,8 +102,15 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
           }
           cursorRef.current = nextCursor;
           setExhaustedKey(nextCursor === null ? setKey : null);
+          setPageFailed(false);
           dispatch({ type: 'search/status', search });
           dispatch({ type: 'photos/loaded', photos, append: false, invalidateCompleteSelection });
+        })
+        .catch(() => {
+          if (requestRef.current !== requestId) return;
+          queueMicrotask(() => {
+            if (requestRef.current === requestId) setPageFailed(true);
+          });
         })
         .finally(() => {
           if (requestRef.current === requestId) {
@@ -182,5 +193,5 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       });
   }, [baseRequest, setKey, dispatch]);
 
-  return { loadMore, exhausted };
+  return { loadMore, exhausted, pageFailed };
 }

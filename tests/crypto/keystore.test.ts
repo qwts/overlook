@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 
 import { createDecryptStream, createEncryptStream } from '../../src/main/crypto/envelope.js';
-import { KeyCustodyError, KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
+import { KeyCustodyError, KeyStore, probeMasterUnwrap, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 
 // Deterministic fake keychain: XORs with a fixed pad so "wrapped" bytes are
 // not the plaintext, and a second fake with a different pad simulates a
@@ -191,7 +191,39 @@ describe('KeyStore failure paths', () => {
   test('a different OS keychain identity cannot unwrap the master key', () => {
     const dataDir = tempDir();
     KeyStore.open({ safeStorage: fakeSafeStorage(0x5a), dataDir });
+    // The XOR fake decrypts to garbage instead of throwing, so this is the
+    // malformed branch. A keychain that throws is covered below.
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x77), dataDir), 'malformed');
     assert.throws(() => KeyStore.open({ safeStorage: fakeSafeStorage(0x77), dataDir }), /master key (could not be unwrapped|is malformed)/);
+  });
+
+  test('probe reports first-run, a damaged master, a missing keychain, and an app-lock record', () => {
+    const empty = tempDir();
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), empty), 'ok');
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a, false), empty), 'keychain-unavailable');
+
+    const damaged = tempDir();
+    writeFileSync(join(damaged, 'master.key'), fakeSafeStorage(0x5a).encryptString('short'));
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), damaged), 'malformed');
+
+    const locked = tempDir();
+    writeFileSync(join(locked, 'master.key'), Buffer.from('OVLK-not-a-legacy-master'));
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), locked), 'ok');
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a, false), locked), 'ok');
+
+    const unreadable = tempDir();
+    mkdirSync(join(unreadable, 'master.key'));
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), unreadable), 'malformed');
+
+    const sealed = tempDir();
+    writeFileSync(join(sealed, 'master.key'), Buffer.from('sealed'));
+    const throwing: SafeStorageLike = {
+      ...fakeSafeStorage(0x5a),
+      decryptString: () => {
+        throw new Error('keychain');
+      },
+    };
+    assert.equal(probeMasterUnwrap(throwing, sealed), 'unwrap-failed');
   });
 
   test('a tampered keys.json fails key authentication loudly', () => {

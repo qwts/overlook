@@ -14,6 +14,7 @@ import { Icon } from '../components/Icon';
 import { PhotoTile } from '../components/PhotoTile';
 import { activePredicate, anyDialogOpen } from '../../../shared/library/app-state.js';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
+import { gridTotal } from './grid-total';
 import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
@@ -73,7 +74,7 @@ export function LibraryGridView({
   const dispatch = useAppDispatch();
   const exportAvailability = useSelectionExportAvailability(state.selection);
   const { announce } = useAnnouncer();
-  const { loadMore, exhausted } = useLibraryPhotos();
+  const { loadMore, exhausted, pageFailed } = useLibraryPhotos();
   const facetsActive = activePredicate(state) !== undefined;
   const projectionKey = `${state.source}|${state.query}|${state.searchMode}|${state.search.appliedMode}|${JSON.stringify(state.chips)}|${state.sortOrder}|${state.album ?? ''}|${facetsActive ? JSON.stringify(state.facets) : ''}`;
   const selectionAnchorRef = useRef<string | null>(null);
@@ -214,7 +215,13 @@ export function LibraryGridView({
   // An active album narrows like query/chips do (#117): the sidebar count
   // sized for the source no longer applies — track the loaded set instead.
   const filtersActive = state.query !== '' || state.album !== null || facetsActive || Object.values(state.chips).some(Boolean);
-  const total = filtersActive || knownTotal === null ? (exhausted ? state.photos.length : state.photos.length + 1) : knownTotal;
+  const total = gridTotal({
+    filtersActive,
+    knownTotal,
+    loaded: state.photos.length,
+    exhausted,
+    pageFailed,
+  });
   const inTrash = state.source === 'deleted';
   const modalOpen =
     anyDialogOpen(state) ||

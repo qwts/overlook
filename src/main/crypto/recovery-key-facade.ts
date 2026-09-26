@@ -24,6 +24,8 @@ export interface RecoveryKeyFacadeOptions {
   readonly pickImportSource: () => Promise<string | null>;
   readonly allowImport: () => boolean;
   readonly onExported?: (() => void) | undefined;
+  /** Fires after a recovery key is installed over the current master. */
+  readonly onImported?: (() => void) | undefined;
 }
 
 export function createRecoveryKeyFacade(options: RecoveryKeyFacadeOptions) {
@@ -55,6 +57,7 @@ export function createRecoveryKeyFacade(options: RecoveryKeyFacadeOptions) {
         if (result === 'mismatch' || result === 'no-library') {
           return { installed: false, fingerprint: null, reason: result };
         }
+        options.onImported?.();
         return { installed: true, fingerprint: fingerprintOf(master), reason: null };
       } catch (error) {
         const reason = error instanceof RecoveryError ? error.reason : ('invalid' as const);

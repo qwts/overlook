@@ -683,6 +683,48 @@
   "custody.state.wrongAccount": {
     "defaultMessage": "Wrong {provider} account — reconnect as {account}; this account cannot satisfy the recorded custody."
   },
+  "custody.unwrap.choose": {
+    "defaultMessage": "Choose recovery key"
+  },
+  "custody.unwrap.failed": {
+    "defaultMessage": "This Mac cannot unwrap the library’s master key. The photos are still in the library. Import the exported recovery key, or switch to another library."
+  },
+  "custody.unwrap.import": {
+    "defaultMessage": "Import recovery key"
+  },
+  "custody.unwrap.importFailed": {
+    "defaultMessage": "Import failed — nothing was installed."
+  },
+  "custody.unwrap.importing": {
+    "defaultMessage": "Importing…"
+  },
+  "custody.unwrap.invalid": {
+    "defaultMessage": "Not a recovery key file."
+  },
+  "custody.unwrap.keychain": {
+    "defaultMessage": "The OS keychain is unavailable, so Overlook will not open this library. Switch to another library, or try again when the keychain is available."
+  },
+  "custody.unwrap.malformed": {
+    "defaultMessage": "The stored master key is damaged. Import the exported recovery key, or switch to another library."
+  },
+  "custody.unwrap.mismatch": {
+    "defaultMessage": "This key doesn’t match this library."
+  },
+  "custody.unwrap.noLibrary": {
+    "defaultMessage": "No library to unlock here yet — restore the library files first, then import the key."
+  },
+  "custody.unwrap.password": {
+    "defaultMessage": "Recovery key password"
+  },
+  "custody.unwrap.switch": {
+    "defaultMessage": "Switch library"
+  },
+  "custody.unwrap.title": {
+    "defaultMessage": "Library can’t be opened"
+  },
+  "custody.unwrap.wrongPassword": {
+    "defaultMessage": "Wrong password (or a corrupted file). The password cannot be reset — try again."
+  },
   "disclosure.class.mixed": {
     "defaultMessage": "Mixed"
   },
