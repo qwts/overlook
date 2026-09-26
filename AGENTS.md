@@ -153,7 +153,7 @@ Machine data (EXIF, counts, sync states) renders with the `.mono-data` utility.
 Run the cheap gates locally, one at a time:
 
 ```sh
-npm run lint     # agent-context, pins, colors, contrast, eslint, cycles, dead, types, i18n, licenses
+npm run lint     # agent-context, pins, colors, tokens, contrast, eslint, cycles, dead, types, i18n, licenses
 npm test         # typecheck, compile, Electron-hosted unit + happy-dom DOM, guard conformance
 npm run docs:gov
 ```

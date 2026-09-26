@@ -792,6 +792,6 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   color: var(--text-muted);
-  font: var(--type-mono);
+  font: var(--type-meta);
   text-transform: none;
 }

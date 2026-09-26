@@ -1372,7 +1372,8 @@
             "tests/db/library-db.test.ts",
             "tests/main/appearance-runtime.test.ts",
             "tests/theme/appearance.test.ts",
-            "tests/tooling/renderer-colors.test.ts"
+            "tests/tooling/renderer-colors.test.ts",
+            "tests/tooling/renderer-tokens.test.ts"
           ]
         },
         {

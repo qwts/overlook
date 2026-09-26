@@ -7,7 +7,7 @@
 .ovl-interop__provider span,
 .ovl-interop__truth {
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .ovl-interop__segmented,
@@ -20,7 +20,7 @@
 .ovl-interop__segmented button {
   padding: var(--space-2) var(--space-3);
   color: var(--text-muted);
-  background: var(--bg-elevated);
+  background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   border-radius: 5px;
 }
@@ -35,7 +35,7 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  background: var(--bg-elevated);
+  background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
 }
@@ -56,7 +56,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-2);
-  background: var(--bg-elevated);
+  background: var(--surface-raised);
 }
 
 .ovl-interop__review dd {
