@@ -17,11 +17,13 @@ async function checker(): Promise<RendererTokensModule> {
   return (await import(pathToFileURL(join(process.cwd(), 'scripts/check-renderer-tokens.mjs')).href)) as RendererTokensModule;
 }
 
-test('renderer custom-property gate reports undefined var() names with lines (#1286)', async () => {
+const TOKENS = { file: 'src/styles/tokens/colors.css', source: ':root { --text-body: #fff; --radius-2: 6px; }' };
+
+test('renderer custom-property gate reports undefined var() names with lines, fallback or not (#1286)', async () => {
   const tokens = await checker();
   assert.deepEqual(
     tokens.findUndefinedCustomProperties([
-      { file: 'src/styles/tokens/colors.css', source: ':root { --text-body: #fff; --radius-2: 6px; }' },
+      TOKENS,
       {
         file: 'src/example/example.css',
         source:
@@ -35,13 +37,25 @@ test('renderer custom-property gate reports undefined var() names with lines (#1
   );
 });
 
-test('renderer custom-property gate accepts component-local and script-set properties (#1286)', async () => {
+test('renderer custom-property gate accepts only tokens and properties a component writes at runtime (#1286)', async () => {
   const tokens = await checker();
   assert.deepEqual(
     tokens.findUndefinedCustomProperties([
-      { file: 'src/grid/grid.css', source: '.grid { --tile-gap: 4px; gap: var(--tile-gap); width: var(--tile-size); }' },
-      { file: 'src/grid/Grid.tsx', source: "const style = { '--tile-size': `${size}px` } as CSSProperties;" },
+      TOKENS,
+      {
+        file: 'src/grid/grid.css',
+        source:
+          '.grid { margin: calc(var(--ovl-depth) * 1px); width: var(--ovl-size); }\n.row { --ovl-local: 4px; gap: var(--ovl-local); color: var(--ovl-labelled); }',
+      },
+      {
+        file: 'src/grid/Grid.tsx',
+        source: "const style = { '--ovl-depth': depth } as CSSProperties;\nnode.style.setProperty('--ovl-size', `${size}px`);",
+      },
+      { file: 'src/grid/copy.ts', source: "const hint = 'Set --ovl-labelled first';\nconst name = '--ovl-labelled';" },
     ]),
-    [],
+    [
+      { file: 'src/grid/grid.css', line: 2, property: '--ovl-local' },
+      { file: 'src/grid/grid.css', line: 2, property: '--ovl-labelled' },
+    ],
   );
 });

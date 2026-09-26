@@ -7,11 +7,15 @@ import { pathToFileURL } from 'node:url';
 
 // An unresolvable var() fails silently — the property falls back to its
 // initial value — so a guessed token name ships as a missing radius, size, or
-// surface instead of an error (#1286). Every name a stylesheet reads must be
-// declared somewhere a stylesheet or component can set it.
+// surface instead of an error (#1286). Every name a stylesheet reads must be a
+// token from styles/tokens/, or a per-element value a component writes at
+// runtime (a style-object key or a setProperty call). A var() fallback does
+// not exempt a name, and a stylesheet-local declaration does not count.
+const TOKEN_SOURCE = '/styles/tokens/';
 const CSS_DECLARATION = /(?<![\w-])(--[\w-]+)\s*:/gu;
 const CSS_USE = /var\(\s*(--[\w-]+)/gu;
-const SCRIPT_PROPERTY = /['"`](--[\w-]+)['"`]/gu;
+const STYLE_KEY = /['"](--[\w-]+)['"]\s*:/gu;
+const SET_PROPERTY = /\.setProperty\(\s*['"`](--[\w-]+)['"`]/gu;
 
 function withoutComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//gu, (comment) => comment.replace(/[^\n]/gu, ' '));
@@ -23,10 +27,14 @@ export function findUndefinedCustomProperties(files) {
   for (const { file, source } of files) {
     if (file.endsWith('.css')) {
       const searchable = withoutComments(source);
-      for (const match of searchable.matchAll(CSS_DECLARATION)) declared.add(match[1]);
-      stylesheets.push({ file, searchable });
+      if (file.includes(TOKEN_SOURCE)) {
+        for (const match of searchable.matchAll(CSS_DECLARATION)) declared.add(match[1]);
+      } else {
+        stylesheets.push({ file, searchable });
+      }
     } else if (/\.tsx?$/u.test(file)) {
-      for (const match of source.matchAll(SCRIPT_PROPERTY)) declared.add(match[1]);
+      for (const match of source.matchAll(STYLE_KEY)) declared.add(match[1]);
+      for (const match of source.matchAll(SET_PROPERTY)) declared.add(match[1]);
     }
   }
   const violations = [];
@@ -59,9 +67,10 @@ async function main() {
     console.log('Renderer custom-property gate OK.');
     return;
   }
-  console.error('Renderer CSS reads custom properties that nothing declares (see src/renderer/src/styles/tokens/):');
+  console.error('Renderer CSS must read tokens from src/renderer/src/styles/tokens/ or properties a component sets at runtime:');
   for (const violation of violations) console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}`);
   process.exitCode = 1;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+const entry = process.argv[1];
+if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) await main();

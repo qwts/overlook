@@ -99,13 +99,11 @@
 .ovl-lightbox__orientation,
 .ovl-lightbox__zoom,
 .ovl-lightbox__edit {
-  --ovl-lightbox-handoff-space: calc(var(--space-2) + var(--space-1));
-
   position: absolute;
   display: flex;
   align-items: center;
-  gap: var(--ovl-lightbox-handoff-space);
-  padding: var(--space-1) var(--ovl-lightbox-handoff-space);
+  gap: calc(var(--space-2) + var(--space-1));
+  padding: var(--space-1) calc(var(--space-2) + var(--space-1));
   border: 1px solid var(--border-2);
   border-radius: var(--radius-2);
   background: var(--gray-1);
