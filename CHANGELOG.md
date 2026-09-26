@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.24
+
+### Patch Changes
+
+- dc7d64b: Show a recovery screen when this Mac cannot unwrap the library master key, instead of a blank photo tile.
+
 ## 0.76.23
 
 ### Patch Changes
