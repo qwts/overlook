@@ -16,6 +16,8 @@ import { registerFullProtocol } from './fullres/full-protocol.js';
 import type { ImportService } from './import/import-service.js';
 import { ulid } from './import/ulid.js';
 import type { KeyStore } from './crypto/keystore.js';
+import { registerCustodyHandlers } from './library/custody-ipc.js';
+import { readProbedLibraryCustody } from './library/library-custody.js';
 import { createRecoveryKeyFacade } from './crypto/recovery-key-facade.js';
 import { pickRecoveryKeyPath } from './crypto/recovery-key-picker.js';
 import type { DrainableExportFacade } from './export/export-runtime.js';
@@ -88,10 +90,12 @@ import type { OriginalRecoveryService } from './library/original-recovery-servic
 export interface AppServicesOptions {
   readonly getOriginalRecovery: () => OriginalRecoveryService;
   readonly dataDir: () => string;
+  readonly libraryOpen: () => boolean;
   readonly harnessEnv: (name: string) => string | undefined;
   readonly requireContentAccess: () => void;
   readonly allowKeyImport: () => boolean;
   readonly onRecoveryKeyExported?: (() => void) | undefined;
+  readonly onRecoveryKeyImported?: (() => void) | undefined;
   readonly getLibrary: () => LibraryService;
   readonly getPhotoRepair: () => Pick<RawRepairService, 'repairPhoto'>;
   readonly getActivity: () => ActivityFacade;
@@ -226,6 +230,7 @@ async function pickDiagnosticsExport(options: AppServicesOptions): Promise<strin
 }
 
 export function registerAppServices(options: AppServicesOptions): void {
+  registerCustodyHandlers(() => readProbedLibraryCustody(options.libraryOpen(), options.dataDir(), options.safeStorage()));
   registerOriginalRecoveryHandlers(options.getOriginalRecovery, options.requireContentAccess, options.authorizationEpoch, async () => {
     const fixture = options.harnessEnv('OVERLOOK_RECOVER_ORIGINAL_SOURCE');
     if (fixture !== undefined && fixture !== '') return fixture;
@@ -294,6 +299,7 @@ export function registerAppServices(options: AppServicesOptions): void {
       pickExportDestination: () => pickKeyExport(options),
       pickImportSource: () => pickRecoveryKeyPath(options.harnessEnv('OVERLOOK_KEY_IMPORT_SOURCE')),
       onExported: options.onRecoveryKeyExported,
+      onImported: options.onRecoveryKeyImported,
     }),
   );
   registerRestoreHandlers(() =>

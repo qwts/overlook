@@ -6,6 +6,8 @@ import { AppStateProvider } from './state/app-state-context';
 import { Shell } from './shell/Shell';
 import { RestoreOnboarding } from './restore/RestoreOnboarding';
 import { LockScreen } from './lock/LockScreen';
+import { CustodyScreen } from './lock/CustodyScreen';
+import type { LibraryCustodyState } from '../../shared/library/custody.js';
 import { EMPTY_COMMAND_MENU_CONTEXT } from '../../shared/commands/menu-contract.js';
 import type { CommandId } from '../../shared/commands/registry.js';
 import { AnnouncerProvider } from './components/LiveAnnouncer';
@@ -23,15 +25,18 @@ export function App(): ReactElement {
   const [platform, setPlatform] = useState('darwin');
   const [fresh, setFresh] = useState<boolean | null>(null);
   const [lock, setLock] = useState<LockStatus | null>(null);
+  const [custody, setCustody] = useState<LibraryCustodyState | null>(null);
+  const [custodyEpoch, setCustodyEpoch] = useState(0);
   const [nativeCommand, setNativeCommand] = useState<{ readonly id: CommandId; readonly sequence: number } | null>(null);
   const [lockedLibrarySwitcherOpen, setLockedLibrarySwitcherOpen] = useState(false);
   const sequenceRef = useRef(0);
   const lockRef = useRef<LockStatus | null>(null);
+  const custodyRef = useRef<LibraryCustodyState | null>(null);
   useEffect(() => {
     const unsubscribe = window.overlook.commands.onInvoked(({ id }) => {
       const currentLock = lockRef.current;
       const authorized = currentLock?.state === 'unconfigured-unlocked' || currentLock?.state === 'unlocked';
-      if (currentLock !== null && !authorized && id === 'library.switch') {
+      if (currentLock !== null && (!authorized || custodyRef.current !== 'ok') && id === 'library.switch') {
         setLockedLibrarySwitcherOpen(true);
         return;
       }
@@ -51,23 +56,37 @@ export function App(): ReactElement {
     return window.overlook.appLock.onChanged(receiveLock);
   }, []);
 
+  const authorized = lock?.state === 'unconfigured-unlocked' || lock?.state === 'unlocked';
   useEffect(() => {
-    if (lock?.state === 'unconfigured-unlocked' || lock?.state === 'unlocked') {
+    if (!authorized) return;
+    let active = true;
+    void window.overlook.library.custody().then(({ state }) => {
+      if (!active) return;
+      custodyRef.current = state;
+      setCustody(state);
+    });
+    return () => {
+      active = false;
+    };
+  }, [authorized, custodyEpoch]);
+
+  useEffect(() => {
+    if (authorized && custody === 'ok') {
       void window.overlook.restore.profileStatus().then(({ fresh: value }) => setFresh(value));
     }
-  }, [lock?.state]);
+  }, [authorized, custody]);
 
   useEffect(() => {
     if (lock === null) return;
-    const authorized = lock.state === 'unconfigured-unlocked' || lock.state === 'unlocked';
+    const contentReady = authorized && custody === 'ok';
     const context = {
       ...EMPTY_COMMAND_MENU_CONTEXT,
-      surface: authorized ? ('onboarding' as const) : ('locked' as const),
+      surface: contentReady ? ('onboarding' as const) : ('locked' as const),
       hasLibrary: lock.libraryId !== null,
       appLockConfigured: lock.state !== 'unconfigured-unlocked',
     };
     void window.overlook.commands.ready(context);
-  }, [lock]);
+  }, [authorized, custody, lock]);
 
   if (lock === null) return <></>;
   if (lock.state !== 'unconfigured-unlocked' && lock.state !== 'unlocked') {
@@ -81,6 +100,33 @@ export function App(): ReactElement {
           onSwitchLibrary={() => setLockedLibrarySwitcherOpen(true)}
         />
         {lockedLibrarySwitcherOpen ? <LibrarySwitcher switchOnly onClose={() => setLockedLibrarySwitcherOpen(false)} /> : null}
+      </AnnouncerProvider>
+    );
+  }
+  if (custody === null) return <></>;
+  if (custody !== 'ok') {
+    return (
+      <AnnouncerProvider>
+        <CustodyScreen
+          platform={platform}
+          state={custody}
+          onRecovered={() => {
+            custodyRef.current = 'ok';
+            setCustody('ok');
+          }}
+          onSwitchLibrary={() => setLockedLibrarySwitcherOpen(true)}
+        />
+        {lockedLibrarySwitcherOpen ? (
+          <LibrarySwitcher
+            switchOnly
+            onClose={() => {
+              setLockedLibrarySwitcherOpen(false);
+              custodyRef.current = null;
+              setCustody(null);
+              setCustodyEpoch((epoch) => epoch + 1);
+            }}
+          />
+        ) : null}
       </AnnouncerProvider>
     );
   }

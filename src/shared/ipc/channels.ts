@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { originalRecoveryChannels } from './original-recovery-channels.js';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
+import { libraryCustodyStates } from '../library/custody.js';
 import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
 import { mediaInfoSchema } from '../library/media-info.js';
 import {
@@ -851,6 +852,7 @@ export const channels = {
   ...coverageChannels,
   ...keyringChannels,
   ...disclosureChannels,
+  libraryCustody: defineChannel('library:custody', z.object({}), z.object({ state: z.enum(libraryCustodyStates) })),
   libraryStats: defineChannel(
     'library:stats',
     z.object({}),

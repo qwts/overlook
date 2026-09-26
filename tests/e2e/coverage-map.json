@@ -2997,6 +2997,22 @@
           ]
         }
       ]
+    },
+    {
+      "id": "1282-master-unwrap-failure",
+      "wiki": "ADR-0004-Encryption-And-Key-Management",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/dom/custody-screen.test.ts",
+            "tests/grid/grid-total.test.ts",
+            "tests/crypto/keystore.test.ts",
+            "tests/library/library-custody.test.ts",
+            "tests/library/open-library-guard.test.ts"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -5,7 +5,12 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path';
 
 import type { EnvelopeKey, KeyResolver } from './envelope.js';
+import type { LibraryCustodyState } from '../../shared/library/custody.js';
 import type { KeyKind, KeyOrigin } from '../../shared/keyring/types.js';
+
+const KEYCHAIN_UNAVAILABLE = 'OS keychain is unavailable; refusing to store the master key without it (no plaintext fallback)';
+const UNWRAP_FAILED = 'the stored master key could not be unwrapped by the OS keychain';
+const MASTER_MALFORMED = 'the stored master key is malformed';
 
 // Master-key + versioned-library-key lifecycle per ADR-0004 §custody/rotation
 // (#68). The Electron safeStorage dependency is injected so node:test proves
@@ -20,6 +25,30 @@ export interface SafeStorageLike {
 
 export class KeyCustodyError extends Error {
   override readonly name = 'KeyCustodyError';
+}
+
+/** Reads `master.key` the way `KeyStore.open` does, without minting a key or
+ * opening the database. An app-lock record is `ok` — the lock screen owns it. */
+export function probeMasterUnwrap(safeStorage: SafeStorageLike, dataDir: string): LibraryCustodyState {
+  if (!safeStorage.isEncryptionAvailable()) return 'keychain-unavailable';
+  const masterPath = join(dataDir, MASTER_FILE);
+  if (!existsSync(masterPath)) return 'ok';
+  const persisted = readFileSync(masterPath);
+  if (persisted.subarray(0, 4).toString('ascii') === 'OVLK') return 'ok';
+  let decoded: string;
+  try {
+    decoded = safeStorage.decryptString(persisted);
+  } catch {
+    return 'unwrap-failed';
+  }
+  if (Buffer.from(decoded, 'base64').length !== 32) return 'malformed';
+  return 'ok';
+}
+
+export function custodyErrorMessage(state: Exclude<LibraryCustodyState, 'ok'>): string {
+  if (state === 'unwrap-failed') return UNWRAP_FAILED;
+  if (state === 'malformed') return MASTER_MALFORMED;
+  return KEYCHAIN_UNAVAILABLE;
 }
 
 /** Non-secret registry facts a custody record carries (ADR-0032 §2). Absent
@@ -157,7 +186,7 @@ export class KeyStore {
   /** First run generates the master key + KEY #1; later runs load + unwrap. */
   static open(options: KeyStoreOptions): KeyStore {
     if (!options.safeStorage.isEncryptionAvailable()) {
-      throw new KeyCustodyError('OS keychain is unavailable; refusing to store the master key without it (no plaintext fallback)');
+      throw new KeyCustodyError(KEYCHAIN_UNAVAILABLE);
     }
     mkdirSync(options.dataDir, { recursive: true });
     const masterPath = join(options.dataDir, MASTER_FILE);
@@ -172,11 +201,11 @@ export class KeyStore {
       try {
         decoded = options.safeStorage.decryptString(persisted);
       } catch {
-        throw new KeyCustodyError('the stored master key could not be unwrapped by the OS keychain');
+        throw new KeyCustodyError(UNWRAP_FAILED);
       }
       masterKey = Buffer.from(decoded, 'base64');
       if (masterKey.length !== 32) {
-        throw new KeyCustodyError('the stored master key is malformed');
+        throw new KeyCustodyError(MASTER_MALFORMED);
       }
     } else {
       masterKey = randomBytes(32);

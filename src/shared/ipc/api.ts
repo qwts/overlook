@@ -111,6 +111,7 @@ export interface OverlookApi {
       request: Req<typeof channels.librarySetGalleryPolicy>,
     ) => Promise<Res<typeof channels.librarySetGalleryPolicy>>;
     readonly stats: () => Promise<Res<typeof channels.libraryStats>>;
+    readonly custody: () => Promise<Res<typeof channels.libraryCustody>>;
     readonly albums: () => Promise<Res<typeof channels.libraryAlbums>>;
     readonly facetValues: (request: Req<typeof channels.libraryFacetValues>) => Promise<Res<typeof channels.libraryFacetValues>>;
     readonly delete: (request: Req<typeof channels.libraryDelete>) => Promise<Res<typeof channels.libraryDelete>>;
