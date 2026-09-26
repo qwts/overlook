@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.25
+
+### Patch Changes
+
+- 3d14a54: Fix Review Duplicates, Activity, Interop, Keyring, Protected, Restore, the detached Inspector window, and the Diagnostics payload reading design tokens that don't exist, which left them with no corner radii, the wrong text size, and transparent surfaces. A new `lint:tokens` check now fails on any renderer stylesheet that reads an undeclared custom property.
+
 ## 0.76.24
 
 ### Patch Changes
