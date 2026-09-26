@@ -91,6 +91,9 @@ export function useLibraryPhotos(): { readonly loadMore: () => void; readonly ex
       const requestId = (requestRef.current += 1);
       inFlightRef.current = true;
       cursorRef.current = null;
+      queueMicrotask(() => {
+        if (requestRef.current === requestId) setPageFailed(false);
+      });
       void window.overlook.library
         .page(baseRequest())
         .then(({ photos, nextCursor, search }) => {

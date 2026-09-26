@@ -209,6 +209,11 @@ describe('KeyStore failure paths', () => {
     const locked = tempDir();
     writeFileSync(join(locked, 'master.key'), Buffer.from('OVLK-not-a-legacy-master'));
     assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), locked), 'ok');
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a, false), locked), 'ok');
+
+    const unreadable = tempDir();
+    mkdirSync(join(unreadable, 'master.key'));
+    assert.equal(probeMasterUnwrap(fakeSafeStorage(0x5a), unreadable), 'malformed');
 
     const sealed = tempDir();
     writeFileSync(join(sealed, 'master.key'), Buffer.from('sealed'));

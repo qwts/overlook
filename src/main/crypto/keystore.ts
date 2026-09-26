@@ -30,11 +30,19 @@ export class KeyCustodyError extends Error {
 /** Reads `master.key` the way `KeyStore.open` does, without minting a key or
  * opening the database. An app-lock record is `ok` — the lock screen owns it. */
 export function probeMasterUnwrap(safeStorage: SafeStorageLike, dataDir: string): LibraryCustodyState {
-  if (!safeStorage.isEncryptionAvailable()) return 'keychain-unavailable';
   const masterPath = join(dataDir, MASTER_FILE);
-  if (!existsSync(masterPath)) return 'ok';
-  const persisted = readFileSync(masterPath);
-  if (persisted.subarray(0, 4).toString('ascii') === 'OVLK') return 'ok';
+  let persisted: Buffer | undefined;
+  if (existsSync(masterPath)) {
+    try {
+      persisted = readFileSync(masterPath);
+    } catch {
+      return 'malformed';
+    }
+    // The lock screen owns an app-lock record, even when Safe Storage is down.
+    if (persisted.subarray(0, 4).toString('ascii') === 'OVLK') return 'ok';
+  }
+  if (!safeStorage.isEncryptionAvailable()) return 'keychain-unavailable';
+  if (persisted === undefined) return 'ok';
   let decoded: string;
   try {
     decoded = safeStorage.decryptString(persisted);
