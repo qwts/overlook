@@ -91,8 +91,26 @@ Verified original restoration clears this evidence for all sibling variants
 sharing that original. Thumbnail success and an unauthenticated file appearing
 at the original path cannot clear it. Independent preview debt remains.
 `gallery-inclusion.test.ts` and `consistency.test.ts` cover these boundaries.
-The explicit local-file Recover original command, UI, and browser acceptance
-remain required follow-up work under #1101.
+Select a missing-original row in Unavailable and choose **Recover original…**
+from Inspector or its single-photo context menu. Cancel keeps the row unchanged.
+A wrong file must leave the absence reason intact and publish no replacement.
+The matching original returns every affected sibling to local custody and updates
+All Photos/Unavailable without restarting. Excluded photos remain excluded;
+independent preview or dimension failures still require their own repair.
+
+Recovery authenticates the published envelope, including when a file already
+exists. A corrupt or wrong-owner envelope is refused without overwriting it.
+New ciphertext uses the active write key and retains the asset-owner identity.
+After verification, all shared photo rows adopt the stored envelope key ID in
+the same transaction as local-custody and absence-evidence updates. An imported
+or retired read key is never used for new encryption.
+Key-locked and trashed photos cannot recover. Library close cancels queued work,
+interrupts the file stream, and drains before closing the database/key store.
+
+`original-recovery.test.ts` covers shared ownership, wrong files, existing bad
+envelopes, custody refusal, and close/drain. `original-recovery.spec.ts` exercises
+the Inspector action through real IPC with encrypted originals, alongside a
+transient upload error that remains in All Photos.
 
 Remote-only duplicate variants authenticate shared originals against their retained
 asset owner. Valid ciphertext must leave root, duplicate, and duplicate-of-duplicate
@@ -101,6 +119,37 @@ rows available; damaged ciphertext must still record missing-original evidence.
 Restored excluded placeholders and explicitly missing partial-restore rows enter
 Unavailable immediately when the catalog is created. Included originals without
 absence evidence remain available; no later consistency scan is required.
+
+When recovery changes the original key, existing derivative envelopes retain their
+prior key reference. Verify that the old key still counts the affected photos,
+requires the destructive removal ceremony, and locks those photos if removed.
+Re-importing the key must authenticate an existing derivative and unlock them.
+References are conservatively retained until photo purge; preview regeneration
+alone does not prove every old-key envelope is gone. Failed catalog publication
+rolls back key references together with availability evidence.
+
+Recover an original shared with a backed-up, unpurged Trash sibling. The next
+manifest must retain that sibling and its deletion timestamp. Its prior synced
+or offloaded custody remains intact; a never-backed-up Trash sibling must not
+be newly advertised as recoverable merely because a live sibling recovered.
+
+Launch recovery from a detached Inspector. After success, its missing-original
+prompt must disappear without changing selection or reopening the window. Rapid
+selection changes or older in-flight reads must not replace the current record.
+DOM coverage: `tests/dom/detached-inspector-photo.test.tsx`.
+
+For an excluded live photo sharing an original with backed-up Trash, local
+recovery need not replace provider ciphertext. Publish a later catalog and
+disaster-restore it: the rebuilt keyring must retain the key that authenticates
+the actual original, even when the catalog names the newer local key. It must
+also retain the write key used for rebuilt previews. Neither key may appear
+unused and permit ordinary removal. The bootstrap must still hold their material.
+
+When a retained key is removed after original recovery, the locked-photo reason
+in Inspector, context menus, grid actions, and Lightbox names that absent key,
+not the present original key. Re-import clears that reason; if another required
+key is still missing, the next read names it. Device-local missing-key reasons
+are not serialized into backup manifests.
 
 ## Explicit per-photo repair (#1098)
 
@@ -133,3 +182,7 @@ uncapped dimensions replace unavailable dimensions; successful repair leaves
 Unavailable without restarting. Image retries keep their image decoder. Audio
 and unsupported media remain refused. `tests/e2e/video-repair.spec.ts` covers a
 real encrypted VP8 WebM through Inspector and the offscreen decoder.
+
+Close, lock, or switch libraries while original recovery is verifying the
+published envelope. Both the source read and the verification read must cancel
+and drain; absence evidence must remain until a later verified recovery succeeds.

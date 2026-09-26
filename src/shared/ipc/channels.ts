@@ -1,6 +1,7 @@
 import { photoRepairChannels } from './photo-repair-channels.js';
 /* eslint-disable max-lines -- central channel registry is intentionally large */
 import { z } from 'zod';
+import { originalRecoveryChannels } from './original-recovery-channels.js';
 
 import { settingsPatchSchema, settingsSchema } from '../settings/settings.js';
 import { libraryDescriptorSchema, libraryDisplayNameSchema, libraryIdSchema } from '../library/registry.js';
@@ -259,6 +260,7 @@ const photoRecordSchema = z.object({
   syncState: syncStatusSchema,
   coverage: z.enum(['included', 'excluding', 'excluded']),
   locked: z.boolean(),
+  missingKeyId: z.number().int().positive().optional(),
 });
 
 const protectedPhotoRecordSchema = photoRecordSchema.omit({
@@ -273,6 +275,7 @@ const protectedPhotoRecordSchema = photoRecordSchema.omit({
   syncState: true,
   coverage: true,
   locked: true,
+  missingKeyId: true,
 });
 const protectedPageCursorSchema = z.object({ position: z.number().int().nonnegative(), id: z.string().min(1) });
 
@@ -372,6 +375,7 @@ export const channels = {
     }),
   ),
   // Library contract (#71) — the renderer's typed window into the library.
+  ...originalRecoveryChannels,
   libraryPage: defineChannel(
     'library:page',
     libraryQuerySchema.extend({

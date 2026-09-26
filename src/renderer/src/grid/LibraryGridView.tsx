@@ -3,7 +3,8 @@ import { quickActionMessages } from './quick-action-messages.js';
 import { LOCKED_PHOTO_COMMAND_REASON } from '../../../shared/commands/photo-availability.js';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
+import { useIntl } from 'react-intl';
+import { libraryGridMessages as messages } from './library-grid-messages.js';
 
 import type { AlbumSummary, PhotoRecord } from '../../../shared/library/types.js';
 import { useFormats } from '../i18n/use-formats.js';
@@ -17,6 +18,7 @@ import { recentSinceIso, useLibraryPhotos } from '../state/use-library-photos';
 import { FeedCard } from './FeedCard';
 import { ListRow } from './ListRow';
 import { PhotoContextMenu } from './PhotoContextMenu';
+import { recoverOriginalWithToast } from '../inspector/original-recovery-action.js';
 import { glyphStateOf } from '../components/StatusGlyph';
 import { duplicatePhotos } from './duplicate-photos.js';
 import { AlbumPicker } from './AlbumPicker';
@@ -40,25 +42,6 @@ import { resolveCommand, type CommandPlatform, type QuickActionCommandId } from 
 import { DEFAULT_QUICK_ACTIONS } from '../../../shared/settings/settings.js';
 import { QuickActions, type QuickActionItem } from './QuickActions';
 import { useFavoriteMutations } from '../state/use-favorite-mutations';
-
-const messages = defineMessages({
-  trashPolicyDays: {
-    id: 'library.trash.retentionPolicy.days',
-    defaultMessage: 'Items in Trash are deleted permanently after {days} days.',
-  },
-  trashPolicyOff: {
-    id: 'library.trash.retentionPolicy.off',
-    defaultMessage: 'Items in Trash are kept until you delete them permanently.',
-  },
-  purgedWithCloudRetry: {
-    id: 'library.trash.purge.partial',
-    defaultMessage: 'Deleted permanently: {purged} local; {remoteFailures} cloud pending retry',
-  },
-  purged: {
-    id: 'library.trash.purge.complete',
-    defaultMessage: 'Deleted {count, plural, one {# photo} other {# photos}} permanently',
-  },
-});
 
 // Library view (#76/#77): PhotoTile or ListRow over the #74 engine, thumbs
 // via the #75 protocol, empty state per the mock. Totals: sidebar counts
@@ -346,7 +329,7 @@ export function LibraryGridView({
             : availability.reason === 'trash-only'
               ? intl.formatMessage(quickActionMessages.availableOnlyInTrash)
               : availability.reason === 'locked'
-                ? intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })
+                ? intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) })
                 : null,
         targetLabel:
           targetIds.length === 1
@@ -675,6 +658,7 @@ export function LibraryGridView({
             });
           }}
           onOffload={() => onOffload(contextPhoto.targetIds)}
+          onRecoverOriginal={() => recoverOriginalWithToast(contextPhoto.photo, intl, dispatch)}
           onKeepOnDevice={() => onKeepOnDevice(contextPhoto.targetIds)}
           onBackUpAgain={() => onBackUpAgain(contextPhoto.targetIds)}
           onRestoreOriginal={() => {

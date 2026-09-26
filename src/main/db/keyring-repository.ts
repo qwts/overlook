@@ -93,8 +93,9 @@ export class KeyringRepository {
   usage(id: number): KeyringUsage {
     const photos = queryGet<{ count: number; bytes: number | null }>(
       this.db,
-      `SELECT count(*) AS count, sum(bytes) AS bytes FROM photos WHERE key_id = ?`,
-      id,
+      `SELECT count(*) AS count, sum(bytes) AS bytes FROM photos p WHERE key_id = @id
+       OR EXISTS (SELECT 1 FROM retained_photo_keys r WHERE r.photo_id = p.id AND r.key_id = @id)`,
+      { id },
     );
     const sidecars = queryGet<{ count: number; bytes: number | null }>(
       this.db,
@@ -113,6 +114,7 @@ export class KeyringRepository {
     return queryAll<{ id: string }>(
       this.db,
       `SELECT id FROM photos WHERE key_id = @id
+       UNION SELECT photo_id AS id FROM retained_photo_keys WHERE key_id = @id
        UNION SELECT photo_id AS id FROM photo_sidecars WHERE key_id = @id
        ORDER BY id`,
       { id },

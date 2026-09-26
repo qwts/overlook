@@ -649,12 +649,12 @@ async function closeLibraryResources(mode: 'restore' | 'lock' | 'switch'): Promi
   egressRuntime.close();
   libraryParts?.protected.cancel();
   purgeRuntime?.close();
-  maintenance?.close();
   for (const controller of activeBackupControllers) controller.abort();
   await drainWithCancellationFence(cancelScheduledLibraryWork, [
     Promise.all([productionInterop.lockDesktop(), closeProductionInboundMoveLibrary()]),
     importRuntime?.service.drain() ?? Promise.resolve(),
     egressRuntime.drain(),
+    maintenance?.close() ?? Promise.resolve(),
     libraryParts?.protected.drain() ?? Promise.resolve(),
     purgeRuntime?.drain() ?? Promise.resolve(),
     embeddingRuntime?.close() ?? Promise.resolve(),
@@ -827,11 +827,11 @@ void externalOpen.whenReady().then(async () => {
     },
     getProtected: getProtectedRuntime,
     getThumbs: getThumbService,
-    getEdits: () => ensureMaintenanceServices().photoEdits,
-    getProvenance: () => ensureMaintenanceServices().provenance,
+    ...{ getEdits: () => ensureMaintenanceServices().photoEdits, getProvenance: () => ensureMaintenanceServices().provenance },
     ...{ getVariants: () => ensureMaintenanceServices().variants, getPhotoRepair: () => ensureMaintenanceServices().photoRepair },
     getHistogram: () => ensureMaintenanceServices().histogram.service,
     getDuplicates: () => ensureMaintenanceServices().duplicates.service,
+    getOriginalRecovery: () => ensureMaintenanceServices().originalRecovery,
     getCoverage: () => requireCoverageService(getBackupEngine, () => coverageService),
     getKeyring: () => requireKeyringService(getLibraryService, () => keyringService),
     getFull: getFullService,

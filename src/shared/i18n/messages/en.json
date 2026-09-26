@@ -467,6 +467,9 @@
   "commands.photo.purge": {
     "defaultMessage": "Delete permanently…"
   },
+  "commands.photo.recoverOriginal": {
+    "defaultMessage": "Recover original…"
+  },
   "commands.photo.repair": {
     "defaultMessage": "Retry repair"
   },
@@ -2377,6 +2380,18 @@
   },
   "photo.context.actions": {
     "defaultMessage": "Actions for {target}"
+  },
+  "photo.recovery.failed": {
+    "defaultMessage": "Recovery failed. Select the exact original file and make sure its key is available."
+  },
+  "photo.recovery.missing": {
+    "defaultMessage": "The original is missing. Select the matching original file to recover it."
+  },
+  "photo.recovery.recovered": {
+    "defaultMessage": "Original recovered."
+  },
+  "photo.recovery.unavailable": {
+    "defaultMessage": "This photo no longer needs original recovery, or is unavailable."
   },
   "photo.repair.failed": {
     "defaultMessage": "The photo could not be repaired. Check its original and try again."

@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { queryAll, queryGet, run } from './sql.js';
+import { markDirty } from '../backup/sync-ledger.js';
 
 /** Device-local evidence, independent of previews and transient upload errors. */
 export function migrateOriginalAvailability(db: BetterSqlite3.Database): void {
@@ -49,6 +50,38 @@ export class OriginalAvailabilityRepository {
       'UPDATE photos SET original_failure = NULL WHERE content_hash = @contentHash AND original_failure IS NOT NULL RETURNING id',
       { contentHash },
     ).map((row) => row.id);
+  }
+
+  /** A matching local file restores local custody, without claiming a remote
+   * backup or re-including a deliberately excluded photo. */
+  recoveredLocal(contentHash: string, keyId: number): readonly string[] {
+    return this.db.transaction(() => {
+      run(
+        this.db,
+        `INSERT OR IGNORE INTO retained_photo_keys (photo_id, key_id)
+        SELECT id, key_id FROM photos WHERE content_hash = ? AND key_id != ?`,
+        contentHash,
+        keyId,
+      );
+      const ids = queryAll<{ id: string }>(
+        this.db,
+        'UPDATE photos SET original_failure = NULL, key_id = @keyId WHERE content_hash = @contentHash RETURNING id',
+        { contentHash, keyId },
+      ).map((row) => row.id);
+      for (const id of ids) {
+        // Trash remains restorable only while its prior remote-custody status
+        // survives. Recovering a live sibling must not unpublish that record.
+        run(
+          this.db,
+          `UPDATE sync_ledger SET status = 'local', custody_authority_id = NULL
+          WHERE photo_id = ? AND EXISTS (SELECT 1 FROM photos WHERE id = ? AND deleted_at IS NULL)`,
+          id,
+          id,
+        );
+        markDirty(this.db, id);
+      }
+      return ids;
+    })();
   }
 }
 

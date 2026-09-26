@@ -18,6 +18,8 @@ import { createProvenanceRuntime } from '../library/provenance-runtime.js';
 import type { ProvenanceService } from '../library/provenance-service.js';
 import { createVariantRuntime } from '../library/variant-runtime.js';
 import type { VariantService } from '../library/variant-service.js';
+import { createOriginalRecoveryRuntime } from '../library/original-recovery-runtime.js';
+import type { OriginalRecoveryService } from '../library/original-recovery-service.js';
 
 // RAW/HEIC preview repair and video poster capture (ADR-0026 §6) are both
 // post-import background passes over the same library parts, and persisted
@@ -48,6 +50,7 @@ export interface MaintenanceContext {
 }
 
 export interface MaintenanceServices {
+  readonly originalRecovery: OriginalRecoveryService;
   readonly photoRepair: ReturnType<typeof createPhotoRepairRouter>;
   readonly rawRepair: RawRepairService;
   readonly posterCapture: PosterCaptureService;
@@ -59,7 +62,7 @@ export interface MaintenanceServices {
   /** Perceptual duplicate index and review (#650). */
   readonly duplicates: DuplicateIndexRuntime;
   /** Stops the background passes and the histogram worker with the library. */
-  readonly close: () => void;
+  readonly close: () => Promise<void>;
 }
 
 export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceServices {
@@ -138,7 +141,14 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     emitPending: ctx.emitPending,
     scheduleAutoBackup: ctx.scheduleAutoBackup,
   });
+  const originalRecovery = createOriginalRecoveryRuntime(parts, (ids) => {
+    for (const id of ids) ctx.invalidateFull(id);
+    ctx.emitChanged(ids, 'library');
+    ctx.emitPending(repo.pendingCount());
+    ctx.scheduleAutoBackup();
+  });
   return {
+    originalRecovery,
     photoRepair: createPhotoRepairRouter({
       getPhoto: (id) => repo.get(id),
       repairImage: (id) => rawRepair.repairPhoto(id),
@@ -152,11 +162,13 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
     histogram,
     duplicates,
     close: () => {
+      originalRecovery.close();
       rawRepair.close();
       posterCapture.close();
       void histogram.close();
       unfollowLibrary();
       void duplicates.close();
+      return originalRecovery.drain();
     },
   };
 }

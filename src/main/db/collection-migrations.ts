@@ -1,3 +1,4 @@
+import { migrateRetainedPhotoKeys } from './retained-photo-keys.js';
 import { migrateRestoredExclusion } from './restored-exclusion-migration.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
@@ -60,5 +61,8 @@ export const COLLECTION_MIGRATIONS: readonly {
   },
   { version: 44, name: 'deferred-edit-bakes', up: migrateEditBakeDebt },
   { version: 45, name: 'original-availability', up: migrateOriginalAvailability },
+  // #1101 retained photo key references: keeps derivative envelopes represented
+  // in key-removal checks after an original is recovered.
+  { version: 46, name: 'retained-photo-keys', up: migrateRetainedPhotoKeys },
   { version: 47, name: 'restored-exclusion-provenance', up: migrateRestoredExclusion },
 ];

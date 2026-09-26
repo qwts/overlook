@@ -1,3 +1,4 @@
+import { PHOTO_KEY_PRESENT_SQL } from './retained-photo-keys.js';
 import type BetterSqlite3 from 'better-sqlite3-multiple-ciphers';
 
 import { queryAll } from './sql.js';
@@ -9,7 +10,7 @@ export function photoKeySelection(db: BetterSqlite3.Database, photoIds: readonly
   const rows = queryAll<{ id: string; keyPresent: number | null }>(
     db,
     `
-    SELECT p.id, k.material_present AS keyPresent
+    SELECT p.id, ${PHOTO_KEY_PRESENT_SQL} AS keyPresent
     FROM json_each(@ids) requested
     JOIN ordinary_visible_photos p ON p.id = requested.value
     LEFT JOIN keys k ON k.id = p.key_id

@@ -1,3 +1,4 @@
+import { PHOTO_KEY_PRESENT_SQL, PHOTO_MISSING_KEY_SQL } from './retained-photo-keys.js';
 import { DEFAULT_GALLERY_POLICY, type GalleryPolicy } from '../../shared/library/gallery-policy.js';
 import type { LibraryQuery, PageRequest, SelectionRangeRequest } from '../../shared/library/types.js';
 import { RAW_WHERE, UNAVAILABLE_WHERE, UNKNOWN_DIMENSIONS_WHERE } from './photo-clauses.js';
@@ -10,7 +11,7 @@ export const ORDERINGS = {
 } as const;
 export function select(order: keyof typeof ORDERINGS): string {
   return `
-  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, k.material_present AS key_present, ${ORDERINGS[order].expr} AS sort_key
+  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, ${PHOTO_KEY_PRESENT_SQL} AS key_present, ${PHOTO_MISSING_KEY_SQL} AS missing_key_id, ${ORDERINGS[order].expr} AS sort_key
   FROM ordinary_visible_photos p
   LEFT JOIN sync_ledger l ON l.photo_id = p.id
   LEFT JOIN keys k ON k.id = p.key_id
@@ -19,7 +20,7 @@ export function select(order: keyof typeof ORDERINGS): string {
 
 export function selectRanked(): string {
   return `
-  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, k.material_present AS key_present, photos_fts.rank AS sort_key
+  SELECT p.*, l.status AS sync_state, l.coverage AS coverage, ${PHOTO_KEY_PRESENT_SQL} AS key_present, ${PHOTO_MISSING_KEY_SQL} AS missing_key_id, photos_fts.rank AS sort_key
   FROM photos_fts
   JOIN photos ph ON ph.rowid = photos_fts.rowid
   JOIN ordinary_visible_photos p ON p.id = ph.id

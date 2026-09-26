@@ -26,6 +26,7 @@ export interface PhotoContextMenuProps {
   readonly onRemoveFromAlbum: () => void;
   readonly onOffload: () => void;
   readonly onRestoreOriginal: () => void;
+  readonly onRecoverOriginal?: (() => void) | undefined;
   readonly onKeepOnDevice: () => void;
   readonly onBackUpAgain: () => void;
   readonly onTransfer?: (() => void) | undefined;
@@ -53,6 +54,7 @@ export function PhotoContextMenu({
   onRemoveFromAlbum,
   onOffload,
   onRestoreOriginal,
+  onRecoverOriginal,
   onKeepOnDevice,
   onBackUpAgain,
   onTransfer,
@@ -67,7 +69,7 @@ export function PhotoContextMenu({
   const custodyReason = (id: CommandId): string | undefined =>
     photoCommandAvailability(id, targetCount === 1 && photo.locked).enabled
       ? undefined
-      : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) });
+      : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) });
   const item = (
     id: CommandId,
     icon: IconName,
@@ -119,6 +121,9 @@ export function PhotoContextMenu({
                 detail: repairDisabledReason(photo, intl),
               },
             ]
+          : []),
+        ...(targetCount === 1 && photo.originalFailure === 'missing-original' && onRecoverOriginal !== undefined
+          ? [item('photo.recoverOriginal', 'folder-open', onRecoverOriginal)]
           : []),
         ...(quickActionIds.has('album.membership.add') ? [] : [item('album.membership.add', 'album', onAddToAlbum)]),
         ...(inAlbum ? [item('album.membership.remove', 'x', onRemoveFromAlbum)] : []),

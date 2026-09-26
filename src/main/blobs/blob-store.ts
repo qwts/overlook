@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { link, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { Readable } from 'node:stream';
-import { pipeline as composeStreams } from 'node:stream';
+import { addAbortSignal, pipeline as composeStreams } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { createDecryptStream, createEncryptStream } from '../crypto/envelope.js';
@@ -497,11 +497,13 @@ export class BlobStore {
 
   /** Full integrity walk: decrypts the blob (every auth tag) and re-checks
    * the content address. */
-  async verifyOriginal(contentHash: string, resolveKey: KeyResolver, photoId: string): Promise<boolean> {
+  async verifyOriginal(contentHash: string, resolveKey: KeyResolver, photoId: string, signal?: AbortSignal): Promise<boolean> {
     assertHash(contentHash);
     const hasher = createHash('sha256');
     try {
+      signal?.throwIfAborted();
       const stream = this.getStream(contentHash, resolveKey, photoId);
+      if (signal !== undefined) addAbortSignal(signal, stream);
       // type-coverage:ignore-next-line -- Readable yields untyped chunks
       for await (const chunk of stream) {
         // type-coverage:ignore-next-line -- Readable yields untyped chunks

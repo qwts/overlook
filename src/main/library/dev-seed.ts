@@ -2,6 +2,7 @@ import { seedVideoRepair } from './seed-video-repair.js';
 import { seedLibrary, seedSemanticIndex, seedSynthetic, seedRepairFailures } from './seed.js';
 import type { LibraryService } from './library-service.js';
 import type { LibraryParts } from './library-parts.js';
+import { seedOriginalRecovery } from './seed-original-recovery.js';
 
 // Dev/E2E seed harness (#72/#74), extracted from the composition root. Both
 // seeds are no-ops on a non-empty library — re-runs on the same profile must
@@ -66,6 +67,13 @@ export async function runDevSeeds(options: DevSeedOptions): Promise<void> {
       if (plan && seeded.photos > 0) {
         parts.rotate();
         parts.reconcileKeyring();
+      }
+      if (
+        seeded.photos > 0 &&
+        options.harnessEnv('OVERLOOK_E2E') !== undefined &&
+        options.harnessEnv('OVERLOOK_SEED_MISSING_ORIGINAL') === '1'
+      ) {
+        await seedOriginalRecovery(parts);
       }
     }
   }

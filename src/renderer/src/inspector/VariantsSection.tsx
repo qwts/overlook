@@ -131,7 +131,7 @@ export function VariantsSection({ photo, onShowPhoto, api }: VariantsSectionProp
       </ul>
       <p className={NOTE_CLASS}>{intl.formatMessage(messages.sharedOriginal)}</p>
       {!duplicateAvailable ? (
-        <p className={NOTE_CLASS}>{intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })}</p>
+        <p className={NOTE_CLASS}>{intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) })}</p>
       ) : null}
       <div className={ACTIONS_CLASS}>
         <Button size="sm" icon="copy" disabled={variants.busy || !duplicateAvailable} onClick={() => void duplicate()}>

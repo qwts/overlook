@@ -49,6 +49,7 @@ export function manifestSnapshot(db: BetterSqlite3.Database, toRecord: (row: Pho
           syncState: _syncState,
           coverage,
           locked: _locked,
+          missingKeyId: _missingKeyId,
           tags: _tags,
           title,
           description,

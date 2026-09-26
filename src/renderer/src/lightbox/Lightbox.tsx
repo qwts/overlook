@@ -251,7 +251,7 @@ export function Lightbox({
       {photo.locked ? (
         <div className="ovl-lightbox__locked" role="status" data-testid="lightbox-locked">
           <Icon name="lock" size={40} strokeWidth={1.75} />
-          <span className="mono-data">{intl.formatMessage(lockedMessages.locked, { id: String(photo.keyId) })}</span>
+          <span className="mono-data">{intl.formatMessage(lockedMessages.locked, { id: String(photo.missingKeyId ?? photo.keyId) })}</span>
           <span className="ovl-lightbox__lockedHint">{intl.formatMessage(lockedMessages.hint)}</span>
         </div>
       ) : isVideo ? (
@@ -307,7 +307,9 @@ export function Lightbox({
           icon="share"
           label="Export"
           disabled={!exportAvailable}
-          title={exportAvailable ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.keyId) })}
+          title={
+            exportAvailable ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) })
+          }
           onClick={exportPhoto}
         />
         {onTransfer === undefined ? null : <IconButton icon="refresh-cw" label="Transfer & Sync" onClick={onTransfer} />}

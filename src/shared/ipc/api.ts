@@ -83,6 +83,7 @@ export interface OverlookApi {
   };
   readonly library: {
     readonly repairPhoto: (request: Req<typeof channels.photoRepair>) => Promise<Res<typeof channels.photoRepair>>;
+    readonly recoverOriginal: (request: Req<typeof channels.photoRecoverOriginal>) => Promise<Res<typeof channels.photoRecoverOriginal>>;
     readonly page: (request: Req<typeof channels.libraryPage>) => Promise<Res<typeof channels.libraryPage>>;
     readonly photoKeySelection: (
       request: Req<typeof channels.libraryPhotoKeySelection>,

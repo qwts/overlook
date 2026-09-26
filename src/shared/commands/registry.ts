@@ -124,6 +124,7 @@ const commandLabels = defineMessages({
   'photo.duplicate': { id: 'commands.photo.duplicate', defaultMessage: 'Duplicate' },
   'photo.offload': { id: 'commands.photo.offload', defaultMessage: 'Offload original…' },
   'photo.restoreOriginal': { id: 'commands.photo.restoreOriginal', defaultMessage: 'Restore original' },
+  'photo.recoverOriginal': { id: 'commands.photo.recoverOriginal', defaultMessage: 'Recover original…' },
   'photo.coverage.exclude': { id: 'commands.photo.coverage.exclude', defaultMessage: 'Keep on this device only…' },
   'photo.coverage.include': { id: 'commands.photo.coverage.include', defaultMessage: 'Back up again' },
   'photo.transfer': { id: 'commands.photo.transfer', defaultMessage: 'Transfer & Sync…' },
@@ -520,6 +521,13 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   { id: 'photo.duplicate', label: label('photo.duplicate', 'Duplicate'), surfaces: [], target: 'selection', requiresPhotoKey: true },
   { id: 'photo.offload', label: label('photo.offload', 'Offload original…'), surfaces: [], target: 'selection' },
   { id: 'photo.restoreOriginal', label: label('photo.restoreOriginal', 'Restore original'), surfaces: [], target: 'selection' },
+  {
+    id: 'photo.recoverOriginal',
+    label: label('photo.recoverOriginal', 'Recover original…'),
+    surfaces: [],
+    target: 'focused-item',
+    requiresPhotoKey: true,
+  },
   // Backup coverage (#506, ADR-0033 §7): contextual like offload — the
   // preflight ceremony belongs to the workflow, not the native menu.
   { id: 'photo.coverage.exclude', label: label('photo.coverage.exclude', 'Keep on this device only…'), surfaces: [], target: 'selection' },

@@ -21,6 +21,7 @@ import { ProvenanceSection } from './ProvenanceSection.js';
 import { VariantsSection } from './VariantsSection.js';
 import { custodyPresentation } from '../backup/custody-presentation.js';
 import { usePhotoCustodyStatus } from '../backup/use-photo-custody-status.js';
+import { OriginalRecoveryAction } from './original-recovery-action.js';
 
 import './inspector.css';
 
@@ -162,7 +163,8 @@ export function Inspector({
           {previewFailureLabel(intl, photo.previewFailure)}
         </p>
       ) : null}
-      <PhotoRepairAction key={photo.id} photo={photo} />
+      <PhotoRepairAction key={`repair:${photo.id}`} photo={photo} />
+      <OriginalRecoveryAction key={`recover:${photo.id}`} photo={photo} />
       <div className="ovl-inspector__header">
         {photo.locked ? (
           <div
@@ -231,7 +233,7 @@ export function Inspector({
         {photo.locked ? (
           <MetadataRow
             label="Custody"
-            value={intl.formatMessage(messages.custodyLocked, { id: String(photo.keyId) })}
+            value={intl.formatMessage(messages.custodyLocked, { id: String(photo.missingKeyId ?? photo.keyId) })}
             tone="var(--accent-amber)"
           />
         ) : null}

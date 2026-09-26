@@ -131,6 +131,32 @@ describe('BlobStore', () => {
     }
   });
 
+  test('verification aborts an active encrypted read and leaves published ciphertext intact (#1101)', async () => {
+    const { store } = await freshStore();
+    const ref = await store.putOriginal(Readable.from([randomBytes(300_000)]), KEY, 'abort-verification');
+    const controller = new AbortController();
+    let resolutions = 0;
+    const resolve: KeyResolver = (id) => {
+      resolutions++;
+      controller.abort();
+      return RESOLVE(id);
+    };
+    assert.equal(await store.verifyOriginal(ref.contentHash, resolve, 'abort-verification', controller.signal), false);
+    assert.ok(resolutions > 0, 'cancellation occurs during the authenticated read');
+    assert.equal(await store.verifyOriginal(ref.contentHash, RESOLVE, 'abort-verification'), true);
+    assert.equal(
+      await store.verifyOriginal(
+        ref.contentHash,
+        () => {
+          throw new Error('must not open');
+        },
+        'abort-verification',
+        controller.signal,
+      ),
+      false,
+    );
+  });
+
   test('verify walks every auth tag and the content address', async () => {
     const { store, dataDir } = await freshStore();
     const plaintext = randomBytes(150_000);
