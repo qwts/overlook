@@ -41,10 +41,14 @@ export function takeLibraryKeyStore(
   heldRelease: (() => void) | undefined,
   acquire: (dataDir: string, instanceId: string) => () => void,
 ): { readonly keyStore: KeyStore; readonly release: () => void } {
-  const probed = probeMasterUnwrap(safeStorage, dataDir);
-  if (probed !== 'ok') {
-    block = { dataDir, state: probed };
-    throw new KeyCustodyError(custodyErrorMessage(probed));
+  // App-lock unlock already released the master. `openWithMaster` does not
+  // read `master.key`, so a missing keychain must not refuse that path.
+  if (releasedMaster === undefined) {
+    const probed = probeMasterUnwrap(safeStorage, dataDir);
+    if (probed !== 'ok') {
+      block = { dataDir, state: probed };
+      throw new KeyCustodyError(custodyErrorMessage(probed));
+    }
   }
   try {
     const opened = openWithLibraryLock({

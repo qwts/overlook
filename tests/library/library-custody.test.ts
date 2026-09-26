@@ -4,12 +4,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 
-import { KeyCustodyError, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
+import { KeyCustodyError, KeyStore, type SafeStorageLike } from '../../src/main/crypto/keystore.js';
 import { clearLibraryCustodyBlock, readLibraryCustody, takeLibraryKeyStore } from '../../src/main/library/library-custody.js';
 
 afterEach(() => {
   clearLibraryCustodyBlock();
 });
+
+function fakeSafeStorage(pad: number, available = true): SafeStorageLike {
+  return {
+    isEncryptionAvailable: () => available,
+    encryptString: (plain) => Buffer.from(Buffer.from(plain, 'utf8').map((byte) => byte ^ pad)),
+    decryptString: (encrypted) => Buffer.from(encrypted.map((byte) => byte ^ pad)).toString('utf8'),
+  };
+}
 
 test('a cached unwrap failure does not apply to another library', () => {
   assert.equal(
@@ -28,6 +36,33 @@ test('a cached unwrap failure does not apply to another library', () => {
     readLibraryCustody(true, '/library-a', () => 'unwrap-failed'),
     'ok',
   );
+});
+
+test('an authorized master opens when the keychain cannot unwrap master.key', () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'overlook-custody-'));
+  const first = KeyStore.open({ safeStorage: fakeSafeStorage(0x5a), dataDir });
+  const master = first.masterKeyBytes();
+  first.close();
+  const unavailable: SafeStorageLike = {
+    ...fakeSafeStorage(0x5a, false),
+    decryptString: () => {
+      throw new Error('keychain');
+    },
+  };
+  let acquired = false;
+  try {
+    const opened = takeLibraryKeyStore(dataDir, 'instance', unavailable, master, undefined, () => {
+      acquired = true;
+      return () => undefined;
+    });
+    assert.equal(acquired, true);
+    assert.equal(opened.keyStore.currentKey().id, 1);
+    opened.keyStore.close();
+    opened.release();
+  } finally {
+    master.fill(0);
+    rmSync(dataDir, { recursive: true, force: true });
+  }
 });
 
 test('a failed unwrap is remembered and does not take the library lock', () => {
