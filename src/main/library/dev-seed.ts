@@ -1,3 +1,4 @@
+import { seedVideoRepair } from './seed-video-repair.js';
 import { seedLibrary, seedSemanticIndex, seedSynthetic, seedRepairFailures } from './seed.js';
 import type { LibraryService } from './library-service.js';
 import type { LibraryParts } from './library-parts.js';
@@ -75,6 +76,11 @@ export async function runDevSeeds(options: DevSeedOptions): Promise<void> {
         await seedOriginalRecovery(parts);
       }
     }
+  }
+  const repairVideo = options.harnessEnv('OVERLOOK_SEED_VIDEO_REPAIR');
+  if (options.harnessEnv('OVERLOOK_E2E') === '1' && repairVideo !== undefined) {
+    const parts = options.open();
+    if (parts !== undefined) await seedVideoRepair(parts, repairVideo);
   }
   // Metadata-only rows sharing one blob — the 200K grid perf baseline (#74).
   const syntheticCount = Number(options.harnessEnv('OVERLOOK_SEED_SYNTHETIC') ?? '0');

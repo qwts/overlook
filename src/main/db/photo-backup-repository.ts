@@ -175,18 +175,19 @@ export function restoreManifest(
            gps_lat, gps_lon, place, imported_at, import_source, favorite,
            is_original, key_id, deleted_at, media_info, user_title, user_description,
            imported_keywords, user_tags, suppressed_keywords, metadata_tags_search, metadata_version,
-           derivative_key, variant_source_id, asset_owner_id, original_failure
+           derivative_key, variant_source_id, asset_owner_id, original_failure, restored_exclusion_at
          ) VALUES (
            @id, @fileName, @fileKind, @width, @height, @bytes, @contentHash,
            @camera, @lens, @iso, @aperture, @shutter, @focalLength, @takenAt,
            @gpsLat, @gpsLon, @place, @importedAt, @importSource, @favorite,
            @isOriginal, @keyId, @deletedAt, @mediaInfoJson, @title, @description,
            @importedKeywordsJson, @userTagsJson, @suppressedKeywordsJson, @metadataTagsSearch, @metadataVersion,
-           @derivativeKey, @variantSourceId, @assetOwnerId, @originalFailure
+           @derivativeKey, @variantSourceId, @assetOwnerId, @originalFailure, @restoredExclusionAt
          )`,
         {
           ...photo,
           originalFailure: absent ? 'missing-original' : null,
+          restoredExclusionAt: excluded ? manifest.generatedAt : null,
           coverage: null,
           blobPath: null,
           derivativeKey: ('derivativeKey' in photo ? photo.derivativeKey : undefined) ?? photo.contentHash,

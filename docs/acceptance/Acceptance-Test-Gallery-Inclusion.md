@@ -176,6 +176,13 @@ After success, its thumbnail must reload the regenerated derivative immediately,
 without navigating away or reopening Inspector. Unrelated photo changes must not
 reload it; the same event-driven thumbnail invalidation applies to detached Inspectors.
 
+For a video with recorded preview/dimension failure, **Retry repair** uses the
+existing video poster capture service for that exact row. The source video's
+uncapped dimensions replace unavailable dimensions; successful repair leaves
+Unavailable without restarting. Image retries keep their image decoder. Audio
+and unsupported media remain refused. `tests/e2e/video-repair.spec.ts` covers a
+real encrypted VP8 WebM through Inspector and the offscreen decoder.
+
 Close, lock, or switch libraries while original recovery is verifying the
 published envelope. Both the source read and the verification read must cancel
 and drain; absence evidence must remain until a later verified recovery succeeds.

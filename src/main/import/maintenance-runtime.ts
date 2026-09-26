@@ -1,3 +1,4 @@
+import { createPhotoRepairRouter } from '../library/photo-repair-router.js';
 import { EditBakeDebtRepository } from '../db/edit-bake-debt-repository.js';
 import { EditRevisionRepository } from '../db/edit-revision-repository.js';
 import { PhotosRepository } from '../db/photos-repository.js';
@@ -50,6 +51,7 @@ export interface MaintenanceContext {
 
 export interface MaintenanceServices {
   readonly originalRecovery: OriginalRecoveryService;
+  readonly photoRepair: ReturnType<typeof createPhotoRepairRouter>;
   readonly rawRepair: RawRepairService;
   readonly posterCapture: PosterCaptureService;
   readonly photoEdits: PhotoEditService;
@@ -147,6 +149,11 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
   });
   return {
     originalRecovery,
+    photoRepair: createPhotoRepairRouter({
+      getPhoto: (id) => repo.get(id),
+      repairImage: (id) => rawRepair.repairPhoto(id),
+      captureVideo: (id) => posterCapture.capturePhoto(id),
+    }),
     rawRepair,
     posterCapture,
     photoEdits,
@@ -163,18 +170,5 @@ export function buildMaintenanceServices(ctx: MaintenanceContext): MaintenanceSe
       void duplicates.close();
       return originalRecovery.drain();
     },
-  };
-}
-
-/** Keep service creation lazy when registering the application IPC surface. */
-export function maintenanceServiceAccessors(getServices: () => MaintenanceServices) {
-  return {
-    getEdits: () => getServices().photoEdits,
-    getProvenance: () => getServices().provenance,
-    getVariants: () => getServices().variants,
-    getPhotoRepair: () => getServices().rawRepair,
-    getOriginalRecovery: () => getServices().originalRecovery,
-    getHistogram: () => getServices().histogram.service,
-    getDuplicates: () => getServices().duplicates.service,
   };
 }
