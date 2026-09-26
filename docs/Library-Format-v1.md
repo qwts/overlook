@@ -142,8 +142,8 @@ This blob is bound to the Electron application's OS identity. **A second
 implementation cannot read it**, and there is deliberately no plaintext
 fallback — the key store refuses to open when the keychain is unavailable.
 [ADR-0035](./adr/ADR-0035-Same-Mac-Master-Key-Backup.md) proposes a same-Mac
-copy of the unwrapped master in the OS secret store. That copy sits outside
-this file; `master.key` still has only the two forms in this section.
+copy of the unwrapped master in the macOS login keychain. That copy sits
+outside this file; `master.key` still has only the two forms in this section.
 
 The two portable ways into such a library are the recovery key file (§8) or
 configuring app lock, which rewrites `master.key` into the §4.2 form.
