@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed on [#1312](https://github.com/qwts/overlook/issues/1312) (2026-09-26). Implementation of the item waits until this status is Accepted.
+Accepted 2026-09-26 on [#1312](https://github.com/qwts/overlook/issues/1312). The owner approved the record the same day. Implementation of the macOS login-keychain item may proceed. Any section may still be amended by owner veto before that code lands.
 
 This ADR extends [ADR-0004](./ADR-0004-Encryption-And-Key-Management.md) and [ADR-0017](./ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle.md). It rewrites neither decision body. [ADR-0008](./ADR-0008-Recovery-Key-Format.md) remains the portable recovery artifact. [ADR-0013](./ADR-0013-App-Lock-Key-Release-And-Protected-Albums.md) remains the app-lock ceremony.
 
@@ -79,4 +79,4 @@ The exported recovery-key file ([ADR-0008](./ADR-0008-Recovery-Key-Format.md)) r
 - App-lock configuration deletes the item before the `OVLK` record commits. App-lock removal writes the item again from the authorized master.
 - An unsigned dev build that the Keychain ACL denies still depends on the exported recovery key. Linux and Windows stay on the #1282 recovery screen until a later amendment.
 - Directory destruction, when it is specified, owns deletion of this item.
-- Keychain code lands in a later change, after this status is Accepted. Until then the #1282 recovery screen is the only path for an unwrap failure.
+- Keychain code is a later change. Until it lands, the #1282 recovery screen is the only path for an unwrap failure.

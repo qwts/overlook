@@ -10,7 +10,7 @@ Accepted 2026-07-16 on issue [#383](https://github.com/qwts/photos/issues/383) (
 
 This ADR extends [ADR-0004](./ADR-0004-Encryption-And-Key-Management.md), [ADR-0005](./ADR-0005-Library-Data-Model.md), [ADR-0007](./ADR-0007-Backup-Format-And-Offload.md), [ADR-0011](./ADR-0011-Provider-Catalog-Capabilities-And-Switching.md), and [ADR-0013](./ADR-0013-App-Lock-Key-Release-And-Protected-Albums.md); it rewrites none of them.
 
-**Proposed extension:** [ADR-0035](./ADR-0035-Same-Mac-Master-Key-Backup.md) ([#1312](https://github.com/qwts/overlook/issues/1312)) adds one macOS login-keychain item per library ULID. §3 still isolates libraries by open and close. The item uses its own service, separate from Electron Safe Storage.
+**Extended 2026-09-26 by [ADR-0035](./ADR-0035-Same-Mac-Master-Key-Backup.md) ([#1312](https://github.com/qwts/overlook/issues/1312)):** one macOS login-keychain item per library ULID. §3 still isolates libraries by open and close. The item uses its own service, separate from Electron Safe Storage.
 
 Section map for the epic's children: §1–§3, §7 govern [#384](https://github.com/qwts/photos/issues/384) (registry + keys), §4–§5 govern [#385](https://github.com/qwts/photos/issues/385) (lifecycle), §1, §5 and the identity rules in §2 govern [#386](https://github.com/qwts/photos/issues/386) (switcher UI), §2 and §6 govern [#387](https://github.com/qwts/photos/issues/387) (per-library scoping).
 

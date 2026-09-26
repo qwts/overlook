@@ -19,7 +19,7 @@ custody), [ADR-0005](./adr/ADR-0005-Library-Data-Model.md) (layout),
 [ADR-0008](./adr/ADR-0008-Recovery-Key-Format.md), [ADR-0013](./adr/ADR-0013-App-Lock-Key-Release-And-Protected-Albums.md),
 [ADR-0017](./adr/ADR-0017-Multi-Library-Registry-Keying-And-Lifecycle.md),
 [ADR-0028](./adr/ADR-0028-Remote-Custody-Binding-And-Custody-Safe-Disconnect.md), and
-[ADR-0035](./adr/ADR-0035-Same-Mac-Master-Key-Backup.md) (proposed same-Mac master backup; not an on-disk form).
+[ADR-0035](./adr/ADR-0035-Same-Mac-Master-Key-Backup.md) (same-Mac master backup; not an on-disk form).
 
 ## Conventions
 
@@ -141,7 +141,7 @@ bytes**, not the raw bytes.
 This blob is bound to the Electron application's OS identity. **A second
 implementation cannot read it**, and there is deliberately no plaintext
 fallback — the key store refuses to open when the keychain is unavailable.
-[ADR-0035](./adr/ADR-0035-Same-Mac-Master-Key-Backup.md) proposes a same-Mac
+[ADR-0035](./adr/ADR-0035-Same-Mac-Master-Key-Backup.md) records a same-Mac
 copy of the unwrapped master in the macOS login keychain. That copy sits
 outside this file; `master.key` still has only the two forms in this section.
 

@@ -4,7 +4,7 @@
 
 Accepted (proposed 2026-07-12 on issue [#65](https://github.com/qwts/photos/issues/65); accepted under the owner's standing work-through-M11 authorization after an open review window — any section may still be amended by owner veto before its implementing code lands)
 
-**Proposed extension:** [ADR-0035](./ADR-0035-Same-Mac-Master-Key-Backup.md) ([#1312](https://github.com/qwts/overlook/issues/1312)) records a same-Mac OS secret-store copy of the master key, in force when its status is Accepted.
+**Extended 2026-09-26 by [ADR-0035](./ADR-0035-Same-Mac-Master-Key-Backup.md) ([#1312](https://github.com/qwts/overlook/issues/1312)):** a same-Mac macOS login-keychain copy of the master key.
 
 ## Context
 
