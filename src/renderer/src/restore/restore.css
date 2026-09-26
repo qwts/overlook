@@ -197,7 +197,7 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--accent-amber-dim);
+  border: 1px solid var(--accent-amber);
   border-radius: var(--radius-2);
   background: var(--accent-amber-dim);
 }
@@ -209,7 +209,7 @@
 }
 
 .ovl-restore__error {
-  border-color: var(--accent-red-dim);
+  border-color: var(--accent-red);
   background: var(--accent-red-dim);
   color: var(--accent-red);
 }
