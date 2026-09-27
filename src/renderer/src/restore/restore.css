@@ -185,7 +185,7 @@
 .ovl-restore__libraryId,
 .ovl-restore__sectionTitle {
   color: var(--text-body);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .ovl-restore__notice {

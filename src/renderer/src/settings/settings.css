@@ -320,7 +320,7 @@
 .ovl-settings__providerName {
   font-size: var(--text-md);
   color: var(--text-body);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .ovl-settings__providerMeta {

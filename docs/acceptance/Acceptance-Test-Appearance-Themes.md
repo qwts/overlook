@@ -77,6 +77,8 @@ token use, and standard/high-contrast passes over both first-party themes.
 3. Run `npm run lint:colors`. Confirm renderer component CSS containing a raw
    color literal fails while token-source files remain the only color authority.
    Then run `npm run lint:tokens`. Confirm renderer CSS that reads an undeclared
-   custom property (a guessed token name such as `--radius-md`) fails.
+   custom property (a guessed token name such as `--radius-md`) fails, and so
+   does a literal radius or font weight (`border-radius: 3px`,
+   `font-weight: 600`) instead of `var(--radius-*)` / `var(--weight-*)`.
 4. Run `npm run lint:contrast`. Confirm text, status, selection, border, focus,
    pressed, destructive, and photo-chrome pairs meet their declared floors.

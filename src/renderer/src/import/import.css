@@ -24,7 +24,7 @@
 .ovl-import__cardTitle {
   font-size: var(--text-md);
   color: var(--text-body);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .ovl-import__cardMeta {

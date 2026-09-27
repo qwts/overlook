@@ -61,7 +61,7 @@
   width: var(--interactive-target-min);
   height: var(--interactive-target-min);
   margin-inline: -4px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex: none;
   display: flex;
   align-items: center;
@@ -78,7 +78,7 @@
   content: '';
   position: absolute;
   inset: 4px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: transparent;
   border: 1px solid var(--border-2);
 }
@@ -110,7 +110,7 @@
 
 .ovl-feedcard__title {
   font-size: var(--text-lg);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
@@ -121,7 +121,7 @@
 .ovl-feedcard__title--fallback {
   font-family: var(--font-mono);
   font-size: var(--text-md);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-muted);
 }
 

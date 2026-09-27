@@ -22,7 +22,7 @@
   color: var(--text-muted);
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: 5px;
+  border-radius: var(--radius-2);
 }
 
 .ovl-interop__segmented button[aria-pressed='true'] {
@@ -37,7 +37,7 @@
   padding: var(--space-3);
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-2);
 }
 
 .ovl-interop__provider p {

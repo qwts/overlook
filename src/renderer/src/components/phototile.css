@@ -61,7 +61,7 @@
 
 .ovl-tile--selected .ovl-tile__img {
   transform: scale(0.92);
-  border-radius: 2px;
+  border-radius: var(--radius-tile);
 }
 
 .ovl-tile--offloaded .ovl-tile__img {
@@ -87,7 +87,7 @@
   inset-inline-start: 3px;
   width: var(--interactive-target-min);
   height: var(--interactive-target-min);
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -105,7 +105,7 @@
   content: '';
   position: absolute;
   inset: 3px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--surface-photo-overlay-soft);
   border: 1px solid var(--border-photo-overlay);
 }
@@ -241,7 +241,7 @@
   background: var(--surface-photo-original);
   color: var(--text-photo-original);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.04em;
   line-height: 1;
   pointer-events: none;

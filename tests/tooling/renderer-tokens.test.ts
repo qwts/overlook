@@ -9,8 +9,13 @@ interface RendererTokenViolation {
   readonly property: string;
 }
 
+interface RendererLiteralViolation extends RendererTokenViolation {
+  readonly value: string;
+}
+
 interface RendererTokensModule {
   findUndefinedCustomProperties(files: readonly { file: string; source: string }[]): RendererTokenViolation[];
+  findLiteralScaleValues(files: readonly { file: string; source: string }[]): RendererLiteralViolation[];
 }
 
 async function checker(): Promise<RendererTokensModule> {
@@ -56,6 +61,34 @@ test('renderer custom-property gate accepts only tokens and properties a compone
     [
       { file: 'src/grid/grid.css', line: 2, property: '--ovl-local' },
       { file: 'src/grid/grid.css', line: 2, property: '--ovl-labelled' },
+    ],
+  );
+});
+
+test('renderer scale gate reports literal radii and font weights with lines (#1289)', async () => {
+  const tokens = await checker();
+  assert.deepEqual(
+    tokens.findLiteralScaleValues([
+      { file: 'src/styles/tokens/spacing.css', source: ':root { --radius-1: 4px; }\n.x { border-radius: 4px; }' },
+      {
+        file: 'src/example/example.css',
+        source: [
+          '/* border-radius: 3px; */',
+          '.a { border-radius: var(--radius-1); font-weight: var(--weight-medium); }',
+          '.b { border-radius: 50%; }',
+          '.c { border-top-left-radius: 2px; }',
+          '.d { font-weight: 700 !important; }',
+          '.e { border-radius: inherit; font-weight: unset; }',
+          '.f { border-radius: var(--radius-1) var(--radius-2); }',
+        ].join('\n'),
+      },
+      { file: 'src/example/Example.tsx', source: "const style = { borderRadius: '3px' };" },
+    ]),
+    [
+      { file: 'src/example/example.css', line: 3, property: 'border-radius', value: '50%' },
+      { file: 'src/example/example.css', line: 4, property: 'border-top-left-radius', value: '2px' },
+      { file: 'src/example/example.css', line: 5, property: 'font-weight', value: '700' },
+      { file: 'src/example/example.css', line: 7, property: 'border-radius', value: 'var(--radius-1) var(--radius-2)' },
     ],
   );
 });

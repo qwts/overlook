@@ -114,7 +114,7 @@
   height: 10px;
   background-color: var(--white-1);
   border: 1.5px solid var(--accent-cyan);
-  border-radius: 2px;
+  border-radius: var(--radius-tile);
   z-index: 6;
 }
 .ovl-moodboard__rotate {
@@ -123,7 +123,7 @@
   height: 12px;
   background-color: var(--accent-cyan);
   border: 2px solid var(--white-1);
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   z-index: 6;
   cursor: grab;
 }

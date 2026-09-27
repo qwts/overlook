@@ -58,7 +58,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex: none;
   background: color-mix(in oklch, var(--surface-photo-overlay) 70%, transparent);
   backdrop-filter: blur(4px);

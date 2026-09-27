@@ -64,7 +64,7 @@
   height: 12px;
   border: 1px solid var(--border-photo-overlay);
   border-top-color: var(--accent-cyan);
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   animation: ovl-lightbox-loading-spin 800ms linear infinite;
 }
 
