@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.31
+
+### Patch Changes
+
+- 6d5f688: Keep the library switcher's keyboard hint on one row, and drop it when the dialog is too narrow for it.
+- b35253b: Set the sidebar's not-connected sentence through the shared prose type class instead of copying its rules.
+
 ## 0.76.30
 
 ### Patch Changes
