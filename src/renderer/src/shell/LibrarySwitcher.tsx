@@ -468,6 +468,7 @@ export function LibrarySwitcher({
                   <Checkbox
                     checked={selected.has(lib.id)}
                     label={intl.formatMessage(moveMessages.select, { name: lib.name })}
+                    hideLabel
                     onChange={(checked) => {
                       setSelected((previous) => {
                         const next = new Set(previous);

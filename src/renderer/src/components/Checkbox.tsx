@@ -10,11 +10,21 @@ export interface CheckboxProps {
   readonly onChange?: (checked: boolean) => void;
   readonly disabled?: boolean;
   readonly label: string;
+  /** Keep the label as the accessible name but do not show it, for a row
+   *  that already names its subject visibly (#1298). */
+  readonly hideLabel?: boolean;
 }
 
 // components/forms/Checkbox.jsx over a real hidden input (#61 exit criteria):
 // keyboard operable, indeterminate reported as aria-checked=mixed.
-export function Checkbox({ checked, indeterminate = false, onChange, disabled = false, label }: CheckboxProps): ReactElement {
+export function Checkbox({
+  checked,
+  indeterminate = false,
+  onChange,
+  disabled = false,
+  label,
+  hideLabel = false,
+}: CheckboxProps): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (inputRef.current !== null) {
@@ -24,7 +34,7 @@ export function Checkbox({ checked, indeterminate = false, onChange, disabled = 
 
   const on = checked || indeterminate;
   return (
-    <label className={`ovl-checkbox${disabled ? ' ovl-checkbox--disabled' : ''}`}>
+    <label className={`ovl-checkbox${hideLabel ? ' ovl-checkbox--hidden-label' : ''}${disabled ? ' ovl-checkbox--disabled' : ''}`}>
       <input
         ref={inputRef}
         type="checkbox"
@@ -42,7 +52,7 @@ export function Checkbox({ checked, indeterminate = false, onChange, disabled = 
       <span className={`ovl-checkbox__box${on ? ' ovl-checkbox__box--on' : ''}`}>
         {indeterminate ? <Icon name="minus" size={11} strokeWidth={3} /> : checked ? <Icon name="check" size={11} strokeWidth={3} /> : null}
       </span>
-      <span>{label}</span>
+      <span className={hideLabel ? 'ovl-sr-only' : undefined}>{label}</span>
     </label>
   );
 }

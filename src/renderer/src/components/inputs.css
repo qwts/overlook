@@ -90,6 +90,14 @@
   color: var(--text-body);
 }
 
+/* A hidden label leaves only the 15px box, so the label keeps a 24px
+   pointer target around it (WCAG 2.5.8, #1298). */
+.ovl-checkbox--hidden-label {
+  justify-content: center;
+  min-inline-size: var(--control-h-sm);
+  min-block-size: var(--control-h-sm);
+}
+
 .ovl-checkbox--disabled {
   cursor: default;
   opacity: 0.45;

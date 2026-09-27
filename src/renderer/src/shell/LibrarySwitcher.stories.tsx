@@ -350,6 +350,10 @@ export const MoveEntryPointsAndMultiSelect: Story = {
     // ones (missing volume / locked elsewhere) — #483 entry points.
     await expect(body.getByLabelText('Move Alpha…')).toBeVisible();
     await expect(body.queryByLabelText('Move ExpeditionX 2026…')).toBeNull();
+    // The row checkbox keeps its name for assistive technology but does not
+    // print it beside the library name (#1298).
+    await expect(body.getByRole('checkbox', { name: 'Select Alpha to move' })).toBeInTheDocument();
+    await expect(body.getByText('Select Alpha to move')).toHaveClass('ovl-sr-only');
     // Multi-select: checking rows reveals the batch action with a count.
     await userEvent.click(body.getByLabelText('Select Alpha to move'));
     await userEvent.click(body.getByLabelText('Select Beta to move'));
