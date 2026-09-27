@@ -314,9 +314,6 @@
   gap: var(--space-2);
   margin: 0;
   color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
 }
 
 /* Link-style (#1302): reads as part of the sentence but keeps the WCAG 2.2
