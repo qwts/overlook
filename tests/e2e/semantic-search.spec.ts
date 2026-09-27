@@ -6,7 +6,10 @@ test('natural-language semantic search surfaces a photo with honest applied-mode
     prefix: 'overlook-e2e-semantic-search-',
     env: { OVERLOOK_SEED: '16', OVERLOOK_SEMANTIC_QUERY_DIMENSION: '0' },
   });
-  await page.getByRole('radio', { name: 'Semantic' }).click();
+  // Search mode lives in a menu at the field's inline start (#1291).
+  await page.getByRole('button', { name: 'Search mode: Auto' }).click();
+  await page.getByRole('menuitemradio', { name: 'Semantic' }).click();
+  await expect(page.getByRole('searchbox', { name: 'Search library' })).toBeFocused();
   await page.getByRole('searchbox', { name: 'Search library' }).fill('a neon tram at dusk');
   await expect(page.locator('.ovl-toolbar__hint[role="status"]')).toContainText('Semantic results');
   await expect(page.getByRole('button', { name: 'Open IMG_4021.RAF' })).toBeVisible();
@@ -25,7 +28,10 @@ test('natural-language semantic search surfaces a photo with honest applied-mode
 
 test('an unavailable semantic index visibly falls back to exact keyword results', async ({ launchOverlook }) => {
   const { page } = await launchOverlook({ prefix: 'overlook-e2e-semantic-fallback-', env: { OVERLOOK_SEED: '16' } });
-  await page.getByRole('radio', { name: 'Semantic' }).click();
+  // Search mode lives in a menu at the field's inline start (#1291).
+  await page.getByRole('button', { name: 'Search mode: Auto' }).click();
+  await page.getByRole('menuitemradio', { name: 'Semantic' }).click();
+  await expect(page.getByRole('searchbox', { name: 'Search library' })).toBeFocused();
   await page.getByRole('searchbox', { name: 'Search library' }).fill('Lisbon');
   await expect(page.locator('.ovl-toolbar__hint[role="status"]')).toContainText('Semantic is off; showing keyword results');
   await expect(page.getByRole('button', { name: 'Open IMG_4021.RAF' })).toBeVisible();

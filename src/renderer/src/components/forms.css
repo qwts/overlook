@@ -18,6 +18,52 @@
   color: var(--text-body);
 }
 
+/* Search mode button (#1291): the field's inline-start control, split from
+   the input by a divider. It spans the frame's full height, borders
+   included, so its target is the field's 28px. */
+.ovl-search__mode {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  block-size: var(--control-h-md);
+  margin-block: -1px;
+  margin-inline-start: calc(var(--space-3) * -1);
+  padding-inline: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ovl-search__mode:hover,
+.ovl-search__mode[aria-expanded='true'] {
+  color: var(--text-body);
+}
+
+.ovl-search__mode:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ovl-search__mode-name {
+  color: var(--accent-iris);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.ovl-search__divider {
+  flex: none;
+  align-self: stretch;
+  inline-size: 1px;
+  margin-block: var(--space-2);
+  margin-inline-start: calc(var(--space-2) * -1);
+  background: var(--border-1);
+}
+
 .ovl-search__input {
   flex: 1;
   min-width: 0;
