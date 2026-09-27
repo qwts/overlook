@@ -15,7 +15,7 @@ const meta: Meta<typeof SemanticIndexSettings> = {
       (globalThis as { overlook?: unknown }).overlook = { embedding: controller.api };
       return (
         <div style={{ maxWidth: 560, padding: 24 }}>
-          <Field wide label="Semantic search" hint={semanticIndexHint.defaultMessage}>
+          <Field layout="stacked" label="Semantic search" hint={semanticIndexHint.defaultMessage}>
             <Story />
           </Field>
         </div>

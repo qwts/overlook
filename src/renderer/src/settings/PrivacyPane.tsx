@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { Switch } from '../components/Switch';
 import { Segmented } from '../components/Segmented';
-import { Field } from './Field';
+import { Field, FieldActions } from './Field';
 import type { AppSettings } from '../../../shared/settings/settings.js';
 import type { KeyDialogMode } from './KeyDialog';
 import type { AppPasswordMode } from './AppPasswordDialog';
@@ -68,14 +68,14 @@ export function PrivacyPane({
         hint={appLockConfigured ? 'Required on launch and after every lock.' : 'Withholds decryption authority until you unlock.'}
       >
         {appLockConfigured ? (
-          <div className="ovl-settings__keyactions">
+          <FieldActions>
             <Button variant="secondary" onClick={() => onPasswordAction('change')}>
               Change…
             </Button>
             <Button variant="ghost" onClick={() => onPasswordAction('remove')}>
               Remove…
             </Button>
-          </div>
+          </FieldActions>
         ) : (
           <Button variant="secondary" icon="lock" onClick={() => onPasswordAction('set')}>
             Set password…
@@ -89,7 +89,6 @@ export function PrivacyPane({
       </Field>
       <Field label="Auto-lock" hint="Lock after trusted keyboard or pointer input has been idle.">
         <Segmented
-          label="Auto-lock timeout"
           disabled={!appLockConfigured}
           value={settings.appLockIdle}
           options={[
@@ -104,7 +103,6 @@ export function PrivacyPane({
       </Field>
       <Field label="Lock when hidden" hint="Also lock when the app is hidden or minimized.">
         <Switch
-          accessibleLabel="Lock when hidden"
           checked={settings.lockWhenHidden}
           disabled={!appLockConfigured}
           onChange={(lockWhenHidden) => onPatch({ lockWhenHidden })}
@@ -112,7 +110,6 @@ export function PrivacyPane({
       </Field>
       <Field label="Unlock with Touch ID" hint={touchIdHint(appLockConfigured, touchIdStatus)}>
         <Switch
-          accessibleLabel="Unlock with Touch ID"
           checked={touchIdStatus?.enabled ?? false}
           disabled={!appLockConfigured || touchIdBusy || touchIdStatus === null || (!touchIdStatus.available && !touchIdStatus.enabled)}
           onChange={onTouchIdChange}
@@ -123,7 +120,6 @@ export function PrivacyPane({
         hint="Off repairs this Mac’s local credential anchor after a valid password or Touch ID. On treats an anchor change as recovery and requires a freshly exported recovery key."
       >
         <Switch
-          accessibleLabel="Hardened anchor protection"
           checked={anchorPolicy === 'hardened'}
           disabled={!appLockConfigured || anchorPolicy === null}
           onChange={(enabled) => onAnchorPolicyChange(enabled ? 'hardened' : 'usability')}
@@ -133,20 +129,22 @@ export function PrivacyPane({
       <Field label="End-to-end encryption" hint="Originals and thumbnails are encrypted on this device before leaving it.">
         <Badge tone="green">Always on</Badge>
       </Field>
-      <div className="ovl-settings__keyrow" data-testid="recovery-key-row">
-        <div>
-          <div className="ovl-settings__keytitle">Recovery key</div>
-          <div className="ovl-settings__keyhint">
+      <Field
+        label="Recovery key"
+        testId="recovery-key-row"
+        hint={
+          <>
             {appLockConfigured
               ? 'Back up your library key here. Remove the app password before importing a different key; recovery remains available from the lock screen when required.'
               : "Back up your library key to unlock photos on another device. Store it safely — it can't be reset."}
-          </div>
-          <div className="ovl-settings__keyfp">
-            <Icon name="fingerprint" size={13} color="var(--text-faint)" />
-            <span className="mono-data">{fingerprint ?? '—'}</span>
-          </div>
-        </div>
-        <div className="ovl-settings__keyactions">
+            <span className="ovl-settings__keyfp">
+              <Icon name="fingerprint" size={13} color="var(--text-faint)" />
+              <span className="mono-data">{fingerprint ?? '—'}</span>
+            </span>
+          </>
+        }
+      >
+        <FieldActions>
           <Button
             variant="secondary"
             icon="download"
@@ -166,14 +164,15 @@ export function PrivacyPane({
           >
             Import…
           </Button>
-        </div>
-      </div>
+        </FieldActions>
+      </Field>
       <KeyringSection />
       <DisclosureSettings />
       <Field label="Face grouping" hint="Not yet available — will run entirely on-device when it ships.">
-        <Switch checked={false} disabled accessibleLabel="Face grouping" />
+        <Switch checked={false} disabled />
       </Field>
       <Field
+        layout="stacked"
         label="Share diagnostics"
         hint="Anonymous crash reports only — never photo content or metadata. Reporting stays local-only for now."
       >

@@ -49,6 +49,7 @@ export function OffloadedStorage({ connection, selectedPhotoIds }: OffloadedStor
   const showActions = connected || connection === 'disconnected';
   return (
     <Field
+      layout="stacked"
       label="Offloaded originals"
       hint={`${formatBytes(offloadedBytes)} stored only in your verified cloud backup. Thumbnails remain on this Mac.`}
     >

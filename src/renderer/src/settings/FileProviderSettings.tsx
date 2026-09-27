@@ -94,7 +94,7 @@ export function FileProviderSettings(): ReactElement {
   const unavailable = snapshot !== null && !snapshot.available;
   const enabled = snapshot?.config.enabled === true;
   return (
-    <Field label={intl.formatMessage(messages.label)} hint={intl.formatMessage(messages.hint)} wide>
+    <Field label={intl.formatMessage(messages.label)} hint={intl.formatMessage(messages.hint)} layout="stacked">
       <div className="ovl-settings__fileProvider">
         {enabled ? (
           <>
