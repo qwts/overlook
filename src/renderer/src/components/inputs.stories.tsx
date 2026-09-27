@@ -100,6 +100,10 @@ export const Checkboxes: StoryObj = {
     const hiddenText = canvas.getByText('Select Alpha to move');
     await expect(hiddenText).toHaveClass('ovl-sr-only');
     await expect(hiddenText.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+    // The box alone is 15px; the label keeps a 24px pointer target.
+    const target = hidden.closest('label')?.getBoundingClientRect();
+    await expect(target?.width).toBeGreaterThanOrEqual(24);
+    await expect(target?.height).toBeGreaterThanOrEqual(24);
     await userEvent.click(hidden);
     await expect(hidden).toBeChecked();
   },

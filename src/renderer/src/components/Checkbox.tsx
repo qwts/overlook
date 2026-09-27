@@ -34,7 +34,7 @@ export function Checkbox({
 
   const on = checked || indeterminate;
   return (
-    <label className={`ovl-checkbox${disabled ? ' ovl-checkbox--disabled' : ''}`}>
+    <label className={`ovl-checkbox${hideLabel ? ' ovl-checkbox--hidden-label' : ''}${disabled ? ' ovl-checkbox--disabled' : ''}`}>
       <input
         ref={inputRef}
         type="checkbox"
