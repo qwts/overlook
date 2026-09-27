@@ -19,3 +19,7 @@ copyFileSync(
   join(__dirname, 'build', 'Release', 'overlook_file_provider.node'),
   join(targetDirectory, `file-provider.node.napi.${extension}`),
 );
+copyFileSync(
+  join(__dirname, 'build', 'Release', 'overlook_library_master.node'),
+  join(targetDirectory, `library-master.node.napi.${extension}`),
+);

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { LibraryRegistry, LibraryRegistryError, ensureDefaultEntry } from './library-registry.js';
 import { readOrMintLibraryId, writeLibraryId } from './library-id.js';
 import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
+import { installedLibraryMasterBackup, LibraryMasterBackupError } from '../crypto/library-master-port.js';
 import { openLibraryDatabase } from '../db/database.js';
 import { ulid } from '../import/ulid.js';
 import {
@@ -21,6 +22,17 @@ import type { SwitchOutcome } from './switch-runtime.js';
 // composition root: the registry replaces the hardcoded userData/library.
 // Existing installs resolve to the same directory via the register-in-place
 // migration; the live switch arrives with #385.
+
+/** The directory never became a library. Drop its master copy with the files. */
+function discardCreatedLibrary(dir: string, libraryId: string): void {
+  rmSync(dir, { recursive: true, force: true });
+  try {
+    installedLibraryMasterBackup().remove(libraryId);
+  } catch (error) {
+    const code = error instanceof LibraryMasterBackupError ? error.code : 'unavailable';
+    console.error('[overlook] library master backup remove failed', code);
+  }
+}
 
 export interface LibraryRegistryRuntimeOptions {
   readonly userDataDir: () => string;
@@ -254,7 +266,7 @@ export class LibraryRegistryRuntime {
         lastOpenedAt: null,
       });
     } catch (error) {
-      if (createdDir) rmSync(dir, { recursive: true, force: true });
+      if (createdDir) discardCreatedLibrary(dir, id);
       throw error;
     }
   }

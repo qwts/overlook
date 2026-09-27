@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { EnvelopeKey, KeyResolver } from './envelope.js';
 import type { LibraryCustodyState } from '../../shared/library/custody.js';
 import type { KeyKind, KeyOrigin } from '../../shared/keyring/types.js';
+import { installedLibraryMasterBackup, rememberOpenedMaster, type LibraryMasterBackup } from './library-master-port.js';
 
 const KEYCHAIN_UNAVAILABLE = 'OS keychain is unavailable; refusing to store the master key without it (no plaintext fallback)';
 const UNWRAP_FAILED = 'the stored master key could not be unwrapped by the OS keychain';
@@ -179,6 +180,10 @@ export interface KeyStoreOptions {
   readonly dataDir: string;
   /** Injected for tests; defaults to wall clock. */
   readonly now?: () => Date;
+  /** Same-Mac master copy. Defaults to the process port, which is a no-op until the app installs it. */
+  readonly masterBackup?: LibraryMasterBackup;
+  /** Staging opens pass false. The caller records the copy after that directory becomes the library. */
+  readonly recordMasterBackup?: boolean;
 }
 
 export class KeyStore {
@@ -220,7 +225,13 @@ export class KeyStore {
       writeFileAtomic(masterPath, options.safeStorage.encryptString(masterKey.toString('base64')));
     }
 
-    return KeyStore.fromMaster(options, masterKey, isFirstRun);
+    const store = KeyStore.fromMaster(options, masterKey, isFirstRun);
+    // keys.json has authenticated this master. An earlier write would replace a good
+    // copy with ciphertext that decrypts and then fails to open the library.
+    if (options.recordMasterBackup !== false) {
+      rememberOpenedMaster(options.dataDir, masterKey, options.masterBackup ?? installedLibraryMasterBackup());
+    }
+    return store;
   }
 
   /** Opens an app-locked library after ADR-0013 has authenticated and released
