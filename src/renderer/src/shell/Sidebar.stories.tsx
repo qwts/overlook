@@ -289,6 +289,18 @@ export const Disconnected: Story = {
     await expect(canvas.getByText('1.2 TB on disk')).toBeVisible();
     await expect(canvas.queryByText(/OFFLOAD/)).not.toBeInTheDocument();
     await expect(canvas.getByText('Library encrypted')).toBeVisible();
+    // #1302: the line is a sans sentence and Connect is its link-style
+    // button, with at least a 24×24 target.
+    const connect = canvas.getByRole('button', { name: 'Connect' });
+    await expect(connect).toBe(canvas.getByTestId('sidebar-connect'));
+    const line = connect.closest('p');
+    if (line === null) throw new Error('connect line missing');
+    await expect(line).toHaveTextContent(/not connected — Connect$/u);
+    await expect(getComputedStyle(line).textTransform).toBe('none');
+    await expect(getComputedStyle(line).fontFamily).not.toMatch(/mono/iu);
+    const target = connect.getBoundingClientRect();
+    await expect(target.width).toBeGreaterThanOrEqual(24);
+    await expect(target.height).toBeGreaterThanOrEqual(24);
   },
 };
 
