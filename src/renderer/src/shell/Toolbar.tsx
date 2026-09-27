@@ -14,6 +14,7 @@ import { SearchField } from '../components/SearchField';
 import { Segmented } from '../components/Segmented';
 import { Slider } from '../components/Slider';
 import { Tooltip } from '../components/Tooltip';
+import { useAnnouncer } from '../components/LiveAnnouncer';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { FacetBar } from './FacetBar';
 
@@ -64,6 +65,22 @@ const messages = defineMessages({
   searchAuto: { id: 'toolbar.search.mode.auto', defaultMessage: 'Auto' },
   searchSemantic: { id: 'toolbar.search.mode.semantic', defaultMessage: 'Semantic' },
   searchKeyword: { id: 'toolbar.search.mode.keyword', defaultMessage: 'Keyword' },
+  // Search mode menu (#1291, Pass B spec §07).
+  searchModeTrigger: { id: 'toolbar.search.mode.trigger', defaultMessage: 'Search mode: {mode}' },
+  searchModeChanged: { id: 'toolbar.search.mode.changed', defaultMessage: 'Search mode: {mode}.' },
+  searchAutoDescription: {
+    id: 'toolbar.search.mode.auto.description',
+    defaultMessage: 'Keyword and meaning together. Best for most searches.',
+  },
+  searchSemanticDescription: {
+    id: 'toolbar.search.mode.semantic.description',
+    defaultMessage: 'Finds photos by what’s in them, like ‘dog on a beach’.',
+  },
+  searchKeywordDescription: {
+    id: 'toolbar.search.mode.keyword.description',
+    defaultMessage: 'Matches file names, places, cameras, and tags exactly.',
+  },
+  searchSemanticWithNote: { id: 'toolbar.search.mode.semantic.withNote', defaultMessage: '{description} {note}' },
   searchFusedStatus: { id: 'toolbar.search.status.fused', defaultMessage: 'Keyword + semantic results' },
   searchSemanticStatus: { id: 'toolbar.search.status.semantic', defaultMessage: 'Semantic results' },
   searchKeywordStatus: { id: 'toolbar.search.status.keyword', defaultMessage: 'Keyword results' },
@@ -78,6 +95,16 @@ const fallbackMessages = defineMessages({
   indexing: { id: 'toolbar.search.fallback.indexing', defaultMessage: 'is still indexing' },
   busy: { id: 'toolbar.search.fallback.busy', defaultMessage: 'is busy' },
   error: { id: 'toolbar.search.fallback.error', defaultMessage: 'had an error' },
+});
+
+// Why Semantic can't run right now, appended to its menu description. It stays
+// selectable; searches fall back to keyword results until it can.
+const semanticNotes = defineMessages({
+  indexing: { id: 'toolbar.search.mode.semantic.note.indexing', defaultMessage: 'Still indexing — keyword results until it finishes.' },
+  disabled: { id: 'toolbar.search.mode.semantic.note.disabled', defaultMessage: 'Turned off in Settings.' },
+  // Design gives no copy for unavailable, busy, or error; one line covers them
+  // and the results line names the exact reason.
+  other: { id: 'toolbar.search.mode.semantic.note.other', defaultMessage: 'Not available right now — keyword results until it’s back.' },
 });
 
 const filterLabels = {
@@ -112,6 +139,7 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
+  const { announce } = useAnnouncer();
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState(state.query);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -130,6 +158,26 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
     }, QUERY_DEBOUNCE_MS);
   };
 
+  const modeName = (mode: SearchMode): string =>
+    intl.formatMessage(mode === 'auto' ? messages.searchAuto : mode === 'semantic' ? messages.searchSemantic : messages.searchKeyword);
+  const fallback = state.search.fallbackReason;
+  const semanticNote =
+    fallback === null
+      ? null
+      : intl.formatMessage(fallback === 'indexing' || fallback === 'disabled' ? semanticNotes[fallback] : semanticNotes.other);
+  const semanticDescription = intl.formatMessage(messages.searchSemanticDescription);
+  const searchModeOptions = [
+    { value: 'auto', label: modeName('auto'), description: intl.formatMessage(messages.searchAutoDescription) },
+    {
+      value: 'semantic',
+      label: modeName('semantic'),
+      description:
+        semanticNote === null
+          ? semanticDescription
+          : intl.formatMessage(messages.searchSemanticWithNote, { description: semanticDescription, note: semanticNote }),
+    },
+    { value: 'keyword', label: modeName('keyword'), description: intl.formatMessage(messages.searchKeywordDescription) },
+  ] as const;
   const anyFilter = Object.values(state.chips).some(Boolean) || state.facets.groups.length > 0;
   const smartAlbum = state.smartAlbum === null ? null : (albums.find((album) => album.id === state.smartAlbum) ?? null);
   const searchStatus =
@@ -151,23 +199,22 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
           <img className="ovl-toolbar__mark" src={overlookIcon} alt="" width={20} height={20} />
           <span className="ovl-toolbar__brand">{BRAND_WORDMARK}</span>
         </div>
-        <SearchField
+        <SearchField<SearchMode>
           value={draft}
           onChange={onSearch}
           shortcut={formatShortcut(commandById('app.search.focus'), platform)}
           width={300}
           label={intl.formatMessage(messages.search)}
-        />
-        <Segmented<SearchMode>
-          label={intl.formatMessage(messages.searchMode)}
-          options={[
-            { value: 'auto', label: intl.formatMessage(messages.searchAuto) },
-            { value: 'semantic', label: intl.formatMessage(messages.searchSemantic) },
-            { value: 'keyword', label: intl.formatMessage(messages.searchKeyword) },
-          ]}
-          value={state.searchMode}
-          onChange={(mode) => {
+          mode={{
+            value: state.searchMode,
+            options: searchModeOptions,
+            menuLabel: intl.formatMessage(messages.searchMode),
+            triggerLabel: intl.formatMessage(messages.searchModeTrigger, { mode: modeName(state.searchMode) }),
+            showName: state.searchMode !== 'auto',
+          }}
+          onModeChange={(mode) => {
             dispatch({ type: 'searchMode/set', mode });
+            announce(intl.formatMessage(messages.searchModeChanged, { mode: modeName(mode) }), 'polite', 'search-mode');
           }}
         />
         <IconButton
