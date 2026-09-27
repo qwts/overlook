@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { AppLockCredentialStore, type CredentialAnchor, type CredentialAnchorStore } from '../../src/main/crypto/app-lock-credentials.js';
+import { LibraryMasterBackupError, type LibraryMasterBackup } from '../../src/main/crypto/library-master-port.js';
 import type { SafeStorageLike } from '../../src/main/crypto/keystore.js';
 
 function tempDir(): string {
@@ -47,7 +48,29 @@ class FakeAnchorStore implements CredentialAnchorStore {
   }
 }
 
-function world(): {
+class FakeMasterBackup implements LibraryMasterBackup {
+  readonly items = new Map<string, string>();
+  failRemove = false;
+  failWrite = false;
+  onRemove: (() => void) | null = null;
+
+  read(libraryId: string): string | null {
+    return this.items.get(libraryId) ?? null;
+  }
+
+  write(libraryId: string, canonicalBase64: string): void {
+    if (this.failWrite) throw new LibraryMasterBackupError('unavailable');
+    this.items.set(libraryId, canonicalBase64);
+  }
+
+  remove(libraryId: string): void {
+    this.onRemove?.();
+    if (this.failRemove) throw new LibraryMasterBackupError('unavailable');
+    this.items.delete(libraryId);
+  }
+}
+
+function world(backup?: LibraryMasterBackup): {
   dataDir: string;
   masterKey: Buffer;
   anchors: FakeAnchorStore;
@@ -61,7 +84,12 @@ function world(): {
     dataDir,
     masterKey,
     anchors,
-    store: new AppLockCredentialStore({ dataDir, anchorStore: anchors, safeStorage: fakeSafeStorage() }),
+    store: new AppLockCredentialStore({
+      dataDir,
+      anchorStore: anchors,
+      safeStorage: fakeSafeStorage(),
+      ...(backup === undefined ? {} : { masterBackup: backup }),
+    }),
   };
 }
 
@@ -300,6 +328,66 @@ describe('restore custody re-establishment (#754)', () => {
       unlocked.masterKey.fill(0);
     }
     assert.ok((anchors.anchor?.generation ?? 0) > 7, 'the stale anchor generation is superseded, never reused');
+    assert.equal(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+  });
+
+  test('configuring app lock deletes the master backup before the OVLK record commits', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, store, masterKey } = world(backup);
+    backup.items.set('library-a', masterKey.toString('base64'));
+    backup.onRemove = () => {
+      assert.notEqual(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+    };
+    await store.configure({ libraryId: 'library-a', password: 'correct horse battery staple', masterKey });
+    assert.equal(backup.items.has('library-a'), false);
+    assert.equal(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+  });
+
+  test('a failed master-backup delete aborts app-lock configuration', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, store, masterKey } = world(backup);
+    backup.items.set('library-a', masterKey.toString('base64'));
+    backup.failRemove = true;
+    await assert.rejects(
+      store.configure({ libraryId: 'library-a', password: 'correct horse battery staple', masterKey }),
+      LibraryMasterBackupError,
+    );
+    assert.equal(backup.items.get('library-a'), masterKey.toString('base64'));
+    assert.notEqual(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+  });
+
+  test('removing app lock stores the master backup from the authorized master', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, store, masterKey } = world(backup);
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    assert.equal(backup.items.has('library-a'), false);
+    assert.equal(await store.remove(password), true);
+    assert.equal(backup.items.get('library-a'), masterKey.toString('base64'));
+    const restored = Buffer.from(fakeSafeStorage().decryptString(readFileSync(join(dataDir, 'master.key'))), 'base64');
+    assert.deepEqual(restored, masterKey);
+  });
+
+  test('a failed master-backup write leaves the OVLK record in place', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, store, masterKey } = world(backup);
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    backup.failWrite = true;
+    await assert.rejects(store.remove(password), LibraryMasterBackupError);
+    assert.equal(backup.items.has('library-a'), false);
+    assert.equal(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+    assert.equal(store.status().state, 'locked');
+  });
+
+  test('a failed anchor write after the backup is stored drops the item and leaves OVLK', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, anchors, store, masterKey } = world(backup);
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    anchors.failWrite = true;
+    await assert.rejects(store.remove(password), /anchor unavailable/);
+    assert.equal(backup.items.has('library-a'), false);
     assert.equal(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
   });
 });

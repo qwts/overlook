@@ -1,5 +1,6 @@
 import type { LibraryCustodyState } from '../../shared/library/custody.js';
-import { custodyErrorMessage, KeyCustodyError, KeyStore, probeMasterUnwrap, type SafeStorageLike } from '../crypto/keystore.js';
+import { probeLibraryCustody } from '../crypto/library-master-restore.js';
+import { custodyErrorMessage, KeyCustodyError, KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
 import { openWithLibraryLock } from './open-library-guard.js';
 
 type CustodyBlock = { readonly dataDir: string; readonly state: Exclude<LibraryCustodyState, 'ok'> };
@@ -29,7 +30,7 @@ function rememberCustodyFailure(dataDir: string, error: unknown): void {
 
 /** The active library path, probed without healing or opening the database. */
 export function readProbedLibraryCustody(libraryOpen: boolean, dataDir: string, safeStorage: SafeStorageLike): LibraryCustodyState {
-  return readLibraryCustody(libraryOpen, dataDir, () => probeMasterUnwrap(safeStorage, dataDir));
+  return readLibraryCustody(libraryOpen, dataDir, () => probeLibraryCustody(safeStorage, dataDir));
 }
 
 /** Probe before taking the lock. A throw releases a lock acquired for this attempt. */
@@ -44,7 +45,7 @@ export function takeLibraryKeyStore(
   // App-lock unlock already released the master. `openWithMaster` does not
   // read `master.key`, so a missing keychain must not refuse that path.
   if (releasedMaster === undefined) {
-    const probed = probeMasterUnwrap(safeStorage, dataDir);
+    const probed = probeLibraryCustody(safeStorage, dataDir);
     if (probed !== 'ok') {
       block = { dataDir, state: probed };
       throw new KeyCustodyError(custodyErrorMessage(probed));

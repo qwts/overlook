@@ -18,6 +18,21 @@ export function writeLibraryId(dataDir: string, id: string): void {
   renameSync(`${idPath}.tmp`, idPath);
 }
 
+const LIBRARY_ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/u;
+
+/** The directory's ULID, or null when the file is missing, unreadable, or not a ULID.
+ * Does not mint. Callers that need an id for a new library use `readOrMintLibraryId`. */
+export function readStoredLibraryId(dataDir: string): string | null {
+  const idPath = join(dataDir, 'library-id');
+  if (!existsSync(idPath)) return null;
+  try {
+    const stored = readFileSync(idPath, 'utf8').trim();
+    return LIBRARY_ULID.test(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readOrMintLibraryId(dataDir: string): string {
   const idPath = join(dataDir, 'library-id');
   if (existsSync(idPath)) {
@@ -25,7 +40,7 @@ export function readOrMintLibraryId(dataDir: string): string {
     // Only a well-formed ULID names an identity (PR #260 review): a
     // truncated/corrupted record would poison every future remote path
     // (even ''), so it is replaced — it never named a valid home.
-    if (/^[0-9A-HJKMNP-TV-Z]{26}$/u.test(stored)) {
+    if (LIBRARY_ULID.test(stored)) {
       return stored;
     }
   }

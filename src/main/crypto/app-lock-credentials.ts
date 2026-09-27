@@ -4,7 +4,9 @@ import { join } from 'node:path';
 
 import { z } from 'zod';
 
+import { readStoredLibraryId } from '../library/library-id.js';
 import type { SafeStorageLike } from './keystore.js';
+import { installedLibraryMasterBackup, type LibraryMasterBackup } from './library-master-port.js';
 import { assertStrongPassword, createPasswordSaltV1, derivePasswordKeyV1, PASSWORD_KDF_V1 } from './password-kdf.js';
 
 const MAGIC = Buffer.from('OVLK', 'ascii');
@@ -56,6 +58,8 @@ export interface AppLockCredentialStoreOptions {
   readonly dataDir: string;
   readonly anchorStore: CredentialAnchorStore;
   readonly safeStorage: SafeStorageLike;
+  /** Same-Mac master copy. Defaults to the process port. */
+  readonly masterBackup?: LibraryMasterBackup;
 }
 
 export interface ConfigureAppLockInput {
@@ -381,22 +385,35 @@ export class AppLockCredentialStore {
   async remove(password: string): Promise<boolean> {
     const unlocked = await this.unlock(password);
     if (!unlocked.ok) return false;
+    let libraryId: string | null = null;
+    let itemWritten = false;
+    let renamed = false;
     try {
       if (!this.options.safeStorage.isEncryptionAvailable()) throw new Error('OS keychain is unavailable');
       mkdirSync(this.options.dataDir, { recursive: true });
       const legacy = this.options.safeStorage.encryptString(unlocked.masterKey.toString('base64'));
       const current = parseRecord(readFileSync(this.masterPath));
       if (current === null) throw new Error('app-lock record is unavailable');
+      libraryId = current.libraryId;
+      this.backup().write(libraryId, unlocked.masterKey.toString('base64'));
+      itemWritten = true;
       const anchor = {
-        libraryId: current.libraryId,
+        libraryId,
         generation: Math.max(current.generation, this.options.anchorStore.read()?.generation ?? 0) + 1,
         recordHash: recordHash(legacy),
       };
       writeFileAtomic(this.pendingPath, legacy);
       this.options.anchorStore.write(anchor);
       renameSync(this.pendingPath, this.masterPath);
+      renamed = true;
       this.completeRemoval();
       return true;
+    } catch (error) {
+      // A pending legacy record whose anchor already matches will commit on the next
+      // status read. Leave the item in place for that commit. Otherwise the OVLK file
+      // remains, and the item has to go with the failed attempt.
+      if (itemWritten && !renamed && libraryId !== null && !this.legacyRemovalWillCommit()) this.dropMasterBackup(libraryId);
+      throw error;
     } finally {
       unlocked.masterKey.fill(0);
     }
@@ -420,6 +437,7 @@ export class AppLockCredentialStore {
     const generation = Math.max(current?.generation ?? 0, this.options.anchorStore.read()?.generation ?? 0) + 1;
     const record = await createRecord(input, generation, anchorPolicy);
     const raw = recordBytes(record);
+    this.deleteMasterBackup(record.libraryId);
     mkdirSync(this.options.dataDir, { recursive: true });
     writeFileAtomic(this.pendingPath, raw);
     this.options.anchorStore.write({ libraryId: record.libraryId, generation: record.generation, recordHash: recordHash(raw) });
@@ -491,6 +509,34 @@ export class AppLockCredentialStore {
   private writeConfiguredMarker(): void {
     if (existsSync(this.configuredMarkerPath) && readFileSync(this.configuredMarkerPath).equals(CONFIGURED_MARKER)) return;
     writeFileAtomic(this.configuredMarkerPath, CONFIGURED_MARKER);
+  }
+
+  private backup(): LibraryMasterBackup {
+    return this.options.masterBackup ?? installedLibraryMasterBackup();
+  }
+
+  /** Deletes the item before an OVLK record can commit. A thrown delete aborts that commit. */
+  private deleteMasterBackup(libraryId: string): void {
+    const ids = new Set<string>([libraryId]);
+    const stored = readStoredLibraryId(this.options.dataDir);
+    if (stored !== null) ids.add(stored);
+    for (const id of ids) this.backup().remove(id);
+  }
+
+  private legacyRemovalWillCommit(): boolean {
+    if (!existsSync(this.pendingPath)) return false;
+    const pending = readFileSync(this.pendingPath);
+    if (parseRecord(pending) !== null) return false;
+    return this.options.anchorStore.read()?.recordHash === recordHash(pending);
+  }
+
+  /** Best-effort undo when removal wrote the item and then failed before replacing master.key. */
+  private dropMasterBackup(libraryId: string): void {
+    try {
+      this.deleteMasterBackup(libraryId);
+    } catch {
+      // The original removal error is the one the caller sees. The OVLK file is still in place.
+    }
   }
 
   private completeRemoval(): void {
