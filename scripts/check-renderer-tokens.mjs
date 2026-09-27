@@ -48,6 +48,34 @@ export function findUndefinedCustomProperties(files) {
   return violations;
 }
 
+// Radii and weights copied from mocks as numbers drift off the scale (#1289):
+// each must be one var() of its own token family, or a CSS-wide keyword. The
+// font shorthand carries a weight too, so it must be one --type-* token.
+const SCALED_PROPERTIES = [
+  { property: /^border(?:-[a-z-]+)?-radius$/u, token: /^var\(--radius-[\w-]+\)$/u },
+  { property: /^font-weight$/u, token: /^var\(--weight-[\w-]+\)$/u },
+  { property: /^font$/u, token: /^var\(--type-[\w-]+\)$/u },
+];
+const CSS_WIDE_KEYWORD = /^(?:inherit|initial|unset|revert|revert-layer)$/u;
+const DECLARATION = /(?<![\w-])([a-z-]+)\s*:\s*([^;{}]+)/gu;
+
+export function findLiteralScaleValues(files) {
+  const violations = [];
+  for (const { file, source } of files) {
+    if (!file.endsWith('.css') || file.includes(TOKEN_SOURCE)) continue;
+    const searchable = withoutComments(source);
+    for (const match of searchable.matchAll(DECLARATION)) {
+      const scale = SCALED_PROPERTIES.find(({ property }) => property.test(match[1]));
+      if (scale === undefined) continue;
+      const value = match[2].trim().replace(/\s*!important$/u, '');
+      if (scale.token.test(value) || CSS_WIDE_KEYWORD.test(value)) continue;
+      const line = searchable.slice(0, match.index ?? 0).split('\n').length;
+      violations.push({ file, line, property: match[1], value });
+    }
+  }
+  return violations;
+}
+
 async function sourceFiles(directory, root = directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -62,13 +90,22 @@ async function sourceFiles(directory, root = directory) {
 
 async function main() {
   const rendererRoot = path.join(process.cwd(), 'src/renderer');
-  const violations = findUndefinedCustomProperties(await sourceFiles(rendererRoot));
-  if (violations.length === 0) {
+  const files = await sourceFiles(rendererRoot);
+  const undefinedProperties = findUndefinedCustomProperties(files);
+  const literals = findLiteralScaleValues(files);
+  if (undefinedProperties.length === 0 && literals.length === 0) {
     console.log('Renderer custom-property gate OK.');
     return;
   }
-  console.error('Renderer CSS must read tokens from src/renderer/src/styles/tokens/ or properties a component sets at runtime:');
-  for (const violation of violations) console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}`);
+  if (undefinedProperties.length > 0) {
+    console.error('Renderer CSS must read tokens from src/renderer/src/styles/tokens/ or properties a component sets at runtime:');
+    for (const violation of undefinedProperties) console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}`);
+  }
+  if (literals.length > 0) {
+    console.error('Renderer radii and font weights must use var(--radius-*), var(--weight-*), or a var(--type-*) font:');
+    for (const violation of literals)
+      console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}: ${violation.value}`);
+  }
   process.exitCode = 1;
 }
 

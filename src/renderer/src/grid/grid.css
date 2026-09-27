@@ -67,7 +67,7 @@
 
 .ovl-empty__title {
   font-size: var(--text-lg);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-body);
 }
 

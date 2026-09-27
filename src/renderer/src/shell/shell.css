@@ -37,7 +37,7 @@
 
 .ovl-toolbar__brand {
   font-size: var(--text-md);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.14em; /* the mock's own wordmark tracking */
   background: var(--brand-gradient);
   background-clip: text;
@@ -273,7 +273,7 @@
 
 .ovl-sidebar__card-title {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-body);
   flex: 1;
 }
@@ -678,7 +678,7 @@
 
 .ovl-shell__dropTitle {
   font-size: var(--text-lg);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-body);
 }
 

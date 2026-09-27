@@ -44,7 +44,7 @@
   width: var(--interactive-target-min);
   height: var(--interactive-target-min);
   margin-inline: -4px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex: none;
   display: flex;
   align-items: center;
@@ -61,7 +61,7 @@
   content: '';
   position: absolute;
   inset: 4px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: transparent;
   border: 1px solid var(--border-2);
 }

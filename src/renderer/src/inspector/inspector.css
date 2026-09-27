@@ -63,7 +63,7 @@
   display: block;
   flex: 1;
   font-size: var(--text-md);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;

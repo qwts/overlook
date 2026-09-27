@@ -208,7 +208,7 @@
 .ovl-video__notice-heading {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-body);
 }
 
