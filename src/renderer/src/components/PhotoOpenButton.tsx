@@ -5,6 +5,8 @@ import { directionOf } from '../../../shared/i18n/locales.js';
 
 export interface PhotoOpenButtonProps {
   readonly label: string;
+  /** Hover text for state a tile pill shows only as a glyph (#1288). */
+  readonly title?: string | undefined;
   readonly className: string;
   readonly onOpen?: (() => void) | undefined;
   readonly onContextAction?: ((point: { readonly x: number; readonly y: number; readonly origin: HTMLButtonElement }) => void) | undefined;
@@ -18,6 +20,7 @@ export interface PhotoOpenButtonProps {
 
 export function PhotoOpenButton({
   label,
+  title,
   className,
   onOpen,
   onContextAction,
@@ -33,6 +36,7 @@ export function PhotoOpenButton({
     <button
       type="button"
       aria-label={label}
+      title={title}
       aria-haspopup={onContextAction === undefined ? undefined : 'menu'}
       className={className}
       tabIndex={tabIndex}

@@ -146,7 +146,7 @@ export const TypeFloorPills: Story = {
   render: () => <TypeFloorPillGrid />,
   play: async ({ canvasElement }) => {
     const labels = [...canvasElement.querySelectorAll<HTMLElement>('.ovl-tile__pill-label')];
-    await expect(labels).toHaveLength(TYPE_FLOOR_WIDTHS.length * 3);
+    await expect(labels).toHaveLength(TYPE_FLOOR_WIDTHS.length * 4);
     for (const label of labels) {
       await expect(Number.parseFloat(getComputedStyle(label).fontSize)).toBeGreaterThanOrEqual(11);
     }
@@ -160,6 +160,11 @@ export const TypeFloorPills: Story = {
     // Collapsed or not, each label is still in the accessibility tree.
     await expect(within(canvasElement).getAllByText('Deletes permanently in 12 days')).toHaveLength(TYPE_FLOOR_WIDTHS.length);
     await expect(within(canvasElement).getAllByText('1:02:03')).toHaveLength(TYPE_FLOOR_WIDTHS.length);
+    // The pill ignores the pointer, so the hover text lives on the open button.
+    await expect(within(canvasElement).getByRole('button', { name: 'Open Trashed photo at 96px' })).toHaveAttribute(
+      'title',
+      'Deletes permanently in 12 days',
+    );
   },
 };
 

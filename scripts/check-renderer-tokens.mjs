@@ -52,16 +52,31 @@ export function findUndefinedCustomProperties(files) {
 // (#1289, #1288): each must be one var() of its own token family, or a
 // CSS-wide keyword. The font shorthand carries a weight and a size too, so it
 // must be one --type-* token. --text-xs is the floor; nothing smaller exists.
+// --text-* also names colors (--text-body), so a font size must be one of the
+// --text-* tokens the token files declare as a length.
 const SCALED_PROPERTIES = [
   { property: /^border(?:-[a-z-]+)?-radius$/u, token: /^var\(--radius-[\w-]+\)$/u },
   { property: /^font-weight$/u, token: /^var\(--weight-[\w-]+\)$/u },
-  { property: /^font-size$/u, token: /^var\(--text-[\w-]+\)$/u },
+  { property: /^font-size$/u, token: /^var\((--text-[\w-]+)\)$/u, sizeToken: true },
   { property: /^font$/u, token: /^var\(--type-[\w-]+\)$/u },
 ];
+const SIZE_TOKEN = /(?<![\w-])(--text-[\w-]+)\s*:\s*\d*\.?\d+(?:px|rem|em)\s*;/gu;
 const CSS_WIDE_KEYWORD = /^(?:inherit|initial|unset|revert|revert-layer)$/u;
 const DECLARATION = /(?<![\w-])([a-z-]+)\s*:\s*([^;{}]+)/gu;
 
+function onScale(scale, value, sizeTokens) {
+  const match = scale.token.exec(value);
+  if (match === null) return false;
+  return scale.sizeToken !== true || sizeTokens.has(match[1]);
+}
+
 export function findLiteralScaleValues(files) {
+  const sizeTokens = new Set();
+  for (const { file, source } of files) {
+    if (file.endsWith('.css') && file.includes(TOKEN_SOURCE)) {
+      for (const match of withoutComments(source).matchAll(SIZE_TOKEN)) sizeTokens.add(match[1]);
+    }
+  }
   const violations = [];
   for (const { file, source } of files) {
     if (!file.endsWith('.css') || file.includes(TOKEN_SOURCE)) continue;
@@ -70,7 +85,7 @@ export function findLiteralScaleValues(files) {
       const scale = SCALED_PROPERTIES.find(({ property }) => property.test(match[1]));
       if (scale === undefined) continue;
       const value = match[2].trim().replace(/\s*!important$/u, '');
-      if (scale.token.test(value) || CSS_WIDE_KEYWORD.test(value)) continue;
+      if (onScale(scale, value, sizeTokens) || CSS_WIDE_KEYWORD.test(value)) continue;
       const line = searchable.slice(0, match.index ?? 0).split('\n').length;
       violations.push({ file, line, property: match[1], value });
     }

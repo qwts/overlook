@@ -154,6 +154,7 @@ export function PhotoTile({
     >
       <PhotoOpenButton
         label={accessibleName ?? (alt === '' ? 'Open photo' : `Open ${alt}`)}
+        title={retentionLabel}
         className="ovl-tile__open"
         onOpen={onClick}
         onContextAction={onContextAction}
@@ -265,7 +266,7 @@ export function PhotoTile({
         </span>
       ) : null}
       {retentionLabel === undefined ? null : (
-        <span className="ovl-tile__retention" title={retentionLabel}>
+        <span className="ovl-tile__retention">
           <Icon name="clock" size={12} />
           <span className="ovl-tile__pill-label mono-data">{retentionLabel}</span>
         </span>

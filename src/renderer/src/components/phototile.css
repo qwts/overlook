@@ -313,7 +313,7 @@
   left: 6px;
   z-index: 2;
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-2);
   align-items: center;
   max-width: calc(100% - 48px);
   padding: 3px 6px;

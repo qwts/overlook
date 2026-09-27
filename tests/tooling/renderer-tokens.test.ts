@@ -70,6 +70,8 @@ test('renderer scale gate reports literal radii, font weights, and font sizes wi
   assert.deepEqual(
     tokens.findLiteralScaleValues([
       { file: 'src/styles/tokens/spacing.css', source: ':root { --radius-1: 4px; }\n.x { border-radius: 4px; }' },
+      { file: 'src/styles/tokens/typography.css', source: ':root { --text-xs: 11px; --text-sm: 12px; }' },
+      { file: 'src/styles/tokens/colors.css', source: ':root { --text-body: #fff; }' },
       {
         file: 'src/example/example.css',
         source: [
@@ -85,6 +87,7 @@ test('renderer scale gate reports literal radii, font weights, and font sizes wi
           '.i { font: inherit; }',
           '.j { font-size: 9px; }',
           '.k { font-size: var(--text-xs); font-size: inherit; }',
+          '.l { font-size: var(--text-body); }',
         ].join('\n'),
       },
       { file: 'src/example/Example.tsx', source: "const style = { borderRadius: '3px' };" },
@@ -96,6 +99,7 @@ test('renderer scale gate reports literal radii, font weights, and font sizes wi
       { file: 'src/example/example.css', line: 7, property: 'border-radius', value: 'var(--radius-1) var(--radius-2)' },
       { file: 'src/example/example.css', line: 9, property: 'font', value: '700 12px sans-serif' },
       { file: 'src/example/example.css', line: 11, property: 'font-size', value: '9px' },
+      { file: 'src/example/example.css', line: 13, property: 'font-size', value: 'var(--text-body)' },
     ],
   );
 });
