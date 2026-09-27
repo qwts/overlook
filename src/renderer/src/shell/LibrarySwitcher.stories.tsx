@@ -148,6 +148,64 @@ export const AllRowStates: Story = {
     await expect(body.getByText('Open on CLARAS-MACBOOK')).toBeVisible();
     // Never-opened stamp.
     await expect(body.getByText('Never opened')).toBeVisible();
+    // Relative time is sans sentence case, never uppercase mono (#1300).
+    const when = body.getAllByText(/ ago$/u)[0];
+    if (when === undefined) throw new Error('relative time missing');
+    await expect(getComputedStyle(when).textTransform).toBe('none');
+    await expect(getComputedStyle(when).fontFamily).not.toMatch(/mono/iu);
+    // With room to spare, the key hint shows whole on one line.
+    const { keys, text } = keyHint(canvasElement.ownerDocument);
+    await expect(text.top).toBeGreaterThanOrEqual(keys.top);
+    await expect(text.bottom).toBeLessThanOrEqual(keys.bottom);
+  },
+};
+
+// Where the key hint's text sits against its own clipping box.
+function keyHint(doc: Document): { keys: DOMRect; text: DOMRect } {
+  const el = doc.querySelector('.ovl-libswitch__keys');
+  if (el === null) throw new Error('key hint missing');
+  const range = el.ownerDocument.createRange();
+  range.selectNodeContents(el);
+  return { keys: el.getBoundingClientRect(), text: range.getBoundingClientRect() };
+}
+
+const narrow: Story['render'] = (args) => (
+  <div style={{ position: 'relative', width: 400, height: 560 }}>
+    <LibrarySwitcher {...args} />
+  </div>
+);
+
+// #1300: in a narrow dialog the key hint never wraps; it drops below its
+// clipped line whole, and the buttons stay visible.
+export const NarrowFooterDropsKeyHint: Story = {
+  render: narrow,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getByTestId('library-row-Alpha')).toBeVisible();
+    });
+    const { keys, text } = keyHint(canvasElement.ownerDocument);
+    await expect(text.top).toBeGreaterThanOrEqual(keys.bottom);
+    await expect(body.getByRole('button', { name: /New library/u })).toBeVisible();
+  },
+};
+
+// Only the hint is clipped: the batch Move button, which wraps to a second
+// footer row when narrow, stays visible and hit-testable.
+export const NarrowFooterKeepsMoveSelected: Story = {
+  render: narrow,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getByTestId('library-row-Alpha')).toBeVisible();
+    });
+    await userEvent.click(body.getByLabelText('Select Alpha to move'));
+    await userEvent.click(body.getByLabelText('Select Beta to move'));
+    const move = body.getByTestId('move-selected');
+    await expect(move).toBeVisible();
+    const box = move.getBoundingClientRect();
+    const hit = move.ownerDocument.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    await expect(move.contains(hit)).toBe(true);
   },
 };
 

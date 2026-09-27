@@ -2197,6 +2197,10 @@
           "paths": ["src/renderer/src/shell/LibrarySwitcher.stories.tsx", "src/renderer/src/shell/EditLibraryDisplayNameDialog.tsx"]
         },
         {
+          "type": "manual",
+          "reason": "The switcher footer's key hint (#1300) depends on the dialog width the window allows. In packaged builds, open the switcher at 1280px, at the 960x600 minimum, and at 200% zoom: the hint sits on one row beside the buttons or is dropped entirely, never wrapped, and the buttons' focus rings stay visible."
+        },
+        {
           "type": "unit-dom",
           "paths": [
             "tests/main/app-profile.test.ts",
