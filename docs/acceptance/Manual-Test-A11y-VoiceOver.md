@@ -132,6 +132,12 @@ Open Settings, tab around, close with Escape.
   **Known fail** (finding 11): nothing is `inert`/`aria-hidden`.
 - Navigate the Settings section nav with **arrow keys**. **Known fail** (finding 21): it
   is a tab pattern with no tab semantics.
+- Tab through a Settings pane (#1295). **Expect:** each switch, segmented control,
+  select, and slider is read by its row's label, then its hint, with no "group" and
+  no label read twice. Buttons keep their own names and read the row's label and hint
+  after them ("Change…, App password, Required on launch…"). Custom themes, Quick
+  Actions, Semantic search, Offloaded originals, Finder access, and Share diagnostics
+  are read as groups named by their label.
 
 ### 9. Lock and protected surfaces — accessible _and_ fail-closed
 

@@ -392,7 +392,6 @@ export function StoragePane({
       {!connected && providers.length > 1 && targetId !== null ? (
         <Field label="Backup provider" hint="Choose where encrypted library data is stored.">
           <Segmented
-            label="Backup provider"
             value={targetId}
             options={providers.map((provider) => ({ value: provider.id, label: provider.label, disabled: !provider.available }))}
             onChange={(providerId) => {
@@ -424,7 +423,6 @@ export function StoragePane({
 
       <Field label="Re-offload after viewing" hint="Keep cloud-only originals temporary unless you choose Keep downloaded.">
         <Switch
-          accessibleLabel="Re-offload after viewing"
           checked={settings.reOffloadAfterViewing}
           onChange={(reOffloadAfterViewing) => {
             onPatch({ reOffloadAfterViewing });
@@ -436,7 +434,6 @@ export function StoragePane({
         <>
           <Field label="Back up new imports automatically" hint="Encrypts and uploads originals after import.">
             <Switch
-              accessibleLabel="Back up new imports automatically"
               checked={settings.autoBackupOnImport}
               onChange={(autoBackupOnImport) => {
                 onPatch({ autoBackupOnImport });
@@ -445,7 +442,6 @@ export function StoragePane({
           </Field>
           <Field label="Wi-Fi only" hint="Pause uploads on cellular or metered connections.">
             <Switch
-              accessibleLabel="Wi-Fi only"
               checked={settings.wifiOnly}
               onChange={(wifiOnly) => {
                 onPatch({ wifiOnly });
@@ -454,7 +450,6 @@ export function StoragePane({
           </Field>
           <Field label="Upload bandwidth limit" hint={bandwidth >= 100 ? 'Unlimited' : `${String(bandwidth)}% of available upload`}>
             <Slider
-              label="Upload bandwidth limit"
               value={bandwidth}
               min={10}
               max={100}
@@ -469,7 +464,6 @@ export function StoragePane({
       ) : null}
       <Field label="On import, from card or drive" hint="Move frees space immediately; copy keeps the source untouched.">
         <Segmented
-          label="On import, from card or drive"
           value={settings.importMode}
           options={[
             { value: 'copy', label: 'Copy' },
@@ -481,7 +475,7 @@ export function StoragePane({
         />
       </Field>
       <Field label="Encrypt originals" hint="Client-side encryption before any upload. Cannot be disabled.">
-        <Switch checked disabled accessibleLabel="Encrypt originals" />
+        <Switch checked disabled />
       </Field>
     </div>
   );

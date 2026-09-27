@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { ReactElement } from 'react';
 
 import './forms.css';
+import { useFieldNameProps } from './field-name';
 import { Icon, type IconName } from './Icon';
 import { Tooltip } from './Tooltip';
 
@@ -20,8 +21,9 @@ export interface SegmentedProps<T extends string> {
   readonly options: readonly (T | SegmentedOption<T>)[];
   readonly value: T;
   readonly onChange: (value: T) => void;
-  /** Accessible name for the group (e.g. "View", "On import"). */
-  readonly label: string;
+  /** Accessible name for the group (e.g. "View", "On import"). Omit it in an
+   *  auto settings row, which names the group by its label (#1295). */
+  readonly label?: string | undefined;
   /** Disables the whole group (#114's disconnected-controls pattern). */
   readonly disabled?: boolean;
 }
@@ -35,6 +37,7 @@ function normalize<T extends string>(option: T | SegmentedOption<T>): SegmentedO
 export function Segmented<T extends string>({ options, value, onChange, label, disabled = false }: SegmentedProps<T>): ReactElement {
   const groupRef = useRef<HTMLDivElement>(null);
   const normalized = options.map(normalize);
+  const names = useFieldNameProps(label);
 
   const moveSelection = (delta: number): void => {
     if (disabled) {
@@ -59,6 +62,7 @@ export function Segmented<T extends string>({ options, value, onChange, label, d
       ref={groupRef}
       role="radiogroup"
       aria-label={label}
+      {...names}
       className="ovl-segmented"
       onKeyDown={(event) => {
         if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
