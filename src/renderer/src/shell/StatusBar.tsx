@@ -22,6 +22,8 @@ const messages = defineMessages({
     id: 'statusbar.coverage.removalPending',
     defaultMessage: '{count, plural, one {# cloud copy} other {# cloud copies}} awaiting removal',
   },
+  // Loading, not empty: never a lone dash (#1301).
+  countingPhotos: { id: 'statusbar.stats.counting', defaultMessage: 'Counting photos…' },
   allBackedUp: { id: 'statusbar.sync.allBackedUp', defaultMessage: 'All backed up' },
   backedUpExceptLocalOnly: {
     id: 'statusbar.sync.backedUpExceptLocalOnly',
@@ -77,7 +79,9 @@ export function StatusBar({
   }, [announce, announcement]);
   return (
     <footer className="ovl-statusbar">
-      <span data-testid="statusbar-left">{stats === null ? '—' : `${formatCount(stats.photos)} photos · ${formatBytes(stats.bytes)}`}</span>
+      <span data-testid="statusbar-left">
+        {stats === null ? intl.formatMessage(messages.countingPhotos) : `${formatCount(stats.photos)} photos · ${formatBytes(stats.bytes)}`}
+      </span>
       {excluded > 0 ? (
         <button
           type="button"

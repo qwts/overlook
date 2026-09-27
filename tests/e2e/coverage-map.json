@@ -773,6 +773,14 @@
         {
           "type": "playwright-e2e",
           "path": "tests/e2e/smoke.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/Sidebar.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/statusbar-empty-values.test.tsx"
         }
       ]
     },

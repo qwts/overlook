@@ -3440,6 +3440,9 @@
   "statusbar.inclusion.hiddenByAlbums": {
     "defaultMessage": "{count, plural, one {# photo hidden} other {# photos hidden}} by album settings"
   },
+  "statusbar.stats.counting": {
+    "defaultMessage": "Counting photos…"
+  },
   "statusbar.sync.allBackedUp": {
     "defaultMessage": "All backed up"
   },
