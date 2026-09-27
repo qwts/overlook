@@ -148,6 +148,38 @@ export const AllRowStates: Story = {
     await expect(body.getByText('Open on CLARAS-MACBOOK')).toBeVisible();
     // Never-opened stamp.
     await expect(body.getByText('Never opened')).toBeVisible();
+    // Relative time is sans sentence case, never uppercase mono (#1300).
+    const when = body.getAllByText(/ ago$/u)[0];
+    if (when === undefined) throw new Error('relative time missing');
+    await expect(getComputedStyle(when).textTransform).toBe('none');
+    await expect(getComputedStyle(when).fontFamily).not.toMatch(/mono/iu);
+    // With room to spare, the key hint shows on the footer's single row.
+    const keys = body.getByText('↑↓ select · ⏎ switch · esc close');
+    const footer = keys.parentElement!.getBoundingClientRect();
+    const hint = keys.getBoundingClientRect();
+    await expect(hint.bottom).toBeLessThanOrEqual(footer.bottom);
+    await expect(hint.height).toBeLessThan(2 * parseFloat(getComputedStyle(keys).lineHeight));
+  },
+};
+
+// #1300: in a narrow dialog the key hint never wraps; it drops to a clipped
+// second footer row, and the buttons keep the single row.
+export const NarrowFooterDropsKeyHint: Story = {
+  render: (args) => (
+    <div style={{ position: 'relative', width: 400, height: 560 }}>
+      <LibrarySwitcher {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(async () => {
+      await expect(body.getByTestId('library-row-Alpha')).toBeVisible();
+    });
+    const keys = body.getByText('↑↓ select · ⏎ switch · esc close');
+    const footer = keys.parentElement!.getBoundingClientRect();
+    await expect(getComputedStyle(keys).whiteSpace).toBe('nowrap');
+    await expect(keys.getBoundingClientRect().top).toBeGreaterThanOrEqual(footer.bottom);
+    await expect(body.getByRole('button', { name: /New library/u })).toBeVisible();
   },
 };
 

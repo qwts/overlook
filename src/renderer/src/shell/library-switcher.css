@@ -115,14 +115,23 @@
 
 .ovl-libswitch__footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4) var(--space-3);
   margin-top: var(--space-5);
+  /* One row only (#1300): when the key hint no longer fits beside the
+     buttons it wraps to a second row, which is clipped away. The clip
+     margin keeps the buttons' focus rings visible, and the row gap sits
+     past it so a wrapped hint never peeks through. */
+  max-block-size: var(--control-h-md);
+  overflow: clip;
+  overflow-clip-margin: var(--space-2);
 }
 
 .ovl-libswitch__keys {
   margin-inline-start: auto;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* Refusal banner (amber, inline — never a toast). */
