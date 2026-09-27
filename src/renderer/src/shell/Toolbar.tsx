@@ -18,6 +18,9 @@ import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { FacetBar } from './FacetBar';
 
 import overlookIcon from '../assets/overlook-icon-64.png';
+// The toolbar rules live in the shell stylesheet; importing it here keeps
+// the component styled when mounted alone, as by its stories (#1292).
+import './shell.css';
 
 const QUERY_DEBOUNCE_MS = 250;
 
@@ -93,9 +96,13 @@ export interface ToolbarProps {
   readonly platform: CommandPlatform;
   /** Opens the ImportDialog (#88); wired by the shell. */
   readonly onImport?: (() => void) | undefined;
-  /** Opens the unencrypted-library export through the shared command handler. */
+  /**
+   * Opens the unencrypted-library export through the shared command handler.
+   * Windows/Linux only: macOS reaches it from the File menu (#1292).
+   */
   readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
+  /** Windows/Linux only: macOS reaches it from the Overlook menu (#1292). */
   readonly onTransfer?: (() => void) | undefined;
   /** Collections for the facet bar (#514): the open Smart Album, and folders to save into. */
   readonly albums?: readonly AlbumListing[] | undefined;
@@ -229,12 +236,16 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
             <IconButton icon="lock" label={intl.formatMessage(messages.lockNow)} onClick={onLock} />
           </Tooltip>
         )}
-        {onTransfer === undefined ? null : (
+        {/* Import is the only primary action (#1292). macOS already has Transfer
+            & Sync and Export All in its native menus, so they leave the toolbar
+            there; Windows/Linux keep them until the titlebar Overlook menu
+            gives them a home (#1293). */}
+        {onTransfer === undefined || platform === 'darwin' ? null : (
           <Button variant="secondary" icon="refresh-cw" size="md" onClick={onTransfer}>
             <FormattedMessage id="toolbar.transfer" defaultMessage="Transfer & Sync" />
           </Button>
         )}
-        {onExportAll === undefined ? null : (
+        {onExportAll === undefined || platform === 'darwin' ? null : (
           <Button variant="secondary" icon="share" size="md" onClick={onExportAll}>
             {intl.formatMessage(commandById('library.exportAll').label)}
           </Button>
