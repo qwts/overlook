@@ -990,6 +990,7 @@ export const en = {
   "settings.keyring.usage": "{photos, plural, =0 {nothing sealed} one {# photo} other {# photos}}{sidecars, plural, =0 {} one { · # sidecar} other { · # sidecars}} · {bytes}",
   "settings.keys.copyFileName": "recovery key filename",
   "settings.keys.copyFingerprint": "library key fingerprint",
+  "settings.keys.macMasterBackup": "This Mac keeps a login-keychain copy of the master key. Without that copy and the exported recovery key, the library cannot be decrypted.",
   "settings.nav.general": "General",
   "settings.nav.label": "Settings sections",
   "settings.nav.privacy": "Privacy",

@@ -25,6 +25,11 @@ export type KeyDialogMode = 'backup' | 'import';
 const messages = defineMessages({
   copyFingerprint: { id: 'settings.keys.copyFingerprint', defaultMessage: 'library key fingerprint' },
   copyFileName: { id: 'settings.keys.copyFileName', defaultMessage: 'recovery key filename' },
+  macBackup: {
+    id: 'settings.keys.macMasterBackup',
+    defaultMessage:
+      'This Mac keeps a login-keychain copy of the master key. Without that copy and the exported recovery key, the library cannot be decrypted.',
+  },
   dropEmpty: { id: 'recoveryKey.drop.empty', defaultMessage: 'Drop one Overlook recovery-key file.' },
   dropMultiple: { id: 'recoveryKey.drop.multiple', defaultMessage: 'Choose or drop one recovery-key file at a time.' },
   dropWrongType: { id: 'recoveryKey.drop.wrongType', defaultMessage: 'Choose an Overlook .key recovery file.' },
@@ -111,6 +116,7 @@ export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialo
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [installedFp, setInstalledFp] = useState<string | null>(null);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<string | null>(null);
 
   const isBackup = mode === 'backup';
   useEffect(() => {
@@ -125,6 +131,14 @@ export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialo
       .catch(() => {
         setFingerprint(null);
       });
+    if (typeof window.overlook.getPlatform === 'function') {
+      void window.overlook
+        .getPlatform()
+        .then(setPlatform)
+        .catch(() => {
+          setPlatform(null);
+        });
+    }
   }, [open, isBackup]);
 
   if (!open) {
@@ -263,7 +277,10 @@ export function KeyDialog({ open, mode, onClose, onToast, onExported }: KeyDialo
               </div>
             </div>
             <Note tone="amber" icon="triangle-alert">
-              Keep this file and its password apart, and store both offline. Overlook can't recover your photos without them.
+              <>
+                Keep this file and its password apart, and store both offline. Overlook can't recover your photos without them.
+                {platform === 'darwin' ? ` ${intl.formatMessage(messages.macBackup)}` : null}
+              </>
             </Note>
           </div>
         ) : (
