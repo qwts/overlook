@@ -100,7 +100,12 @@ export function ProviderCard(props: ProviderCardProps): ReactElement {
           props.message === null ? (
             <div className="ovl-settings__providerMeta">{intl.formatMessage(messages.couldNotCheck)}</div>
           ) : (
-            <CopyableValue value={props.message} label={intl.formatMessage(messages.copyError)} className="ovl-settings__providerMeta" prose />
+            <CopyableValue
+              value={props.message}
+              label={intl.formatMessage(messages.copyError)}
+              className="ovl-settings__providerMeta"
+              prose
+            />
           )
         ) : connected ? (
           <>
@@ -130,7 +135,12 @@ export function ProviderCard(props: ProviderCardProps): ReactElement {
         ) : props.message === null ? (
           <div className="ovl-settings__providerMeta">{intl.formatMessage(messages.connectHint)}</div>
         ) : (
-          <CopyableValue value={props.message} label={intl.formatMessage(messages.copyError)} className="ovl-settings__providerMeta" prose />
+          <CopyableValue
+            value={props.message}
+            label={intl.formatMessage(messages.copyError)}
+            className="ovl-settings__providerMeta"
+            prose
+          />
         )}
       </div>
 
