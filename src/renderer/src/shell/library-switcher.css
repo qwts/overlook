@@ -117,21 +117,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4) var(--space-3);
+  gap: var(--space-3);
   margin-top: var(--space-5);
-  /* One row only (#1300): when the key hint no longer fits beside the
-     buttons it wraps to a second row, which is clipped away. The clip
-     margin keeps the buttons' focus rings visible, and the row gap sits
-     past it so a wrapped hint never peeks through. */
-  max-block-size: var(--control-h-md);
-  overflow: clip;
-  overflow-clip-margin: var(--space-2);
 }
 
+/* The key hint shows whole or not at all (#1300). It takes the space the
+   buttons leave; an empty, line-high lead item keeps the hint off the
+   first line whenever it does not fit there, and that second line is
+   clipped. Only the hint is clipped, so a button that wraps (Move N
+   selected…) stays visible. */
 .ovl-libswitch__keys {
-  margin-inline-start: auto;
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-inline-size: 0;
+  max-block-size: 1lh;
+  overflow: clip;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.ovl-libswitch__keys::before {
+  content: '';
+  block-size: 1lh;
 }
 
 /* Refusal banner (amber, inline — never a toast). */
