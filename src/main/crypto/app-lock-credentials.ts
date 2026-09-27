@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { readStoredLibraryId } from '../library/library-id.js';
 import type { SafeStorageLike } from './keystore.js';
-import { installedLibraryMasterBackup, type LibraryMasterBackup } from './library-master-port.js';
+import { installedLibraryMasterBackup, LibraryMasterBackupError, type LibraryMasterBackup } from './library-master-port.js';
 import { assertStrongPassword, createPasswordSaltV1, derivePasswordKeyV1, PASSWORD_KDF_V1 } from './password-kdf.js';
 
 const MAGIC = Buffer.from('OVLK', 'ascii');
@@ -221,6 +221,9 @@ export class AppLockCredentialStore {
   private readonly masterPath: string;
   private readonly pendingPath: string;
   private readonly configuredMarkerPath: string;
+
+  /** One successful drop per process. A thrown drop stays false so the next status retries. */
+  private releasedLockedBackup = false;
 
   constructor(private readonly options: AppLockCredentialStoreOptions) {
     this.masterPath = join(options.dataDir, MASTER_FILE);
@@ -446,6 +449,7 @@ export class AppLockCredentialStore {
   }
 
   private reconcilePendingTransition(): void {
+    this.dropBackupUnlessRemovalCommits();
     if (!existsSync(this.pendingPath) || !this.options.anchorStore.isAvailable()) return;
     const pending = readFileSync(this.pendingPath);
     const anchor = this.options.anchorStore.read();
@@ -521,6 +525,22 @@ export class AppLockCredentialStore {
     const stored = readStoredLibraryId(this.options.dataDir);
     if (stored !== null) ids.add(stored);
     for (const id of ids) this.backup().remove(id);
+  }
+
+  /** A crash after the removal write skips the catch. The item stays only when this
+   * process will still replace the OVLK file with the pending safeStorage bytes. */
+  private dropBackupUnlessRemovalCommits(): void {
+    if (this.releasedLockedBackup || !this.options.anchorStore.isAvailable()) return;
+    if (this.legacyRemovalWillCommit() || !existsSync(this.masterPath)) return;
+    const record = parseRecord(readFileSync(this.masterPath));
+    if (record === null) return;
+    try {
+      this.deleteMasterBackup(record.libraryId);
+      this.releasedLockedBackup = true;
+    } catch (error) {
+      const code = error instanceof LibraryMasterBackupError ? error.code : 'unavailable';
+      console.error('[overlook] library master backup remove failed', code);
+    }
   }
 
   private legacyRemovalWillCommit(): boolean {

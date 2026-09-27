@@ -28,7 +28,8 @@ function rememberCustodyFailure(dataDir: string, error: unknown): void {
   else if (error.message === custodyErrorMessage('keychain-unavailable')) block = { dataDir, state: 'keychain-unavailable' };
 }
 
-/** The active library path, probed without healing or opening the database. */
+/** The active library path. A vouched login-keychain copy may replace an unreadable
+ * master.key. This probe does not open the database. */
 export function readProbedLibraryCustody(libraryOpen: boolean, dataDir: string, safeStorage: SafeStorageLike): LibraryCustodyState {
   return readLibraryCustody(libraryOpen, dataDir, () => probeLibraryCustody(safeStorage, dataDir));
 }

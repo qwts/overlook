@@ -380,6 +380,43 @@ describe('restore custody re-establishment (#754)', () => {
     assert.equal(store.status().state, 'locked');
   });
 
+  test('a locked library drops a backup that removal will not commit', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, anchors, store, masterKey } = world(backup);
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    backup.items.set('library-a', masterKey.toString('base64'));
+    const restarted = new AppLockCredentialStore({
+      dataDir,
+      anchorStore: anchors,
+      safeStorage: fakeSafeStorage(),
+      masterBackup: backup,
+    });
+    assert.equal(restarted.status().state, 'locked');
+    assert.equal(backup.items.has('library-a'), false);
+    assert.equal(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+  });
+
+  test('a removal that already updated the anchor keeps the backup and commits on status', async () => {
+    const backup = new FakeMasterBackup();
+    const { dataDir, anchors, store, masterKey } = world(backup);
+    const password = 'correct horse battery staple';
+    await store.configure({ libraryId: 'library-a', password, masterKey });
+    anchors.failAfterWrite = true;
+    await assert.rejects(store.remove(password), /interrupted/);
+    assert.equal(backup.items.get('library-a'), masterKey.toString('base64'));
+    anchors.failAfterWrite = false;
+    const restarted = new AppLockCredentialStore({
+      dataDir,
+      anchorStore: anchors,
+      safeStorage: fakeSafeStorage(),
+      masterBackup: backup,
+    });
+    assert.equal(restarted.status().state, 'unconfigured');
+    assert.equal(backup.items.get('library-a'), masterKey.toString('base64'));
+    assert.notEqual(readFileSync(join(dataDir, 'master.key')).subarray(0, 4).toString('ascii'), 'OVLK');
+  });
+
   test('a failed anchor write after the backup is stored drops the item and leaves OVLK', async () => {
     const backup = new FakeMasterBackup();
     const { dataDir, anchors, store, masterKey } = world(backup);

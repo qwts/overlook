@@ -72,6 +72,25 @@ AccountGate ReadAccount(const Napi::CallbackInfo& info, std::string& account, Na
   return AccountGate::ready;
 }
 
+// Login-keychain trusted-application ACL. The data-protection keychain would need a
+// keychain access group this app's profile-free entitlements do not ship.
+SecAccessRef CreateLibraryAccess() {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  SecTrustedApplicationRef trusted = nullptr;
+  if (SecTrustedApplicationCreateFromPath(nullptr, &trusted) != errSecSuccess || trusted == nullptr) return nullptr;
+  NSArray* trustedApplications = @[ (__bridge id)trusted ];
+  SecAccessRef access = nullptr;
+  const OSStatus created = SecAccessCreate(CFSTR("Overlook library master"), (__bridge CFArrayRef)trustedApplications, &access);
+  CFRelease(trusted);
+#pragma clang diagnostic pop
+  if (created != errSecSuccess || access == nullptr) {
+    if (access != nullptr) CFRelease(access);
+    return nullptr;
+  }
+  return access;
+}
+
 Napi::Value Write(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   std::string account;
@@ -90,40 +109,27 @@ Napi::Value Write(const Napi::CallbackInfo& info) {
     NSMutableData* value = [NSMutableData dataWithLength:copy.size()];
     if (!copy.empty()) memcpy(value.mutableBytes, copy.data(), copy.size());
     Wipe(copy);
-    NSMutableDictionary* query = BaseQuery(accountName);
-    NSDictionary* update = @{(__bridge id)kSecValueData : value};
-    const OSStatus updated = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)update);
-    if (updated == errSecSuccess) {
-      [value resetBytesInRange:NSMakeRange(0, value.length)];
-      return Status(env, "stored");
-    }
-    if (updated != errSecItemNotFound) {
-      [value resetBytesInRange:NSMakeRange(0, value.length)];
-      return Status(env, Failure(updated));
-    }
-
-    // Login-keychain trusted-application ACL. The data-protection keychain would need a
-    // keychain access group this app's profile-free entitlements do not ship.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    SecTrustedApplicationRef trusted = nullptr;
-    if (SecTrustedApplicationCreateFromPath(nullptr, &trusted) != errSecSuccess || trusted == nullptr) {
+    // Replacing the value of an existing item would keep a pre-created ACL. Delete, then add
+    // under this process only. A duplicate add is another process winning the race; retry
+    // once, then fail without writing into that item.
+    SecAccessRef access = CreateLibraryAccess();
+    if (access == nullptr) {
       [value resetBytesInRange:NSMakeRange(0, value.length)];
       return Status(env, "unavailable");
     }
-    NSArray* trustedApplications = @[ (__bridge id)trusted ];
-    SecAccessRef access = nullptr;
-    const OSStatus created =
-        SecAccessCreate(CFSTR("Overlook library master"), (__bridge CFArrayRef)trustedApplications, &access);
-    CFRelease(trusted);
-#pragma clang diagnostic pop
-    if (created != errSecSuccess || access == nullptr) {
-      [value resetBytesInRange:NSMakeRange(0, value.length)];
-      return Status(env, "unavailable");
+    OSStatus added = errSecDuplicateItem;
+    for (int attempt = 0; attempt < 2 && added == errSecDuplicateItem; ++attempt) {
+      NSMutableDictionary* query = BaseQuery(accountName);
+      const OSStatus deleted = SecItemDelete((__bridge CFDictionaryRef)query);
+      if (deleted != errSecSuccess && deleted != errSecItemNotFound) {
+        [value resetBytesInRange:NSMakeRange(0, value.length)];
+        CFRelease(access);
+        return Status(env, Failure(deleted));
+      }
+      query[(__bridge id)kSecAttrAccess] = (__bridge id)access;
+      query[(__bridge id)kSecValueData] = value;
+      added = SecItemAdd((__bridge CFDictionaryRef)query, nullptr);
     }
-    query[(__bridge id)kSecAttrAccess] = (__bridge id)access;
-    query[(__bridge id)kSecValueData] = value;
-    const OSStatus added = SecItemAdd((__bridge CFDictionaryRef)query, nullptr);
     [value resetBytesInRange:NSMakeRange(0, value.length)];
     CFRelease(access);
     return Status(env, added == errSecSuccess ? "stored" : Failure(added));

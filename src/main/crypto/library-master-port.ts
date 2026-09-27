@@ -35,7 +35,11 @@ export function installLibraryMasterBackup(backup: LibraryMasterBackup): void {
 
 /** Writes the item for this directory's ULID. A missing id skips the write. A failure
  * stays in the main process: the library is already open under the current Safe Storage password. */
-export function rememberOpenedMaster(dataDir: string, masterKey: Buffer, backup: LibraryMasterBackup): void {
+export function rememberOpenedMaster(
+  dataDir: string,
+  masterKey: Buffer,
+  backup: LibraryMasterBackup = installedLibraryMasterBackup(),
+): void {
   const libraryId = readStoredLibraryId(dataDir);
   if (libraryId === null) return;
   try {

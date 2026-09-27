@@ -133,7 +133,26 @@ describe('library master backup (#1321, ADR-0035)', () => {
     assert.notDeepEqual(before, after);
   });
 
-  test('an absent item, a denial, a bad value, or a master keys.json will not vouch for leaves the file', () => {
+  test('a decryptable master that keys.json rejects does not replace the stored copy', () => {
+    const backup = new FakeBackup();
+    const { dataDir, safeStorage } = openedLibrary(backup);
+    const stored = backup.items.get(LIBRARY_ID);
+    const writes = backup.writes;
+    writeFileSync(join(dataDir, 'master.key'), safeStorage.encryptString(randomBytes(32).toString('base64')));
+    assert.throws(() => KeyStore.open({ safeStorage, dataDir, masterBackup: backup }));
+    assert.equal(backup.writes, writes);
+    assert.equal(backup.items.get(LIBRARY_ID), stored);
+  });
+
+  test('a staging open does not write the item', () => {
+    const backup = new FakeBackup();
+    const dataDir = tempDir();
+    writeLibraryId(dataDir, LIBRARY_ID);
+    KeyStore.open({ safeStorage: fakeSafeStorage(0x5a), dataDir, masterBackup: backup, recordMasterBackup: false });
+    assert.equal(backup.writes, 0);
+  });
+
+  test('an absent item, a denial, a bad value, or a master keys.json will not vouch for leaves the file untouched', () => {
     const cases: Array<{ name: string; prepare: (backup: FakeBackup, dataDir: string) => void; state: string }> = [
       { name: 'absent', prepare: (backup) => backup.items.delete(LIBRARY_ID), state: 'unwrap-failed' },
       {
@@ -219,6 +238,14 @@ describe('library master backup (#1321, ADR-0035)', () => {
     assert.match(source, /kSecUseDataProtectionKeychain : @NO/u);
     assert.doesNotMatch(source, /add-generic-password/u);
     assert.doesNotMatch(source, /kSecAccessControlBiometryCurrentSet/u);
+    assert.doesNotMatch(source, /SecItemUpdate/u);
+    assert.match(source, /SecItemDelete/u);
+    const restore = readFileSync(join(process.cwd(), 'src/main/backup/restore-engine.ts'), 'utf8');
+    assert.match(restore, /recordMasterBackup: false/u);
+    assert.ok(restore.lastIndexOf('rememberOpenedMaster') > restore.indexOf('await activateStagedLibrary'));
+    const created = readFileSync(join(process.cwd(), 'src/main/library/library-registry-runtime.ts'), 'utf8');
+    const createBody = created.slice(created.indexOf('create(options:'), created.indexOf('addExisting('));
+    assert.match(createBody, /discardCreatedLibrary\(dir, id\)/u);
     assert.match(loader, /library-master\.node\.napi/u);
   });
 
