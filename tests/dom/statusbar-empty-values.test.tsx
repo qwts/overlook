@@ -37,6 +37,8 @@ test('the status bar left slot says it is counting until stats load, never a lon
   try {
     render(null);
     assert.equal(left(), 'Counting photos…');
+    // A status sentence, not machine data: prose type inside the mono strip.
+    assert.equal(container.querySelector('[data-testid="statusbar-left"] .prose-note')?.textContent, 'Counting photos…');
 
     render({
       photos: 12,
@@ -50,6 +52,7 @@ test('the status bar left slot says it is counting until stats load, never a lon
     });
     assert.match(left(), /^12 photos · /u);
     assert.notEqual(left().trim(), '—');
+    assert.equal(container.querySelector('[data-testid="statusbar-left"] .prose-note'), null);
   } finally {
     act(() => {
       root.unmount();

@@ -80,7 +80,11 @@ export function StatusBar({
   return (
     <footer className="ovl-statusbar">
       <span data-testid="statusbar-left">
-        {stats === null ? intl.formatMessage(messages.countingPhotos) : `${formatCount(stats.photos)} photos · ${formatBytes(stats.bytes)}`}
+        {stats === null ? (
+          <span className="prose-note">{intl.formatMessage(messages.countingPhotos)}</span>
+        ) : (
+          `${formatCount(stats.photos)} photos · ${formatBytes(stats.bytes)}`
+        )}
       </span>
       {excluded > 0 ? (
         <button
