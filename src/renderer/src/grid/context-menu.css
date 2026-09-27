@@ -61,6 +61,25 @@
   line-height: var(--leading-normal);
 }
 
+/* Item descriptions (#1291) wrap at a reading measure rather than stretching
+   the menu to the longest one. */
+.ovl-context-menu__description {
+  max-inline-size: 36ch;
+}
+
+/* Radio items (#1291): a fixed check column keeps labels aligned whether or
+   not the item is the current choice. */
+.ovl-context-menu__check {
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
+  inline-size: 14px;
+  /* The label's first line, so the check sits beside it, not the description. */
+  block-size: 1lh;
+  align-items: center;
+  color: var(--accent-iris);
+}
+
 /* Right-aligned accelerator hint (e.g. the `?` on Keyboard shortcuts). */
 .ovl-context-menu__hint {
   margin-inline-start: auto;

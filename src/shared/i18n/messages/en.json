@@ -3515,11 +3515,38 @@
   "toolbar.search.mode.auto": {
     "defaultMessage": "Auto"
   },
+  "toolbar.search.mode.auto.description": {
+    "defaultMessage": "Keyword and meaning together. Best for most searches."
+  },
+  "toolbar.search.mode.changed": {
+    "defaultMessage": "Search mode: {mode}."
+  },
   "toolbar.search.mode.keyword": {
     "defaultMessage": "Keyword"
   },
+  "toolbar.search.mode.keyword.description": {
+    "defaultMessage": "Matches file names, places, cameras, and tags exactly."
+  },
   "toolbar.search.mode.semantic": {
     "defaultMessage": "Semantic"
+  },
+  "toolbar.search.mode.semantic.description": {
+    "defaultMessage": "Finds photos by what’s in them, like ‘dog on a beach’."
+  },
+  "toolbar.search.mode.semantic.note.disabled": {
+    "defaultMessage": "Turned off in Settings."
+  },
+  "toolbar.search.mode.semantic.note.indexing": {
+    "defaultMessage": "Still indexing — keyword results until it finishes."
+  },
+  "toolbar.search.mode.semantic.note.other": {
+    "defaultMessage": "Not available right now — keyword results until it’s back."
+  },
+  "toolbar.search.mode.semantic.withNote": {
+    "defaultMessage": "{description} {note}"
+  },
+  "toolbar.search.mode.trigger": {
+    "defaultMessage": "Search mode: {mode}"
   },
   "toolbar.search.status.fallback": {
     "defaultMessage": "Semantic {reason}; showing keyword results"

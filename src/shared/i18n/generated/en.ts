@@ -1178,8 +1178,17 @@ export const en = {
   "toolbar.search.fallback.unavailable": "is unavailable",
   "toolbar.search.mode": "Search mode",
   "toolbar.search.mode.auto": "Auto",
+  "toolbar.search.mode.auto.description": "Keyword and meaning together. Best for most searches.",
+  "toolbar.search.mode.changed": "Search mode: {mode}.",
   "toolbar.search.mode.keyword": "Keyword",
+  "toolbar.search.mode.keyword.description": "Matches file names, places, cameras, and tags exactly.",
   "toolbar.search.mode.semantic": "Semantic",
+  "toolbar.search.mode.semantic.description": "Finds photos by what’s in them, like ‘dog on a beach’.",
+  "toolbar.search.mode.semantic.note.disabled": "Turned off in Settings.",
+  "toolbar.search.mode.semantic.note.indexing": "Still indexing — keyword results until it finishes.",
+  "toolbar.search.mode.semantic.note.other": "Not available right now — keyword results until it’s back.",
+  "toolbar.search.mode.semantic.withNote": "{description} {note}",
+  "toolbar.search.mode.trigger": "Search mode: {mode}",
   "toolbar.search.status.fallback": "Semantic {reason}; showing keyword results",
   "toolbar.search.status.fused": "Keyword + semantic results",
   "toolbar.search.status.index": "{indexed} of {total} photos indexed",
@@ -1427,6 +1436,9 @@ interface InterpolatedMessageArguments {
   "statusbar.inclusion.hiddenByAlbums": { "count": number };
   "statusbar.sync.backedUpExceptLocalOnly": { "count": number };
   "toast.announcement": { "detail": MessageValue; "title": MessageValue };
+  "toolbar.search.mode.changed": { "mode": MessageValue };
+  "toolbar.search.mode.semantic.withNote": { "description": MessageValue; "note": MessageValue };
+  "toolbar.search.mode.trigger": { "mode": MessageValue };
   "toolbar.search.status.fallback": { "reason": MessageValue };
   "toolbar.search.status.index": { "indexed": MessageValue; "total": MessageValue };
   "toolbar.search.status.withIndex": { "index": MessageValue; "status": MessageValue };

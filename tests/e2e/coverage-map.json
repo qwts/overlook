@@ -25,7 +25,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Search.md in packaged macOS and Windows builds to verify real model retrieval quality, assistive-technology announcements, and foreground/background scheduling with production assets."
+          "reason": "Follow docs/acceptance/Acceptance-Test-Semantic-Search.md in packaged macOS and Windows builds to verify real model retrieval quality, the search mode menu with pointer, keyboard, and a screen reader (#1291), assistive-technology announcements, and foreground/background scheduling with production assets."
         }
       ]
     },

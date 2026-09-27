@@ -59,11 +59,16 @@ On macOS and Windows packages after indexing finishes:
 
 1. Search for a natural-language scene whose terms are absent from the target
    photo metadata. Semantic and Auto must surface the expected photo.
-2. Switch among Auto, Semantic, and Keyword with pointer and arrow keys. The
-   visible grid and live status must match the selected mode.
+2. Switch among Auto, Semantic, and Keyword from the search mode menu at the
+   field's inline start (#1291): by pointer, by Enter or ↓ on the mode button,
+   and by Alt+↓ from the search input. The button names a non-Auto mode, focus
+   returns to the input, a screen reader announces "Search mode: {mode}.", and
+   the visible grid and live status match the selected mode. Esc, Tab, and an
+   outside click close the menu without changing the mode.
 3. Start a fresh index, pause it, disable it, and temporarily disconnect model
    assets. Semantic and Auto must show the reason and keyword results; they must
-   never render an empty grid as if semantic search succeeded.
+   never render an empty grid as if semantic search succeeded. Semantic stays
+   selectable in the mode menu, with the reason appended to its description.
 4. Apply each source, chip, and album filter, then use Select All and Shift-range
    selection. No photo outside the visible semantic projection may be selected.
 5. Type two queries quickly. Only the later query may populate the grid or live
