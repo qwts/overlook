@@ -3,6 +3,7 @@
   z-index: 210;
   min-width: 210px;
   max-height: calc(100vh - 16px);
+  overflow-x: hidden;
   overflow-y: auto;
   padding: var(--space-1);
   background: var(--gray-2);

@@ -34,7 +34,7 @@ function Swatch({ token, background }: { token: string; background: string }): R
 
 export function TokenSpecimen(): ReactElement {
   return (
-    <div style={{ padding: 'var(--space-8)', overflow: 'auto', height: '100%', boxSizing: 'border-box' }}>
+    <div style={{ padding: 'var(--space-8)', overflowX: 'hidden', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
       <p style={{ margin: 0 }}>Overlook — shell placeholder</p>
 
       <section style={sectionStyle}>

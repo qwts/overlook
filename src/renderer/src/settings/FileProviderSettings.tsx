@@ -94,55 +94,57 @@ export function FileProviderSettings(): ReactElement {
   const unavailable = snapshot !== null && !snapshot.available;
   const enabled = snapshot?.config.enabled === true;
   return (
-    <Field label={intl.formatMessage(messages.label)} hint={intl.formatMessage(messages.hint)}>
-      {enabled ? (
-        <>
-          <p>{intl.formatMessage(messages.enabledDisclosure)}</p>
-          <Button variant="secondary" disabled={busy} onClick={disable}>
-            {intl.formatMessage(busy ? messages.disabling : messages.disable)}
-          </Button>
-        </>
-      ) : (
-        <>
-          <Segmented
-            label={intl.formatMessage(messages.scope)}
-            value={scopeKind}
-            options={[
-              { value: 'library', label: intl.formatMessage(messages.wholeLibrary) },
-              { value: 'albums', label: intl.formatMessage(messages.selectedAlbums) },
-            ]}
-            onChange={setScopeKind}
-          />
-          {scopeKind === 'albums' ? (
-            <div role="group" aria-label={intl.formatMessage(messages.albums)}>
-              {snapshot?.albums.map((album) => (
-                <label key={album.id}>
-                  <input
-                    type="checkbox"
-                    checked={albumIds.has(album.id)}
-                    onChange={(event) => {
-                      const next = new Set(albumIds);
-                      if (event.currentTarget.checked) next.add(album.id);
-                      else next.delete(album.id);
-                      setAlbumIds(next);
-                    }}
-                  />
-                  {intl.formatMessage(messages.album, { name: album.name, count: album.count })}
-                </label>
-              ))}
-            </div>
-          ) : null}
-          <label>
-            <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
-            {intl.formatMessage(messages.consent)}
-          </label>
-          <Button disabled={busy || unavailable || !consented || (scopeKind === 'albums' && albumIds.size === 0)} onClick={enable}>
-            {intl.formatMessage(busy ? messages.enabling : messages.enable)}
-          </Button>
-          {unavailable ? <p>{intl.formatMessage(messages.unavailable)}</p> : null}
-        </>
-      )}
-      {error === null ? null : <p role="alert">{error}</p>}
+    <Field label={intl.formatMessage(messages.label)} hint={intl.formatMessage(messages.hint)} wide>
+      <div className="ovl-settings__fileProvider">
+        {enabled ? (
+          <>
+            <p>{intl.formatMessage(messages.enabledDisclosure)}</p>
+            <Button variant="secondary" disabled={busy} onClick={disable}>
+              {intl.formatMessage(busy ? messages.disabling : messages.disable)}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Segmented
+              label={intl.formatMessage(messages.scope)}
+              value={scopeKind}
+              options={[
+                { value: 'library', label: intl.formatMessage(messages.wholeLibrary) },
+                { value: 'albums', label: intl.formatMessage(messages.selectedAlbums) },
+              ]}
+              onChange={setScopeKind}
+            />
+            {scopeKind === 'albums' ? (
+              <div role="group" aria-label={intl.formatMessage(messages.albums)}>
+                {snapshot?.albums.map((album) => (
+                  <label key={album.id}>
+                    <input
+                      type="checkbox"
+                      checked={albumIds.has(album.id)}
+                      onChange={(event) => {
+                        const next = new Set(albumIds);
+                        if (event.currentTarget.checked) next.add(album.id);
+                        else next.delete(album.id);
+                        setAlbumIds(next);
+                      }}
+                    />
+                    {intl.formatMessage(messages.album, { name: album.name, count: album.count })}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            <label>
+              <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
+              {intl.formatMessage(messages.consent)}
+            </label>
+            <Button disabled={busy || unavailable || !consented || (scopeKind === 'albums' && albumIds.size === 0)} onClick={enable}>
+              {intl.formatMessage(busy ? messages.enabling : messages.enable)}
+            </Button>
+            {unavailable ? <p>{intl.formatMessage(messages.unavailable)}</p> : null}
+          </>
+        )}
+        {error === null ? null : <p role="alert">{error}</p>}
+      </div>
     </Field>
   );
 }

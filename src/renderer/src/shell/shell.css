@@ -115,7 +115,8 @@
   border-inline-end: 1px solid var(--border-1);
   background: var(--gray-1);
   padding: var(--space-3);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   transition: width var(--duration-normal) var(--ease-out);
 }
 
@@ -344,7 +345,8 @@
   width: var(--inspector-w);
   border-inline-start: 1px solid var(--border-1);
   background: var(--surface-panel);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .ovl-statusbar {

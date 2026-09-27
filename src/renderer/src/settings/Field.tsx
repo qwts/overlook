@@ -16,7 +16,7 @@ export function Field({ label, hint, wide = false, children }: FieldProps): Reac
   const hintId = useId();
   return (
     <div className={`ovl-settings__field${wide ? ' ovl-settings__field--wide' : ''}`}>
-      <div>
+      <div className="ovl-settings__fieldText">
         <div id={labelId} className="ovl-settings__fieldLabel">
           {label}
         </div>

@@ -980,6 +980,14 @@ export const ContentOwnsScrolling: Story = {
     await userEvent.click(body.getByRole('tab', { name: 'General' }));
     await expect(pane).toHaveAttribute('data-section', 'general');
     await expect(pane.scrollTop).toBe(0);
+
+    // Vertical only (#1285): the pane states overflow-x, and every section's
+    // rows wrap to its width instead of adding a horizontal scrollbar.
+    await expect(getComputedStyle(pane).overflowX).toBe('hidden');
+    for (const section of ['General', 'Storage & Backup', 'Privacy']) {
+      await userEvent.click(body.getByRole('tab', { name: section }));
+      await expect(pane.scrollWidth).toBeLessThanOrEqual(pane.clientWidth);
+    }
   },
 };
 

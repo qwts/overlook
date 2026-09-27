@@ -151,7 +151,8 @@
   left: var(--space-3);
   width: 200px;
   max-height: calc(100% - var(--space-6));
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background-color: var(--gray-1);
   border: 1px solid var(--border-1);
   border-radius: var(--radius-2);
@@ -189,6 +190,7 @@
 .ovl-moodboard__field input,
 .ovl-moodboard__field textarea,
 .ovl-moodboard__field select {
+  box-sizing: border-box;
   width: 100%;
   font-size: var(--text-sm);
   color: var(--text-body);

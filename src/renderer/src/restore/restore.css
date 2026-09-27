@@ -139,7 +139,8 @@
   display: grid;
   gap: var(--space-2);
   max-height: 250px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .ovl-restore__library {
@@ -279,6 +280,7 @@
   margin: 0;
   padding-inline-start: var(--space-5);
   max-height: 250px;
+  overflow-x: hidden;
   overflow-y: auto;
   color: var(--text-muted);
   overflow-wrap: anywhere;

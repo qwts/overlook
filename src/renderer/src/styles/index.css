@@ -25,6 +25,32 @@ body {
   user-select: none;
 }
 
+/* Scrollbars (#1285): one shared, token-coloured treatment. The standard
+   properties keep Chromium's platform behaviour, so macOS stays an overlay
+   scrollbar when the system hides them and Windows gets a thin classic bar.
+   scrollbar-color inherits, so the scroll container under the pointer
+   brightens its thumb. Every scroll container states overflow-x itself. */
+* {
+  scrollbar-width: thin;
+}
+
+html {
+  scrollbar-color: var(--gray-4) transparent;
+}
+
+:hover {
+  scrollbar-color: var(--gray-5) transparent;
+}
+
+/* Forced colors: hand the scrollbar back to system colors. ButtonFace on
+   Canvas can vanish, and the user's contrast scheme must win. */
+@media (forced-colors: active) {
+  html,
+  :hover {
+    scrollbar-color: auto;
+  }
+}
+
 /* Machine data (EXIF, counts, sync states, filenames-in-metadata): always
    uppercase, tracked mono and selectable. no-drag keeps selection gestures
    from moving a frameless window when values appear in a drag region (#805). */

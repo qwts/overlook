@@ -2,6 +2,8 @@
 
 .ovl-settings {
   display: flex;
+  flex: 1;
+  min-inline-size: 0;
   block-size: 100%;
   min-block-size: 0;
   gap: calc(var(--space-4) - var(--space-1));
@@ -20,6 +22,7 @@
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-1) / 2);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -53,6 +56,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -121,9 +125,10 @@
 
 .ovl-settings__field {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
   padding: calc(var(--space-2) + var(--space-1) / 2) 0;
   border-bottom: 1px solid var(--border-1);
 }
@@ -142,13 +147,26 @@
   max-width: 300px;
 }
 
+/* A control that does not fit beside its label wraps below it and is capped
+   at the pane width, so the pane never scrolls sideways (#1285). */
+.ovl-settings__fieldText {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .ovl-settings__fieldControl {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ovl-settings__field--wide {
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.ovl-settings__field--wide .ovl-settings__fieldText {
+  flex: none;
 }
 
 .ovl-settings__field--wide .ovl-settings__fieldControl {
@@ -171,6 +189,19 @@
   box-shadow: var(--focus-ring);
 }
 
+/* Finder access (#1285): stack the scope, consent, and action so the long
+   consent sentence wraps inside the pane instead of widening it. */
+.ovl-settings__fileProvider {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.ovl-settings__fileProvider p {
+  margin: 0;
+}
+
 .ovl-theme-manager {
   display: flex;
   flex-direction: column;
@@ -180,13 +211,14 @@
 
 .ovl-theme-manager__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: var(--space-2);
 }
 
 .ovl-theme-manager__drop {
   display: flex;
-  flex: 1;
+  flex: 1 1 160px;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -701,9 +733,10 @@
 /* Settings → Privacy recovery row (#240). */
 .ovl-settings__keyrow {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-5);
+  gap: var(--space-2) var(--space-5);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-1);
 }
@@ -729,10 +762,17 @@
   color: var(--text-muted);
 }
 
+.ovl-settings__keyrow > :first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .ovl-settings__keyactions {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  max-width: 100%;
 }
 
 .ovl-settings__semantic {
