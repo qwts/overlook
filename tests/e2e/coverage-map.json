@@ -2156,7 +2156,7 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/dom/toast-positioning.test.ts", "tests/tooling/a11y-budget.test.ts"]
+          "paths": ["tests/dom/toast-positioning.test.ts", "tests/tooling/a11y-budget.test.ts", "tests/tooling/renderer-tokens.test.ts"]
         },
         {
           "type": "manual",

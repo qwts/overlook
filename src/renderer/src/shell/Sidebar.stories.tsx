@@ -164,7 +164,8 @@ export const Expanded: Story = {
     await expect(canvas.getByText('1.2 TB on disk')).toBeVisible();
     const offloadRow = await canvas.findByText('380 GB offload (Google Drive)');
     await expect(offloadRow).toBeVisible();
-    await expect(window.getComputedStyle(offloadRow).whiteSpace).toBe('nowrap');
+    // #1288: the row wraps evenly at the 11px floor instead of overflowing the card.
+    await expect(window.getComputedStyle(offloadRow).fontSize).toBe('11px');
     const storage = offloadRow.parentElement;
     await expect(storage).not.toBeNull();
     await expect(offloadRow.scrollWidth).toBeLessThanOrEqual(storage?.clientWidth ?? 0);

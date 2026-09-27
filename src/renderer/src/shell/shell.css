@@ -296,12 +296,14 @@
   flex-direction: column;
   gap: var(--space-1);
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.02em;
 }
 
+/* At the 11px floor (#1288) a long provider name no longer fits one line;
+   wrap evenly rather than shrink or clip the type. */
 .ovl-sidebar__storage > * {
-  white-space: nowrap;
+  text-wrap: balance;
 }
 
 /* Disconnected card row (#239): plain-fact line + the Connect path. */

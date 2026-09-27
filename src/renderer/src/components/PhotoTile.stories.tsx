@@ -117,6 +117,57 @@ export const ProtectedOriginal: Story = {
   },
 };
 
+// #1288 — type never drops below --text-xs (11px). Across the grid's zoom
+// range (96–320px) each pill keeps its size and, where its label no longer
+// fits, drops to its glyph; the label stays readable to screen readers.
+const TYPE_FLOOR_WIDTHS = [96, 160, 320] as const;
+
+function TypeFloorPillGrid(): ReactElement {
+  return (
+    <div style={{ display: 'grid', gap: 'var(--grid-gap)', padding: 'var(--space-7)' }}>
+      {TYPE_FLOOR_WIDTHS.map((width) => (
+        <div key={width} data-width={width} style={{ display: 'flex', gap: 'var(--grid-gap)', alignItems: 'start' }}>
+          <div style={{ width, aspectRatio: '1' }}>
+            <PhotoTile src={realPhoto} alt={`Original video at ${String(width)}px`} isOriginal duration={3723} />
+          </div>
+          <div style={{ width, aspectRatio: '1' }}>
+            <PhotoTile src={realPhoto} alt={`Preserved clip at ${String(width)}px`} preserved />
+          </div>
+          <div style={{ width, aspectRatio: '1' }}>
+            <PhotoTile src={realPhoto} alt={`Trashed photo at ${String(width)}px`} retentionLabel="Deletes permanently in 12 days" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const TypeFloorPills: Story = {
+  render: () => <TypeFloorPillGrid />,
+  play: async ({ canvasElement }) => {
+    const labels = [...canvasElement.querySelectorAll<HTMLElement>('.ovl-tile__pill-label')];
+    await expect(labels).toHaveLength(TYPE_FLOOR_WIDTHS.length * 4);
+    for (const label of labels) {
+      await expect(Number.parseFloat(getComputedStyle(label).fontSize)).toBeGreaterThanOrEqual(11);
+    }
+    const labelWidths = (width: number): number[] =>
+      [...canvasElement.querySelectorAll<HTMLElement>(`[data-width="${String(width)}"] .ovl-tile__pill-label`)].map(
+        (label) => label.getBoundingClientRect().width,
+      );
+    // 96px: every pill is its glyph alone. 320px: every label shows in full.
+    for (const width of labelWidths(96)) await expect(width).toBeLessThanOrEqual(1);
+    for (const width of labelWidths(320)) await expect(width).toBeGreaterThan(1);
+    // Collapsed or not, each label is still in the accessibility tree.
+    await expect(within(canvasElement).getAllByText('Deletes permanently in 12 days')).toHaveLength(TYPE_FLOOR_WIDTHS.length);
+    await expect(within(canvasElement).getAllByText('1:02:03')).toHaveLength(TYPE_FLOOR_WIDTHS.length);
+    // The pill ignores the pointer, so the hover text lives on the open button.
+    await expect(within(canvasElement).getByRole('button', { name: 'Open Trashed photo at 96px' })).toHaveAttribute(
+      'title',
+      'Deletes permanently in 12 days',
+    );
+  },
+};
+
 export const ClickTargetsAreIndependent: Story = {
   args: {
     src: realPhoto,

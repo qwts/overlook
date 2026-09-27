@@ -20,7 +20,7 @@
 .ovl-quick-actions__target {
   max-width: 100%;
   color: var(--text-faint);
-  font-size: 9px;
+  font-size: var(--text-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

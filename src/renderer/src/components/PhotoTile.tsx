@@ -154,6 +154,7 @@ export function PhotoTile({
     >
       <PhotoOpenButton
         label={accessibleName ?? (alt === '' ? 'Open photo' : `Open ${alt}`)}
+        title={retentionLabel}
         className="ovl-tile__open"
         onOpen={onClick}
         onContextAction={onContextAction}
@@ -261,13 +262,18 @@ export function PhotoTile({
       {isOriginal ? (
         <span className="ovl-tile__original" role="img" aria-label="Protected Original" title="Protected Original">
           <Icon name="shield-check" size={14} />
-          <span>Original</span>
+          <span className="ovl-tile__pill-label">Original</span>
         </span>
       ) : null}
-      {retentionLabel === undefined ? null : <span className="ovl-tile__retention mono-data">{retentionLabel}</span>}
+      {retentionLabel === undefined ? null : (
+        <span className="ovl-tile__retention">
+          <Icon name="clock" size={12} />
+          <span className="ovl-tile__pill-label mono-data">{retentionLabel}</span>
+        </span>
+      )}
       {duration == null && !preserved ? null : (
         <span
-          className="ovl-tile__duration"
+          className={`ovl-tile__duration${preserved ? ' ovl-tile__duration--preserved' : ''}`}
           title={
             preserved
               ? intl.formatMessage(messages.videoPreservedTitle)
@@ -277,7 +283,7 @@ export function PhotoTile({
           }
         >
           <Icon name={preserved ? 'film' : 'play'} size={9} strokeWidth={2} />
-          <span className="mono-data">
+          <span className="ovl-tile__pill-label mono-data">
             {preserved ? intl.formatMessage(messages.videoPreservedPill) : duration == null ? '' : formatDuration(duration)}
           </span>
         </span>

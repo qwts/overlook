@@ -65,11 +65,13 @@ test('renderer custom-property gate accepts only tokens and properties a compone
   );
 });
 
-test('renderer scale gate reports literal radii and font weights with lines (#1289)', async () => {
+test('renderer scale gate reports literal radii, font weights, and font sizes with lines (#1289, #1288)', async () => {
   const tokens = await checker();
   assert.deepEqual(
     tokens.findLiteralScaleValues([
       { file: 'src/styles/tokens/spacing.css', source: ':root { --radius-1: 4px; }\n.x { border-radius: 4px; }' },
+      { file: 'src/styles/tokens/typography.css', source: ':root { --text-xs: 11px; --text-sm: 12px; }' },
+      { file: 'src/styles/tokens/colors.css', source: ':root { --text-body: #fff; }' },
       {
         file: 'src/example/example.css',
         source: [
@@ -80,9 +82,12 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
           '.d { font-weight: 700 !important; }',
           '.e { border-radius: inherit; font-weight: unset; }',
           '.f { border-radius: var(--radius-1) var(--radius-2); }',
-          '.g { font: var(--type-meta); font-size: 12px; }',
+          '.g { font: var(--type-meta); font-size: var(--text-sm); }',
           '.h { font: 700 12px sans-serif; }',
           '.i { font: inherit; }',
+          '.j { font-size: 9px; }',
+          '.k { font-size: var(--text-xs); font-size: inherit; }',
+          '.l { font-size: var(--text-body); }',
         ].join('\n'),
       },
       { file: 'src/example/Example.tsx', source: "const style = { borderRadius: '3px' };" },
@@ -93,6 +98,8 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
       { file: 'src/example/example.css', line: 5, property: 'font-weight', value: '700' },
       { file: 'src/example/example.css', line: 7, property: 'border-radius', value: 'var(--radius-1) var(--radius-2)' },
       { file: 'src/example/example.css', line: 9, property: 'font', value: '700 12px sans-serif' },
+      { file: 'src/example/example.css', line: 11, property: 'font-size', value: '9px' },
+      { file: 'src/example/example.css', line: 13, property: 'font-size', value: 'var(--text-body)' },
     ],
   );
 });

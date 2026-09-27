@@ -29,7 +29,7 @@
 .ovl-protected-settings__group {
   margin-top: var(--space-2);
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
@@ -59,7 +59,7 @@
 .ovl-protected-settings__empty,
 .ovl-protected-progress > .mono-data {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .ovl-protected-settings__actions {
@@ -126,7 +126,7 @@
   align-items: center;
   gap: var(--space-2);
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
@@ -194,7 +194,7 @@
   flex: 1;
   overflow: hidden;
   color: var(--text-photo-muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
