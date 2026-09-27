@@ -32,8 +32,10 @@ hidden Electron harness cannot reproduce.
 
 1. Set the Electron/application zoom to 200% at the default 1280×800 window.
 2. Tab through the wrapped toolbar. Confirm Search, Filters, view selection,
-   Zoom, Back up, Transfer & Sync, and Import are reachable with no horizontal
-   document scrolling.
+   Zoom, Back up, and Import are reachable with no horizontal document
+   scrolling. On Windows/Linux, Transfer & Sync (with pCloud on) and Export All
+   Unencrypted are also in the toolbar until the ⋯ menu lands (#1293); on macOS
+   they are in the Overlook and File menus instead (#1292).
 3. Scroll the Sidebar and open Settings. Confirm every tab and the Close button
    remain reachable; scroll each pane through its final control.
 4. Open a photo. Confirm Back, Close, navigation, orientation, and zoom controls

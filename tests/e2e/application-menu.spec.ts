@@ -161,6 +161,11 @@ test('macOS application menu is the six-menu design-system spec projected from t
     // Six menus, exact order, no Window menu.
     expect(await topLevelMenuLabels(app)).toEqual(['Overlook', 'File', 'Edit', 'View', 'Photo', 'Help']);
 
+    // #1292: the bar owns Export All (and Transfer & Sync), so the toolbar
+    // keeps Import as its only primary action.
+    await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export All Unencrypted…' })).toHaveCount(0);
+
     // File carries Import + Export Selection + Export All + the library trio, in order.
     expect(await submenuItemIds(app, 'File')).toEqual([
       'library.import',

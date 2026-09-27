@@ -124,7 +124,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/settings/SemanticIndexSettings.stories.tsx"
+          "paths": ["src/renderer/src/settings/SemanticIndexSettings.stories.tsx", "src/renderer/src/shell/Toolbar.stories.tsx"]
         },
         {
           "type": "unit-dom",
