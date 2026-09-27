@@ -25,7 +25,7 @@ test('matching-file recovery leaves Unavailable immediately while transient sync
     await page.getByTestId('virtual-grid').waitFor();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('tab', { name: 'General', exact: true }).click();
-    await page.getByRole('switch', { name: 'Show unavailable items in All Photos' }).click();
+    await page.getByRole('switch', { name: 'Show unavailable items' }).click();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'All Photos 2', exact: true })).toBeVisible();
     await expect(page.locator('[data-quick-action-photo-id="01J8SEEDPHOTO0002"]')).toBeVisible();

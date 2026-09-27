@@ -1375,6 +1375,28 @@
       ]
     },
     {
+      "id": "1296-settings-group",
+      "wiki": "Acceptance-Test-Gallery-Inclusion",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/settings.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsGroup.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/settings-group.test.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "Region announcement is not observable from automation. Follow step 1 of the inclusion rules in docs/acceptance/Acceptance-Test-Gallery-Inclusion.md with VoiceOver and confirm entering the group reads \"All Photos, region\"."
+        }
+      ]
+    },
+    {
       "id": "m09-settings-transfer-action",
       "wiki": "Acceptance-Test-Image-Trail-Transfer-And-Sync-UI",
       "coverage": [
