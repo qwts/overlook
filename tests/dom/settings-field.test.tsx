@@ -8,7 +8,7 @@ import { Button } from '../../src/renderer/src/components/Button.js';
 import { Segmented } from '../../src/renderer/src/components/Segmented.js';
 import { Slider } from '../../src/renderer/src/components/Slider.js';
 import { Switch } from '../../src/renderer/src/components/Switch.js';
-import { Field, FieldSelect } from '../../src/renderer/src/settings/Field.js';
+import { Field, FieldActions, FieldSelect } from '../../src/renderer/src/settings/Field.js';
 
 // #1295 (Pass C spec, Names): an auto row's control is named by the row's
 // label and described by its hint, with no wrapper group; a stacked row stays
@@ -136,4 +136,21 @@ test('hints are sans, muted, and capped at a reading measure, never meta type', 
   assert.doesNotMatch(hint, /--type-meta/u);
   assert.match(css, /\.ovl-settings__fieldText\s*\{[^}]*flex:\s*1 1 220px/u);
   assert.doesNotMatch(css, /ovl-settings__field--wide/u);
+});
+
+test('several buttons in an auto row form a group named by the row, each keeping its own name', () => {
+  render(
+    <Field label="App password" hint="Required on launch and after every lock.">
+      <FieldActions>
+        <Button>Change…</Button>
+        <Button>Remove…</Button>
+      </FieldActions>
+    </Field>,
+  );
+  const group = document.querySelector('[role="group"]');
+  assert.ok(group);
+  assert.equal(text(group.getAttribute('aria-labelledby')), 'App password');
+  assert.equal(text(group.getAttribute('aria-describedby')), 'Required on launch and after every lock.');
+  for (const button of group.querySelectorAll('button'))
+    assert.equal(button.getAttribute('aria-describedby'), null, button.textContent ?? '');
 });

@@ -1,4 +1,4 @@
-import { useId, useMemo, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useContext, useId, useMemo, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react';
 
 import { FieldNameContext, useFieldNameProps, type FieldName } from '../components/field-name';
 
@@ -50,6 +50,19 @@ export function Field({ label, hint, layout = 'auto', testId, children }: FieldP
           <FieldNameContext.Provider value={name}>{children}</FieldNameContext.Provider>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Several buttons as one auto row's control (App password's Change… and
+ *  Remove…): a group named by the row's label and described by its hint, so
+ *  each "Remove…" is told apart by its row. The buttons keep their own names
+ *  and carry no second copy of the row's text. */
+export function FieldActions({ children }: { readonly children: ReactNode }): ReactElement {
+  const field = useContext(FieldNameContext);
+  return (
+    <div className="ovl-settings__keyactions" role="group" aria-labelledby={field?.labelId} aria-describedby={field?.hintId}>
+      <FieldNameContext.Provider value={null}>{children}</FieldNameContext.Provider>
     </div>
   );
 }

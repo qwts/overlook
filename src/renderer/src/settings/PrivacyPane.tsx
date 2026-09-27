@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { Switch } from '../components/Switch';
 import { Segmented } from '../components/Segmented';
-import { Field } from './Field';
+import { Field, FieldActions } from './Field';
 import type { AppSettings } from '../../../shared/settings/settings.js';
 import type { KeyDialogMode } from './KeyDialog';
 import type { AppPasswordMode } from './AppPasswordDialog';
@@ -68,14 +68,14 @@ export function PrivacyPane({
         hint={appLockConfigured ? 'Required on launch and after every lock.' : 'Withholds decryption authority until you unlock.'}
       >
         {appLockConfigured ? (
-          <div className="ovl-settings__keyactions">
+          <FieldActions>
             <Button variant="secondary" onClick={() => onPasswordAction('change')}>
               Change…
             </Button>
             <Button variant="ghost" onClick={() => onPasswordAction('remove')}>
               Remove…
             </Button>
-          </div>
+          </FieldActions>
         ) : (
           <Button variant="secondary" icon="lock" onClick={() => onPasswordAction('set')}>
             Set password…
@@ -144,7 +144,7 @@ export function PrivacyPane({
           </>
         }
       >
-        <div className="ovl-settings__keyactions">
+        <FieldActions>
           <Button
             variant="secondary"
             icon="download"
@@ -164,7 +164,7 @@ export function PrivacyPane({
           >
             Import…
           </Button>
-        </div>
+        </FieldActions>
       </Field>
       <KeyringSection />
       <DisclosureSettings />
