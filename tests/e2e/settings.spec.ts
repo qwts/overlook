@@ -252,3 +252,54 @@ test('settings keeps stable modal geometry and content-only scrolling in a short
     await app.close();
   }
 });
+
+// #1295 (Pass C spec, Invariants): across dialog widths 448 to 760 in 16px
+// steps, every auto row's label column keeps at least min(220, row width) —
+// a control that would squeeze it narrower wraps below it instead — and the
+// pane never scrolls sideways.
+test('settings rows keep a 220px label column and never scroll sideways across dialog widths', async () => {
+  const userData = mkE2eTmpDir('overlook-e2e-settings-rows-');
+  const app = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      OVERLOOK_USER_DATA: userData,
+      OVERLOOK_SEED: '2',
+      OVERLOOK_INSECURE_KEYSTORE: '1',
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByTestId('virtual-grid').waitFor();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Settings' });
+    await expect(dialog).toBeVisible();
+
+    for (const tab of ['General', 'Privacy', 'Storage']) {
+      await page.getByRole('tab', { name: tab }).click();
+      await expect(page.getByTestId('settings-pane')).toHaveAttribute('data-section', tab.toLowerCase());
+      for (let width = 448; width <= 760; width += 16) {
+        const squeezed = await page.evaluate<string[]>(`(async () => {
+          const dialog = document.querySelector('[role="dialog"]');
+          dialog.style.width = '${String(width)}px';
+          dialog.style.minWidth = '0';
+          dialog.style.maxWidth = 'none';
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const pane = document.querySelector('[data-testid="settings-pane"]');
+          const problems = [];
+          if (pane.scrollWidth > pane.clientWidth) problems.push('pane scrolls sideways: ' + pane.scrollWidth + ' > ' + pane.clientWidth);
+          for (const row of pane.querySelectorAll('.ovl-settings__field--auto')) {
+            const rowWidth = row.getBoundingClientRect().width;
+            const label = row.querySelector('.ovl-settings__fieldText').getBoundingClientRect().width;
+            if (label + 0.5 < Math.min(220, rowWidth)) problems.push(row.querySelector('.ovl-settings__fieldLabel').textContent + ': ' + label + ' of ' + rowWidth);
+          }
+          return problems;
+        })()`);
+        expect(squeezed, `${tab} at ${String(width)}px`).toEqual([]);
+      }
+    }
+  } finally {
+    await app.close();
+  }
+});

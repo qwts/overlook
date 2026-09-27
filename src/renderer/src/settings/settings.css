@@ -135,8 +135,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
   padding: calc(var(--space-2) + var(--space-1) / 2) 0;
   border-bottom: 1px solid var(--border-1);
 }
@@ -150,15 +150,16 @@
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  color: var(--text-faint);
+  color: var(--text-muted);
   margin-top: 2px;
-  max-width: 300px;
+  max-width: 60ch;
 }
 
-/* A control that does not fit beside its label wraps below it and is capped
-   at the pane width, so the pane never scrolls sideways (#1285). */
+/* The label keeps a 220px basis: a control that would squeeze it narrower
+   wraps below it, start-aligned, instead (#1295). The control is capped at
+   the pane width, so the pane never scrolls sideways (#1285). */
 .ovl-settings__fieldText {
-  flex: 1 1 160px;
+  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -168,9 +169,9 @@
   max-width: 100%;
 }
 
-.ovl-settings__field--wide {
-  flex-direction: column;
-  gap: var(--space-2);
+/* A stacked row's compound control spans the row under its label. */
+.ovl-settings__field--stacked > .ovl-settings__fieldControl {
+  flex-basis: 100%;
 }
 
 /* A segmented control wraps its options rather than overflow a narrow pane,
@@ -187,14 +188,6 @@
   height: auto;
   /* The segmented control's height less its 2px padding and 1px border. */
   min-height: calc(var(--control-h-md) - 6px);
-}
-
-.ovl-settings__field--wide > .ovl-settings__fieldText {
-  flex: none;
-}
-
-.ovl-settings__field--wide > .ovl-settings__fieldControl {
-  width: 100%;
 }
 
 .ovl-settings__select {
@@ -546,17 +539,16 @@
   color: var(--text-muted);
 }
 
+/* The Offloaded originals row's control: stacked, start-aligned (#1295). */
 .ovl-settings__restoreOriginals {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--space-1);
-  max-width: 290px;
 }
 
 .ovl-settings__restoreActions {
   display: flex;
-  justify-content: flex-end;
   gap: var(--space-1);
   flex-wrap: wrap;
 }
@@ -760,17 +752,6 @@
   color: var(--text-faint);
 }
 
-/* Settings → Privacy recovery row (#240). */
-.ovl-settings__keyrow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-5);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-1);
-}
-
 .ovl-settings__keytitle {
   font-size: var(--text-md);
   color: var(--text-body);
@@ -780,7 +761,7 @@
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  color: var(--text-faint);
+  color: var(--text-muted);
   margin-top: 2px; /* the mock's own hint offset */
 }
 
@@ -790,11 +771,6 @@
   gap: calc(var(--space-1) * 1.75);
   margin-top: calc(var(--space-1) * 1.5);
   color: var(--text-muted);
-}
-
-.ovl-settings__keyrow > :first-child {
-  flex: 1 1 160px;
-  min-width: 0;
 }
 
 .ovl-settings__keyactions {
@@ -820,11 +796,12 @@
   line-height: var(--leading-normal);
 }
 
+/* Share diagnostics is a stacked row: its controls start-align (#1295). */
 .ovl-settings__diagnosticsControl,
 .ovl-settings__diagnostics {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--space-1);
 }
 

@@ -3,7 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/Switch';
-import { Field } from './Field';
+import { Field, FieldSelect } from './Field';
 import { QuickActionsSettings } from './QuickActionsSettings';
 import { SHIPPED_LOCALES } from '../../../shared/i18n/locales.js';
 import type { AppSettings } from '../../../shared/settings/settings.js';
@@ -71,7 +71,6 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
     <div className="ovl-settings__fields">
       <Field label={intl.formatMessage(messages.sortOrder)}>
         <Segmented
-          label={intl.formatMessage(messages.sortOrder)}
           value={settings.sortOrder}
           options={[
             { value: 'date', label: intl.formatMessage(messages.sortDate) },
@@ -84,9 +83,7 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
         />
       </Field>
       <Field label={intl.formatMessage(messages.language)} hint={intl.formatMessage(messages.languageHint)}>
-        <select
-          className="ovl-settings__select"
-          aria-label={intl.formatMessage(messages.language)}
+        <FieldSelect
           value={settings.language ?? ''}
           onChange={(event) => {
             onPatch({ language: event.target.value === '' ? null : event.target.value });
@@ -98,11 +95,10 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
               {intl.formatDisplayName(locale, { type: 'language' }) ?? locale}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </Field>
       <Field label={intl.formatMessage(messages.trashRetention)} hint={intl.formatMessage(messages.trashRetentionHint)}>
         <Segmented
-          label={intl.formatMessage(messages.trashRetention)}
           value={settings.trashRetention}
           options={[
             { value: 'off', label: intl.formatMessage(messages.trashRetentionOff) },
@@ -115,12 +111,15 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
           }}
         />
       </Field>
-      <Field wide label={intl.formatMessage(galleryInclusionMessages.heading)} hint={intl.formatMessage(galleryInclusionMessages.hint)}>
+      <Field
+        layout="stacked"
+        label={intl.formatMessage(galleryInclusionMessages.heading)}
+        hint={intl.formatMessage(galleryInclusionMessages.hint)}
+      >
         <GalleryInclusionSettings />
       </Field>
       <Field label={intl.formatMessage(messages.appearance)} hint={intl.formatMessage(messages.appearanceHint)}>
         <Segmented
-          label={intl.formatMessage(messages.appearance)}
           value={settings.appearance}
           options={[
             { value: 'dark', label: intl.formatMessage(messages.dark) },
@@ -132,10 +131,10 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
           }}
         />
       </Field>
-      <Field wide label={intl.formatMessage(messages.customThemes)} hint={intl.formatMessage(messages.customThemesHint)}>
+      <Field layout="stacked" label={intl.formatMessage(messages.customThemes)} hint={intl.formatMessage(messages.customThemesHint)}>
         <ThemeManager />
       </Field>
-      <Field wide label={intl.formatMessage(messages.quickActions)} hint={intl.formatMessage(messages.quickActionsHint)}>
+      <Field layout="stacked" label={intl.formatMessage(messages.quickActions)} hint={intl.formatMessage(messages.quickActionsHint)}>
         <QuickActionsSettings
           value={settings.quickActions}
           onChange={(quickActions) => {
@@ -144,9 +143,9 @@ export function GeneralPane({ settings, onPatch }: GeneralPaneProps): ReactEleme
         />
       </Field>
       <Field label={intl.formatMessage(messages.thumbnails)} hint={intl.formatMessage(messages.thumbnailsHint)}>
-        <Switch checked disabled accessibleLabel={intl.formatMessage(messages.thumbnails)} />
+        <Switch checked disabled />
       </Field>
-      <Field wide label={intl.formatMessage(messages.semantic)} hint={intl.formatMessage(semanticIndexHint)}>
+      <Field layout="stacked" label={intl.formatMessage(messages.semantic)} hint={intl.formatMessage(semanticIndexHint)}>
         <SemanticIndexSettings />
       </Field>
     </div>

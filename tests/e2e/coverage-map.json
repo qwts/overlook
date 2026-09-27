@@ -1353,6 +1353,28 @@
       ]
     },
     {
+      "id": "1295-settings-field-rows",
+      "wiki": "User-Story-M09-Settings-preferences",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/settings.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/Field.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/settings-field.test.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "Screen-reader reading of row names and hints is not observable from automation. Follow the Settings rows step in docs/acceptance/Manual-Test-A11y-VoiceOver.md with VoiceOver, at 640px and at 200% zoom."
+        }
+      ]
+    },
+    {
       "id": "m09-settings-transfer-action",
       "wiki": "Acceptance-Test-Image-Trail-Transfer-And-Sync-UI",
       "coverage": [

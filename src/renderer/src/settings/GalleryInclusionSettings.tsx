@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Switch } from '../components/Switch';
-import { Field } from './Field';
+import { Field, FieldSelect } from './Field';
 import { DEFAULT_GALLERY_POLICY, MINIMUM_MEGAPIXEL_OPTIONS, type GalleryPolicy } from '../../../shared/library/gallery-policy.js';
 
 // All Photos inclusion rules (#512, ADR-0030 §4). These are library data,
@@ -54,7 +54,6 @@ export function GalleryInclusionSettings(): ReactElement {
         <Switch
           checked={current.showUnavailable}
           disabled={disabled}
-          accessibleLabel={intl.formatMessage(galleryInclusionMessages.showUnavailable)}
           onChange={(showUnavailable) => {
             update({ showUnavailable });
           }}
@@ -64,9 +63,7 @@ export function GalleryInclusionSettings(): ReactElement {
         label={intl.formatMessage(galleryInclusionMessages.minimumSize)}
         hint={intl.formatMessage(galleryInclusionMessages.minimumSizeHint)}
       >
-        <select
-          className="ovl-settings__select"
-          aria-label={intl.formatMessage(galleryInclusionMessages.minimumSize)}
+        <FieldSelect
           disabled={disabled}
           value={current.minimumMegapixels === null ? '' : String(current.minimumMegapixels)}
           onChange={(event) => {
@@ -79,7 +76,7 @@ export function GalleryInclusionSettings(): ReactElement {
               {intl.formatMessage(galleryInclusionMessages.megapixels, { count: megapixels })}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </Field>
     </div>
   );

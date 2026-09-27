@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 
+import { useFieldNameProps } from './field-name';
 import './inputs.css';
 
 export interface SliderProps {
@@ -9,8 +10,9 @@ export interface SliderProps {
   readonly step?: number;
   readonly onChange: (value: number) => void;
   readonly width?: number;
-  /** Accessible name (e.g. "Zoom", "Upload bandwidth limit"). */
-  readonly label: string;
+  /** Accessible name (e.g. "Zoom"). Omit it in an auto settings row, which
+   *  names the slider by its label (#1295). */
+  readonly label?: string | undefined;
   /** Real disabled semantics — unreachable by Tab, inert to arrows (#114). */
   readonly disabled?: boolean;
 }
@@ -19,11 +21,13 @@ export interface SliderProps {
 // styling comes from inputs.css (not an injected style tag).
 export function Slider({ value, min = 0, max = 100, step = 1, onChange, width = 140, label, disabled = false }: SliderProps): ReactElement {
   const pct = ((value - min) / (max - min)) * 100;
+  const names = useFieldNameProps(label);
   return (
     <input
       type="range"
       className="ovl-slider"
       aria-label={label}
+      {...names}
       disabled={disabled}
       value={value}
       min={min}
