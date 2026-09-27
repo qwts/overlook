@@ -2,6 +2,8 @@
 
 .ovl-settings {
   display: flex;
+  flex: 1;
+  min-inline-size: 0;
   block-size: 100%;
   min-block-size: 0;
   gap: calc(var(--space-4) - var(--space-1));
@@ -20,6 +22,7 @@
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-1) / 2);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -53,6 +56,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -60,6 +64,7 @@
 
 .ovl-settings__transfer {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 
@@ -102,6 +107,13 @@
   gap: var(--space-2);
 }
 
+/* At 200% zoom on the minimum window a long label can outgrow the pane by a
+   few pixels; the button's own padding absorbs it (#1285). */
+.ovl-settings__transferActions > .ovl-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .ovl-settings__transferError {
   color: var(--accent-amber);
 }
@@ -121,9 +133,10 @@
 
 .ovl-settings__field {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
   padding: calc(var(--space-2) + var(--space-1) / 2) 0;
   border-bottom: 1px solid var(--border-1);
 }
@@ -142,8 +155,17 @@
   max-width: 300px;
 }
 
+/* A control that does not fit beside its label wraps below it and is capped
+   at the pane width, so the pane never scrolls sideways (#1285). */
+.ovl-settings__fieldText {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .ovl-settings__fieldControl {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ovl-settings__field--wide {
@@ -151,7 +173,27 @@
   gap: var(--space-2);
 }
 
-.ovl-settings__field--wide .ovl-settings__fieldControl {
+/* A segmented control wraps its options rather than overflow a narrow pane,
+   so every option stays reachable at 200% zoom on the minimum window. At
+   full width the options sit on one line at exactly --control-h-md. */
+.ovl-settings__fieldControl .ovl-segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+  height: auto;
+  min-height: var(--control-h-md);
+}
+
+.ovl-settings__fieldControl .ovl-segmented__option {
+  height: auto;
+  /* The segmented control's height less its 2px padding and 1px border. */
+  min-height: calc(var(--control-h-md) - 6px);
+}
+
+.ovl-settings__field--wide > .ovl-settings__fieldText {
+  flex: none;
+}
+
+.ovl-settings__field--wide > .ovl-settings__fieldControl {
   width: 100%;
 }
 
@@ -171,6 +213,19 @@
   box-shadow: var(--focus-ring);
 }
 
+/* Finder access (#1285): stack the scope, consent, and action so the long
+   consent sentence wraps inside the pane instead of widening it. */
+.ovl-settings__fileProvider {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.ovl-settings__fileProvider p {
+  margin: 0;
+}
+
 .ovl-theme-manager {
   display: flex;
   flex-direction: column;
@@ -180,13 +235,14 @@
 
 .ovl-theme-manager__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: var(--space-2);
 }
 
 .ovl-theme-manager__drop {
   display: flex;
-  flex: 1;
+  flex: 1 1 160px;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -279,10 +335,16 @@
 
 .ovl-quick-action-settings__row {
   display: grid;
-  grid-template-columns: 16px minmax(116px, 1fr) auto;
+  grid-template-columns: 16px minmax(min-content, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
   min-height: 30px;
+}
+
+/* A label that wraps in a narrow pane stays start-aligned; the switch is a
+   button, which centres its text by default. */
+.ovl-quick-action-settings__row .ovl-switch {
+  text-align: start;
 }
 
 .ovl-quick-action-settings__order {
@@ -701,9 +763,10 @@
 /* Settings → Privacy recovery row (#240). */
 .ovl-settings__keyrow {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-5);
+  gap: var(--space-2) var(--space-5);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-1);
 }
@@ -729,10 +792,17 @@
   color: var(--text-muted);
 }
 
+.ovl-settings__keyrow > :first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .ovl-settings__keyactions {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  max-width: 100%;
 }
 
 .ovl-settings__semantic {

@@ -4,7 +4,8 @@
 .ovl-inspector {
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   height: 100%;
 }
 

@@ -51,7 +51,8 @@
 
 .ovl-dialog__body {
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: var(--space-5) var(--space-6);
   font-size: var(--text-md);
   line-height: var(--leading-normal);

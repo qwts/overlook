@@ -1337,6 +1337,10 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/components/Dialog.stories.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "Native scrollbar rendering is invisible to hidden automation (#1285). In packaged builds, check at 1280px, the 960x600 minimum, and 200% zoom that the Settings pane, sidebar, Inspector, and dialog bodies scroll vertically only; that macOS shows an overlay scrollbar when the system hides scroll bars and a thin token-coloured bar when set to Always; that Windows shows a thin classic bar; and that forced-colors mode shows a system-coloured scrollbar."
         }
       ]
     },
