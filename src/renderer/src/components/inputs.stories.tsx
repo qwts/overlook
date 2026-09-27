@@ -74,11 +74,13 @@ export const Switches: StoryObj = {
 
 function CheckboxDemo(): ReactElement {
   const [thumbs, setThumbs] = useState(true);
+  const [pick, setPick] = useState(false);
   return (
     <div style={{ display: 'grid', gap: 'var(--space-4)', padding: 'var(--space-7)', justifyItems: 'start' }}>
       <Checkbox checked={thumbs} onChange={setThumbs} label="Generate thumbnails on import" />
       <Checkbox checked={false} indeterminate label="Some of 1,204 selected" />
       <Checkbox checked disabled label="Locked on" />
+      <Checkbox checked={pick} onChange={setPick} label="Select Alpha to move" hideLabel />
     </div>
   );
 }
@@ -93,5 +95,12 @@ export const Checkboxes: StoryObj = {
     await expect(thumbs).not.toBeChecked();
     const partial = canvas.getByRole('checkbox', { name: 'Some of 1,204 selected' });
     await expect(partial).toHaveProperty('indeterminate', true);
+    // hideLabel (#1298): named for assistive technology, box only on screen.
+    const hidden = canvas.getByRole('checkbox', { name: 'Select Alpha to move' });
+    const hiddenText = canvas.getByText('Select Alpha to move');
+    await expect(hiddenText).toHaveClass('ovl-sr-only');
+    await expect(hiddenText.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+    await userEvent.click(hidden);
+    await expect(hidden).toBeChecked();
   },
 };

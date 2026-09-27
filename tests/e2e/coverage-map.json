@@ -2356,7 +2356,7 @@
         },
         {
           "type": "storybook",
-          "path": "src/renderer/src/shell/LibrarySwitcher.stories.tsx"
+          "paths": ["src/renderer/src/shell/LibrarySwitcher.stories.tsx", "src/renderer/src/components/inputs.stories.tsx"]
         },
         {
           "type": "storybook",
