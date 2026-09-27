@@ -708,32 +708,30 @@ export function Sidebar({
               tone="amber"
             />
           ) : null}
-          <div className="ovl-sidebar__storage mono-data">
-            {stats === null ? (
-              '—'
-            ) : (
-              <>
+          {/* Before the first stats load there is nothing true to say about
+              storage, so the line waits rather than showing a dash (#1301). */}
+          {stats === null ? null : (
+            <div className="ovl-sidebar__storage mono-data">
+              <div>
+                {intl.formatMessage(messages.storageOnDisk, {
+                  bytes: formatBytes(stats.bytes - stats.offloadedBytes),
+                })}
+              </div>
+              {state.providerConnected ? (
                 <div>
-                  {intl.formatMessage(messages.storageOnDisk, {
-                    bytes: formatBytes(stats.bytes - stats.offloadedBytes),
+                  {intl.formatMessage(messages.storageOffload, {
+                    bytes: formatBytes(stats.offloadedBytes),
+                    provider: state.providerLabel,
                   })}
                 </div>
-                {state.providerConnected ? (
-                  <div>
-                    {intl.formatMessage(messages.storageOffload, {
-                      bytes: formatBytes(stats.offloadedBytes),
-                      provider: state.providerLabel,
-                    })}
-                  </div>
-                ) : null}
-                {stats.excludedCount > 0 ? (
-                  <div data-testid="storage-excluded">
-                    {intl.formatMessage(messages.storageExcluded, { bytes: formatBytes(stats.excludedBytes) })}
-                  </div>
-                ) : null}
-              </>
-            )}
-          </div>
+              ) : null}
+              {stats.excludedCount > 0 ? (
+                <div data-testid="storage-excluded">
+                  {intl.formatMessage(messages.storageExcluded, { bytes: formatBytes(stats.excludedBytes) })}
+                </div>
+              ) : null}
+            </div>
+          )}
           {state.providerConnected ? null : (
             // Disconnected (#239): say so and offer the path back — never a
             // fabricated backup figure.

@@ -322,6 +322,39 @@ export const OffloadedHiddenWhenEmpty: Story = {
   },
 };
 
+// #1301: before the first stats load the storage line renders nothing,
+// never a lone dash; once loaded it sits at the --text-xs floor.
+export const StorageWaitsForStats: Story = {
+  args: { stats: null },
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('All Photos')).toBeVisible();
+    await expect(canvas.queryByText('—')).not.toBeInTheDocument();
+    await expect(canvasElement.querySelector('.ovl-sidebar__storage')).toBeNull();
+  },
+};
+
+export const StorageAtTextXs: Story = {
+  loaders: [
+    () => {
+      window.localStorage.removeItem(COLLAPSE_KEY);
+      return Promise.resolve({});
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const storage = canvasElement.querySelector('.ovl-sidebar__storage');
+    if (storage === null) throw new Error('storage line missing');
+    const xs = getComputedStyle(canvasElement).getPropertyValue('--text-xs').trim();
+    await expect(getComputedStyle(storage).fontSize).toBe(xs);
+  },
+};
+
 // Derived sources (#512): RAW and Unavailable appear only with members and
 // then carry exact counts, in a fixed order between Recent and Trash.
 export const DerivedSourcesWithCounts: Story = {
