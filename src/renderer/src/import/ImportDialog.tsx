@@ -598,7 +598,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   </div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(googleDrive.summary, formatCount, formatBytes)}</div>
                   {googleDrive.skipped > 0 ? (
-                    <div className="ovl-import__cardMeta mono-data">
+                    <div className="ovl-import__cardMeta prose-note">
                       {formatCount(googleDrive.skipped)} unsupported or unavailable file{googleDrive.skipped === 1 ? '' : 's'} skipped
                     </div>
                   ) : null}
@@ -618,7 +618,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
               <div className="ovl-import__card">
                 <Icon name="cloud" size={16} />
                 <div className="ovl-import__cardText">
-                  <div className="ovl-import__cardMeta mono-data">Waiting for Google Drive selection in your browser…</div>
+                  <div className="ovl-import__cardMeta prose-note">Waiting for Google Drive selection in your browser…</div>
                 </div>
               </div>
             ) : (
@@ -642,7 +642,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   </div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(drop.summary, formatCount, formatBytes)}</div>
                   {unmatchedCompanionNote(drop.summary, formatCount) === null ? null : (
-                    <div className="ovl-import__cardMeta mono-data" data-testid="import-unmatched-companions">
+                    <div className="ovl-import__cardMeta prose-note" data-testid="import-unmatched-companions">
                       {unmatchedCompanionNote(drop.summary, formatCount)}
                     </div>
                   )}
@@ -652,7 +652,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
               <div className="ovl-import__card">
                 <Icon name="image" size={16} />
                 <div className="ovl-import__cardText">
-                  <div className="ovl-import__cardMeta mono-data">Scanning dropped files…</div>
+                  <div className="ovl-import__cardMeta prose-note">Scanning dropped files…</div>
                 </div>
               </div>
             )
@@ -664,7 +664,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   <div className="ovl-import__cardTitle">{sd.label}</div>
                   <div className="ovl-import__cardMeta mono-data">{summaryDetail(sd.summary, formatCount, formatBytes)}</div>
                   {unmatchedCompanionNote(sd.summary, formatCount) === null ? null : (
-                    <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(sd.summary, formatCount)}</div>
+                    <div className="ovl-import__cardMeta prose-note">{unmatchedCompanionNote(sd.summary, formatCount)}</div>
                   )}
                 </div>
               </div>
@@ -672,7 +672,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
               <div className="ovl-import__card">
                 <Icon name="hard-drive" size={16} />
                 <div className="ovl-import__cardText">
-                  <div className="ovl-import__cardMeta mono-data">Looking for cards…</div>
+                  <div className="ovl-import__cardMeta prose-note">Looking for cards…</div>
                 </div>
               </div>
             ) : (
@@ -709,7 +709,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
                   {folder.status === 'ready' ? summaryDetail(folder.summary, formatCount, formatBytes) : 'Scanning…'}
                 </div>
                 {folder.status === 'ready' && unmatchedCompanionNote(folder.summary, formatCount) !== null ? (
-                  <div className="ovl-import__cardMeta mono-data">{unmatchedCompanionNote(folder.summary, formatCount)}</div>
+                  <div className="ovl-import__cardMeta prose-note">{unmatchedCompanionNote(folder.summary, formatCount)}</div>
                 ) : null}
               </div>
               <button
@@ -746,7 +746,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
             />
           </div>
           {moveAllowed && mode === 'move' ? (
-            <div className="ovl-import__warning mono-data" role="alert">
+            <div className="ovl-import__warning prose-note" role="alert">
               <Icon name="triangle-alert" size={12} />
               {usingSd
                 ? intl.formatMessage(messages.moveWarningSd)
@@ -758,7 +758,7 @@ export function ImportDialog({ open, dropped, onClose, onDone, onRejectedDrop, o
           {moveAllowed && mode === 'move' ? (
             <Checkbox checked={moveConfirmed} onChange={setMoveConfirmed} label={intl.formatMessage(messages.moveConsent)} />
           ) : !moveAllowed ? (
-            <div className="ovl-import__note mono-data">
+            <div className="ovl-import__note prose-note">
               <Icon name="info" size={12} />
               Imported files are copied — source files are left untouched.
             </div>

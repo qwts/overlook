@@ -136,7 +136,7 @@ export function ListRow({
         <div className="ovl-listrow__name" aria-hidden="true">
           {photo.fileName}
         </div>
-        <div className="ovl-listrow__meta mono-data">
+        <div className={`ovl-listrow__meta ${retentionLabel === undefined ? 'mono-data' : 'prose-note'}`}>
           {retentionLabel ?? `${photo.place ?? '—'} · ${photo.takenAt === null ? '—' : formatCalendarDate(photo.takenAt)}`}
         </div>
       </div>

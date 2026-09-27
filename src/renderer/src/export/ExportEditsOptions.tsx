@@ -115,18 +115,18 @@ export function ExportEditsOptions({
         </div>
       )}
       {disabled || preflight === null || mode !== 'original' || preflight.edited === 0 ? null : (
-        <div className="ovl-export__photosNotice mono-data" data-testid="export-edits-omitted">
+        <div className="ovl-export__photosNotice prose-note" data-testid="export-edits-omitted">
           <Icon name="info" size={12} />
           {intl.formatMessage(messages.omitted, { count: preflight.edited })}
         </div>
       )}
       {disabled || losses.length === 0 ? null : (
         <div className="ovl-export__losses" role="alert" data-testid="export-edits-losses">
-          <div className="ovl-export__warning mono-data">
+          <div className="ovl-export__warning prose-note">
             <Icon name="triangle-alert" size={12} />
             {intl.formatMessage(messages.losses, { count: losses.length })}
           </div>
-          <ul className="ovl-export__lossList mono-data">
+          <ul className="ovl-export__lossList prose-note">
             {losses.map((loss) => (
               <li key={loss.photoId}>{intl.formatMessage(messages.lossItem, { fileName: loss.fileName, reason: loss.reason })}</li>
             ))}

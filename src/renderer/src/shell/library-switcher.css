@@ -1,6 +1,7 @@
 /* Library Switcher (#386) — design/handoff HANDOFF_library_switcher.md.
    Modal list of registered libraries with switch/create/add/remove flows.
-   Tokens only; machine data (paths, hosts, timestamps) renders mono-data. */
+   Tokens only; machine data (paths, hosts) renders mono-data, and prose and
+   relative times ("4h ago") render prose-note (#1287). */
 
 .ovl-libswitch__count {
   color: var(--text-muted);

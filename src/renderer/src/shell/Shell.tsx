@@ -520,7 +520,7 @@ export function Shell({
           <div className="ovl-shell__dropCard">
             <Icon name="image-down" size={40} color="var(--accent-cyan)" />
             <div className="ovl-shell__dropTitle">Drop photos to import</div>
-            <div className="ovl-shell__dropHint mono-data">Encrypted on this device · RAW, JPEG, PNG, HEIC</div>
+            <div className="ovl-shell__dropHint prose-note">Encrypted on this device · RAW, JPEG, PNG, HEIC</div>
           </div>
         </div>
       ) : null}

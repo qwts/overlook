@@ -223,7 +223,7 @@ export function RenameLibraryDialog({ library, onClose }: RenameLibraryDialogPro
                 ? reasonMessages[failed.reason as keyof typeof reasonMessages]
                 : reasonMessages.fallback)}
             />
-            {failed.detail === '' ? null : <span className="mono-data ovl-libmove__error-detail"> {failed.detail}</span>}
+            {failed.detail === '' ? null : <span className="prose-note ovl-libmove__error-detail"> {failed.detail}</span>}
           </div>
         )}
         {outcome === 'no-response' && !library.open ? (

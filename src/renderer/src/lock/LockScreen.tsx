@@ -167,11 +167,11 @@ export function LockScreen({
                 {busy ? 'Unlocking…' : 'Unlock'}
               </Button>
               {remainingMs > 0 ? (
-                <div id="lock-screen-retry-countdown" className="mono-data">
+                <div id="lock-screen-retry-countdown" className="prose-note">
                   {intl.formatMessage(messages.retryCountdown, { seconds: waitSeconds })}
                 </div>
               ) : null}
-              <div className="mono-data" data-testid="app-lock-attempts-remaining">
+              <div className="prose-note" data-testid="app-lock-attempts-remaining">
                 {intl.formatMessage(messages.attemptsRemaining, { count: attemptsRemaining })}
               </div>
             </>
@@ -191,7 +191,7 @@ export function LockScreen({
           >
             {intl.formatMessage(commandById('library.switch').label)}
           </Button>
-          <div className="ovl-lock-screen__seal mono-data">
+          <div className="ovl-lock-screen__seal prose-note">
             <Icon name="shield-check" size={13} />
             Decrypted originals stay sealed while locked
           </div>

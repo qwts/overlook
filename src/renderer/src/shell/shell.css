@@ -316,9 +316,9 @@
   padding: 0;
   cursor: pointer;
   color: var(--text-muted);
-  font: var(--type-meta);
-  letter-spacing: var(--tracking-mono);
-  text-transform: uppercase;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   text-align: start;
 }
 

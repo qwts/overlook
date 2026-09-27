@@ -306,7 +306,7 @@ export function LibrarySwitcher({
               <span>Opening {switchTarget?.name ?? 'library'}…</span>
             </div>
           </div>
-          <div className="mono-data ovl-libswitch__progress-note">Encrypted teardown · keys never leave this device</div>
+          <div className="prose-note ovl-libswitch__progress-note">Encrypted teardown · keys never leave this device</div>
         </div>
       </Dialog>
     );
@@ -382,7 +382,9 @@ export function LibrarySwitcher({
           />
           <div className="ovl-libswitch__label">Location</div>
           <div className="ovl-libswitch__location">
-            <span className="mono-data ovl-libswitch__location-path">{createPath ?? 'App-managed location'}</span>
+            <span className={`${createPath === null ? 'prose-note' : 'mono-data'} ovl-libswitch__location-path`}>
+              {createPath ?? 'App-managed location'}
+            </span>
             <Button
               size="sm"
               disabled={creating}
@@ -414,7 +416,7 @@ export function LibrarySwitcher({
             <div className="ovl-libswitch__banner-copy">
               <div className="ovl-libswitch__banner-title">{REFUSAL_COPY[refusal.kind].title}</div>
               <div className="ovl-libswitch__banner-detail">{REFUSAL_COPY[refusal.kind].detail}</div>
-              {refusal.host == null ? null : <div className="mono-data ovl-libswitch__banner-host">Locked on {refusal.host}</div>}
+              {refusal.host == null ? null : <div className="prose-note ovl-libswitch__banner-host">Locked on {refusal.host}</div>}
             </div>
             <IconButton icon="x" label="Dismiss" size="sm" onClick={() => setRefusal(null)} />
           </div>
@@ -449,7 +451,7 @@ export function LibrarySwitcher({
                     </span>
                     <span className="mono-data ovl-libswitch__path">{lib.path}</span>
                     {duplicateName ? (
-                      <span className="mono-data ovl-libswitch__duplicate-hint">
+                      <span className="prose-note ovl-libswitch__duplicate-hint">
                         {intl.formatMessage(moveMessages.duplicateHint, {
                           location: privacySafeLocationHint(lib.path) ?? intl.formatMessage(moveMessages.folder),
                           id: lib.id.slice(-4),
@@ -458,7 +460,7 @@ export function LibrarySwitcher({
                     ) : null}
                     {lib.missing ? <span className="ovl-libswitch__hint">Reconnect the volume to open this library</span> : null}
                   </span>
-                  <span className="mono-data ovl-libswitch__when">
+                  <span className="prose-note ovl-libswitch__when">
                     {lib.lastOpenedAt === null ? 'Never opened' : formatRelativeTime(lib.lastOpenedAt, loadedAt)}
                   </span>
                 </button>
@@ -563,7 +565,7 @@ export function LibrarySwitcher({
               )}
             </>
           )}
-          <span className="mono-data ovl-libswitch__keys">↑↓ select · ⏎ switch · esc close</span>
+          <span className="prose-note ovl-libswitch__keys">↑↓ select · ⏎ switch · esc close</span>
         </div>
       </div>
     </Dialog>

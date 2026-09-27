@@ -77,7 +77,7 @@ export function DisclosurePreview({
                 {fieldLabel(intl, row.field)}
                 <Badge tone={TONES[row.class]}>{classLabel(intl, row.class)}</Badge>
               </span>
-              <span className="ovl-disclosure__count mono-data">
+              <span className="ovl-disclosure__count prose-note">
                 {row.disclosed === 0
                   ? intl.formatMessage(disclosureMessages.previewWithheld)
                   : intl.formatMessage(disclosureMessages.previewCrosses, { disclosed: row.disclosed, present: row.present })}

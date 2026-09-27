@@ -1218,7 +1218,7 @@
     "defaultMessage": "filename"
   },
   "inspector.custody.locked": {
-    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+    "defaultMessage": "Locked — KEY #{id} is not on this device"
   },
   "inspector.custody.lockedThumb": {
     "defaultMessage": "Locked"
@@ -1251,7 +1251,7 @@
     "defaultMessage": "Newer format — view only"
   },
   "inspector.file.dimensionMismatch": {
-    "defaultMessage": "DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA"
+    "defaultMessage": "Dimensions mismatch — possibly corrupt metadata"
   },
   "inspector.file.metadata": {
     "defaultMessage": "Metadata"
@@ -2103,7 +2103,7 @@
     "defaultMessage": "Loading full-resolution image…"
   },
   "lightbox.locked": {
-    "defaultMessage": "LOCKED — KEY #{id} IS NOT ON THIS DEVICE"
+    "defaultMessage": "Locked — KEY #{id} is not on this device"
   },
   "lightbox.locked.hint": {
     "defaultMessage": "Import the key under Settings › Privacy › Encryption keys to view this photo."
@@ -2457,19 +2457,19 @@
     "defaultMessage": "Repair is not available for this media type."
   },
   "preview.pending.original": {
-    "defaultMessage": "PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE"
+    "defaultMessage": "Previews pending — original required on this device"
   },
   "preview.unavailable": {
-    "defaultMessage": "PREVIEW UNAVAILABLE"
+    "defaultMessage": "Preview unavailable"
   },
   "preview.unavailable.corrupt": {
-    "defaultMessage": "PREVIEW UNAVAILABLE — FILE IS CORRUPT"
+    "defaultMessage": "Preview unavailable — file is corrupt"
   },
   "preview.unavailable.decodeFailed": {
-    "defaultMessage": "PREVIEW UNAVAILABLE — IMAGE DECODE FAILED"
+    "defaultMessage": "Preview unavailable — image decode failed"
   },
   "preview.unavailable.unsupportedCodec": {
-    "defaultMessage": "PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED"
+    "defaultMessage": "Preview unavailable — HEIC codec is unsupported"
   },
   "purge.keptLocal.all": {
     "defaultMessage": "{count, plural, one {This photo is kept on this device only: there is no cloud copy to remove.} other {These photos are kept on this device only: there are no cloud copies to remove.}}"

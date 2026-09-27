@@ -183,7 +183,7 @@ export const RafFavorite: Story = {
     await expect(canvas.getByText('Encrypted · Local mock')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Copy filename' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Copy cipher identity' })).toBeVisible();
-    await expect(canvas.queryByText('DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA')).toBeNull();
+    await expect(canvas.queryByText('Dimensions mismatch — possibly corrupt metadata')).toBeNull();
   },
 };
 
@@ -282,7 +282,7 @@ export const PossiblyCorruptMetadata: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Metadata')).toBeVisible();
-    await expect(canvas.getByText('DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA')).toBeVisible();
+    await expect(canvas.getByText('Dimensions mismatch — possibly corrupt metadata')).toBeVisible();
     await expect(canvas.getByText('6240×4160 · 26.0 MP')).toBeVisible();
   },
 };
@@ -552,7 +552,7 @@ export const DeferredVariantPreviews: Story = {
   args: { photo: { ...PHOTO, previewFailure: 'deferred-original' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE')).toBeVisible();
+    await expect(canvas.getByText('Previews pending — original required on this device')).toBeVisible();
   },
 };
 
@@ -564,7 +564,7 @@ export const LockedDuplicate: Story = {
     const section = within(await within(canvasElement).findByTestId('inspector-variants'));
     const action = section.getByRole('button', { name: 'Duplicate' });
     await expect(action).toBeDisabled();
-    await expect(section.getByText('LOCKED — KEY #7 IS NOT ON THIS DEVICE')).toBeVisible();
+    await expect(section.getByText('Locked — KEY #7 is not on this device')).toBeVisible();
     // Native activation verifies disabled semantics without a pointer helper rejecting the CSS guard.
     action.click();
     await expect(duplicate).not.toHaveBeenCalled();

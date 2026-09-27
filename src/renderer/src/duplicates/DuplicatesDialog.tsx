@@ -195,7 +195,7 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
         {review === null ? null : (
           <>
             <div className="ovl-duplicates__status">
-              <span className="ovl-duplicates__progress mono-data" data-testid="duplicates-progress">
+              <span className="ovl-duplicates__progress prose-note" data-testid="duplicates-progress">
                 {intl.formatMessage(messages.progress, {
                   indexed: review.status.indexed,
                   total: review.status.total,

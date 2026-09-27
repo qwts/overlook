@@ -57,7 +57,9 @@
   gap: var(--space-3);
   align-items: center;
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-lock-screen__divider::before,
@@ -71,7 +73,9 @@
 .ovl-lock-screen__status {
   min-height: var(--space-5);
   color: var(--accent-red);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   text-align: center;
 }
 

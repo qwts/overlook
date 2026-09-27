@@ -66,7 +66,7 @@ export function PhotoKitImportSource({
           <Icon name="image" size={16} color="var(--accent-cyan)" />
           <div className="ovl-import__cardText">
             <div className="ovl-import__cardTitle">{intl.formatMessage(messages.reviewTitle)}</div>
-            <div className="ovl-import__cardMeta mono-data">
+            <div className="ovl-import__cardMeta prose-note">
               {intl.formatMessage(state.authorization === 'limited' ? messages.selectedLimited : messages.selected, {
                 selected: formatCount(selection.size),
                 total: formatCount(state.assets.length),
@@ -88,7 +88,7 @@ export function PhotoKitImportSource({
             />
           ))}
         </div>
-        <div className="ovl-import__note mono-data">
+        <div className="ovl-import__note prose-note">
           <Icon name="info" size={12} />
           {intl.formatMessage(messages.reviewNote)}
         </div>
@@ -99,7 +99,7 @@ export function PhotoKitImportSource({
     return (
       <div className="ovl-import__card">
         <Icon name="image" size={16} />
-        <div className="ovl-import__cardMeta mono-data">{intl.formatMessage(messages.waiting)}</div>
+        <div className="ovl-import__cardMeta prose-note">{intl.formatMessage(messages.waiting)}</div>
       </div>
     );
   }

@@ -113,7 +113,7 @@ export function ProtectedAlbumSettings(): ReactElement {
               <Icon name="lock" size={14} color="var(--accent-amber)" />
               <div>
                 <div className="ovl-protected-settings__name">{album.locked ? album.label : (album.name ?? album.label)}</div>
-                <div className="mono-data ovl-protected-settings__meta">
+                <div className="prose-note ovl-protected-settings__meta">
                   {album.locked
                     ? 'Locked · metadata sealed'
                     : `${formatCount(album.count ?? 0)} ${(album.count ?? 0) === 1 ? 'photo' : 'photos'} · session unlocked`}

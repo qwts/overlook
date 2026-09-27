@@ -78,7 +78,7 @@ export function InteropWorkflowDialog({
       }
     >
       <div className="ovl-interop" aria-live="polite" data-phase={state.phase}>
-        <div className="ovl-interop__context mono-data">
+        <div className="ovl-interop__context prose-note">
           {state.entry} · {interopPhaseLabel(state.phase)}
         </div>
         <div className="ovl-interop__segmented" role="group" aria-label="Transfer operation">
@@ -96,7 +96,7 @@ export function InteropWorkflowDialog({
         </div>
         <section className="ovl-interop__provider" aria-label="Provider and pairing status">
           <strong>{state.provider.label}</strong>
-          <span className="mono-data">
+          <span className="prose-note">
             {state.provider.state.replace('-', ' ')} · Pairing {state.pairing}
           </span>
           <p>{state.provider.detail}</p>

@@ -12,7 +12,9 @@
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-inspector__selectionNav {
@@ -24,7 +26,9 @@
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border-1);
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-inspector__header {
@@ -100,7 +104,9 @@
  * Re-check action. Tone overrides ride inline tokens (stale = amber). */
 .ovl-inspector__provenanceNote {
   margin: var(--space-1) 0 0;
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text-muted);
 }
 
@@ -125,7 +131,9 @@
 
 .ovl-inspector__tagGroupLabel {
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-inspector__metadataInput {
@@ -163,7 +171,9 @@
   border-radius: var(--radius-full);
   background: var(--surface-raised);
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   cursor: pointer;
 }
 
@@ -206,7 +216,9 @@
 .ovl-inspector__metadataStatus {
   margin-top: var(--space-3);
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 /* Variants (#496): one row per live variant over the shared original. The
@@ -314,6 +326,8 @@
 
 .ovl-inspector__histogramNote {
   margin: 0;
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text-muted);
 }

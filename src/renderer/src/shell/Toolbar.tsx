@@ -267,7 +267,7 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
               ))
             : null}
           {state.query === '' ? null : (
-            <span className="ovl-toolbar__hint mono-data" role="status" aria-live="polite">
+            <span className="ovl-toolbar__hint prose-note" role="status" aria-live="polite">
               {state.search.total === 0
                 ? searchStatus
                 : intl.formatMessage(messages.searchStatusWithIndex, {

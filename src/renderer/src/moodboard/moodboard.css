@@ -82,7 +82,9 @@
   text-align: center;
   padding: var(--space-2);
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 .ovl-moodboard__piece[data-availability='unavailable'] {
   background-color: var(--gray-2);

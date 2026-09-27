@@ -60,7 +60,6 @@
 }
 
 .ovl-libmove__location-path {
-  font-size: var(--text-xs);
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
@@ -143,7 +142,6 @@
 }
 
 .ovl-libmove__error-detail {
-  font-size: var(--text-xs);
   color: var(--text-faint);
 }
 
@@ -203,6 +201,5 @@
 }
 
 .ovl-libmove__probe-note {
-  font-size: var(--text-xs);
   color: var(--text-faint);
 }

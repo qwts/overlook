@@ -222,11 +222,12 @@ export function DisconnectProviderDialog(props: DisconnectProviderDialogProps): 
                 value={props.result.reason}
                 label={intl.formatMessage(messages.copyError)}
                 className="ovl-settings__disconnectError"
+                prose
               />
             )
           ) : null}
           {props.error === null ? null : (
-            <CopyableValue value={props.error} label={intl.formatMessage(messages.copyError)} className="ovl-settings__disconnectError" />
+            <CopyableValue value={props.error} label={intl.formatMessage(messages.copyError)} className="ovl-settings__disconnectError" prose />
           )}
           {props.restoreSummary === null ? null : <p className="mono-data">{props.restoreSummary}</p>}
         </div>

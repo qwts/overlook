@@ -89,7 +89,7 @@ export const VideoAndAudioTiles: Story = {
     await expect(canvasElement.querySelector('audio')).toBeNull();
     // Regression (#548 §6): the preserved clip's poster src 404s — it's the
     // one img that fails. A `video` tile must fall back to the film glyph (a
-    // success state) and NEVER show the still-image "PREVIEW UNAVAILABLE" text;
+    // success state) and NEVER show the still-image "Preview unavailable" text;
     // the shipped bug wrote that label into the fallback div, wiping the icon.
     await waitFor(() => expect(canvasElement.querySelector('.ovl-tile__img[data-unavailable="true"]')).not.toBeNull());
     const brokenPoster = canvasElement.querySelector('.ovl-tile__img[data-unavailable="true"]');
@@ -234,7 +234,7 @@ export const PreviewUnavailable: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('PREVIEW UNAVAILABLE'));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Preview unavailable'));
     const image = canvasElement.querySelector('img');
     await expect(image).toHaveAttribute('data-unavailable', 'true');
 
@@ -249,7 +249,7 @@ export const PreviewUnavailable: Story = {
     // accessibility snapshot still exercise the failure UI.
     if (image !== null) await fireEvent.error(image);
     await expect(image).toHaveAttribute('data-unavailable', 'true');
-    await expect(canvas.getByRole('status')).toHaveTextContent('PREVIEW UNAVAILABLE');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Preview unavailable');
   },
 };
 
@@ -266,7 +266,7 @@ export const UnsupportedHeicCodecIsExplicit: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED'));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Preview unavailable — HEIC codec is unsupported'));
   },
 };
 
@@ -288,7 +288,7 @@ export const SourceChangeClearsUnavailable: Story = {
   render: () => <ReusedTile />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('PREVIEW UNAVAILABLE'));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Preview unavailable'));
     const failedImage = canvasElement.querySelector('img');
     await expect(failedImage).toHaveAttribute('data-unavailable', 'true');
 
@@ -306,6 +306,6 @@ export const DeferredVariantPreviews: Story = {
   args: { src: 'data:image/jpeg;base64,AA==', alt: 'deferred variant', previewFailure: 'deferred-original' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE'));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Previews pending — original required on this device'));
   },
 };

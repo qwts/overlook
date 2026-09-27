@@ -82,7 +82,7 @@ export function RecoveryKeyDropTarget({
         <Icon name="key-round" size={16} />
         <span className="ovl-restore__keydropText">
           <span id={labelId}>{intl.formatMessage(messages.choose)}</span>
-          <span id={selectionId} className="mono-data" aria-live="polite" aria-atomic="true">
+          <span id={selectionId} className={path === null ? 'prose-note' : 'mono-data'} aria-live="polite" aria-atomic="true">
             {path === null ? intl.formatMessage(messages.none) : fileName(path)}
           </span>
           <span id={hintId} className="ovl-restore__keydropHint">

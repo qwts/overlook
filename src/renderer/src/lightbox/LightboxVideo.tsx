@@ -265,7 +265,7 @@ export function LightboxVideo({
       )}
       {started && buffering ? (
         <div className="ovl-video__buffering" role="status">
-          {reducedMotion ? <span className="mono-data">{intl.formatMessage(messages.loading)}</span> : <Icon name="loader" size={28} />}
+          {reducedMotion ? <span className="prose-note">{intl.formatMessage(messages.loading)}</span> : <Icon name="loader" size={28} />}
         </div>
       ) : null}
       {started ? (

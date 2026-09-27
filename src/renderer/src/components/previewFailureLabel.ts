@@ -3,14 +3,14 @@ import { defineMessages, type IntlShape } from 'react-intl';
 import type { PreviewFailureReason } from '../../../shared/library/preview.js';
 
 const messages = defineMessages({
-  deferred: { id: 'preview.pending.original', defaultMessage: 'PREVIEWS PENDING — ORIGINAL REQUIRED ON THIS DEVICE' },
-  generic: { id: 'preview.unavailable', defaultMessage: 'PREVIEW UNAVAILABLE' },
-  corrupt: { id: 'preview.unavailable.corrupt', defaultMessage: 'PREVIEW UNAVAILABLE — FILE IS CORRUPT' },
+  deferred: { id: 'preview.pending.original', defaultMessage: 'Previews pending — original required on this device' },
+  generic: { id: 'preview.unavailable', defaultMessage: 'Preview unavailable' },
+  corrupt: { id: 'preview.unavailable.corrupt', defaultMessage: 'Preview unavailable — file is corrupt' },
   unsupportedCodec: {
     id: 'preview.unavailable.unsupportedCodec',
-    defaultMessage: 'PREVIEW UNAVAILABLE — HEIC CODEC IS UNSUPPORTED',
+    defaultMessage: 'Preview unavailable — HEIC codec is unsupported',
   },
-  decodeFailed: { id: 'preview.unavailable.decodeFailed', defaultMessage: 'PREVIEW UNAVAILABLE — IMAGE DECODE FAILED' },
+  decodeFailed: { id: 'preview.unavailable.decodeFailed', defaultMessage: 'Preview unavailable — image decode failed' },
 });
 
 export function previewFailureLabel(intl: IntlShape, failure: PreviewFailureReason | null | undefined): string {
