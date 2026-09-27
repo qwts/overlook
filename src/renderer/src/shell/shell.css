@@ -312,19 +312,34 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
+  margin: 0;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  text-align: start;
 }
 
+/* Link-style (#1302): reads as part of the sentence but keeps the WCAG 2.2
+   SC 2.5.8 24px target. */
 .ovl-sidebar__connect-cta {
+  min-inline-size: var(--interactive-target-min);
+  min-block-size: var(--interactive-target-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: none;
   color: var(--accent-cyan);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ovl-sidebar__connect-cta:hover {
+  text-decoration: underline;
+}
+
+.ovl-sidebar__connect-cta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .ovl-shell__content {

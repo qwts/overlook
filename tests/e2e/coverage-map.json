@@ -1894,6 +1894,10 @@
         {
           "type": "storybook",
           "path": "src/renderer/src/shell/Sidebar.stories.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "The sidebar connect line (#1302) is a sans sentence with Connect as its only control. In packaged builds, disconnect the provider and check at the 960x600 minimum and 200% zoom that the sentence wraps with Connect kept whole, that Tab reaches Connect with a visible focus ring, and that Enter opens Settings."
         }
       ]
     },
