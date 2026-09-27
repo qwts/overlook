@@ -221,7 +221,7 @@ export function Inspector({
         </Section>
       )}
       <Section title="File">
-        <MetadataRow label="Dimensions" value={dimensions} />
+        <MetadataRow label="Dimensions" value={dimensions} mono={photo.width > 0 && photo.height > 0} />
         {photo.dimensionStatus === 'metadata-mismatch' ? (
           <MetadataRow
             label={intl.formatMessage(messages.metadataLabel)}
@@ -235,6 +235,7 @@ export function Inspector({
           <MetadataRow
             label="Custody"
             value={intl.formatMessage(messages.custodyLocked, { id: String(photo.missingKeyId ?? photo.keyId) })}
+            mono={false}
             tone="var(--accent-amber)"
           />
         ) : null}
@@ -248,6 +249,7 @@ export function Inspector({
         <MetadataRow
           label="State"
           value={photo.coverage === 'included' ? (custody?.text ?? statusText[photo.syncState]) : coverageText}
+          mono={false}
           tone={photo.coverage === 'included' ? (custody?.tone ?? STATUS_TONE[photo.syncState]) : STATUS_TONE.offloaded}
         />
         <MetadataRow
