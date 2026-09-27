@@ -48,12 +48,14 @@ export function findUndefinedCustomProperties(files) {
   return violations;
 }
 
-// Radii and weights copied from mocks as numbers drift off the scale (#1289):
-// each must be one var() of its own token family, or a CSS-wide keyword. The
-// font shorthand carries a weight too, so it must be one --type-* token.
+// Radii, weights, and sizes copied from mocks as numbers drift off the scale
+// (#1289, #1288): each must be one var() of its own token family, or a
+// CSS-wide keyword. The font shorthand carries a weight and a size too, so it
+// must be one --type-* token. --text-xs is the floor; nothing smaller exists.
 const SCALED_PROPERTIES = [
   { property: /^border(?:-[a-z-]+)?-radius$/u, token: /^var\(--radius-[\w-]+\)$/u },
   { property: /^font-weight$/u, token: /^var\(--weight-[\w-]+\)$/u },
+  { property: /^font-size$/u, token: /^var\(--text-[\w-]+\)$/u },
   { property: /^font$/u, token: /^var\(--type-[\w-]+\)$/u },
 ];
 const CSS_WIDE_KEYWORD = /^(?:inherit|initial|unset|revert|revert-layer)$/u;
@@ -102,7 +104,9 @@ async function main() {
     for (const violation of undefinedProperties) console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}`);
   }
   if (literals.length > 0) {
-    console.error('Renderer radii and font weights must use var(--radius-*), var(--weight-*), or a var(--type-*) font:');
+    console.error(
+      'Renderer radii, font weights, and font sizes must use var(--radius-*), var(--weight-*), var(--text-*), or a var(--type-*) font:',
+    );
     for (const violation of literals)
       console.error(`- src/renderer/${violation.file}:${violation.line}: ${violation.property}: ${violation.value}`);
   }

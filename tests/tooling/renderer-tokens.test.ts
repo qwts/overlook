@@ -65,7 +65,7 @@ test('renderer custom-property gate accepts only tokens and properties a compone
   );
 });
 
-test('renderer scale gate reports literal radii and font weights with lines (#1289)', async () => {
+test('renderer scale gate reports literal radii, font weights, and font sizes with lines (#1289, #1288)', async () => {
   const tokens = await checker();
   assert.deepEqual(
     tokens.findLiteralScaleValues([
@@ -80,9 +80,11 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
           '.d { font-weight: 700 !important; }',
           '.e { border-radius: inherit; font-weight: unset; }',
           '.f { border-radius: var(--radius-1) var(--radius-2); }',
-          '.g { font: var(--type-meta); font-size: 12px; }',
+          '.g { font: var(--type-meta); font-size: var(--text-sm); }',
           '.h { font: 700 12px sans-serif; }',
           '.i { font: inherit; }',
+          '.j { font-size: 9px; }',
+          '.k { font-size: var(--text-xs); font-size: inherit; }',
         ].join('\n'),
       },
       { file: 'src/example/Example.tsx', source: "const style = { borderRadius: '3px' };" },
@@ -93,6 +95,7 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
       { file: 'src/example/example.css', line: 5, property: 'font-weight', value: '700' },
       { file: 'src/example/example.css', line: 7, property: 'border-radius', value: 'var(--radius-1) var(--radius-2)' },
       { file: 'src/example/example.css', line: 9, property: 'font', value: '700 12px sans-serif' },
+      { file: 'src/example/example.css', line: 11, property: 'font-size', value: '9px' },
     ],
   );
 });

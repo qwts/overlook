@@ -83,6 +83,7 @@ const VOCABULARY = [
   'circle-check',
   // Titlebar Help menu (#699): the Help button/Overlook Help glyph.
   'circle-help',
+  'clock',
   // SettingsDialog nav glyph the design's SettingsDialog.jsx uses beyond the
   // readme list (#112): the General section row.
   'sliders-horizontal',

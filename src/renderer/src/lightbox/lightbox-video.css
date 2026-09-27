@@ -96,7 +96,7 @@
 }
 
 .ovl-video__time {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-photo-overlay);
 }
@@ -207,14 +207,14 @@
 
 .ovl-video__notice-heading {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   color: var(--text-body);
 }
 
 .ovl-video__notice-body {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.5;
   color: var(--text-muted);
 }
