@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.30
+
+### Patch Changes
+
+- 23e113f: The library switcher's move checkboxes no longer print "Select {name} to move" beside each row; screen readers still announce it. `Checkbox` gains a `hideLabel` option, and the visually-hidden utility now loads globally, so hidden labels stay hidden in Storybook and detached windows too.
+- a05b8fd: Make "Connect" in the sidebar's not-connected line a link-style button with a 24px target, instead of turning the whole sentence into one button.
+
 ## 0.76.29
 
 ### Patch Changes
