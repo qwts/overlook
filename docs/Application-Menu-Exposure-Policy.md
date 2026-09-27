@@ -136,6 +136,12 @@ registry. A parity test fails if a non-Photo macOS command is in neither
 enabled, and Lock Now only when app lock is configured. Spec: Overlook Design
 System → _Toolbar and Window Chrome_ (Pass B).
 
+**Staged rollout.** The table is the end state. #1292 removed Transfer & Sync
+and Export All Unencrypted from the macOS toolbar, where the native Overlook
+and File menus already carry them. On Windows/Linux both stay in the toolbar
+until #1293 ships the ⋯ menu; that change removes them from the toolbar, so
+neither platform is ever without a surface for either command.
+
 ## Command exposure matrix
 
 `Native` means eligible for the application menu. `Context` includes toolbar,
