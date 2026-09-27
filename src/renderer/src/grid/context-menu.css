@@ -62,9 +62,11 @@
 }
 
 /* Item descriptions (#1291) wrap at a reading measure rather than stretching
-   the menu to the longest one. */
+   the menu to the longest one. They are read, not glanced at, so they take the
+   muted text colour: faint falls below 4.5:1 on a focused item's fill. */
 .ovl-context-menu__description {
   max-inline-size: 36ch;
+  color: var(--text-muted);
 }
 
 /* Radio items (#1291): a fixed check column keeps labels aligned whether or
