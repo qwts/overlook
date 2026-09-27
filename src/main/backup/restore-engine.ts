@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { BlobStore, BlobStoreError } from '../blobs/blob-store.js';
 import { ProtectedBlobStore, ProtectedBlobStoreError } from '../blobs/protected-blob-store.js';
 import { KeyStore, type SafeStorageLike } from '../crypto/keystore.js';
+import { rememberOpenedMaster } from '../crypto/library-master-port.js';
 import { installRecoveredMaster } from '../crypto/recovery.js';
 import { createDecryptStream } from '../crypto/envelope.js';
 import { openLibraryDatabase } from '../db/database.js';
@@ -448,6 +449,7 @@ export class RestoreEngine {
     this.emit('activating', 0, 1, null);
     await this.deps.beforeActivate?.();
     await activateStagedLibrary(paths, this.deps.activationOperations);
+    rememberOpenedMaster(paths.targetDir, request.masterKey);
     try {
       // Immediately after the rename: the activated library must not relaunch
       // against the replaced library's anchor. A crash before this line keeps
@@ -756,7 +758,7 @@ export class RestoreEngine {
     if (installed !== 'installed' && installed !== 'already-installed') {
       throw new RestoreError('wrong-key', `recovered master installation failed: ${installed}`);
     }
-    const recovered = KeyStore.open({ safeStorage: this.deps.safeStorage, dataDir: paths.stagingDir });
+    const recovered = KeyStore.open({ safeStorage: this.deps.safeStorage, dataDir: paths.stagingDir, recordMasterBackup: false });
     try {
       const requiresFreshWriteKey = discovery.bootstrap.schema === 1 || candidate.generation !== discovery.bootstrap.manifestGeneration;
       if (requiresFreshWriteKey) {

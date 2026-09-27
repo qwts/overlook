@@ -2951,6 +2951,9 @@
   "settings.keys.copyFingerprint": {
     "defaultMessage": "library key fingerprint"
   },
+  "settings.keys.macMasterBackup": {
+    "defaultMessage": "This Mac keeps a login-keychain copy of the master key. Without that copy and the exported recovery key, the library cannot be decrypted."
+  },
   "settings.nav.general": {
     "defaultMessage": "General"
   },

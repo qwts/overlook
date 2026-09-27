@@ -15,6 +15,7 @@
     "drag.cjs",
     "photokit.cjs",
     "file-provider.cjs",
+    "library-master.cjs",
     "prebuilds/**/*.node"
   ],
   "binary": {

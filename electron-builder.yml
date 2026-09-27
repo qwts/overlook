@@ -39,6 +39,7 @@ files:
   - '!node_modules/@overlook/touch-id/native_drag.mm'
   - '!node_modules/@overlook/touch-id/photokit.mm'
   - '!node_modules/@overlook/touch-id/file_provider.mm'
+  - '!node_modules/@overlook/touch-id/library_master.mm'
   - '!node_modules/@overlook/windows-interop/build/**'
   - '!node_modules/@overlook/windows-interop/install.cjs'
   - '!node_modules/@overlook/windows-interop/prepare-prebuild.cjs'

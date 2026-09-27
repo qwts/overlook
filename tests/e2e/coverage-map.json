@@ -3024,6 +3024,24 @@
           ]
         }
       ]
+    },
+    {
+      "id": "1321-library-master-backup",
+      "wiki": "ADR-0035-Same-Mac-Master-Key-Backup",
+      "coverage": [
+        {
+          "type": "unit-dom",
+          "paths": [
+            "tests/crypto/library-master-backup.test.ts",
+            "tests/crypto/app-lock-credentials.test.ts",
+            "tests/dom/key-dialog-master-backup.test.ts"
+          ]
+        },
+        {
+          "type": "manual",
+          "reason": "The login-keychain ACL is checked on a signed Overlook build. Unit tests use a fake port and do not call SecItem."
+        }
+      ]
     }
   ]
 }

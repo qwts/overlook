@@ -16,6 +16,8 @@ import { registerFullProtocol } from './fullres/full-protocol.js';
 import type { ImportService } from './import/import-service.js';
 import { ulid } from './import/ulid.js';
 import type { KeyStore } from './crypto/keystore.js';
+import { createLibraryMasterBackup } from './crypto/library-master-native.js';
+import { installLibraryMasterBackup } from './crypto/library-master-port.js';
 import { registerCustodyHandlers } from './library/custody-ipc.js';
 import { readProbedLibraryCustody } from './library/library-custody.js';
 import { createRecoveryKeyFacade } from './crypto/recovery-key-facade.js';
@@ -230,6 +232,7 @@ async function pickDiagnosticsExport(options: AppServicesOptions): Promise<strin
 }
 
 export function registerAppServices(options: AppServicesOptions): void {
+  installLibraryMasterBackup(createLibraryMasterBackup({ platform: process.platform }));
   registerCustodyHandlers(() => readProbedLibraryCustody(options.libraryOpen(), options.dataDir(), options.safeStorage()));
   registerOriginalRecoveryHandlers(options.getOriginalRecovery, options.requireContentAccess, options.authorizationEpoch, async () => {
     const fixture = options.harnessEnv('OVERLOOK_RECOVER_ORIGINAL_SOURCE');
