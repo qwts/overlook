@@ -80,6 +80,9 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
           '.d { font-weight: 700 !important; }',
           '.e { border-radius: inherit; font-weight: unset; }',
           '.f { border-radius: var(--radius-1) var(--radius-2); }',
+          '.g { font: var(--type-meta); font-size: 12px; }',
+          '.h { font: 700 12px sans-serif; }',
+          '.i { font: inherit; }',
         ].join('\n'),
       },
       { file: 'src/example/Example.tsx', source: "const style = { borderRadius: '3px' };" },
@@ -89,6 +92,7 @@ test('renderer scale gate reports literal radii and font weights with lines (#12
       { file: 'src/example/example.css', line: 4, property: 'border-top-left-radius', value: '2px' },
       { file: 'src/example/example.css', line: 5, property: 'font-weight', value: '700' },
       { file: 'src/example/example.css', line: 7, property: 'border-radius', value: 'var(--radius-1) var(--radius-2)' },
+      { file: 'src/example/example.css', line: 9, property: 'font', value: '700 12px sans-serif' },
     ],
   );
 });
