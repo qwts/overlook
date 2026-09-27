@@ -737,14 +737,7 @@ export function Sidebar({
           {state.providerConnected ? null : (
             // Disconnected (#239): say so and offer the path back — never a
             // fabricated backup figure.
-            <button
-              type="button"
-              className="ovl-sidebar__connect"
-              data-testid="sidebar-connect"
-              onClick={() => {
-                dispatch({ type: 'dialog/set', dialog: 'settings', open: true });
-              }}
-            >
+            <p className="ovl-sidebar__connect">
               <Icon name="cloud-off" size={12} color="var(--text-faint)" />
               <span>
                 <FormattedMessage
@@ -752,11 +745,23 @@ export function Sidebar({
                   defaultMessage="{provider} not connected — <cta>Connect</cta>"
                   values={{
                     provider: state.providerLabel,
-                    cta: (chunks) => <span className="ovl-sidebar__connect-cta">{chunks}</span>,
+                    // A sans sentence with Connect as its only control (#1302).
+                    cta: (chunks) => (
+                      <button
+                        type="button"
+                        className="ovl-sidebar__connect-cta"
+                        data-testid="sidebar-connect"
+                        onClick={() => {
+                          dispatch({ type: 'dialog/set', dialog: 'settings', open: true });
+                        }}
+                      >
+                        {chunks}
+                      </button>
+                    ),
                   }}
                 />
               </span>
-            </button>
+            </p>
           )}
         </div>
       )}
