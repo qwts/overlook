@@ -168,7 +168,7 @@ test('HEIC import renders oriented previews and Original export remains byte-fai
     await page.getByRole('button', { name: 'Open iphone-13-pro.heic' }).click();
     const image = page.getByTestId('lightbox').getByRole('img', { name: 'iphone-13-pro.heic' });
     await expect.poll(() => image.evaluate((node) => (node as unknown as { readonly naturalHeight: number }).naturalHeight)).toBe(4032);
-    await expect(page.getByText('PREVIEW UNAVAILABLE')).toHaveCount(0);
+    await expect(page.getByText('Preview unavailable')).toHaveCount(0);
 
     await page.getByTestId('lightbox').getByRole('button', { name: 'Export' }).click();
     await page.getByRole('radio', { name: 'Original only', exact: true }).click();
@@ -240,7 +240,7 @@ test('EXIF dimension mismatch keeps decoded dimensions and warns in the Inspecto
     await page.keyboard.press('i');
     const inspector = page.getByTestId('inspector');
     await expect(inspector).toContainText('1280×838 · 1.1 MP');
-    await expect(inspector).toContainText('DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA');
+    await expect(inspector).toContainText('Dimensions mismatch — possibly corrupt metadata');
   } finally {
     await app.close();
   }

@@ -43,7 +43,7 @@ export function OriginalRecoveryAction({ photo }: { readonly photo: PhotoRecord 
   const reason = enabled ? undefined : intl.formatMessage(LOCKED_PHOTO_COMMAND_REASON, { id: String(photo.missingKeyId ?? photo.keyId) });
   return (
     <div>
-      <p className="mono-data">{intl.formatMessage(messages.missing)}</p>
+      <p className="prose-note">{intl.formatMessage(messages.missing)}</p>
       <Button
         size="sm"
         variant="secondary"
@@ -59,9 +59,9 @@ export function OriginalRecoveryAction({ photo }: { readonly photo: PhotoRecord 
       >
         {intl.formatMessage(commandById('photo.recoverOriginal').label)}
       </Button>
-      {reason === undefined ? null : <p className="mono-data">{reason}</p>}
+      {reason === undefined ? null : <p className="prose-note">{reason}</p>}
       {result === null ? null : (
-        <p role="status" className="mono-data">
+        <p role="status" className="prose-note">
           {result}
         </p>
       )}

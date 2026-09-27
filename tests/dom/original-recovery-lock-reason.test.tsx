@@ -17,7 +17,7 @@ test('recovery action names the absent retained key rather than the present orig
     deletedAt: null,
   } as PhotoRecord;
   const intl = createIntl({ locale: 'en', messages: {} }, createIntlCache());
-  assert.equal(await recoverOriginalWithMessage(photo, intl), 'LOCKED — KEY #2 IS NOT ON THIS DEVICE');
+  assert.equal(await recoverOriginalWithMessage(photo, intl), 'Locked — KEY #2 is not on this device');
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -32,7 +32,7 @@ test('recovery action names the absent retained key rather than the present orig
     const button = container.querySelector('button');
     assert.ok(button);
     assert.equal(button.disabled, true);
-    assert.equal(button.title, 'LOCKED — KEY #2 IS NOT ON THIS DEVICE');
+    assert.equal(button.title, 'Locked — KEY #2 is not on this device');
     assert.ok(container.textContent?.includes('KEY #2'));
     assert.ok(!container.textContent?.includes('KEY #3'));
   } finally {

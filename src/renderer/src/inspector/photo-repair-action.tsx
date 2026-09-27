@@ -63,9 +63,9 @@ export function PhotoRepairAction({ photo }: { readonly photo: RepairablePhoto }
       >
         {intl.formatMessage(commandById('photo.repair').label)}
       </Button>
-      {reason === undefined ? null : <p className="mono-data">{reason}</p>}
+      {reason === undefined ? null : <p className="prose-note">{reason}</p>}
       {result === null ? null : (
-        <p className="mono-data" role="status">
+        <p className="prose-note" role="status">
           {result}
         </p>
       )}

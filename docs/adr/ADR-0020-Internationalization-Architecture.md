@@ -4,6 +4,8 @@
 
 Accepted 2026-07-17 on issue [#402](https://github.com/qwts/photos/issues/402) (proposed and owner-accepted the same day; any section may still be amended by owner veto before its implementing code lands). This ADR extends [ADR-0001](./ADR-0001-Automation-Check-Governance.md) (the ratchet in §6 is governed by it) and works within [ADR-0003](./ADR-0003-Desktop-Stack.md) (process layering); it rewrites nothing.
 
+Amended 2026-09-26 on issue [#1287](https://github.com/qwts/overlook/issues/1287): §3's `.mono-data` scope narrows to machine values (see the amendment at the end).
+
 Section map for the epic's children: §1, §2, §6 govern [#403](https://github.com/qwts/photos/issues/403) (catalog runtime, extraction, pseudo-locale gate); §3, §4 govern [#404](https://github.com/qwts/photos/issues/404) (locale-aware formatting); §2, §3, §5 govern [#405](https://github.com/qwts/photos/issues/405) (language setting, live switching, RTL). §7 governs the epic's translation workflow.
 
 ## Context
@@ -176,3 +178,11 @@ Both are dev/CI only and never ship in a release build.
 - An application menu, tray, or notification lands — main becomes a catalog consumer via `@formatjs/intl` (§1).
 - React 19 migration — re-check `react-intl`'s peer range at that point, though it already allows `>=18`.
 - A locale needs a calendar the stored Gregorian wall-clock cannot express (§4) — nothing today does; `fa-IR` renders Jalali from a Gregorian instant correctly.
+
+## Amendment 2026-09-26 (#1287, UI-03): prose leaves `.mono-data`
+
+§3 keeps its ruling: catalog strings are natural case, and casing is applied by CSS alone. What changes is which text `.mono-data` may carry. §3 and finding 27 of the 2026-07 accessibility audit treated prose inside `.mono-data` as acceptable, because CSS uppercased it. The 2026-09 UI audit found that mono sentences wrap badly and read slowly, and that the uppercase transform turns "24m ago" into "24M AGO".
+
+- **`.mono-data` is for machine values only:** paths, file names, sizes, counts, hashes, EXIF values, absolute timestamps, key identifiers, and lines made only of such values joined by `·`. Short labels (field labels, section headings, eyebrows, badges) also stay mono uppercase.
+- **Prose is sans and sentence case:** hints, notes, errors, status sentences, relative times, and lines that read as a phrase even when they contain a count ("3 of 12 selected"). These use the `.prose-note` utility or a component rule on the sans type scale.
+- **Recased catalog strings.** Five `preview.*` messages, `lightbox.locked`, `inspector.custody.locked`, and `inspector.file.dimensionMismatch` were uppercase in source, contrary to §3. They are now sentence case. The key identifier inside them stays `KEY #{id}`, as §3 leaves identifiers literal.

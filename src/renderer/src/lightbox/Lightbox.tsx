@@ -33,7 +33,7 @@ import './lightbox.css';
 // #94; delete stays a disabled stub until M10's soft-delete.
 
 const lockedMessages = defineMessages({
-  locked: { id: 'lightbox.locked', defaultMessage: 'LOCKED — KEY #{id} IS NOT ON THIS DEVICE' },
+  locked: { id: 'lightbox.locked', defaultMessage: 'Locked — KEY #{id} is not on this device' },
   hint: {
     id: 'lightbox.locked.hint',
     defaultMessage: 'Import the key under Settings › Privacy › Encryption keys to view this photo.',
@@ -251,7 +251,7 @@ export function Lightbox({
       {photo.locked ? (
         <div className="ovl-lightbox__locked" role="status" data-testid="lightbox-locked">
           <Icon name="lock" size={40} strokeWidth={1.75} />
-          <span className="mono-data">{intl.formatMessage(lockedMessages.locked, { id: String(photo.missingKeyId ?? photo.keyId) })}</span>
+          <span className="prose-note">{intl.formatMessage(lockedMessages.locked, { id: String(photo.missingKeyId ?? photo.keyId) })}</span>
           <span className="ovl-lightbox__lockedHint">{intl.formatMessage(lockedMessages.hint)}</span>
         </div>
       ) : isVideo ? (
@@ -333,10 +333,10 @@ export function Lightbox({
         {isVideo ? null : <span className="ovl-lightbox__exif mono-data">{exifStrip(photo)}</span>}
         {remoteCustodyCandidate && ephemeralStage !== null && ephemeralStage !== 'released' ? (
           <div className="ovl-lightbox__custody">
-            {ephemeralStage === 'fetching' ? <span className="mono-data">Fetching original…</span> : null}
-            {ephemeralStage === 'verifying' ? <span className="mono-data">Verifying original…</span> : null}
-            {ephemeralStage === 'ready' ? <span className="mono-data">Streaming original · re-offloads on close</span> : null}
-            {ephemeralStage === 'error' ? <span className="mono-data">{custody?.text ?? 'Original unavailable'}</span> : null}
+            {ephemeralStage === 'fetching' ? <span className="prose-note">Fetching original…</span> : null}
+            {ephemeralStage === 'verifying' ? <span className="prose-note">Verifying original…</span> : null}
+            {ephemeralStage === 'ready' ? <span className="prose-note">Streaming original · re-offloads on close</span> : null}
+            {ephemeralStage === 'error' ? <span className="prose-note">{custody?.text ?? 'Original unavailable'}</span> : null}
             {ephemeralStage === 'ready' && offloaded ? (
               <Button
                 size="sm"

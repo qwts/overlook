@@ -15,5 +15,5 @@ export function photoCommandAvailability(
 
 export const LOCKED_PHOTO_COMMAND_REASON = {
   id: 'inspector.custody.locked',
-  defaultMessage: 'LOCKED — KEY #{id} IS NOT ON THIS DEVICE',
+  defaultMessage: 'Locked — KEY #{id} is not on this device',
 } as const;

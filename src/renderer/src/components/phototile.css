@@ -54,7 +54,6 @@
   place-items: center;
   padding: var(--space-3);
   color: var(--text-tertiary);
-  letter-spacing: 0.08em;
   text-align: center;
   pointer-events: none;
 }
@@ -333,8 +332,8 @@
 
 /* Type never drops below --text-xs (#1288). A pill too wide for its tile at
  * the current zoom drops to its glyph; the label stays in the accessibility
- * tree. Each breakpoint is the pill's widest label at 11px in the bundled
- * fonts plus the corner controls that share its row. */
+ * tree. Each breakpoint is the pill's widest label at its rendered size in the
+ * bundled fonts plus the corner controls that share its row. */
 @container ovl-tile (width < 136px) {
   .ovl-tile__original {
     --ovl-tile-pill: glyph;
@@ -353,7 +352,7 @@
   }
 }
 
-@container ovl-tile (width < 296px) {
+@container ovl-tile (width < 256px) {
   .ovl-tile__retention {
     --ovl-tile-pill: glyph;
   }

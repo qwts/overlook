@@ -169,7 +169,7 @@ export function FeedCard({
           <Icon name={PLACEHOLDER_ICON.video} size={40} strokeWidth={1.75} />
         </div>
       ) : null}
-      <div className="ovl-feedcard__unavailable mono-data" />
+      <div className="ovl-feedcard__unavailable prose-note" />
     </div>
   );
   return (
@@ -223,7 +223,7 @@ export function FeedCard({
           <div className={titleClass} aria-hidden="true">
             {title === '' ? photo.fileName : title}
           </div>
-          <div className="ovl-feedcard__meta mono-data">{meta}</div>
+          <div className={`ovl-feedcard__meta ${retentionLabel === undefined ? 'mono-data' : 'prose-note'}`}>{meta}</div>
         </div>
         {photo.isOriginal ? (
           <span role="img" aria-label={protectedLabel} title={protectedLabel}>

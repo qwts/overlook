@@ -11,10 +11,46 @@ import type { OverlookApi } from '../../../shared/ipc/api.js';
 // Phase transitions past "options" need the real engine (#90's E2E). The
 // decorator stubs window.overlook.settings + import discovery.
 
-const SD_SUMMARY = { total: 1204, newCount: 1204, newBytes: 38_200_000_000, newRaw: 812, newJpg: 392, newOther: 0 };
-const FOLDER_SUMMARY = { total: 486, newCount: 486, newBytes: 12_400_000_000, newRaw: 0, newJpg: 486, newOther: 0 };
-const DROP_SUMMARY = { total: 2, newCount: 2, newBytes: 61_000_000, newRaw: 1, newJpg: 1, newOther: 0 };
-const DRIVE_SUMMARY = { total: 3, newCount: 2, newBytes: 82_000_000, newRaw: 1, newJpg: 1, newOther: 0 };
+const SD_SUMMARY = {
+  total: 1204,
+  newCount: 1204,
+  newBytes: 38_200_000_000,
+  newRaw: 812,
+  newJpg: 392,
+  newOther: 0,
+  newSidecars: 0,
+  unmatchedCompanions: 0,
+};
+const FOLDER_SUMMARY = {
+  total: 486,
+  newCount: 486,
+  newBytes: 12_400_000_000,
+  newRaw: 0,
+  newJpg: 486,
+  newOther: 0,
+  newSidecars: 0,
+  unmatchedCompanions: 0,
+};
+const DROP_SUMMARY = {
+  total: 2,
+  newCount: 2,
+  newBytes: 61_000_000,
+  newRaw: 1,
+  newJpg: 1,
+  newOther: 0,
+  newSidecars: 0,
+  unmatchedCompanions: 0,
+};
+const DRIVE_SUMMARY = {
+  total: 3,
+  newCount: 2,
+  newBytes: 82_000_000,
+  newRaw: 1,
+  newJpg: 1,
+  newOther: 0,
+  newSidecars: 0,
+  unmatchedCompanions: 0,
+};
 
 function installStub(options?: {
   readonly noCard?: boolean;

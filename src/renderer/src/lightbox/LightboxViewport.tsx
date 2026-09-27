@@ -554,23 +554,23 @@ export function LightboxViewport({
         <CropOverlay box={cropBox} crop={cropDraft} onChange={setCropDraft} label={intl.formatMessage(messages.cropSurface)} />
       ) : null}
       {loadStage === 'loading' && showLoadingIndicator ? (
-        <div className="ovl-lightbox__loading mono-data" role="status" aria-live="polite">
+        <div className="ovl-lightbox__loading prose-note" role="status" aria-live="polite">
           <span className="ovl-lightbox__loading-spinner" aria-hidden="true" />
           {intl.formatMessage(messages.loading)}
         </div>
       ) : null}
       {loadStage === 'error' ? (
-        <div className="ovl-lightbox__unavailable mono-data" role="status">
+        <div className="ovl-lightbox__unavailable prose-note" role="status">
           {previewFailureLabel(intl, photo.previewFailure)}
         </div>
       ) : null}
       {showHint && chromeVisible ? (
-        <div className="ovl-lightbox__gesture-hint mono-data" role="status">
+        <div className="ovl-lightbox__gesture-hint prose-note" role="status">
           Double-click to fill · Option + scroll to zoom · scroll or arrows to pan
         </div>
       ) : null}
       {edit !== undefined && edit.unsupported !== null ? (
-        <div className="ovl-lightbox__edit-status mono-data" role="status" data-testid="lightbox-edit-unsupported">
+        <div className="ovl-lightbox__edit-status prose-note" role="status" data-testid="lightbox-edit-unsupported">
           {intl.formatMessage(messages.unsupported)}
         </div>
       ) : null}

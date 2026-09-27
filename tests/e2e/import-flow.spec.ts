@@ -238,7 +238,7 @@ test('RAW matrix: every accepted extension imports with a visible tile and light
       .first()
       .click();
     await expect(page.getByText('Preview', { exact: true })).toBeVisible();
-    await expect(page.getByText('PREVIEW UNAVAILABLE')).toHaveCount(0);
+    await expect(page.getByText('Preview unavailable')).toHaveCount(0);
   } finally {
     await close();
   }

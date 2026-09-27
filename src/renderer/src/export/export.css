@@ -8,7 +8,9 @@
 
 .ovl-export__metadataHint {
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-export__card {
@@ -91,7 +93,9 @@
 }
 
 .ovl-export__decryptHint {
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text-faint);
   margin-top: calc(var(--space-1) / 2);
   max-width: 260px;
@@ -102,7 +106,9 @@
   align-items: center;
   gap: calc(var(--space-1) * 1.5);
   color: var(--accent-amber);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-export__photosNotice {
@@ -110,7 +116,9 @@
   align-items: center;
   gap: calc(var(--space-1) * 1.5);
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-export__running {
@@ -150,7 +158,9 @@
   margin: 0;
   padding-inline-start: var(--space-4);
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .ovl-export__acknowledge {

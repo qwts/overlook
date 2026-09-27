@@ -123,7 +123,7 @@ export function ProtectedAlbumView({ albumId, onRelocked, mediaSrc }: ProtectedA
             <Icon name="lock" size={13} /> Session unlocked
           </div>
           <h1>{summary?.name ?? 'Protected album'}</h1>
-          <div className="ovl-protected-route__count mono-data" aria-live="polite">
+          <div className={`ovl-protected-route__count ${summary === null ? 'prose-note' : 'mono-data'}`} aria-live="polite">
             {summary === null ? 'Opening securely…' : `${formatCount(summary.count)} ${summary.count === 1 ? 'photo' : 'photos'}`}
           </div>
         </div>

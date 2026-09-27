@@ -50,8 +50,9 @@
   border: 1px solid var(--border-photo-overlay);
   border-radius: var(--radius-sm);
   background: var(--surface-photo-overlay-medium);
-  font: var(--type-meta);
-  letter-spacing: 0.04em;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   backdrop-filter: blur(12px);
 }
 
@@ -89,8 +90,9 @@
   border-radius: var(--radius-sm);
   background: var(--surface-photo-overlay-strong);
   color: var(--text-photo-muted);
-  font: var(--type-meta);
-  letter-spacing: 0.04em;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   text-align: center;
   pointer-events: none;
   animation: ovl-lightbox-hint-in var(--duration-normal) var(--ease-out);
@@ -323,6 +325,10 @@
   color: var(--text-photo-muted);
 }
 
+.ovl-lightbox__custody .prose-note {
+  color: var(--text-photo-muted);
+}
+
 @media (max-width: 860px) {
   .ovl-lightbox__title {
     display: none;
@@ -398,6 +404,8 @@
 
 .ovl-lightbox__lockedHint {
   color: var(--text-muted);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   max-width: 36ch;
 }

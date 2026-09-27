@@ -206,7 +206,7 @@ export function ProtectedAlbumCeremony({ mode, albumId, albumName, onClose, onCo
           <div className="ovl-protected-file">
             <div>
               <div className="ovl-key__label mono-data">Recovery file</div>
-              <div className="ovl-protected-file__name mono-data">
+              <div className={`ovl-protected-file__name ${recoveryPath === null ? 'prose-note' : 'mono-data'}`}>
                 {recoveryPath === null ? 'No file selected' : (recoveryPath.split(/[\\/]/).at(-1) ?? 'Recovery file')}
               </div>
             </div>
@@ -275,7 +275,7 @@ export function ProtectedAlbumCeremony({ mode, albumId, albumName, onClose, onCo
               max={STAGES.length}
               tone={progress.stage === 'complete' ? 'green' : 'amber'}
             />
-            <div className="mono-data">
+            <div className="prose-note">
               {canCancel ? 'Cancellation is available before commit.' : 'Commit reached — finishing verified cleanup.'}
             </div>
           </div>

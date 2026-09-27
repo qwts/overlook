@@ -24,17 +24,26 @@ export interface CopyableValueProps {
   readonly label: string;
   readonly className?: string;
   readonly textClassName?: string;
+  /** Sentence text, such as an error message: sans, not machine mono (#1287). */
+  readonly prose?: boolean;
   /** Injectable for Storybook and for hosts that require a clipboard bridge. */
   readonly copy?: CopyValue;
 }
 
-/** Real selectable machine text with one keyboard-accessible copy action. */
-export function CopyableValue({ value, label, className, textClassName, copy = writeToClipboard }: CopyableValueProps): ReactElement {
+/** Real selectable text with one keyboard-accessible copy action. */
+export function CopyableValue({
+  value,
+  label,
+  className,
+  textClassName,
+  prose = false,
+  copy = writeToClipboard,
+}: CopyableValueProps): ReactElement {
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const copyLabel = intl.formatMessage(messages.copy, { label });
   const classes = ['ovl-copyable-value', className].filter(Boolean).join(' ');
-  const textClasses = ['mono-data', 'ovl-copyable-value__text', textClassName].filter(Boolean).join(' ');
+  const textClasses = [prose ? 'prose-note' : 'mono-data', 'ovl-copyable-value__text', textClassName].filter(Boolean).join(' ');
   const handleCopy = async (): Promise<void> => {
     try {
       await copy(value);

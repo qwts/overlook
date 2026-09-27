@@ -111,7 +111,7 @@ export const LockedPhotoActions: Story = {
     const duplicateItem = menu.getByRole('menuitem', { name: /Duplicate/u });
     for (const item of [exportItem, duplicateItem]) {
       await expect(item).toHaveAttribute('aria-disabled', 'true');
-      await expect(item).toHaveAttribute('title', 'LOCKED — KEY #7 IS NOT ON THIS DEVICE');
+      await expect(item).toHaveAttribute('title', 'Locked — KEY #7 is not on this device');
       await userEvent.click(item);
     }
     await expect(args.onExport).not.toHaveBeenCalled();

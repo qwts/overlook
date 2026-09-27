@@ -390,7 +390,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
             {allPhotos ? null : <Switch checked={decrypt} onChange={setDecrypt} label="Decrypt originals" />}
           </div>
           {!decrypt ? (
-            <div className="ovl-export__warning mono-data" role="alert">
+            <div className="ovl-export__warning prose-note" role="alert">
               <Icon name="triangle-alert" size={12} />
               Without decryption, exported files can&apos;t be opened outside Overlook.
             </div>
@@ -415,7 +415,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
               </Button>
             </div>
           ) : (
-            <div className="ovl-export__photosNotice mono-data">
+            <div className="ovl-export__photosNotice prose-note">
               <Icon name="info" size={12} />
               {intl.formatMessage(messages.photoKitAccessHint)}
             </div>
@@ -465,6 +465,7 @@ export function ExportDialog({ open, photoIds, allPhotos = false, onClose }: Exp
                             <CopyableValue
                               value={`${fileName}: ${detail}`}
                               label={intl.formatMessage(messages.copyFailure)}
+                              prose
                               className="ovl-export__failureValue"
                             />
                           </li>

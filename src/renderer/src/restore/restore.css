@@ -87,7 +87,8 @@
 }
 
 .ovl-restore__keyrow .mono-data,
-.ovl-restore__keydrop .mono-data {
+.ovl-restore__keydrop .mono-data,
+.ovl-restore__keydrop .prose-note {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

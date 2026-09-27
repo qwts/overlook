@@ -43,7 +43,7 @@ const messages = defineMessages({
   metadataLabel: { id: 'inspector.file.metadata', defaultMessage: 'Metadata' },
   dimensionMismatch: {
     id: 'inspector.file.dimensionMismatch',
-    defaultMessage: 'DIMENSIONS MISMATCH — POSSIBLY CORRUPT METADATA',
+    defaultMessage: 'Dimensions mismatch — possibly corrupt metadata',
   },
   selectionPosition: { id: 'inspector.selection.position', defaultMessage: '{current} of {count} selected' },
   previousSelected: { id: 'inspector.selection.previous', defaultMessage: 'Previous selected photo' },
@@ -53,7 +53,7 @@ const messages = defineMessages({
   lockedThumb: { id: 'inspector.custody.lockedThumb', defaultMessage: 'Locked' },
   custodyLocked: {
     id: 'inspector.custody.locked',
-    defaultMessage: 'LOCKED — KEY #{id} IS NOT ON THIS DEVICE',
+    defaultMessage: 'Locked — KEY #{id} is not on this device',
   },
 });
 
@@ -110,7 +110,7 @@ export function Inspector({
     return (
       <div className="ovl-inspector ovl-inspector--empty" data-testid="inspector">
         <h2 className="ovl-sr-only">{intl.formatMessage(messages.title)}</h2>
-        <span className="mono-data">Select a photo</span>
+        <span className="prose-note">Select a photo</span>
       </div>
     );
   }
@@ -149,7 +149,7 @@ export function Inspector({
           })}
         >
           <IconButton icon="chevron-left" label={intl.formatMessage(messages.previousSelected)} onClick={onPrevious} />
-          <span className="mono-data" aria-live="polite">
+          <span className="prose-note" aria-live="polite">
             {intl.formatMessage(messages.selectionPosition, {
               current: selectionPosition.index + 1,
               count: selectionPosition.count,
@@ -159,7 +159,7 @@ export function Inspector({
         </nav>
       )}
       {photo.previewFailure === 'deferred-original' ? (
-        <p className="mono-data" role="status">
+        <p className="prose-note" role="status">
           {previewFailureLabel(intl, photo.previewFailure)}
         </p>
       ) : null}
@@ -221,11 +221,12 @@ export function Inspector({
         </Section>
       )}
       <Section title="File">
-        <MetadataRow label="Dimensions" value={dimensions} />
+        <MetadataRow label="Dimensions" value={dimensions} mono={photo.width > 0 && photo.height > 0} />
         {photo.dimensionStatus === 'metadata-mismatch' ? (
           <MetadataRow
             label={intl.formatMessage(messages.metadataLabel)}
             value={intl.formatMessage(messages.dimensionMismatch)}
+            mono={false}
             tone="var(--accent-amber)"
           />
         ) : null}
@@ -234,6 +235,7 @@ export function Inspector({
           <MetadataRow
             label="Custody"
             value={intl.formatMessage(messages.custodyLocked, { id: String(photo.missingKeyId ?? photo.keyId) })}
+            mono={false}
             tone="var(--accent-amber)"
           />
         ) : null}
@@ -247,6 +249,7 @@ export function Inspector({
         <MetadataRow
           label="State"
           value={photo.coverage === 'included' ? (custody?.text ?? statusText[photo.syncState]) : coverageText}
+          mono={false}
           tone={photo.coverage === 'included' ? (custody?.tone ?? STATUS_TONE[photo.syncState]) : STATUS_TONE.offloaded}
         />
         <MetadataRow

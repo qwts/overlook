@@ -77,7 +77,7 @@ export function OffloadDialog({ photoIds, onClose, onComplete }: OffloadDialogPr
       }
     >
       <div className="ovl-offload" aria-live="polite">
-        {plan === null && error === null ? <div className="ovl-offload__loading mono-data">Checking verified backups…</div> : null}
+        {plan === null && error === null ? <div className="ovl-offload__loading prose-note">Checking verified backups…</div> : null}
         {plan === null ? null : (
           <>
             <div className="ovl-offload__summary">
@@ -90,7 +90,7 @@ export function OffloadDialog({ photoIds, onClose, onComplete }: OffloadDialogPr
             <div className="ovl-offload__safety">Encrypted cloud copies stay untouched. Thumbnails remain available offline.</div>
             {reasons.size === 0 ? null : (
               <div className="ovl-offload__skips">
-                <div className="mono-data">{formatCount(plan.ineligible)} will be skipped</div>
+                <div className="prose-note">{formatCount(plan.ineligible)} will be skipped</div>
                 <ul>
                   {[...reasons].map(([reason, count]) => (
                     <li key={reason}>

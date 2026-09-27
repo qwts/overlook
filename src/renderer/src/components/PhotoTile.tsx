@@ -79,7 +79,7 @@ function setPreviewUnavailable(image: HTMLImageElement, unavailable: boolean, la
   // Toggling data-unavailable drives the CSS: the text overlay OR, for a
   // `video` placeholder, the film-glyph fallback. Only the text overlay carries
   // the label — writing textContent onto the film fallback would clobber its
-  // icon and surface "PREVIEW UNAVAILABLE" on a perfectly good video tile.
+  // icon and surface "Preview unavailable" on a perfectly good video tile.
   image.dataset['unavailable'] = unavailable ? 'true' : 'false';
   const fallback = image.nextElementSibling;
   if (!(fallback instanceof HTMLElement) || !fallback.classList.contains('ovl-tile__unavailable')) return;
@@ -181,7 +181,7 @@ export function PhotoTile({
       ) : (
         // A `video` placeholder shows the deterministic poster once captured
         // (§6); until then the img is unavailable and the film-icon fallback
-        // stands in — a success state, never the "PREVIEW UNAVAILABLE" text.
+        // stands in — a success state, never the "Preview unavailable" text.
         <Fragment key={`${src}:${previewFailure ?? ''}:${placeholder ?? ''}`}>
           <img
             src={src}
@@ -202,7 +202,7 @@ export function PhotoTile({
               <Icon name="film" size={28} strokeWidth={1.75} />
             </div>
           ) : (
-            <div className="ovl-tile__unavailable mono-data" />
+            <div className="ovl-tile__unavailable prose-note" />
           )}
         </Fragment>
       )}
@@ -268,7 +268,7 @@ export function PhotoTile({
       {retentionLabel === undefined ? null : (
         <span className="ovl-tile__retention">
           <Icon name="clock" size={12} />
-          <span className="ovl-tile__pill-label mono-data">{retentionLabel}</span>
+          <span className="ovl-tile__pill-label prose-note">{retentionLabel}</span>
         </span>
       )}
       {duration == null && !preserved ? null : (

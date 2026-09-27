@@ -5,11 +5,14 @@
   color: var(--text-body);
 }
 
-.ovl-coverage__loading,
 .ovl-coverage__line,
 .ovl-coverage__skips {
   color: var(--text-muted);
   letter-spacing: var(--tracking-wide);
+}
+
+.ovl-coverage__loading {
+  color: var(--text-muted);
 }
 
 .ovl-coverage__summary {

@@ -102,7 +102,7 @@ in `src/shared/ipc/channels.ts` — never raw `ipcRenderer`.
 `design/handoff/tokens/`, the committed design handoff package) is the single
 styling source of truth. **No magic values** in renderer styles: color, type,
 spacing, radii, elevation, and motion always reference a token (`var(--…)`).
-Machine data (EXIF, counts, sync states) renders with the `.mono-data` utility.
+Machine data renders with `.mono-data`; prose sentences with `.prose-note`.
 
 ## Product Invariants
 

@@ -3,11 +3,14 @@
   gap: var(--space-4);
 }
 
-.ovl-interop__context,
 .ovl-interop__provider span,
 .ovl-interop__truth {
   color: var(--text-muted);
   font-size: var(--text-xs);
+}
+
+.ovl-interop__context {
+  color: var(--text-muted);
 }
 
 .ovl-interop__segmented,

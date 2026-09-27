@@ -472,7 +472,9 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
           <FormattedMessage {...messages.destination} />
         </div>
         <div className="ovl-libmove__location">
-          <span className="mono-data ovl-libmove__location-path">{root ?? intl.formatMessage(messages.destinationPlaceholder)}</span>
+          <span className={`${root === null ? 'prose-note' : 'mono-data'} ovl-libmove__location-path`}>
+            {root ?? intl.formatMessage(messages.destinationPlaceholder)}
+          </span>
           <Button size="sm" onClick={chooseRoot} data-testid="move-pick-destination">
             <FormattedMessage {...messages.choose} />
           </Button>
@@ -610,7 +612,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
             {row.status === 'failed' && row.reason !== undefined ? (
               <div className="ovl-libmove__error" role="alert">
                 <FormattedMessage {...reasonMessages[row.reason]} />
-                {row.detail === undefined ? '' : <span className="mono-data ovl-libmove__error-detail"> {row.detail}</span>}
+                {row.detail === undefined ? '' : <span className="prose-note ovl-libmove__error-detail"> {row.detail}</span>}
               </div>
             ) : null}
           </li>
@@ -625,7 +627,7 @@ export function MoveLibraryDialog({ libraries, onClose }: MoveLibraryDialogProps
 function ReviewProbe({ probe, pending }: { readonly probe: Probe | undefined; readonly pending: boolean }): ReactElement | null {
   if (pending) {
     return (
-      <span className="mono-data ovl-libmove__probe-note">
+      <span className="prose-note ovl-libmove__probe-note">
         <FormattedMessage {...messages.probing} />
       </span>
     );

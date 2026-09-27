@@ -149,7 +149,7 @@ export function CoverageDialog({ photoIds, onClose, onComplete }: CoverageDialog
     >
       <div className="ovl-coverage" aria-live="polite">
         {plan === null && error === null ? (
-          <div className="ovl-coverage__loading mono-data">{intl.formatMessage(messages.loading)}</div>
+          <div className="ovl-coverage__loading prose-note">{intl.formatMessage(messages.loading)}</div>
         ) : null}
         {plan === null ? null : (
           <>
@@ -175,7 +175,7 @@ export function CoverageDialog({ photoIds, onClose, onComplete }: CoverageDialog
             <div className="ovl-coverage__safety">{safety}</div>
             {reasons.size === 0 ? null : (
               <div className="ovl-coverage__skips">
-                <div className="mono-data">{intl.formatMessage(messages.skips, { count: plan.ineligible })}</div>
+                <div className="prose-note">{intl.formatMessage(messages.skips, { count: plan.ineligible })}</div>
                 <ul>
                   {[...reasons].map(([reason, count]) => (
                     <li key={reason}>

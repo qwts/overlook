@@ -2256,7 +2256,17 @@
             "tests/dom/intl-host.test.tsx",
             "tests/i18n/message-contracts.test.ts",
             "tests/backup/custody-presentation.test.ts",
-            "tests/tooling/i18n-contracts.test.ts"
+            "tests/tooling/i18n-contracts.test.ts",
+            "tests/dom/original-recovery-lock-reason.test.tsx"
+          ]
+        },
+        {
+          "type": "storybook",
+          "paths": [
+            "src/renderer/src/components/PhotoTile.stories.tsx",
+            "src/renderer/src/inspector/Inspector.stories.tsx",
+            "src/renderer/src/lightbox/Lightbox.stories.tsx",
+            "src/renderer/src/lightbox/LightboxCustody.stories.tsx"
           ]
         }
       ]

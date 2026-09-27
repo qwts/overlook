@@ -55,7 +55,9 @@
 
 .ovl-context-menu__meta {
   color: var(--text-faint);
-  font: var(--type-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 /* Right-aligned accelerator hint (e.g. the `?` on Keyboard shortcuts). */
