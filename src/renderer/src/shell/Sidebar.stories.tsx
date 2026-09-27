@@ -296,6 +296,7 @@ export const Disconnected: Story = {
     const line = connect.closest('p');
     if (line === null) throw new Error('connect line missing');
     await expect(line).toHaveTextContent(/not connected — Connect$/u);
+    await expect(line).toHaveClass('prose-note');
     await expect(getComputedStyle(line).textTransform).toBe('none');
     await expect(getComputedStyle(line).fontFamily).not.toMatch(/mono/iu);
     const target = connect.getBoundingClientRect();

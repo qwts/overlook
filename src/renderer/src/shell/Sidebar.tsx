@@ -735,7 +735,7 @@ export function Sidebar({
           {state.providerConnected ? null : (
             // Disconnected (#239): say so and offer the path back — never a
             // fabricated backup figure.
-            <p className="ovl-sidebar__connect">
+            <p className="prose-note ovl-sidebar__connect">
               <Icon name="cloud-off" size={12} color="var(--text-faint)" />
               <span>
                 <FormattedMessage
