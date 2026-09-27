@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.32
+
+### Patch Changes
+
+- bdd7991: Stop showing a lone dash while library stats load: the status bar says "Counting photos…" and the sidebar storage line waits until there is something to show.
+
 ## 0.76.31
 
 ### Patch Changes
