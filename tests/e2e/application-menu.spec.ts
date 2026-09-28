@@ -256,9 +256,12 @@ test('Windows/Linux draw no native menu and expose Help from the titlebar (#699)
     // No native application menu bar on these platforms (ADR-0024 §5).
     expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)).toBe(true);
 
-    // Export All remains reachable without macOS's native File menu. It uses
-    // the same registry command handler as the native menu surface.
-    await page.getByRole('button', { name: 'Export All Unencrypted…' }).click();
+    // Export All leaves the toolbar (#1293) and stays reachable from the ⋯
+    // Overlook menu, through the same registry command handler as the
+    // native menu surface.
+    await expect(page.locator('.ovl-toolbar').getByRole('button', { name: 'Export All Unencrypted…' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Overlook menu' }).click();
+    await page.getByRole('menuitem', { name: 'Export All Unencrypted…' }).click();
     await expect(page.getByRole('dialog', { name: 'Export' }).getByText('Every photo in this library')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
@@ -283,6 +286,55 @@ test('Windows/Linux draw no native menu and expose Help from the titlebar (#699)
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(help).toBeFocused();
+  } finally {
+    await app.close();
+  }
+});
+
+test('Windows/Linux ⋯ Overlook menu reaches File, Edit, View, and Overlook commands by keyboard (#1293)', async () => {
+  test.skip(process.platform === 'darwin', 'macOS keeps these commands in its native menu bar');
+  const app = await launch(mkE2eTmpDir('overlook-e2e-application-menu-overlook-'));
+  try {
+    const page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    // Import is the toolbar's only primary action (Pass B spec, decision 3).
+    await expect(page.locator('.ovl-toolbar').getByRole('button', { name: 'Transfer & Sync' })).toHaveCount(0);
+
+    const button = page.getByRole('button', { name: 'Overlook menu' });
+    await expect(button).toHaveAttribute('aria-haspopup', 'menu');
+    await button.focus();
+    await page.keyboard.press('ArrowDown');
+    const menu = page.getByRole('menu', { name: 'Overlook menu' });
+    await expect(menu).toBeVisible();
+    for (const heading of ['File', 'Edit', 'View', 'Overlook']) {
+      await expect(menu.getByRole('group', { name: heading })).toBeVisible();
+    }
+    await expect(menu.getByRole('menuitem', { name: 'Import Photos…' })).toBeFocused();
+    // pCloud is on in this profile, so Transfer & Sync has a place here.
+    await expect(menu.getByRole('menuitem', { name: 'Transfer & Sync' })).toBeVisible();
+
+    // Settings…: the menu closes, focus returns to ⋯, then Settings opens;
+    // closing Settings hands focus back to ⋯.
+    await menu.getByRole('menuitem', { name: 'Settings…' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(menu).toBeHidden();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await expect(settings).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(settings).toBeHidden();
+    await expect(button).toBeFocused();
+
+    // Esc closes without acting; Tab closes too. Focus never drops to <body>.
+    await page.keyboard.press('ArrowDown');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(button).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(menu.getByRole('menuitem').last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(menu).toBeHidden();
+    await expect(button).toBeFocused();
   } finally {
     await app.close();
   }

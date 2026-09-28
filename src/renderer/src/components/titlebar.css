@@ -47,25 +47,25 @@
   color: var(--text-over-danger);
 }
 
-/* Windows/Linux titlebar Help affordance (#699). Narrower than the window
- * controls; open + focus state carried by tint AND aria/ring, never colour
- * alone. */
+/* Windows/Linux titlebar menus: Help (#699) and the ⋯ Overlook menu
+ * (#1293, 44×30 like the window controls). Help is narrower; open + focus
+ * state carried by tint AND aria/ring, never colour alone. */
 .ovl-titlebar__help {
   width: 34px;
 }
 
-.ovl-titlebar__help[aria-expanded='true'] {
+.ovl-titlebar__menu[aria-expanded='true'] {
   background: var(--gray-3);
   color: var(--text-body);
 }
 
-.ovl-titlebar__help:focus-visible {
+.ovl-titlebar__menu:focus-visible {
   outline: 2px solid var(--accent-cyan);
   outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ovl-titlebar__help {
+  .ovl-titlebar__menu {
     transition: none;
   }
 }

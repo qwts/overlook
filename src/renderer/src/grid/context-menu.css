@@ -43,6 +43,21 @@
   border-top: 1px solid var(--border-1);
 }
 
+/* Grouped menus (#1293): a visible, non-interactive heading per group and a
+   rule between groups. */
+.ovl-context-menu__separator {
+  margin-block: var(--space-1);
+  border-top: 1px solid var(--border-1);
+}
+
+.ovl-context-menu__heading {
+  padding: var(--space-1) var(--space-2) 0;
+  color: var(--text-faint);
+  font: var(--type-meta);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
 .ovl-context-menu .ovl-context-menu__danger {
   color: var(--accent-red);
 }

@@ -17,10 +17,41 @@
 
 .ovl-toolbar__row {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-4);
   height: var(--toolbar-h);
   padding: 0 var(--space-4);
+}
+
+/* One row at every width (#1290, Pass B spec §02): only the search field and
+   the spacer flex; everything else keeps its size. The collapse levels below
+   take over before the search field drops under its basis. */
+.ovl-toolbar__row > * {
+  flex: none;
+}
+
+.ovl-toolbar__row > .ovl-search {
+  box-sizing: border-box;
+  flex: 1 1 300px;
+  min-inline-size: 180px;
+  max-inline-size: 360px;
+}
+
+/* The collapse hook's measuring pass (#1290): a level fits only if the
+   search field keeps its basis, with `--toolbar-collapse-probe` of room to
+   spare. The spare is a trailing item that cancels its own gap, since the
+   row's end padding doesn't count toward its scroll width. */
+.ovl-toolbar__row[data-collapse-probe] > .ovl-search {
+  flex-shrink: 0;
+}
+
+.ovl-toolbar__row[data-collapse-probe]::after {
+  content: '';
+  flex: none;
+  inline-size: var(--toolbar-collapse-probe, 0px);
+  block-size: 1px; /* an empty box adds no scrollable overflow */
+  margin-inline-start: calc(var(--space-4) * -1);
 }
 
 .ovl-toolbar__wordmark {
@@ -45,14 +76,108 @@
   color: transparent;
 }
 
-.ovl-toolbar__spacer {
-  flex: 1;
+.ovl-toolbar__row > .ovl-toolbar__spacer {
+  flex: 1 1 0;
 }
 
-.ovl-toolbar__zoom {
+.ovl-toolbar__zoom,
+.ovl-toolbar__zoom-compact,
+.ovl-toolbar__view {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+.ovl-toolbar__zoom-button[aria-expanded='true'] {
+  background: var(--gray-3);
+  color: var(--text-body);
+}
+
+.ovl-toolbar__zoom-popover {
+  position: fixed;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--gray-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-2);
+}
+
+/* The view Segmented's level-4 replacement: the current view's glyph and a
+   chevron in the Segmented's own frame. */
+.ovl-toolbar__view-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  block-size: var(--control-h-md);
+  padding-inline: var(--space-3) var(--space-2);
+  background: var(--gray-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.ovl-toolbar__view-menu:hover,
+.ovl-toolbar__view-menu[aria-expanded='true'] {
+  background: var(--gray-3);
+}
+
+.ovl-toolbar__view-menu:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Collapse levels, in order (#1290). Each compact form is hidden until its
+   level; the collapse hook moves focus between the two forms. */
+.ovl-toolbar__row [data-collapse-variant='compact'] {
+  display: none;
+}
+
+/* 1: the zoom slider becomes the Zoom button and popover. */
+.ovl-toolbar__row:not([data-collapse='0']) [data-collapse-slot='zoom'][data-collapse-variant='full'] {
+  display: none;
+}
+
+.ovl-toolbar__row:not([data-collapse='0']) [data-collapse-slot='zoom'][data-collapse-variant='compact'] {
+  display: flex;
+}
+
+/* 2: the wordmark text hides; the mark stays. */
+.ovl-toolbar__row:is([data-collapse='2'], [data-collapse='3'], [data-collapse='4']) .ovl-toolbar__wordmark {
+  width: auto;
+}
+
+.ovl-toolbar__row:is([data-collapse='2'], [data-collapse='3'], [data-collapse='4']) .ovl-toolbar__brand {
+  display: none;
+}
+
+/* 3: Import goes icon-only and square, still primary. */
+.ovl-toolbar__row:is([data-collapse='3'], [data-collapse='4']) .ovl-toolbar__import {
+  justify-content: center;
+  inline-size: var(--control-h-md);
+  padding-inline: 0;
+}
+
+.ovl-toolbar__row:is([data-collapse='3'], [data-collapse='4']) .ovl-toolbar__import-label {
+  display: none;
+}
+
+/* 4: the view Segmented becomes the View menu button, and the search field
+   may shrink further. */
+.ovl-toolbar__row[data-collapse='4'] [data-collapse-slot='view'][data-collapse-variant='full'] {
+  display: none;
+}
+
+.ovl-toolbar__row[data-collapse='4'] [data-collapse-slot='view'][data-collapse-variant='compact'] {
+  display: flex;
+}
+
+.ovl-toolbar__row[data-collapse='4'] > .ovl-search {
+  min-inline-size: 150px;
 }
 
 .ovl-toolbar__chips {
@@ -65,32 +190,6 @@
 .ovl-toolbar__hint {
   color: var(--text-faint);
   margin-inline-start: var(--space-1);
-}
-
-/* The search-mode control makes the complete command strip wider than the
- * 1280px default window. Compact the fixed items and allow wrapping before
- * either ordinary-width or 200%-zoom layouts clip actions offscreen. */
-@media (max-width: 1360px) {
-  .ovl-toolbar__row {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: var(--toolbar-h);
-    gap: var(--space-2);
-    padding-block: var(--space-2);
-  }
-
-  .ovl-toolbar__wordmark {
-    width: auto;
-  }
-
-  .ovl-toolbar__row > .ovl-search {
-    flex: 1 1 220px;
-    width: auto !important;
-  }
-
-  .ovl-toolbar__spacer {
-    display: none;
-  }
 }
 
 /* Toast surfacing (#79): bottom-right above the status bar. */

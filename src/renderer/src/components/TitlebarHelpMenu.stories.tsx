@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactElement } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
-import { TitlebarHelpMenu } from './TitlebarHelpMenu';
+import { TitlebarHelpMenu } from './TitlebarMenu';
 
 // A plausible titlebar slot so the affordance sits where it ships — a no-drag
 // island at the right edge, left of where the window controls would be.

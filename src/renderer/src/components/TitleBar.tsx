@@ -10,6 +10,9 @@ export interface TitleBarProps {
   readonly trafficLightInset?: number;
   /** Centered no-drag island (#386: the library switcher trigger). */
   readonly center?: ReactNode;
+  /** No-drag affordance left of Help — the Windows/Linux ⋯ Overlook menu
+   *  (#1293). Never rendered in the macOS variant. */
+  readonly appMenu?: ReactNode;
   /** No-drag affordance left of the window controls — the Windows/Linux
    *  titlebar Help menu (#699). Never rendered in the macOS variant. */
   readonly help?: ReactNode;
@@ -27,6 +30,7 @@ export function TitleBar({
   platform,
   trafficLightInset = 78,
   center,
+  appMenu,
   help,
   onMinimize,
   onToggleMaximize,
@@ -41,6 +45,7 @@ export function TitleBar({
       <div className="ovl-titlebar__spacer" />
       {isMac ? null : (
         <div className="ovl-titlebar__controls">
+          {appMenu}
           {help}
           <button type="button" aria-label="Minimize" className="ovl-titlebar__button" onClick={onMinimize}>
             <Icon name="minus" size={13} />

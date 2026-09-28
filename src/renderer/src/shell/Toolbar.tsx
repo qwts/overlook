@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN, type ViewMode } from '../../../shared/library/app-state.js';
 import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
@@ -8,15 +8,15 @@ import { VIEW_MODE_BY_COMMAND, VIEW_MODE_COMMAND_IDS } from '../../../shared/com
 import type { AlbumListing, ChipFilters, SearchMode } from '../../../shared/library/types.js';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
-import { Icon } from '../components/Icon';
 import { IconButton } from '../components/IconButton';
 import { SearchField } from '../components/SearchField';
 import { Segmented } from '../components/Segmented';
-import { Slider } from '../components/Slider';
 import { Tooltip } from '../components/Tooltip';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { useAppState, useAppDispatch } from '../state/app-state-context';
 import { FacetBar } from './FacetBar';
+import { useToolbarCollapse } from './toolbar-collapse';
+import { ToolbarViewMenu, ToolbarZoom } from './ToolbarCollapsibles';
 
 import overlookIcon from '../assets/overlook-icon-64.png';
 // The toolbar rules live in the shell stylesheet; importing it here keeps
@@ -52,6 +52,10 @@ const messages = defineMessages({
   search: { id: 'toolbar.search', defaultMessage: 'Search library' },
   filters: { id: 'toolbar.filters', defaultMessage: 'Filters' },
   view: { id: 'toolbar.view', defaultMessage: 'View' },
+  // The level-4 View menu button (#1290, Pass B spec §06).
+  viewTrigger: { id: 'toolbar.view.trigger', defaultMessage: 'View: {mode}' },
+  viewChanged: { id: 'toolbar.view.changed', defaultMessage: 'View: {mode}.' },
+  importLabel: { id: 'toolbar.import', defaultMessage: 'Import' },
   zoom: { id: 'toolbar.zoom', defaultMessage: 'Zoom' },
   region: { id: 'toolbar.region', defaultMessage: 'Photo tools' },
   backupNow: { id: 'toolbar.backup.now', defaultMessage: 'Back up now' },
@@ -123,25 +127,20 @@ export interface ToolbarProps {
   readonly platform: CommandPlatform;
   /** Opens the ImportDialog (#88); wired by the shell. */
   readonly onImport?: (() => void) | undefined;
-  /**
-   * Opens the unencrypted-library export through the shared command handler.
-   * Windows/Linux only: macOS reaches it from the File menu (#1292).
-   */
-  readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
-  /** Windows/Linux only: macOS reaches it from the Overlook menu (#1292). */
-  readonly onTransfer?: (() => void) | undefined;
   /** Collections for the facet bar (#514): the open Smart Album, and folders to save into. */
   readonly albums?: readonly AlbumListing[] | undefined;
 }
 
-export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, albums = [] }: ToolbarProps): ReactElement {
+export function Toolbar({ platform, onImport, onLock, albums = [] }: ToolbarProps): ReactElement {
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
   const { announce } = useAnnouncer();
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState(state.query);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const collapse = useToolbarCollapse(rowRef);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -178,6 +177,19 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
     },
     { value: 'keyword', label: modeName('keyword'), description: intl.formatMessage(messages.searchKeywordDescription) },
   ] as const;
+  const viewOptions = VIEW_MODE_COMMAND_IDS.map((id) => ({
+    value: VIEW_MODE_BY_COMMAND[id],
+    label: intl.formatMessage(commandById(id).label),
+    icon: VIEW_MODE_ICON[VIEW_MODE_BY_COMMAND[id]],
+    iconOnly: true,
+  }));
+  const viewName = (view: ViewMode): string => viewOptions.find((option) => option.value === view)?.label ?? view;
+  const onViewChange = (view: ViewMode): void => {
+    // The same `view/set` the native View menu reaches through
+    // `VIEW_MODE_BY_COMMAND` (use-native-command-router).
+    dispatch({ type: 'view/set', view });
+    announce(intl.formatMessage(messages.viewChanged, { mode: viewName(view) }), 'polite', 'view-mode');
+  };
   const anyFilter = Object.values(state.chips).some(Boolean) || state.facets.groups.length > 0;
   const smartAlbum = state.smartAlbum === null ? null : (albums.find((album) => album.id === state.smartAlbum) ?? null);
   const searchStatus =
@@ -194,7 +206,9 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
         });
   return (
     <section className="ovl-toolbar titlebar-no-drag" aria-label={intl.formatMessage(messages.region)}>
-      <div className="ovl-toolbar__row" role="toolbar" aria-label={intl.formatMessage(messages.region)}>
+      {/* No `role="toolbar"`: the row has no arrow-key roving, so each
+          control keeps its own Tab stop (Pass B spec §06). */}
+      <div ref={rowRef} className="ovl-toolbar__row" data-collapse={collapse}>
         <div className="ovl-toolbar__wordmark">
           <img className="ovl-toolbar__mark" src={overlookIcon} alt="" width={20} height={20} />
           <span className="ovl-toolbar__brand">{BRAND_WORDMARK}</span>
@@ -203,7 +217,7 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
           value={draft}
           onChange={onSearch}
           shortcut={formatShortcut(commandById('app.search.focus'), platform)}
-          width={300}
+          width="auto"
           label={intl.formatMessage(messages.search)}
           mode={{
             value: state.searchMode,
@@ -226,35 +240,29 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
           }}
         />
         <div className="ovl-toolbar__spacer" />
-        <Segmented
-          label={intl.formatMessage(messages.view)}
-          options={VIEW_MODE_COMMAND_IDS.map((id) => ({
-            value: VIEW_MODE_BY_COMMAND[id],
-            label: intl.formatMessage(commandById(id).label),
-            icon: VIEW_MODE_ICON[VIEW_MODE_BY_COMMAND[id]],
-            iconOnly: true,
-          }))}
-          value={state.view}
-          onChange={(view) => {
-            // The same `view/set` the native View menu reaches through
-            // `VIEW_MODE_BY_COMMAND` (use-native-command-router).
-            dispatch({ type: 'view/set', view });
+        <div className="ovl-toolbar__view" data-collapse-slot="view" data-collapse-variant="full">
+          <Segmented label={intl.formatMessage(messages.view)} options={viewOptions} value={state.view} onChange={onViewChange} />
+        </div>
+        <div className="ovl-toolbar__view" data-collapse-slot="view" data-collapse-variant="compact">
+          <ToolbarViewMenu
+            value={state.view}
+            options={viewOptions}
+            menuLabel={intl.formatMessage(messages.view)}
+            triggerLabel={intl.formatMessage(messages.viewTrigger, { mode: viewName(state.view) })}
+            onChange={onViewChange}
+          />
+        </div>
+        <ToolbarZoom
+          label={intl.formatMessage(messages.zoom)}
+          value={state.zoom}
+          min={ZOOM_MIN}
+          max={ZOOM_MAX}
+          hidden={state.view !== 'grid'}
+          collapsed={collapse >= 1}
+          onChange={(zoom) => {
+            dispatch({ type: 'zoom/set', zoom });
           }}
         />
-        <div className="ovl-toolbar__zoom" style={{ visibility: state.view === 'grid' ? 'visible' : 'hidden' }}>
-          <Icon name="grid-3x3" size={13} color="var(--text-faint)" />
-          <Slider
-            label={intl.formatMessage(messages.zoom)}
-            value={state.zoom}
-            min={ZOOM_MIN}
-            max={ZOOM_MAX}
-            width={110}
-            onChange={(zoom) => {
-              dispatch({ type: 'zoom/set', zoom });
-            }}
-          />
-          <Icon name="grid-2x2" size={15} color="var(--text-faint)" />
-        </div>
         {state.providerConnected && state.pendingCount > 0 ? (
           <Tooltip label={intl.formatMessage(messages.backupNow)} side="bottom">
             <IconButton
@@ -283,30 +291,21 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
             <IconButton icon="lock" label={intl.formatMessage(messages.lockNow)} onClick={onLock} />
           </Tooltip>
         )}
-        {/* Import is the only primary action (#1292). macOS already has Transfer
-            & Sync and Export All in its native menus, so they leave the toolbar
-            there; Windows/Linux keep them until the titlebar Overlook menu
-            gives them a home (#1293). */}
-        {onTransfer === undefined || platform === 'darwin' ? null : (
-          <Button variant="secondary" icon="refresh-cw" size="md" onClick={onTransfer}>
-            <FormattedMessage id="toolbar.transfer" defaultMessage="Transfer & Sync" />
+        {/* Icon-only from level 3, still primary; the name stays "Import". */}
+        <Tooltip label={intl.formatMessage(messages.importLabel)} side="bottom" disabled={collapse < 3}>
+          <Button
+            variant="primary"
+            icon="download"
+            size="md"
+            className="ovl-toolbar__import"
+            aria-label={intl.formatMessage(messages.importLabel)}
+            onClick={() => {
+              onImport?.();
+            }}
+          >
+            <span className="ovl-toolbar__import-label">{intl.formatMessage(messages.importLabel)}</span>
           </Button>
-        )}
-        {onExportAll === undefined || platform === 'darwin' ? null : (
-          <Button variant="secondary" icon="share" size="md" onClick={onExportAll}>
-            {intl.formatMessage(commandById('library.exportAll').label)}
-          </Button>
-        )}
-        <Button
-          variant="primary"
-          icon="download"
-          size="md"
-          onClick={() => {
-            onImport?.();
-          }}
-        >
-          <FormattedMessage id="toolbar.import" defaultMessage="Import" />
-        </Button>
+        </Tooltip>
       </div>
       {filterOpen || state.query !== '' ? (
         <div className="ovl-toolbar__chips" data-testid="chip-row">

@@ -70,6 +70,28 @@
       ]
     },
     {
+      "id": "1290-toolbar-collapse",
+      "wiki": "Acceptance-Test-Visual-Accessibility",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/toolbar-collapse.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/ToolbarCollapse.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/toolbar-collapse.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Follow step 2 of the 200% zoom pass in docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds: the toolbar stays one row at the collapsed level, and every control is reachable by Tab in order with a screen reader running."
+        }
+      ]
+    },
+    {
       "id": "context-menu-command-projections",
       "wiki": "Acceptance-Test-Context-Menus",
       "coverage": [
@@ -2564,6 +2586,28 @@
         {
           "type": "manual",
           "reason": "The offscreen-renderer poster decode (§6: capture.html/capture-frame.ts loaded in a hidden BrowserWindow, mpegts.js TS→fMP4 remux over MediaSource, capturePage of the first decodable frame) and encrypted-TS full-viewer playback run only inside the signed macOS/Windows package — MSE and the offscreen window are absent under headless unit/story runs. Validate against owner-supplied .ts/.mts/.m2ts originals per docs/acceptance/acceptance-test-mpeg-ts-video-media.md: deterministic poster on the tile, duration pill, no autoplay, keyboard-accessible playback, and byte-identical Original export."
+        }
+      ]
+    },
+    {
+      "id": "1293-titlebar-overlook-menu",
+      "wiki": "Acceptance-Test-Native-Application-Menu",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/application-menu.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/components/TitlebarAppMenu.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/commands/app-menu.test.ts", "tests/main/application-menu-model.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow the Windows/Linux Overlook menu section of docs/acceptance/Acceptance-Test-Native-Application-Menu.md in packaged Windows and Linux builds: placement beside Help, group headings and disabled-item reasons as a screen reader reads them, focus return from dialogs opened from the menu, and RTL and 200% zoom."
         }
       ]
     },

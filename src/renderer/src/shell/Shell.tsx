@@ -7,7 +7,7 @@ import { useFormats } from '../i18n/use-formats.js';
 import type { AlbumListing, LibraryStats, SourceCounts } from '../../../shared/library/types.js';
 import { Icon } from '../components/Icon';
 import { TitleBar } from '../components/TitleBar';
-import { TitlebarHelpMenu } from '../components/TitlebarHelpMenu';
+import { TitlebarAppMenu, TitlebarHelpMenu } from '../components/TitlebarMenu';
 import { ToastHost, type ToastItem } from '../components/Toast';
 import { PrimaryLibraryView } from './PrimaryLibraryView';
 import { fullUrl } from '../../../shared/library/full-url.js';
@@ -249,9 +249,11 @@ export function Shell({
   const inspectorSelectionPosition = useDetachedInspector(state, dispatch);
   const inspectorPhotoIds = useMemo(() => (state.selection.size === 0 ? [] : [...state.selection]), [state.selection]);
 
-  useEffect(() => {
+  // One menu context feeds the macOS native menu (through main) and the
+  // Windows/Linux ⋯ Overlook menu, so both enable the same commands (#1293).
+  const menuContext = useMemo((): CommandMenuContext => {
     const target = state.photos.find(({ id }) => id === state.lightboxId);
-    const context: CommandMenuContext = {
+    return {
       surface: state.lightboxId === null ? 'grid' : 'lightbox',
       dialog: commandMenuDialogClass(state, {
         shortcut: shortcutSurface !== null,
@@ -275,8 +277,11 @@ export function Shell({
       view: state.view,
       source: state.source,
     };
-    void window.overlook.commands.updateContext(context);
   }, [hasKey, editableFocus, interopEntry, lockConfigured, offload.activePhotoIds, pcloudEnabled, shortcutSurface, state, unlockAlbumId]);
+
+  useEffect(() => {
+    void window.overlook.commands.updateContext(menuContext);
+  }, [menuContext]);
 
   const refreshProtected = useCallback((): void => {
     void window.overlook.protectedAlbums.list().then(async ({ albums: opaque }) => {
@@ -541,6 +546,7 @@ export function Shell({
             <Icon name="chevrons-up-down" size={12} color="var(--text-faint)" />
           </button>
         }
+        appMenu={<TitlebarAppMenu platform={platform} context={menuContext} onCommand={runNativeCommand} />}
         help={<TitlebarHelpMenu platform={platform} onCommand={runNativeCommand} />}
         onMinimize={() => {
           void window.overlook.minimizeWindow();
@@ -557,16 +563,12 @@ export function Shell({
         platform={commandPlatform(platform)}
         albums={albums}
         onLock={lockConfigured ? () => void window.overlook.appLock.lockNow() : undefined}
-        onExportAll={state.protectedAlbum === null ? () => runNativeCommand('library.exportAll') : undefined}
         onImport={() => {
           // #237: the dialog owns source discovery (SD scan, folder picker,
           // no-card empty state) — the toolbar just opens it.
           setDropped(null);
           dispatch({ type: 'dialog/set', dialog: 'import', open: true });
         }}
-        onTransfer={
-          pcloudEnabled ? () => openInterop(state.selection.size > 0 ? 'selection' : 'settings', [...state.selection]) : undefined
-        }
       />
       {state.importOpen ? (
         <ImportDialog

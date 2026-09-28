@@ -31,11 +31,15 @@ hidden Electron harness cannot reproduce.
 ## 200% text and application zoom
 
 1. Set the Electron/application zoom to 200% at the default 1280×800 window.
-2. Tab through the wrapped toolbar. Confirm Search, Filters, view selection,
-   Zoom, Back up, and Import are reachable with no horizontal document
-   scrolling. On Windows/Linux, Transfer & Sync (with pCloud on) and Export All
-   Unencrypted are also in the toolbar until the ⋯ menu lands (#1293); on macOS
-   they are in the Overlook and File menus instead (#1292).
+2. Confirm the toolbar is still one 48px row (#1290). At 200% the window is
+   640px wide, so the toolbar has collapsed: Zoom is a button that opens the
+   slider in a popover, the wordmark shows only its mark, Import is icon-only,
+   and view selection is a "View: {mode}" menu button. Tab through it: search
+   mode, Search, Filters, View, Zoom, Back up, and Import are reachable in that
+   order with no horizontal document scrolling. Transfer & Sync (with pCloud
+   on) and Export All Unencrypted are not in the toolbar: on Windows/Linux they
+   are in the titlebar ⋯ Overlook menu (#1293), and on macOS in the Overlook
+   and File menus (#1292).
 3. Scroll the Sidebar and open Settings. Confirm every tab and the Close button
    remain reachable; scroll each pane through its final control.
 4. Open a photo. Confirm Back, Close, navigation, orientation, and zoom controls

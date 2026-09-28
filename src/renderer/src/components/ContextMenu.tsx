@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from 'react';
 
 import { Icon, type IconName } from './Icon';
 import '../grid/context-menu.css';
@@ -13,6 +13,14 @@ export interface ContextMenuItem {
   /** Right-aligned accelerator hint (e.g. `?`); part of the item's name. */
   readonly hint?: string | undefined;
   readonly disabledReason?: string | undefined;
+  /** Disabled with no reason worth a tooltip: stays focusable, won't run (#1293). */
+  readonly disabled?: boolean | undefined;
+  /** A visible shortcut (`formatShortcut`) and its `aria-keyshortcuts` value
+   *  (`formatAriaShortcut`); unlike `hint`, not part of the item's name. */
+  readonly shortcut?: { readonly label: string; readonly aria: string } | undefined;
+  /** Consecutive items sharing a group render under its visible heading as a
+   *  labelled `role="group"`, with a separator between groups (#1293). */
+  readonly group?: { readonly id: string; readonly label: string } | undefined;
   readonly danger?: boolean | undefined;
   readonly separatorBefore?: boolean | undefined;
   /** Set on every item of a single-choice menu: the item becomes a
@@ -42,6 +50,24 @@ export interface ContextMenuProps {
 }
 
 const ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]';
+
+// ↑ ↓ Home End move between items (wrapping), skipping headings and separators.
+function moveItemFocus(event: ReactKeyboardEvent<HTMLDivElement>): void {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const menuItems = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR));
+  if (menuItems.length === 0) return;
+  const current = menuItems.indexOf(document.activeElement as HTMLButtonElement);
+  const target =
+    event.key === 'Home'
+      ? menuItems[0]
+      : event.key === 'End'
+        ? menuItems.at(-1)
+        : event.key === 'ArrowDown'
+          ? menuItems[(current + 1) % menuItems.length]
+          : menuItems[current === -1 ? menuItems.length - 1 : (current - 1 + menuItems.length) % menuItems.length];
+  target?.focus();
+}
 
 export function ContextMenu({
   label,
@@ -109,35 +135,66 @@ export function ContextMenu({
           onClose();
           return;
         }
-        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-        event.preventDefault();
-        const menuItems = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR));
-        if (menuItems.length === 0) return;
-        const current = menuItems.indexOf(document.activeElement as HTMLButtonElement);
-        const target =
-          event.key === 'Home'
-            ? menuItems[0]
-            : event.key === 'End'
-              ? menuItems.at(-1)
-              : event.key === 'ArrowDown'
-                ? menuItems[(current + 1) % menuItems.length]
-                : menuItems[current === -1 ? menuItems.length - 1 : (current - 1 + menuItems.length) % menuItems.length];
-        target?.focus();
+        moveItemFocus(event);
       }}
     >
-      {items.map((item) => (
-        <ContextMenuRow
-          key={item.id}
-          item={item}
-          menuId={menuId}
-          onSelect={() => {
-            if (item.disabledReason !== undefined) return;
-            if (closeOnSelect) onClose();
-            item.action();
-          }}
-        />
-      ))}
+      <ContextMenuItems
+        items={items}
+        menuId={menuId}
+        onSelect={(item) => {
+          if (item.disabled === true || item.disabledReason !== undefined) return;
+          if (closeOnSelect) onClose();
+          item.action();
+        }}
+      />
     </div>
+  );
+}
+
+interface ItemRun {
+  readonly group: ContextMenuItem['group'];
+  readonly items: readonly ContextMenuItem[];
+}
+
+// Splits items into runs of the same group, keeping their order.
+function groupRuns(items: readonly ContextMenuItem[]): readonly ItemRun[] {
+  const runs: { group: ContextMenuItem['group']; items: ContextMenuItem[] }[] = [];
+  for (const item of items) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.group?.id === item.group?.id) last.items.push(item);
+    else runs.push({ group: item.group, items: [item] });
+  }
+  return runs;
+}
+
+// Rows in order; runs of a group sit under the group's heading, with a
+// separator between groups (#1293).
+function ContextMenuItems({
+  items,
+  menuId,
+  onSelect,
+}: {
+  readonly items: readonly ContextMenuItem[];
+  readonly menuId: string;
+  readonly onSelect: (item: ContextMenuItem) => void;
+}): ReactElement {
+  return (
+    <>
+      {groupRuns(items).map((run, index) => {
+        const rows = run.items.map((item) => <ContextMenuRow key={item.id} item={item} menuId={menuId} onSelect={() => onSelect(item)} />);
+        if (run.group === undefined) return rows;
+        const headingId = `${menuId}-group-${run.group.id}`;
+        return [
+          index === 0 ? null : <div key={`${run.group.id}-separator`} role="separator" className="ovl-context-menu__separator" />,
+          <div key={run.group.id} role="group" aria-labelledby={headingId}>
+            <div id={headingId} className="ovl-context-menu__heading">
+              {run.group.label}
+            </div>
+            {rows}
+          </div>,
+        ];
+      })}
+    </>
   );
 }
 
@@ -160,7 +217,8 @@ function ContextMenuRow({
         role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.checked}
         className={item.danger === true ? 'ovl-context-menu__danger' : undefined}
-        aria-disabled={item.disabledReason === undefined ? undefined : true}
+        aria-disabled={item.disabled === true || item.disabledReason !== undefined ? true : undefined}
+        aria-keyshortcuts={item.shortcut?.aria}
         aria-describedby={describedBy === '' ? undefined : describedBy}
         title={item.disabledReason}
         onClick={onSelect}
@@ -189,6 +247,11 @@ function ContextMenuRow({
           </span>
         )}
         {item.hint === undefined ? null : <span className="ovl-context-menu__hint">{item.hint}</span>}
+        {item.shortcut === undefined ? null : (
+          <span className="ovl-context-menu__hint" aria-hidden="true">
+            {item.shortcut.label}
+          </span>
+        )}
       </button>
       {reasonId === undefined ? null : (
         // Hidden, so the menu holds only menuitems; a description still reads it.
