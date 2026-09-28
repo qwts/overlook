@@ -54,10 +54,7 @@ test('the toolbar is one row at the default window, fully expanded', async ({ la
 
 test('a resize sweep from 1440 to 480 and back never wraps the toolbar', async ({ launchOverlook }) => {
   const { app, page } = await launchOverlook({ prefix: 'overlook-e2e-toolbar-sweep-', env: { OVERLOOK_SEED: '12' } });
-  // Windows and Linux keep Export All in the toolbar until #1293 moves it to
-  // the ⋯ menu; until then their row fits down to 640px, macOS's to 480px.
-  const narrowest = process.platform === 'darwin' ? 480 : 640;
-  const widths = Array.from({ length: (1440 - narrowest) / 40 + 1 }, (_, index) => 1440 - index * 40);
+  const widths = Array.from({ length: 25 }, (_, index) => 1440 - index * 40);
   let previous = 0;
   for (const width of widths) {
     await showCssWidth(app, width);

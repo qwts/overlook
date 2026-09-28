@@ -2237,6 +2237,12 @@
   "lock.retryCountdown": {
     "defaultMessage": "Try again in {seconds}s"
   },
+  "menu.app": {
+    "defaultMessage": "Overlook"
+  },
+  "menu.app.disabled.protectedAlbumOpen": {
+    "defaultMessage": "Not available while a protected album is open"
+  },
   "menu.edit": {
     "defaultMessage": "Edit"
   },
@@ -3500,6 +3506,9 @@
   "statusbar.sync.backedUpExceptLocalOnly": {
     "defaultMessage": "Backed up except {count, plural, one {# local-only photo} other {# local-only photos}}"
   },
+  "titlebar.appMenu": {
+    "defaultMessage": "Overlook menu"
+  },
   "titlebar.help": {
     "defaultMessage": "Help"
   },
@@ -3616,9 +3625,6 @@
   },
   "toolbar.search.status.withIndex": {
     "defaultMessage": "{status} · {index}"
-  },
-  "toolbar.transfer": {
-    "defaultMessage": "Transfer & Sync"
   },
   "toolbar.view": {
     "defaultMessage": "View"

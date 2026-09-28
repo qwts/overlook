@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { ZOOM_MAX, ZOOM_MIN, type ViewMode } from '../../../shared/library/app-state.js';
 import { commandById, formatShortcut, type CommandPlatform } from '../../../shared/commands/registry.js';
@@ -127,19 +127,12 @@ export interface ToolbarProps {
   readonly platform: CommandPlatform;
   /** Opens the ImportDialog (#88); wired by the shell. */
   readonly onImport?: (() => void) | undefined;
-  /**
-   * Opens the unencrypted-library export through the shared command handler.
-   * Windows/Linux only: macOS reaches it from the File menu (#1292).
-   */
-  readonly onExportAll?: (() => void) | undefined;
   readonly onLock?: (() => void) | undefined;
-  /** Windows/Linux only: macOS reaches it from the Overlook menu (#1292). */
-  readonly onTransfer?: (() => void) | undefined;
   /** Collections for the facet bar (#514): the open Smart Album, and folders to save into. */
   readonly albums?: readonly AlbumListing[] | undefined;
 }
 
-export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, albums = [] }: ToolbarProps): ReactElement {
+export function Toolbar({ platform, onImport, onLock, albums = [] }: ToolbarProps): ReactElement {
   const intl = useIntl();
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -297,20 +290,6 @@ export function Toolbar({ platform, onImport, onExportAll, onLock, onTransfer, a
           <Tooltip label={intl.formatMessage(messages.lockNow)} side="bottom">
             <IconButton icon="lock" label={intl.formatMessage(messages.lockNow)} onClick={onLock} />
           </Tooltip>
-        )}
-        {/* Import is the only primary action (#1292). macOS already has Transfer
-            & Sync and Export All in its native menus, so they leave the toolbar
-            there; Windows/Linux keep them until the titlebar Overlook menu
-            gives them a home (#1293). */}
-        {onTransfer === undefined || platform === 'darwin' ? null : (
-          <Button variant="secondary" icon="refresh-cw" size="md" onClick={onTransfer}>
-            <FormattedMessage id="toolbar.transfer" defaultMessage="Transfer & Sync" />
-          </Button>
-        )}
-        {onExportAll === undefined || platform === 'darwin' ? null : (
-          <Button variant="secondary" icon="share" size="md" onClick={onExportAll}>
-            {intl.formatMessage(commandById('library.exportAll').label)}
-          </Button>
         )}
         {/* Icon-only from level 3, still primary; the name stays "Import". */}
         <Tooltip label={intl.formatMessage(messages.importLabel)} side="bottom" disabled={collapse < 3}>

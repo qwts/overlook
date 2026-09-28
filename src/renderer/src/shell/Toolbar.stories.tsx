@@ -13,8 +13,6 @@ interface ScenarioProps {
   readonly mode: SearchMode;
   readonly search: PageResult['search'];
   readonly platform?: CommandPlatform;
-  readonly onExportAll?: () => void;
-  readonly onTransfer?: () => void;
 }
 
 function installStub(): void {
@@ -22,14 +20,14 @@ function installStub(): void {
   (globalThis as { overlook?: Partial<OverlookApi> }).overlook = { library };
 }
 
-function Scenario({ query, mode, search, platform = 'darwin', onExportAll, onTransfer }: ScenarioProps) {
+function Scenario({ query, mode, search, platform = 'darwin' }: ScenarioProps) {
   const dispatch = useAppDispatch();
   useEffect(() => {
     dispatch({ type: 'query/set', query });
     dispatch({ type: 'searchMode/set', mode });
     dispatch({ type: 'search/status', search });
   }, [dispatch, mode, query, search]);
-  return <Toolbar platform={platform} onImport={() => undefined} onExportAll={onExportAll} onTransfer={onTransfer} />;
+  return <Toolbar platform={platform} onImport={() => undefined} />;
 }
 
 function SearchToolbar(props: ScenarioProps) {
@@ -185,10 +183,9 @@ export const IndexingFallback: Story = {
 const idle: PageResult['search'] = { requestedMode: 'auto', appliedMode: 'keyword', fallbackReason: null, indexed: 0, total: 0 };
 
 // #1292: Import is the toolbar's only primary action. macOS reaches Transfer
-// & Sync and Export All from its native menus, so the toolbar drops them
-// even when the shell offers the handlers.
+// & Sync and Export All from its native menus.
 export const PrimaryActionsMac: Story = {
-  args: { query: '', mode: 'auto', search: idle, platform: 'darwin', onExportAll: () => undefined, onTransfer: () => undefined },
+  args: { query: '', mode: 'auto', search: idle, platform: 'darwin' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Import' })).toBeVisible();
@@ -197,14 +194,14 @@ export const PrimaryActionsMac: Story = {
   },
 };
 
-// Windows/Linux have no menu bar: the two actions stay on the toolbar until
-// the titlebar Overlook menu takes them (#1293).
+// Windows/Linux reach the two from the titlebar Overlook menu (#1293), so
+// the toolbar keeps Import alone there too.
 export const PrimaryActionsWindows: Story = {
-  args: { query: '', mode: 'auto', search: idle, platform: 'win32', onExportAll: () => undefined, onTransfer: () => undefined },
+  args: { query: '', mode: 'auto', search: idle, platform: 'win32' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Import' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Transfer & Sync' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Export All Unencrypted…' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Transfer & Sync' })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Export All Unencrypted…' })).not.toBeInTheDocument();
   },
 };

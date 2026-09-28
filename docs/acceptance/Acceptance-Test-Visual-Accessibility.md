@@ -36,10 +36,10 @@ hidden Electron harness cannot reproduce.
    slider in a popover, the wordmark shows only its mark, Import is icon-only,
    and view selection is a "View: {mode}" menu button. Tab through it: search
    mode, Search, Filters, View, Zoom, Back up, and Import are reachable in that
-   order with no horizontal document scrolling. On Windows/Linux, Transfer &
-   Sync (with pCloud on) and Export All Unencrypted are also in the toolbar
-   until the ⋯ menu lands (#1293); on macOS they are in the Overlook and File
-   menus instead (#1292).
+   order with no horizontal document scrolling. Transfer & Sync (with pCloud
+   on) and Export All Unencrypted are not in the toolbar: on Windows/Linux they
+   are in the titlebar ⋯ Overlook menu (#1293), and on macOS in the Overlook
+   and File menus (#1292).
 3. Scroll the Sidebar and open Settings. Confirm every tab and the Close button
    remain reachable; scroll each pane through its final control.
 4. Open a photo. Confirm Back, Close, navigation, orientation, and zoom controls

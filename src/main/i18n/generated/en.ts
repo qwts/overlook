@@ -103,6 +103,8 @@ export const en: Readonly<Record<string, string>> = {
   "commands.view.mode.list": "List",
   "commands.view.mode.moodboard": "Moodboard",
   "commands.view.sidebar.toggle": "Toggle Sidebar",
+  "menu.app": "Overlook",
+  "menu.app.disabled.protectedAlbumOpen": "Not available while a protected album is open",
   "menu.edit": "Edit",
   "menu.file": "File",
   "menu.photo": "Photo",

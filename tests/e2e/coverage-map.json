@@ -2572,6 +2572,28 @@
       ]
     },
     {
+      "id": "1293-titlebar-overlook-menu",
+      "wiki": "Acceptance-Test-Native-Application-Menu",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/application-menu.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/components/TitlebarAppMenu.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/commands/app-menu.test.ts", "tests/main/application-menu-model.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Follow the Windows/Linux Overlook menu section of docs/acceptance/Acceptance-Test-Native-Application-Menu.md in packaged Windows and Linux builds: placement beside Help, group headings and disabled-item reasons as a screen reader reads them, focus return from dialogs opened from the menu, and RTL and 200% zoom."
+        }
+      ]
+    },
+    {
       "id": "titlebar-help-menu",
       "wiki": "Titlebar-Help-Menu",
       "coverage": [
