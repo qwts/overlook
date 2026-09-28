@@ -53,7 +53,13 @@ test('the toolbar is one row at the default window, fully expanded', async ({ la
 });
 
 test('a resize sweep from 1440 to 480 and back never wraps the toolbar', async ({ launchOverlook }) => {
-  const { app, page } = await launchOverlook({ prefix: 'overlook-e2e-toolbar-sweep-', env: { OVERLOOK_SEED: '12' } });
+  // pCloud on, the widest row any platform ships: Transfer & Sync and Export
+  // All live in the Overlook menu (#1293), never in this row.
+  const { app, page } = await launchOverlook({
+    prefix: 'overlook-e2e-toolbar-sweep-',
+    env: { OVERLOOK_SEED: '12', OVERLOOK_PCLOUD_ENABLED: '1', OVERLOOK_PCLOUD_CLIENT_ID: 'public-e2e-client' },
+  });
+  await expect(page.locator('.ovl-toolbar').getByRole('button', { name: /^(Transfer & Sync|Export All Unencrypted…)$/u })).toHaveCount(0);
   const widths = Array.from({ length: 25 }, (_, index) => 1440 - index * 40);
   let previous = 0;
   for (const width of widths) {
