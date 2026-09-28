@@ -32,8 +32,14 @@ test('matching-file recovery leaves Unavailable immediately while transient sync
     await page.getByRole('button', { name: 'Unavailable 1', exact: true }).click();
     const missing = page.locator('[data-quick-action-photo-id="01J8SEEDPHOTO0001"]');
     await missing.click();
+    // The click opens the Lightbox. Toggle the Inspector only once the
+    // Lightbox is up: an `i` pressed while it is still mounting can be lost,
+    // which stalled the click below on loaded runners (#1279).
+    await expect(page.getByRole('button', { name: 'Back to library (Esc)' })).toBeVisible();
     await page.keyboard.press('i');
-    await page.getByRole('complementary', { name: 'Inspector' }).getByRole('button', { name: 'Recover original…', exact: true }).click();
+    const inspector = page.getByRole('complementary', { name: 'Inspector' });
+    await expect(inspector).toBeVisible();
+    await inspector.getByRole('button', { name: 'Recover original…', exact: true }).click();
     await expect(missing).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Unavailable', exact: false })).toHaveCount(0);
     await page.getByRole('button', { name: 'All Photos 3', exact: true }).click();
