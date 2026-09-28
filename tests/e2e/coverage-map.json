@@ -3106,6 +3106,32 @@
           "reason": "The login-keychain ACL is checked on a signed Overlook build. Unit tests use a fake port and do not call SecItem."
         }
       ]
+    },
+    {
+      "id": "1299-libswitch-rows",
+      "wiki": "Library-Management",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/library-switcher-ui.spec.ts"
+        },
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/library-relocation.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/LibrarySwitcher.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "paths": ["tests/library/library-row-actions.test.ts"]
+        },
+        {
+          "type": "manual",
+          "reason": "Announcements and the menu button role are heard, not observable from automation. Follow the library switcher step in section 8 of docs/acceptance/Manual-Test-A11y-VoiceOver.md."
+        }
+      ]
     }
   ]
 }

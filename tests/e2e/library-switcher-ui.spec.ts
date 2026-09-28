@@ -87,12 +87,14 @@ test('ACCEPTANCE: active and inactive display aliases update live, permit duplic
     const inactiveIdBytes = readFileSync(join(fixture.inactive.path, 'library-id'), 'utf8');
 
     await page.getByTestId('library-trigger').click();
-    await page.getByTestId(`edit-display-name-${fixture.active.id}`).click();
+    await page.getByTestId(`library-actions-${fixture.active.id}`).click();
+    await page.getByRole('menuitem', { name: 'Edit display name…' }).click();
     await page.getByTestId('library-display-name-input').fill('Shared archive');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByTestId('library-trigger')).toContainText('Shared archive');
 
-    await page.getByTestId(`edit-display-name-${fixture.inactive.id}`).click();
+    await page.getByTestId(`library-actions-${fixture.inactive.id}`).click();
+    await page.getByRole('menuitem', { name: 'Edit display name…' }).click();
     await page.getByTestId('library-display-name-input').fill('Shared archive');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText(/Location: .* · ID ending/u)).toHaveCount(2);
@@ -106,7 +108,8 @@ test('ACCEPTANCE: active and inactive display aliases update live, permit duplic
     expect(readFileSync(join(fixture.active.path, 'library-id'), 'utf8')).toBe(activeIdBytes);
     expect(readFileSync(join(fixture.inactive.path, 'library-id'), 'utf8')).toBe(inactiveIdBytes);
 
-    await page.getByTestId(`edit-display-name-${fixture.inactive.id}`).click();
+    await page.getByTestId(`library-actions-${fixture.inactive.id}`).click();
+    await page.getByRole('menuitem', { name: 'Edit display name…' }).click();
     await page.getByTestId('library-display-name-reset').click();
     await expect(page.getByTestId(`library-row-${basename(fixture.inactive.path)}`)).toBeVisible();
 
@@ -145,7 +148,8 @@ test('remove from list is registry-only in the UI: reassurance copy, row gone, f
 
     await page.getByTestId('library-trigger').click();
     await expect(page.getByTestId('library-list')).toContainText('Scratch');
-    await page.getByRole('button', { name: 'Remove library from list: Scratch' }).click();
+    await page.getByRole('button', { name: 'Actions for Scratch' }).click();
+    await page.getByRole('menuitem', { name: 'Remove library from list…' }).click();
     await expect(page.getByText('The library files stay on disk and can be opened again.')).toBeVisible();
     await page.getByTestId('remove-confirm').click();
 
@@ -163,6 +167,96 @@ test('remove from list is registry-only in the UI: reassurance copy, row gone, f
     await page.keyboard.press('Escape');
     await page.getByTestId('library-trigger').click();
     await expect(page.getByTestId('library-list')).toContainText(secondPath);
+  } finally {
+    await app.close();
+  }
+});
+
+// #1299 (Pass D spec, Focus and Invariants): keyboard only through every row
+// action and the selection mode. After each phase closes, focus is back inside
+// the switcher on the control that started it, never on the panel or <body>.
+test('ACCEPTANCE: library row actions and Move several return focus inside the switcher (#1299)', async () => {
+  test.setTimeout(90_000);
+  const userData = mkE2eTmpDir('overlook-e2e-switcher-focus-');
+  const app = await launch(userData, { OVERLOOK_SEED: '1' });
+  try {
+    const page: Page = await app.firstWindow();
+    await page.getByTestId('virtual-grid').waitFor();
+    const [second, third] = await page.evaluate(async () => {
+      const overlook = (globalThis as unknown as { overlook: OverlookApi }).overlook;
+      const a = (await overlook.libraries.create({ name: 'Second', path: null })).library;
+      const b = (await overlook.libraries.create({ name: 'Third', path: null })).library;
+      return [a, b];
+    });
+    const inSwitcher = (): Promise<boolean> =>
+      page.evaluate<boolean>(`(() => {
+        const root = document.querySelector('[data-testid="library-switcher"]');
+        const active = document.activeElement;
+        return root !== null && active !== null && root.contains(active) && active.getAttribute('role') !== 'dialog';
+      })()`);
+
+    await page.getByTestId('library-trigger').click();
+    await expect(page.getByTestId('library-row-Second')).toBeVisible();
+    // Exactly the switch and its ⋯ on every row.
+    for (const row of await page.locator('.ovl-libswitch__row').all()) {
+      await expect(row.locator('button')).toHaveCount(2);
+    }
+
+    const actions = page.getByTestId(`library-actions-${second.id}`);
+    for (const [item, dialog] of [
+      ['Edit display name…', /display name/iu],
+      ['Rename folder…', /Rename/u],
+      ['Move…', /^Move/u],
+      ['Remove library from list…', /Remove/u],
+    ] as const) {
+      await actions.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('menu', { name: 'Actions for Second' })).toBeVisible();
+      await page.getByRole('menuitem', { name: item }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('dialog', { name: dialog })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(actions, `${item} returns to its ⋯`).toBeFocused();
+      expect(await inSwitcher()).toBe(true);
+    }
+
+    // Shift+F10 on the row opens the same menu; Esc returns to the row.
+    await page.getByTestId('library-row-Second').focus();
+    await page.keyboard.press('Shift+F10');
+    await expect(page.getByRole('menu', { name: 'Actions for Second' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('library-row-Second')).toBeFocused();
+    await expect(page.getByTestId('library-switcher')).toBeVisible();
+
+    // New library… and back.
+    await page.getByTestId('new-library').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'New library' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('new-library')).toBeFocused();
+
+    // Move several: in, check one, out with Esc; a second Esc closes.
+    await page.getByTestId('move-several').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('move-mode-banner')).toBeVisible();
+    expect(await inSwitcher()).toBe(true);
+    await expect(page.locator('.ovl-libswitch__rowbtn[role="checkbox"]').first()).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('move-selected')).toContainText('Move 1 selected…');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('move-mode-banner')).toHaveCount(0);
+    await expect(page.getByTestId('move-several')).toBeFocused();
+
+    // Remove Second: the row goes and focus moves to the row after it.
+    await actions.focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: 'Remove library from list…' }).click();
+    await page.getByTestId('remove-confirm').click();
+    await expect(page.getByTestId('library-row-Second')).toHaveCount(0);
+    await expect(page.locator(`[data-library-id="${third.id}"] .ovl-libswitch__rowbtn`)).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('library-switcher')).toHaveCount(0);
   } finally {
     await app.close();
   }
@@ -190,7 +284,8 @@ test('app-locked surface can switch away from a closed startup library without e
     await expect(page.getByTestId('library-switcher')).toBeVisible();
     await expect(page.getByTestId('new-library')).toHaveCount(0);
     await expect(page.getByTestId('add-existing')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Remove library from list:/u })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Actions for/u })).toHaveCount(0);
+    await expect(page.getByTestId('move-several')).toHaveCount(0);
     await page.getByTestId('library-row-Available target').click();
 
     page = await app.firstWindow();

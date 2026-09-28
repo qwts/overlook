@@ -128,6 +128,13 @@ Open Settings, tab around, close with Escape.
 - **Known fail** (finding 10, [#399](https://github.com/qwts/photos/issues/399)): focus
   drops to `<body>` — you are dumped at the top of the document. Repeat for Export,
   Offload, and Key.
+- Open the library switcher and **Tab** along a row (#1299). **Expect:** the row reads as
+  its library, then "Actions for {name}, menu pop-up button"; nothing else. Open the ⋯,
+  choose Rename folder…, and press Escape: focus is back on that ⋯. A disabled item reads
+  its reason ("Move…, dimmed, Reconnect the volume first."). Choose **Move several…**:
+  "Choose libraries to move. Press Space to select, Escape to cancel." is announced, rows
+  read as checkboxes, Space checks one and the count is read ("1 selected."), and Escape
+  announces "Move canceled. Nothing was moved." with focus back on Move several….
 - With Settings open, use the **virtual cursor** to read behind the scrim.
   **Known fail** (finding 11): nothing is `inert`/`aria-hidden`.
 - Navigate the Settings section nav with **arrow keys**. **Known fail** (finding 21): it

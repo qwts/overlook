@@ -96,6 +96,14 @@ export function ContextMenu({
       style={{ left: x, top: y }}
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
+        // Esc closes this menu only: stopped here, before the document, so a
+        // dialog the menu sits in stays open (#1299).
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          return;
+        }
         if (event.key === 'Tab' && closeOnTab) {
           event.preventDefault();
           onClose();
@@ -143,6 +151,8 @@ function ContextMenuRow({
   readonly onSelect: () => void;
 }): ReactElement {
   const descriptionId = item.description === undefined ? undefined : `${menuId}-${item.id}-description`;
+  const reasonId = item.disabledReason === undefined ? undefined : `${menuId}-${item.id}-reason`;
+  const describedBy = [descriptionId, reasonId].filter((id) => id !== undefined).join(' ');
   return (
     <div className={item.separatorBefore === true ? 'ovl-context-menu__separated' : undefined}>
       <button
@@ -151,7 +161,7 @@ function ContextMenuRow({
         aria-checked={item.checked}
         className={item.danger === true ? 'ovl-context-menu__danger' : undefined}
         aria-disabled={item.disabledReason === undefined ? undefined : true}
-        aria-describedby={descriptionId}
+        aria-describedby={describedBy === '' ? undefined : describedBy}
         title={item.disabledReason}
         onClick={onSelect}
       >
@@ -180,6 +190,12 @@ function ContextMenuRow({
         )}
         {item.hint === undefined ? null : <span className="ovl-context-menu__hint">{item.hint}</span>}
       </button>
+      {reasonId === undefined ? null : (
+        // Hidden, so the menu holds only menuitems; a description still reads it.
+        <span id={reasonId} hidden>
+          {item.disabledReason}
+        </span>
+      )}
     </div>
   );
 }

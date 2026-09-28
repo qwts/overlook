@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import './library-switcher.css';
 import { useFormats } from '../i18n/use-formats.js';
 import type { LibraryDescriptor } from '../../../shared/library/registry.js';
-import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
-import { Checkbox } from '../components/Checkbox';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { IconButton } from '../components/IconButton';
@@ -16,6 +14,9 @@ import { RenameLibraryDialog } from './RenameLibraryDialog';
 import { destructiveActions } from '../../../shared/destructive-actions.js';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { EditLibraryDisplayNameDialog } from './EditLibraryDisplayNameDialog';
+import { LibraryRow } from './LibraryRow';
+import { LibraryRowMenu } from './LibraryRowMenu';
+import { libraryRowActions } from './library-row-actions';
 
 // Library Switcher (#386, ADR-0017): view, switch, create, and manage the
 // registered libraries. Switching hands off to the main process (#385) which
@@ -23,6 +24,23 @@ import { EditLibraryDisplayNameDialog } from './EditLibraryDisplayNameDialog';
 // is honest about that: it survives only until the reload wipes the renderer.
 
 type Phase = 'list' | 'switching' | 'create' | 'confirm-remove' | 'display-name' | 'move' | 'rename';
+
+// Where focus lands when the list comes back (#1299): a row's ⋯ after one of
+// its dialogs, or the footer control that started the flow. Never the panel.
+type ReturnFocus =
+  | { readonly part: 'actions'; readonly libraryId: string; readonly index: number }
+  | { readonly part: 'first-selectable' }
+  | { readonly part: 'move-several' }
+  | { readonly part: 'new-library' };
+
+interface RowMenu {
+  readonly library: LibraryDescriptor;
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
+  /** The row or ⋯ that opened the menu; Esc hands focus back to it. */
+  readonly origin: HTMLElement;
+}
 
 interface Refusal {
   readonly kind:
@@ -47,11 +65,18 @@ const REFUSAL_COPY: Record<Refusal['kind'], { title: string; detail: string }> =
 // New copy goes through the catalog (ADR-0020 §6); the switcher's legacy
 // literals hold a shrinking budget and migrate opportunistically.
 const moveMessages = defineMessages({
-  select: { id: 'libswitch.move.select', defaultMessage: 'Select {name} to move' },
-  moveOne: { id: 'libswitch.move.one', defaultMessage: 'Move {name}…' },
+  actions: { id: 'libswitch.actions', defaultMessage: 'Actions for {name}' },
+  actionsDuplicate: { id: 'libswitch.actions.duplicate', defaultMessage: 'Actions for {name} ({hint})' },
+  moveSeveral: { id: 'libswitch.move.several', defaultMessage: 'Move several…' },
+  modeBanner: { id: 'libswitch.move.banner', defaultMessage: 'Choose libraries to move. The open library moves last.' },
+  modeOn: { id: 'libswitch.move.modeOn', defaultMessage: 'Choose libraries to move. Press Space to select, Escape to cancel.' },
+  modeKeys: { id: 'libswitch.move.keys', defaultMessage: 'Space select · esc cancel' },
+  modeCount: { id: 'libswitch.move.count', defaultMessage: '{count} selected.' },
+  modeCancel: { id: 'libswitch.move.cancel', defaultMessage: 'Cancel' },
+  modeCanceled: { id: 'libswitch.move.canceled', defaultMessage: 'Move canceled. Nothing was moved.' },
+  noneSelected: { id: 'libswitch.move.none', defaultMessage: 'Select at least one library' },
   moveSelected: { id: 'libswitch.move.selected', defaultMessage: 'Move {count} selected…' },
-  renameOne: { id: 'libswitch.rename.one', defaultMessage: 'Rename folder of {name}…' },
-  editDisplayName: { id: 'libswitch.displayName.one', defaultMessage: 'Edit display name of {name}…' },
+  removed: { id: 'libswitch.remove.done', defaultMessage: '{name} removed from this list. Its files were not changed.' },
   duplicateHint: { id: 'libswitch.displayName.duplicateHint', defaultMessage: 'Location: {location} · ID ending {id}' },
   folder: { id: 'libswitch.displayName.folder', defaultMessage: 'Library folder' },
   changed: { id: 'libswitch.displayName.changed', defaultMessage: 'Display name changed to {name}' },
@@ -63,6 +88,23 @@ function privacySafeLocationHint(libraryPath: string): string | null {
     .split(/[\\/]+/u)
     .filter(Boolean);
   return parts.at(-1) ?? null;
+}
+
+function focusReturnTarget(root: HTMLElement, target: ReturnFocus): void {
+  const rows = Array.from(root.querySelectorAll<HTMLElement>('.ovl-libswitch__row'));
+  let element: HTMLElement | null = null;
+  if (target.part === 'actions') {
+    element = rows.find((row) => row.dataset['libraryId'] === target.libraryId)?.querySelector('.ovl-libswitch__actions') ?? null;
+    // The library left the list: the row that took its place, else the one before.
+    element ??= (rows[target.index] ?? rows[target.index - 1])?.querySelector('.ovl-libswitch__rowbtn') ?? null;
+  } else if (target.part === 'first-selectable') {
+    // With every row blocked there is nothing to check; Cancel is the way out.
+    element = root.querySelector('.ovl-libswitch__rowbtn:not([aria-disabled="true"])') ?? root.querySelector('[data-testid="move-cancel"]');
+  } else if (target.part === 'move-several') {
+    element = root.querySelector('[data-testid="move-several"]');
+  }
+  element ??= root.querySelector('[data-testid="new-library"]');
+  element?.focus();
 }
 
 export interface LibrarySwitcherProps {
@@ -99,7 +141,13 @@ export function LibrarySwitcher({
   const [renameTarget, setRenameTarget] = useState<LibraryDescriptor | null>(null);
   const [displayNameTarget, setDisplayNameTarget] = useState<LibraryDescriptor | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [selecting, setSelecting] = useState(false);
+  const [menu, setMenu] = useState<RowMenu | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<ReturnFocus | null>(startInCreate ? { part: 'new-library' } : null);
+  const countTimerRef = useRef<number | null>(null);
+  const noneSelectedId = useId();
 
   const refresh = useCallback((): void => {
     void Promise.all([window.overlook.libraries.list(), window.overlook.libraries.current()])
@@ -198,9 +246,12 @@ export function LibrarySwitcher({
     window.overlook.libraries
       .remove({ id: removeTarget.id })
       .then(() => {
+        const removed = removeTarget;
         setRemoving(false);
         setRemoveTarget(null);
+        setLibs((previous) => previous?.filter((library) => library.id !== removed.id) ?? null);
         setPhase('list');
+        announce(intl.formatMessage(moveMessages.removed, { name: removed.name }), 'polite', 'library-remove');
         refresh();
       })
       .catch(() => {
@@ -213,10 +264,11 @@ export function LibrarySwitcher({
   // ↑/↓ move focus between rows from anywhere in the modal (roving focus
   // keeps Enter = native activate). Document-level because the Dialog panel
   // holds focus on open — a handler on our subtree would never hear it.
-  const inList = phase === 'list';
+  const inList = phase === 'list' && menu === null;
   useEffect(() => {
     if (!inList) return;
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
       event.preventDefault();
       const rows = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('.ovl-libswitch__rowbtn') ?? []);
@@ -229,9 +281,118 @@ export function LibrarySwitcher({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [inList]);
 
+  // Focus comes back once the list is on screen again, after the closing
+  // dialog has handed focus to its (now unmounted) opener on a timeout.
+  useEffect(() => {
+    const target = returnFocusRef.current;
+    const root = rootRef.current;
+    if (phase !== 'list' || libs === null || target === null || root === null) return;
+    const timer = window.setTimeout(() => {
+      returnFocusRef.current = null;
+      focusReturnTarget(root, target);
+    });
+    return () => window.clearTimeout(timer);
+  }, [phase, libs, selecting]);
+
+  const clearCountTimer = (): void => {
+    if (countTimerRef.current !== null) window.clearTimeout(countTimerRef.current);
+    countTimerRef.current = null;
+  };
+  useEffect(() => clearCountTimer, []);
+
+  const startSelecting = (): void => {
+    setRefusal(null);
+    setSelected(new Set());
+    setSelecting(true);
+    returnFocusRef.current = { part: 'first-selectable' };
+    announce(intl.formatMessage(moveMessages.modeOn), 'polite', 'library-move-mode');
+  };
+
+  const leaveSelecting = (): void => {
+    clearCountTimer();
+    setSelecting(false);
+    setSelected(new Set());
+    returnFocusRef.current = { part: 'move-several' };
+  };
+
+  const cancelSelecting = (): void => {
+    leaveSelecting();
+    announce(intl.formatMessage(moveMessages.modeCanceled), 'polite', 'library-move-mode');
+  };
+
+  const toggleSelected = (library: LibraryDescriptor): void => {
+    const next = new Set(selected);
+    if (next.has(library.id)) next.delete(library.id);
+    else next.add(library.id);
+    setSelected(next);
+    // Only the count after the last change within 500ms is read.
+    clearCountTimer();
+    countTimerRef.current = window.setTimeout(() => {
+      countTimerRef.current = null;
+      announce(intl.formatMessage(moveMessages.modeCount, { count: next.size }), 'polite', 'library-move-mode');
+    }, 500);
+  };
+
+  const moveSelected = (): void => {
+    if (selected.size === 0) return;
+    setRefusal(null);
+    setMoveTargets((libs ?? []).filter((library) => selected.has(library.id)));
+    leaveSelecting();
+    setPhase('move');
+  };
+
+  // Esc in the mode leaves the mode; the switcher stays. Captured ahead of the
+  // Dialog's own Esc, which would otherwise start closing the switcher.
+  useEffect(() => {
+    if (!selecting || phase !== 'list') return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelSelecting();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  });
+
+  // A row's dialogs hand focus back to its ⋯ (or, if it has gone, a neighbour).
+  const beginRowAction = (library: LibraryDescriptor, next: Phase): void => {
+    setRefusal(null);
+    returnFocusRef.current = {
+      part: 'actions',
+      libraryId: library.id,
+      index: (libs ?? []).findIndex((entry) => entry.id === library.id),
+    };
+    setPhase(next);
+  };
+
+  const openMenu = (
+    library: LibraryDescriptor,
+    label: string,
+    anchor: HTMLElement,
+    origin: HTMLElement,
+    at?: { x: number; y: number },
+  ): void => {
+    const bounds = anchor.getBoundingClientRect();
+    const rtl = getComputedStyle(anchor).direction === 'rtl';
+    // Under the ⋯, its inline-end edge on the menu's (210px min width).
+    const position = at ?? { x: rtl ? bounds.left : bounds.right - 210, y: bounds.bottom + 4 };
+    setMenu({ library, label, origin, ...position });
+  };
+
+  const closeMenu = (): void => {
+    const origin = menu?.origin;
+    setMenu(null);
+    if (origin?.isConnected === true) origin.focus();
+  };
+
   // Esc backs out of layered phases before it closes the switcher.
   const close = (): void => {
     if (phase === 'switching') return;
+    if (selecting) {
+      cancelSelecting();
+      return;
+    }
     if (phase === 'confirm-remove' || phase === 'create' || phase === 'display-name') {
       setPhase('list');
       setRemoveTarget(null);
@@ -280,7 +441,6 @@ export function LibrarySwitcher({
         onClose={() => {
           setPhase('list');
           setMoveTargets(null);
-          setSelected(new Set());
           refresh();
         }}
       />
@@ -409,7 +569,7 @@ export function LibrarySwitcher({
 
   return (
     <Dialog open title="Libraries" icon="images" width={520} onClose={close}>
-      <div data-testid="library-switcher">
+      <div data-testid="library-switcher" ref={rootRef}>
         {refusal === null ? null : (
           <div className="ovl-libswitch__banner" role="alert" data-testid="switch-refusal">
             <Icon name="triangle-alert" size={16} color="var(--accent-amber)" />
@@ -422,120 +582,95 @@ export function LibrarySwitcher({
           </div>
         )}
         <div className="ovl-libswitch__count mono-data">{libs === null ? 'Loading…' : `${String(libs.length)} registered`}</div>
+        {selecting ? (
+          <p className="ovl-libswitch__mode" data-testid="move-mode-banner">
+            <Icon name="info" size={14} color="var(--text-muted)" />
+            <span>{intl.formatMessage(moveMessages.modeBanner)}</span>
+          </p>
+        ) : null}
         <ul className="ovl-libswitch__list" ref={listRef} data-testid="library-list">
           {(libs ?? []).map((lib) => {
-            const blocked = lib.missing || lib.lockedBy !== null;
             const duplicateName =
               (libs ?? []).filter((candidate) => candidate.name.localeCompare(lib.name, undefined, { sensitivity: 'base' }) === 0).length >
               1;
+            const duplicateHint = duplicateName
+              ? intl.formatMessage(moveMessages.duplicateHint, {
+                  location: privacySafeLocationHint(lib.path) ?? intl.formatMessage(moveMessages.folder),
+                  id: lib.id.slice(-4),
+                })
+              : null;
+            // Duplicate names get the hint too, so no two ⋯ buttons share a name.
+            const actionsLabel =
+              duplicateHint === null
+                ? intl.formatMessage(moveMessages.actions, { name: lib.name })
+                : intl.formatMessage(moveMessages.actionsDuplicate, { name: lib.name, hint: duplicateHint });
+            const moveBlocked = libraryRowActions(lib, currentId).move !== null;
             return (
-              <li
+              <LibraryRow
                 key={lib.id}
-                className={['ovl-libswitch__row', lib.open ? 'ovl-libswitch__row--open' : '', blocked ? 'ovl-libswitch__row--blocked' : '']
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <button
-                  type="button"
-                  className="ovl-libswitch__rowbtn"
-                  aria-disabled={blocked}
-                  data-testid={`library-row-${lib.name}`}
-                  onClick={() => switchTo(lib)}
-                >
-                  <span className="ovl-libswitch__rowmain">
-                    <span className="ovl-libswitch__name">
-                      {lib.name}
-                      {lib.open ? <Badge tone="cyan">Open now</Badge> : null}
-                      {lib.missing ? <Badge tone="amber">Missing</Badge> : null}
-                      {lib.lockedBy === null ? null : <Badge tone="amber" icon="lock">{`Open on ${lib.lockedBy}`}</Badge>}
-                    </span>
-                    <span className="mono-data ovl-libswitch__path">{lib.path}</span>
-                    {duplicateName ? (
-                      <span className="prose-note ovl-libswitch__duplicate-hint">
-                        {intl.formatMessage(moveMessages.duplicateHint, {
-                          location: privacySafeLocationHint(lib.path) ?? intl.formatMessage(moveMessages.folder),
-                          id: lib.id.slice(-4),
-                        })}
-                      </span>
-                    ) : null}
-                    {lib.missing ? <span className="ovl-libswitch__hint">Reconnect the volume to open this library</span> : null}
-                  </span>
-                  <span className="prose-note ovl-libswitch__when">
-                    {lib.lastOpenedAt === null ? 'Never opened' : formatRelativeTime(lib.lastOpenedAt, loadedAt)}
-                  </span>
-                </button>
-                {switchOnly || blocked ? null : (
-                  <Checkbox
-                    checked={selected.has(lib.id)}
-                    label={intl.formatMessage(moveMessages.select, { name: lib.name })}
-                    hideLabel
-                    onChange={(checked) => {
-                      setSelected((previous) => {
-                        const next = new Set(previous);
-                        if (checked) next.add(lib.id);
-                        else next.delete(lib.id);
-                        return next;
-                      });
-                    }}
-                  />
-                )}
-                {switchOnly || blocked ? null : (
-                  <IconButton
-                    icon="folder"
-                    label={intl.formatMessage(moveMessages.renameOne, { name: lib.name })}
-                    size="sm"
-                    data-testid={`rename-library-${lib.name}`}
-                    onClick={() => {
-                      setRefusal(null);
-                      setRenameTarget(lib);
-                      setPhase('rename');
-                    }}
-                  />
-                )}
-                {switchOnly ? null : (
-                  <IconButton
-                    icon="pencil"
-                    label={intl.formatMessage(moveMessages.editDisplayName, { name: lib.name })}
-                    size="sm"
-                    data-testid={`edit-display-name-${lib.id}`}
-                    onClick={() => {
-                      setRefusal(null);
-                      setDisplayNameTarget(lib);
-                      setPhase('display-name');
-                    }}
-                  />
-                )}
-                {switchOnly || blocked ? null : (
-                  <IconButton
-                    icon="hard-drive"
-                    label={intl.formatMessage(moveMessages.moveOne, { name: lib.name })}
-                    size="sm"
-                    data-testid={`move-library-${lib.name}`}
-                    onClick={() => {
-                      setRefusal(null);
-                      setMoveTargets([lib]);
-                      setPhase('move');
-                    }}
-                  />
-                )}
-                {switchOnly || lib.open ? null : (
-                  <IconButton
-                    icon="trash-2"
-                    label={`${destructiveActions.removeLibraryFromList.label}: ${lib.name}`}
-                    size="sm"
-                    onClick={() => {
-                      setRefusal(null);
-                      setRemoveTarget(lib);
-                      setPhase('confirm-remove');
-                    }}
-                  />
-                )}
-              </li>
+                library={lib}
+                when={lib.lastOpenedAt === null ? 'Never opened' : formatRelativeTime(lib.lastOpenedAt, loadedAt)}
+                duplicateHint={duplicateHint}
+                actionsLabel={switchOnly || selecting ? null : actionsLabel}
+                menuOpen={menu?.library.id === lib.id}
+                selection={selecting ? { checked: selected.has(lib.id), blocked: moveBlocked } : null}
+                onActivate={() => {
+                  if (!selecting) switchTo(lib);
+                  else if (!moveBlocked) toggleSelected(lib);
+                }}
+                onOpenActions={(anchor, origin, at) => openMenu(lib, actionsLabel, anchor, origin, at)}
+              />
             );
           })}
         </ul>
+        {menu === null ? null : (
+          <LibraryRowMenu
+            library={menu.library}
+            currentId={currentId}
+            label={menu.label}
+            x={menu.x}
+            y={menu.y}
+            onClose={closeMenu}
+            onEditDisplayName={() => {
+              setDisplayNameTarget(menu.library);
+              beginRowAction(menu.library, 'display-name');
+            }}
+            onRename={() => {
+              setRenameTarget(menu.library);
+              beginRowAction(menu.library, 'rename');
+            }}
+            onMove={() => {
+              setMoveTargets([menu.library]);
+              beginRowAction(menu.library, 'move');
+            }}
+            onRemove={() => {
+              setRemoveTarget(menu.library);
+              beginRowAction(menu.library, 'confirm-remove');
+            }}
+          />
+        )}
         <div className="ovl-libswitch__footer">
-          {switchOnly ? null : (
+          {switchOnly ? null : selecting ? (
+            <>
+              <Button
+                variant="primary"
+                icon="hard-drive"
+                data-testid="move-selected"
+                aria-disabled={selected.size === 0}
+                aria-describedby={selected.size === 0 ? noneSelectedId : undefined}
+                title={selected.size === 0 ? intl.formatMessage(moveMessages.noneSelected) : undefined}
+                onClick={moveSelected}
+              >
+                {intl.formatMessage(moveMessages.moveSelected, { count: selected.size })}
+              </Button>
+              <span id={noneSelectedId} hidden>
+                {intl.formatMessage(moveMessages.noneSelected)}
+              </span>
+              <Button variant="ghost" data-testid="move-cancel" onClick={cancelSelecting}>
+                {intl.formatMessage(moveMessages.modeCancel)}
+              </Button>
+            </>
+          ) : (
             <>
               <Button
                 variant="primary"
@@ -543,6 +678,7 @@ export function LibrarySwitcher({
                 data-testid="new-library"
                 onClick={() => {
                   setRefusal(null);
+                  returnFocusRef.current = { part: 'new-library' };
                   setPhase('create');
                 }}
               >
@@ -551,22 +687,16 @@ export function LibrarySwitcher({
               <Button icon="folder-open" onClick={addExisting} data-testid="add-existing">
                 Add existing…
               </Button>
-              {selected.size === 0 ? null : (
-                <Button
-                  icon="hard-drive"
-                  data-testid="move-selected"
-                  onClick={() => {
-                    setRefusal(null);
-                    setMoveTargets((libs ?? []).filter((lib) => selected.has(lib.id)));
-                    setPhase('move');
-                  }}
-                >
-                  {intl.formatMessage(moveMessages.moveSelected, { count: selected.size })}
+              {(libs ?? []).length > 1 ? (
+                <Button icon="hard-drive" data-testid="move-several" onClick={startSelecting}>
+                  {intl.formatMessage(moveMessages.moveSeveral)}
                 </Button>
-              )}
+              ) : null}
             </>
           )}
-          <span className="prose-note ovl-libswitch__keys">↑↓ select · ⏎ switch · esc close</span>
+          <span className="prose-note ovl-libswitch__keys">
+            {selecting ? intl.formatMessage(moveMessages.modeKeys) : '↑↓ select · ⏎ switch · esc close'}
+          </span>
         </div>
       </div>
     </Dialog>

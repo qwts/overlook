@@ -30,13 +30,17 @@
   padding-inline-end: var(--space-3);
 }
 
-.ovl-libswitch__row--open {
+/* The open row, or in Move several a checked one. Forced colors maps these
+   tokens to a Highlight border on Canvas. */
+.ovl-libswitch__row--open,
+.ovl-libswitch__row--checked {
   border-color: var(--accent-iris);
   background: var(--accent-iris-dim);
 }
 
 /* The tinted row lightens the translucent badge below 4.5:1 — go solid. */
-.ovl-libswitch__row--open .ovl-badge--cyan {
+.ovl-libswitch__row--open .ovl-badge--cyan,
+.ovl-libswitch__row--checked .ovl-badge--cyan {
   background: var(--accent-iris);
   color: var(--text-on-accent);
 }
@@ -76,6 +80,7 @@
 }
 
 .ovl-libswitch__rowmain {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -111,6 +116,38 @@
 .ovl-libswitch__when {
   flex: none;
   color: var(--text-muted);
+}
+
+/* The row's one other control (#1299): always shown, never squeezed off the
+   row at 200%. A row without it (selection mode, switch-only) runs its
+   button to the edge. */
+.ovl-libswitch__actions {
+  flex: none;
+}
+
+.ovl-libswitch__row:not(:has(.ovl-libswitch__actions)) {
+  padding-inline-end: 0;
+}
+
+/* Selection mode: a row that cannot move draws its box as a disabled
+   Checkbox does. */
+.ovl-libswitch__rowbtn[role='checkbox'][aria-disabled='true'] .ovl-checkbox__box {
+  opacity: 0.45;
+}
+
+/* Selection mode's banner: a plain note, not the amber refusal banner. */
+.ovl-libswitch__mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.ovl-libswitch__mode svg {
+  flex: none;
 }
 
 .ovl-libswitch__footer {

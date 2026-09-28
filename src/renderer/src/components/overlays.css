@@ -13,7 +13,8 @@
 }
 
 .ovl-dialog {
-  max-width: 90%;
+  /* min(width, window - 32px): a 16px gutter each side at any zoom (#1299). */
+  max-width: calc(100% - 32px);
   max-height: calc(100% - 32px);
   display: flex;
   flex-direction: column;
