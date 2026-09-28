@@ -946,7 +946,7 @@ export const en = {
   "settings.general.allPhotos.minimumSize.hint": "Items whose dimensions are unknown are always shown, whatever the minimum.",
   "settings.general.allPhotos.minimumSize.megapixels": "{count} MP and larger",
   "settings.general.allPhotos.minimumSize.none": "None — show every size",
-  "settings.general.allPhotos.showUnavailable": "Show unavailable items in All Photos",
+  "settings.general.allPhotos.showUnavailable": "Show unavailable items",
   "settings.general.appearance": "Appearance",
   "settings.general.appearance.dark": "Dark",
   "settings.general.appearance.hint": "Changes apply immediately. System follows your operating-system appearance.",

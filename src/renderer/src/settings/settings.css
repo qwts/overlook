@@ -169,6 +169,29 @@
   max-width: 100%;
 }
 
+/* A settings subsection (#1296): a region under an h3, its Field rows at the
+   pane's own indent, no border of its own. */
+.ovl-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ovl-settings__groupHeading {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--text-body);
+}
+
+/* Type comes from .prose-note beside it. */
+.ovl-settings__groupHint {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 60ch;
+}
+
 /* A stacked row's compound control spans the row under its label. */
 .ovl-settings__field--stacked > .ovl-settings__fieldControl {
   flex-basis: 100%;

@@ -3,6 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Switch } from '../components/Switch';
 import { Field, FieldSelect } from './Field';
+import { SettingsGroup } from './SettingsGroup';
 import { DEFAULT_GALLERY_POLICY, MINIMUM_MEGAPIXEL_OPTIONS, type GalleryPolicy } from '../../../shared/library/gallery-policy.js';
 
 // All Photos inclusion rules (#512, ADR-0030 §4). These are library data,
@@ -17,7 +18,7 @@ export const galleryInclusionMessages = defineMessages({
     defaultMessage:
       'These rules change only what All Photos shows. Albums, search, backup, export, and the RAW and Unavailable sources are never affected.',
   },
-  showUnavailable: { id: 'settings.general.allPhotos.showUnavailable', defaultMessage: 'Show unavailable items in All Photos' },
+  showUnavailable: { id: 'settings.general.allPhotos.showUnavailable', defaultMessage: 'Show unavailable items' },
   minimumSize: { id: 'settings.general.allPhotos.minimumSize', defaultMessage: 'Minimum size' },
   minimumSizeHint: {
     id: 'settings.general.allPhotos.minimumSize.hint',
@@ -49,7 +50,11 @@ export function GalleryInclusionSettings(): ReactElement {
   };
   const disabled = policy === null;
   return (
-    <div className="ovl-settings__fields" data-testid="gallery-inclusion">
+    <SettingsGroup
+      heading={intl.formatMessage(galleryInclusionMessages.heading)}
+      hint={intl.formatMessage(galleryInclusionMessages.hint)}
+      testId="gallery-inclusion"
+    >
       <Field label={intl.formatMessage(galleryInclusionMessages.showUnavailable)}>
         <Switch
           checked={current.showUnavailable}
@@ -78,6 +83,6 @@ export function GalleryInclusionSettings(): ReactElement {
           ))}
         </FieldSelect>
       </Field>
-    </div>
+    </SettingsGroup>
   );
 }

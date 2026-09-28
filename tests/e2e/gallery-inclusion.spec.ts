@@ -115,7 +115,7 @@ test('Inspector reloads a repaired preview while its All Photos selection remain
     // prove All Photos membership changes. This scenario keeps the row selected.
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('tab', { name: 'General' }).click();
-    const showUnavailable = page.getByRole('switch', { name: 'Show unavailable items in All Photos' });
+    const showUnavailable = page.getByRole('switch', { name: 'Show unavailable items' });
     await expect(showUnavailable).toHaveAttribute('aria-checked', 'false');
     await showUnavailable.click();
     await expect(showUnavailable).toHaveAttribute('aria-checked', 'true');
