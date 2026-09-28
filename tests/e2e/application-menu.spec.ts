@@ -313,6 +313,9 @@ test('Windows/Linux ⋯ Overlook menu reaches File, Edit, View, and Overlook com
     // pCloud is on in this profile, so Transfer & Sync has a place here.
     await expect(menu.getByRole('menuitem', { name: 'Transfer & Sync' })).toBeVisible();
 
+    // ⌘, is macOS only (#1294): Settings… advertises no Ctrl+,.
+    await expect(menu.getByRole('menuitem', { name: 'Settings…' })).not.toHaveAttribute('aria-keyshortcuts');
+
     // Settings…: the menu closes, focus returns to ⋯, then Settings opens;
     // closing Settings hands focus back to ⋯.
     await menu.getByRole('menuitem', { name: 'Settings…' }).focus();
@@ -335,6 +338,13 @@ test('Windows/Linux ⋯ Overlook menu reaches File, Edit, View, and Overlook com
     await page.keyboard.press('Tab');
     await expect(menu).toBeHidden();
     await expect(button).toBeFocused();
+
+    // Ctrl+, opens nothing (#1294). The ? that follows is handled in order, so
+    // once Keyboard shortcuts is up, Ctrl+, has had its chance.
+    await page.keyboard.press('Control+Comma');
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
   } finally {
     await app.close();
   }

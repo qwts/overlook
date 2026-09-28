@@ -2612,6 +2612,24 @@
       ]
     },
     {
+      "id": "1294-settings-shortcut-macos-only",
+      "wiki": "Acceptance-Test-Native-Application-Menu",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/application-menu.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/components/TitlebarAppMenu.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/commands/app-menu.test.ts"
+        }
+      ]
+    },
+    {
       "id": "titlebar-help-menu",
       "wiki": "Titlebar-Help-Menu",
       "coverage": [

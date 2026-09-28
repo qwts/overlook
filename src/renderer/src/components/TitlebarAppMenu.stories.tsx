@@ -98,12 +98,17 @@ export const WithDisabledItem: Story = {
 
 // Choosing Settings… closes the menu and returns focus to ⋯ before the
 // command runs, so the dialog it opens hands focus back to ⋯ on close.
+// It carries no shortcut: ⌘, is macOS only (#1294).
 export const ChooseSettings: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const button = canvas.getByRole('button', { name: 'Overlook menu' });
     await userEvent.click(button);
-    await userEvent.click(canvas.getByRole('menuitem', { name: 'Settings…' }));
+    // ⌘, is macOS only (#1294), so no Ctrl+, is shown or exposed.
+    const settings = canvas.getByRole('menuitem', { name: 'Settings…' });
+    await expect(settings).not.toHaveAttribute('aria-keyshortcuts');
+    await expect(settings).toHaveTextContent(/^Settings…$/u);
+    await userEvent.click(settings);
     await expect(canvas.queryByRole('menu')).toBeNull();
     await expect(button).toHaveFocus();
     await expect(args.onCommand).toHaveBeenCalledWith('app.settings.open');

@@ -150,3 +150,23 @@ test('every shortcut the ⋯ menu shows is one the renderer resolves on Windows 
   assert.equal(appMenuShortcut('library.import', 'win32'), undefined);
   assert.deepEqual(appMenuShortcut('history.undo', 'win32'), { label: 'Ctrl+Z', aria: 'Control+z' });
 });
+
+// #1294: ⌘, opens Settings on macOS through its native menu accelerator.
+// Windows and Linux have no native menu and the renderer dispatcher leaves
+// Settings to the menus, so Ctrl+, opens nothing and nothing advertises it.
+test('Settings has ⌘, on macOS and no shortcut on Windows or Linux', () => {
+  const settings = (template: readonly MenuItemConstructorOptions[]): MenuItemConstructorOptions | undefined =>
+    template.flatMap((menu) => (Array.isArray(menu.submenu) ? menu.submenu : [])).find((item) => item.id === 'app.settings.open');
+  assert.equal(settings(buildApplicationMenuTemplate('darwin', 'Overlook', grid, () => {}))?.accelerator, 'CommandOrControl+,');
+  for (const platform of ['win32', 'linux'] as const) {
+    assert.deepEqual(
+      buildApplicationMenuTemplate(platform, 'Overlook', grid, () => {}),
+      [],
+    );
+    for (const surface of ['grid', 'lightbox'] as const) {
+      const context = { surface, dialogOpen: false, editable: false, platform };
+      assert.equal(resolveCommand({ key: ',', code: 'Comma', ctrlKey: true }, context), null, `${platform} ${surface}`);
+    }
+    assert.equal(appMenuShortcut('app.settings.open', platform), undefined);
+  }
+});
