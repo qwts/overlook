@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 import { DEFAULT_DISCLOSURE_POLICY, PINNED_PRIVATE } from '../../../shared/disclosure/policy.js';
 /* eslint-disable max-lines -- story stub file, large setup */
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
@@ -1208,6 +1208,109 @@ export const GeneralExpandedPseudoLocale: Story = {
     if (general === undefined) throw new Error('general settings navigation item missing');
     await userEvent.click(general);
     await waitFor(() => expect(body.getByTestId('settings-pane')).toBeVisible());
+    await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+  },
+};
+
+// #1297 (Pass C spec, Nav): the dialog at a fixed width, so the stories show
+// the layout its container query picks.
+function dialogWidth(width: number): Decorator {
+  const WithWidth: Decorator = (Story) => (
+    <>
+      <style>{`.ovl-dialog { width: ${String(width)}px !important; max-width: none !important; }`}</style>
+      <Story />
+    </>
+  );
+  return WithWidth;
+}
+
+// Measured once the dialog has finished entering: it scales in from 0.985,
+// which would shrink every rect.
+async function settingsNav(canvasElement: HTMLElement) {
+  const body = within(canvasElement.ownerDocument.body);
+  const dialog = body.getByRole('dialog');
+  await Promise.all(dialog.getAnimations({ subtree: true }).map((animation) => animation.finished));
+  return { body, dialog, nav: body.getByRole('tablist'), pane: body.getByTestId('settings-pane') };
+}
+
+// 640: the nav is a column beside the pane, as wide as its longest label
+// within 160 to 200px, its left edge on the dialog title's.
+export const NavAt640: Story = {
+  decorators: [dialogWidth(640)],
+  play: async ({ canvasElement }) => {
+    const { body, dialog, nav, pane } = await settingsNav(canvasElement);
+    await waitFor(() => expect(nav).toHaveAttribute('aria-orientation', 'vertical'));
+    const width = nav.getBoundingClientRect().width;
+    await expect(width).toBeGreaterThanOrEqual(160);
+    await expect(width).toBeLessThanOrEqual(200);
+    await expect(nav.getBoundingClientRect().right).toBeLessThanOrEqual(pane.getBoundingClientRect().left);
+    const title = within(dialog).getByRole('heading', { level: 2 });
+    const titleStart = title.parentElement?.getBoundingClientRect().left ?? Number.NaN;
+    const headerPadding = Number.parseFloat(getComputedStyle(title.parentElement ?? title).paddingLeft);
+    await expect(Math.round(nav.getBoundingClientRect().left)).toBe(Math.round(titleStart + headerPadding));
+    await userEvent.click(body.getByRole('tab', { name: 'General' }));
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(body.getByRole('tab', { name: 'Storage & Backup' })).toHaveFocus();
+    await expect(body.getByRole('tab', { name: 'Storage & Backup' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(body.getByRole('tab', { name: 'Privacy' })).toHaveFocus();
+  },
+};
+
+// 448 (a 960px window at 200%): the tabs become a row above the pane; ←/→
+// and ↑/↓ both move, and nothing scrolls sideways but the tab row.
+export const NavAt448: Story = {
+  decorators: [dialogWidth(448)],
+  play: async ({ canvasElement }) => {
+    const { body, dialog, nav, pane } = await settingsNav(canvasElement);
+    await waitFor(() => expect(nav).toHaveAttribute('aria-orientation', 'horizontal'));
+    await expect(nav.getBoundingClientRect().bottom).toBeLessThanOrEqual(pane.getBoundingClientRect().top);
+    await userEvent.click(body.getByRole('tab', { name: 'General' }));
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(body.getByRole('tab', { name: 'Storage & Backup' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(body.getByRole('tab', { name: 'Privacy' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(body.getByRole('tab', { name: 'General' })).toHaveFocus();
+    await expect(pane.scrollWidth).toBeLessThanOrEqual(pane.clientWidth);
+    await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+    // Trash retention wraps under its label; Sort order stays inline.
+    const row = (label: string): Element | null => within(pane).getByText(label).closest('.ovl-settings__field');
+    const rects = (label: string): { text: DOMRect; control: DOMRect } => ({
+      text: row(label)?.querySelector('.ovl-settings__fieldText')?.getBoundingClientRect() ?? new DOMRect(),
+      control: row(label)?.querySelector('.ovl-settings__fieldControl')?.getBoundingClientRect() ?? new DOMRect(),
+    });
+    await expect(rects('Trash retention').control.top).toBeGreaterThanOrEqual(rects('Trash retention').text.bottom);
+    await expect(rects('Default sort order').control.top).toBe(rects('Default sort order').text.top);
+  },
+};
+
+// +40% pseudo-locale at 640: the nav stays within 160 to 200px and its
+// labels wrap rather than truncate.
+export const NavAt640ExpandedPseudoLocale: Story = {
+  globals: { locale: 'en-XA' },
+  decorators: [dialogWidth(640)],
+  play: async ({ canvasElement }) => {
+    const { nav } = await settingsNav(canvasElement);
+    await waitFor(() => expect(nav).toHaveAttribute('aria-orientation', 'vertical'));
+    const width = nav.getBoundingClientRect().width;
+    await expect(width).toBeGreaterThanOrEqual(160);
+    await expect(width).toBeLessThanOrEqual(200);
+    for (const label of nav.querySelectorAll('[role="tab"] span')) {
+      await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+    }
+  },
+};
+
+// +40% pseudo-locale at 448: a row of tabs; the row may scroll, the pane not.
+export const NavAt448ExpandedPseudoLocale: Story = {
+  globals: { locale: 'en-XA' },
+  decorators: [dialogWidth(448)],
+  play: async ({ canvasElement }) => {
+    const { dialog, nav, pane } = await settingsNav(canvasElement);
+    await waitFor(() => expect(nav).toHaveAttribute('aria-orientation', 'horizontal'));
+    await expect(pane.scrollWidth).toBeLessThanOrEqual(pane.clientWidth);
     await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
   },
 };

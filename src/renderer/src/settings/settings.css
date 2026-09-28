@@ -7,7 +7,11 @@
   block-size: 100%;
   min-block-size: 0;
   gap: calc(var(--space-4) - var(--space-1));
-  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+}
+
+/* The settings dialog is the container its layout answers to (#1297). */
+.ovl-dialog:has(> .ovl-dialog__body--settings) {
+  container: settings-dialog / inline-size;
 }
 
 .ovl-dialog__body--settings {
@@ -17,7 +21,11 @@
 }
 
 .ovl-settings__nav {
-  width: 160px;
+  /* As wide as its longest label, between 160 and 200px; a longer label
+     wraps to a second line rather than truncating (#1297). */
+  width: max-content;
+  min-width: 160px;
+  max-width: 200px;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -31,8 +39,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 30px;
-  padding: 0 calc(var(--space-2) + var(--space-1) / 2);
+  min-height: 30px;
+  padding: var(--space-2) calc(var(--space-2) + var(--space-1) / 2);
+  line-height: var(--leading-tight);
   border: none;
   border-radius: var(--radius-1);
   background: transparent;
@@ -50,6 +59,32 @@
 .ovl-settings__navrow--active {
   background: var(--gray-3);
   color: var(--text-body);
+}
+
+.ovl-settings__navrow > :first-child {
+  flex: none;
+}
+
+/* A narrow dialog (a 960px window at 200%, for one) puts the sections in a
+   row above the pane; the row scrolls sideways if it must, the pane never. */
+@container settings-dialog (width < 560px) {
+  .ovl-settings {
+    flex-direction: column;
+  }
+
+  .ovl-settings__nav {
+    flex-direction: row;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .ovl-settings__navrow {
+    flex: none;
+    white-space: nowrap;
+  }
 }
 
 .ovl-settings__pane {

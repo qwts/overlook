@@ -137,8 +137,11 @@ Open Settings, tab around, close with Escape.
   announces "Move canceled. Nothing was moved." with focus back on Move several….
 - With Settings open, use the **virtual cursor** to read behind the scrim.
   **Known fail** (finding 11): nothing is `inert`/`aria-hidden`.
-- Navigate the Settings section nav with **arrow keys**. **Known fail** (finding 21): it
-  is a tab pattern with no tab semantics.
+- Navigate the Settings section tabs with **arrow keys** (#1297). **Expect:** they are
+  read as "Settings sections, tab list", vertical beside the pane and horizontal above
+  it when the dialog is narrower than 560px (a 960px window at 200%); ←/→ and ↑/↓
+  both move and select, Home and End jump to the ends, and in a narrow dialog the
+  selected tab scrolls into view.
 - Tab through a Settings pane (#1295). **Expect:** each switch, segmented control,
   select, and slider is read by its row's label, then its hint, with no "group" and
   no label read twice. A lone button keeps its own name and reads the row's label and
