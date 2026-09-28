@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.35
+
+### Patch Changes
+
+- d4d57bf: All Photos in Settings → General is now a subsection with its own heading instead of rows nested inside another row. Its two rows sit at the pane's indent, and screen readers announce it as the All Photos region. The switch now reads "Show unavailable items".
+
 ## 0.76.34
 
 ### Patch Changes
