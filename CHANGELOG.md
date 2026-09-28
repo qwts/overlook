@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.38
+
+### Patch Changes
+
+- 141be6c: Windows and Linux get an Overlook menu (⋯) in the titlebar, next to Help. It holds the File, Edit, View, and Overlook commands that macOS keeps in its menu bar, grouped under those headings with their shortcuts. Unavailable commands stay listed and say why, such as Export All while a protected album is open. Transfer & Sync and Export All Unencrypted leave the toolbar, so Import is its only primary action on every platform.
+- 141be6c: The toolbar no longer wraps onto two rows at the default window size. It stays one row at every width and makes room in a fixed order: the zoom slider moves into a Zoom popover, the wordmark keeps only its mark, Import becomes icon-only, and view selection becomes a View menu. Focus follows a control into its compact form, and changing the view is now announced.
+
 ## 0.76.37
 
 ### Patch Changes
