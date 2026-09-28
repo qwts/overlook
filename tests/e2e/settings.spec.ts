@@ -253,10 +253,11 @@ test('settings keeps stable modal geometry and content-only scrolling in a short
   }
 });
 
-// #1295, #1296 (Pass C spec, Invariants): across dialog widths 448 to 760 in
-// 16px steps, every auto row's label column keeps at least min(220, row
+// #1295, #1296, #1297 (Pass C spec, Invariants): across dialog widths 448 to
+// 760 in 16px steps, every auto row's label column keeps at least min(220, row
 // width) — a control that would squeeze it narrower wraps below it instead —
-// no Field sits inside another, and the pane never scrolls sideways.
+// no Field sits inside another, nothing scrolls sideways, and the section tabs
+// are a column from 560px and a row below it.
 test('settings rows keep a 220px label column and never scroll sideways across dialog widths', async () => {
   const userData = mkE2eTmpDir('overlook-e2e-settings-rows-');
   const app = await electron.launch({
@@ -289,7 +290,11 @@ test('settings rows keep a 220px label column and never scroll sideways across d
           const pane = document.querySelector('[data-testid="settings-pane"]');
           const problems = [];
           if (pane.scrollWidth > pane.clientWidth) problems.push('pane scrolls sideways: ' + pane.scrollWidth + ' > ' + pane.clientWidth);
+          if (dialog.scrollWidth > dialog.clientWidth) problems.push('dialog scrolls sideways: ' + dialog.scrollWidth + ' > ' + dialog.clientWidth);
           if (pane.querySelector('.ovl-settings__field .ovl-settings__field') !== null) problems.push('a Field is nested in another Field');
+          const nav = document.querySelector('[role="tablist"]');
+          const orientation = ${String(width)} < 560 ? 'horizontal' : 'vertical';
+          if (nav.getAttribute('aria-orientation') !== orientation) problems.push('tabs are ' + nav.getAttribute('aria-orientation') + ', not ' + orientation);
           for (const row of pane.querySelectorAll('.ovl-settings__field--auto')) {
             const rowWidth = row.getBoundingClientRect().width;
             const label = row.querySelector('.ovl-settings__fieldText').getBoundingClientRect().width;
@@ -300,6 +305,19 @@ test('settings rows keep a 220px label column and never scroll sideways across d
         expect(squeezed, `${tab} at ${String(width)}px`).toEqual([]);
       }
     }
+
+    // #1297: at 448 the tabs are a row; → and ↓ both move to the next tab
+    // and select it.
+    await page.evaluate("document.querySelector('[role=dialog]').style.width = '448px'");
+    await expect(page.getByRole('tablist')).toHaveAttribute('aria-orientation', 'horizontal');
+    await page.getByRole('tab', { name: 'General' }).click();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Storage & Backup' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('tab', { name: 'Privacy' })).toBeFocused();
+    await expect(page.getByTestId('settings-pane')).toHaveAttribute('data-section', 'privacy');
+    await page.keyboard.press('Home');
+    await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
   } finally {
     await app.close();
   }

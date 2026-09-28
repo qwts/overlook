@@ -3,10 +3,11 @@ import { defineMessages, useIntl } from 'react-intl';
 import type { MessageDescriptor } from 'react-intl';
 
 import { Dialog } from '../components/Dialog';
-import { Icon, type IconName } from '../components/Icon';
+import type { IconName } from '../components/Icon';
 import { GeneralPane } from './GeneralPane';
 import { KeyDialog, type KeyDialogMode } from './KeyDialog';
 import { PrivacyPane } from './PrivacyPane';
+import { SettingsNav } from './SettingsNav';
 import { StoragePane } from './StoragePane';
 import { AppPasswordDialog, type AppPasswordMode } from './AppPasswordDialog';
 import type { AppSettings, SettingsPatch } from '../../../shared/settings/settings.js';
@@ -15,8 +16,8 @@ import { TransferPane } from './TransferPane.js';
 
 import './settings.css';
 
-// SettingsDialog shell (#112): the design's 640px two-pane frame — 160px
-// left nav (icon+label rows), right content pane. Storage & Backup is the
+// SettingsDialog shell (#112): the design's 640px two-pane frame — a
+// section nav (icon+label rows, SettingsNav) beside the content pane. Storage & Backup is the
 // default-open section per the design. The dialog reads the store once on
 // open and follows changed pushes — one truth for every pane (#113+).
 
@@ -154,53 +155,15 @@ export function SettingsDialog({
       onClose={onClose}
     >
       <div className="ovl-settings" data-testid="settings-dialog">
-        <div
-          className="ovl-settings__nav"
-          role="tablist"
-          aria-orientation="vertical"
-          tabIndex={-1}
-          aria-label={intl.formatMessage(messages.sections)}
-          onKeyDown={(event) => {
-            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-            const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-            const current = tabs.findIndex((tab) => tab === document.activeElement);
-            const next =
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? tabs.length - 1
-                  : event.key === 'ArrowDown'
-                    ? (current + 1) % tabs.length
-                    : (current - 1 + tabs.length) % tabs.length;
-            const tab = tabs[next];
-            if (tab === undefined) return;
-            event.preventDefault();
-            tab.focus();
-            tab.click();
-          }}
-        >
-          {SECTIONS.filter(({ key }) => key !== 'transfer' || transferEnabled).map(({ key, icon, label }) => {
-            const current = key === activeSection;
-            return (
-              <button
-                key={key}
-                id={`settings-tab-${key}`}
-                type="button"
-                role="tab"
-                className={`ovl-settings__navrow${current ? ' ovl-settings__navrow--active' : ''}`}
-                aria-selected={current}
-                aria-controls="settings-panel"
-                tabIndex={current ? 0 : -1}
-                onClick={() => {
-                  selectSection(key);
-                }}
-              >
-                <Icon name={icon} size={14} color={current ? 'var(--accent-cyan)' : 'var(--text-faint)'} />
-                <span>{intl.formatMessage(label)}</span>
-              </button>
-            );
-          })}
-        </div>
+        <SettingsNav
+          label={intl.formatMessage(messages.sections)}
+          sections={SECTIONS.filter(({ key }) => key !== 'transfer' || transferEnabled).map((section) => ({
+            ...section,
+            label: intl.formatMessage(section.label),
+          }))}
+          active={activeSection}
+          onSelect={selectSection}
+        />
         <div
           ref={paneRef}
           id="settings-panel"

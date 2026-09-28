@@ -1397,6 +1397,24 @@
       ]
     },
     {
+      "id": "1297-settings-nav",
+      "wiki": "Manual-Test-A11y-VoiceOver",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/settings.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/settings/SettingsDialog.stories.tsx"
+        },
+        {
+          "type": "manual",
+          "reason": "The tab list's announced orientation is not observable from automation. Follow the Settings section tabs step in docs/acceptance/Manual-Test-A11y-VoiceOver.md at 640px and at 200% zoom."
+        }
+      ]
+    },
+    {
       "id": "m09-settings-transfer-action",
       "wiki": "Acceptance-Test-Image-Trail-Transfer-And-Sync-UI",
       "coverage": [
