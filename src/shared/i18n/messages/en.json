@@ -3623,6 +3623,12 @@
   "toolbar.view": {
     "defaultMessage": "View"
   },
+  "toolbar.view.changed": {
+    "defaultMessage": "View: {mode}."
+  },
+  "toolbar.view.trigger": {
+    "defaultMessage": "View: {mode}"
+  },
   "toolbar.zoom": {
     "defaultMessage": "Zoom"
   }

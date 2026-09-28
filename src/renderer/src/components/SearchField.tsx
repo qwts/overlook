@@ -31,7 +31,9 @@ export interface SearchFieldProps<M extends string = string> {
   readonly placeholder?: string;
   /** Mono shortcut hint, hidden while focused (and while text is present). */
   readonly shortcut?: string;
-  readonly width?: number;
+  /** Fixed width in px, or `auto` to let the container size it (the toolbar
+   *  flexes it between its min and max, #1290). */
+  readonly width?: number | 'auto';
   /** Durable accessible name — the placeholder is not one. */
   readonly label?: string;
   readonly mode?: SearchFieldMode<M> | undefined;
@@ -101,7 +103,7 @@ export function SearchField<M extends string = string>({
   const { menu, triggerRef, inputRef, openMenu, closeMenu, items } = useModeMenu(mode, onModeChange);
 
   return (
-    <div className="ovl-search" style={{ width }}>
+    <div className="ovl-search" style={width === 'auto' ? undefined : { width }}>
       {mode === undefined ? (
         <Icon name="search" size={14} />
       ) : (

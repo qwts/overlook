@@ -70,6 +70,28 @@
       ]
     },
     {
+      "id": "1290-toolbar-collapse",
+      "wiki": "Acceptance-Test-Visual-Accessibility",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/toolbar-collapse.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/shell/ToolbarCollapse.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/toolbar-collapse.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Follow step 2 of the 200% zoom pass in docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds: the toolbar stays one row at the collapsed level, and every control is reachable by Tab in order with a screen reader running."
+        }
+      ]
+    },
+    {
       "id": "context-menu-command-projections",
       "wiki": "Acceptance-Test-Context-Menus",
       "coverage": [

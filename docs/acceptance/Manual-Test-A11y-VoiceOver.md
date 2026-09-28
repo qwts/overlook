@@ -46,8 +46,9 @@ string is the evidence, and paraphrase loses the defect.
 
 - **Expect:** a landmark for each region — banner (title bar), navigation ("Library"),
   the toolbar, main, complementary ("Inspector") when open, contentinfo (status bar).
-- Confirm the “Photo tools” region contains the toolbar, and the skip link moves focus to
-  the named main view.
+- Confirm the “Photo tools” region contains search, Filters, View, Zoom, and Import, and
+  the skip link moves focus to the named main view. The row is not announced as a
+  toolbar: it has no arrow-key navigation, so each control is its own Tab stop (#1290).
 
 ### 2. Headings — is there an outline?
 

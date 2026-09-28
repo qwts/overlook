@@ -1214,6 +1214,8 @@ export const en = {
   "toolbar.search.status.withIndex": "{status} · {index}",
   "toolbar.transfer": "Transfer & Sync",
   "toolbar.view": "View",
+  "toolbar.view.changed": "View: {mode}.",
+  "toolbar.view.trigger": "View: {mode}",
   "toolbar.zoom": "Zoom",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -1461,6 +1463,8 @@ interface InterpolatedMessageArguments {
   "toolbar.search.status.fallback": { "reason": MessageValue };
   "toolbar.search.status.index": { "indexed": MessageValue; "total": MessageValue };
   "toolbar.search.status.withIndex": { "index": MessageValue; "status": MessageValue };
+  "toolbar.view.changed": { "mode": MessageValue };
+  "toolbar.view.trigger": { "mode": MessageValue };
 }
 
 export type SourceMessageArguments = {
