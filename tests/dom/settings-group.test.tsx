@@ -47,10 +47,10 @@ test('a group is a region named by its heading and described by its hint', () =>
   const heading = section.querySelector('h3');
   assert.equal(heading?.textContent, 'All Photos');
   assert.equal(section.getAttribute('aria-labelledby'), heading.id);
-  assert.equal(
-    document.getElementById(section.getAttribute('aria-describedby') ?? '')?.textContent,
-    'These rules change only what All Photos shows.',
-  );
+  const hint = document.getElementById(section.getAttribute('aria-describedby') ?? '');
+  assert.equal(hint?.textContent, 'These rules change only what All Photos shows.');
+  // A prose sentence: selectable, no-drag, UI type (AGENTS.md).
+  assert.ok(hint.classList.contains('prose-note'));
   assert.equal(section.querySelectorAll(':scope > .ovl-settings__field').length, 2);
   assert.deepEqual(settingsGroupProblems(section), []);
 });

@@ -185,11 +185,9 @@
   color: var(--text-body);
 }
 
+/* Type comes from .prose-note beside it. */
 .ovl-settings__groupHint {
   margin: 0;
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
   color: var(--text-muted);
   max-width: 60ch;
 }

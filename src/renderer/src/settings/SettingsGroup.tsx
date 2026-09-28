@@ -35,7 +35,7 @@ export function SettingsGroup({ heading, hint, testId, children }: SettingsGroup
         {heading}
       </h3>
       {hint === undefined ? null : (
-        <p id={hintId} className="ovl-settings__groupHint">
+        <p id={hintId} className="prose-note ovl-settings__groupHint">
           {hint}
         </p>
       )}
