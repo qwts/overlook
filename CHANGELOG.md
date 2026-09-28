@@ -1,5 +1,12 @@
 # photos
 
+## 0.76.34
+
+### Patch Changes
+
+- fecb52e: Search mode moves from a permanent Auto / Semantic / Keyword control beside the search field into a menu button inside the field. The button names the mode when it isn't Auto, each mode carries a short description, and Semantic explains why it can't run yet while it indexes or is turned off.
+- 2703ccd: Settings rows no longer squeeze their labels. A control that would leave its label narrower than 220px now wraps below the label. Hints read in muted body text at a comfortable width. Each control is named by its row's label and described by its hint, so screen readers read both on focus without repeating the label. Compound settings such as Custom themes and Quick Actions span the row under their label.
+
 ## 0.76.33
 
 ### Patch Changes
