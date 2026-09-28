@@ -29,6 +29,13 @@ export function Tooltip({ label, side = 'top', children, disabled = false }: Too
   const ref = useRef<HTMLSpanElement>(null);
   const tooltipId = useId();
   const [coords, setCoords] = useState<CSSProperties | null>(null);
+  // Disabling forgets the shown bubble, so re-enabling never brings back one
+  // at stale coordinates without a fresh hover or focus (#1290).
+  const [wasDisabled, setWasDisabled] = useState(disabled);
+  if (disabled !== wasDisabled) {
+    setWasDisabled(disabled);
+    if (disabled) setCoords(null);
+  }
   const show = (): void => {
     const el = ref.current;
     if (el === null || disabled) {
