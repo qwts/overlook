@@ -33,6 +33,19 @@ export interface LibraryRowProps {
   readonly onOpenActions: (anchor: HTMLElement, origin: HTMLElement, at?: { x: number; y: number }) => void;
 }
 
+// In Move several the tint means checked only; the Open now badge still
+// marks the open row.
+function rowClass(open: boolean, selection: LibraryRowProps['selection'], blocked: boolean): string {
+  return [
+    'ovl-libswitch__row',
+    open && selection === null ? 'ovl-libswitch__row--open' : '',
+    selection?.checked === true ? 'ovl-libswitch__row--checked' : '',
+    blocked ? 'ovl-libswitch__row--blocked' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function LibraryRow({
   library,
   when,
@@ -47,12 +60,7 @@ export function LibraryRow({
   const blocked = library.missing || library.lockedBy !== null;
   const manage = actionsLabel !== null;
   return (
-    <li
-      data-library-id={library.id}
-      className={['ovl-libswitch__row', library.open ? 'ovl-libswitch__row--open' : '', blocked ? 'ovl-libswitch__row--blocked' : '']
-        .filter(Boolean)
-        .join(' ')}
-    >
+    <li data-library-id={library.id} className={rowClass(library.open, selection, blocked)}>
       <button
         type="button"
         className="ovl-libswitch__rowbtn"

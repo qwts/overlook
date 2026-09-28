@@ -611,11 +611,30 @@ export const SelectionModeTwoSelected: Story = {
     await waitFor(async () => {
       await expect(body.getByRole('checkbox', { name: /^Alpha/u })).toHaveFocus();
     });
+    // The tint means checked only: the open row drops it and keeps its badge.
+    const row = (name: string): HTMLElement => {
+      const found = body.getByTestId(`library-row-${name}`).closest('li');
+      if (found === null) throw new Error(`row ${name} missing`);
+      return found;
+    };
+    await expect(row('Alpha')).not.toHaveClass('ovl-libswitch__row--open');
+    await expect(row('Alpha')).not.toHaveClass('ovl-libswitch__row--checked');
+    await expect(within(row('Alpha')).getByText('Open now')).toBeVisible();
+    // Two footer buttons leave room at 520px: the mode's key hint shows whole.
+    const { keys, text } = keyHint(canvasElement.ownerDocument);
+    await expect(text.top >= keys.top && text.bottom <= keys.bottom && text.width > 0).toBe(true);
     await userEvent.keyboard(' ');
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard(' ');
     await expect(body.getByRole('checkbox', { name: /^Alpha/u })).toHaveAttribute('aria-checked', 'true');
     await expect(body.getByRole('checkbox', { name: /^Beta/u })).toHaveAttribute('aria-checked', 'true');
+    await expect(row('Alpha')).toHaveClass('ovl-libswitch__row--checked');
+    await expect(row('Beta')).toHaveClass('ovl-libswitch__row--checked');
+    await expect(row('Field Archive')).not.toHaveClass('ovl-libswitch__row--checked');
+    await expect(getComputedStyle(row('Beta')).backgroundColor).toBe(getComputedStyle(row('Alpha')).backgroundColor);
+    await expect(getComputedStyle(row('Beta')).backgroundColor).not.toBe(getComputedStyle(row('Field Archive')).backgroundColor);
+    const { keys: keysChecked, text: textChecked } = keyHint(canvasElement.ownerDocument);
+    await expect(textChecked.top >= keysChecked.top && textChecked.bottom <= keysChecked.bottom && textChecked.width > 0).toBe(true);
     await expect(body.getByTestId('move-selected')).toHaveTextContent('Move 2 selected…');
     await expect(body.getByTestId('move-selected')).toHaveAttribute('aria-disabled', 'false');
     await waitFor(async () => {

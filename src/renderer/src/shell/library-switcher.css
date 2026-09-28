@@ -30,13 +30,17 @@
   padding-inline-end: var(--space-3);
 }
 
-.ovl-libswitch__row--open {
+/* The open row, or in Move several a checked one. Forced colors maps these
+   tokens to a Highlight border on Canvas. */
+.ovl-libswitch__row--open,
+.ovl-libswitch__row--checked {
   border-color: var(--accent-iris);
   background: var(--accent-iris-dim);
 }
 
 /* The tinted row lightens the translucent badge below 4.5:1 — go solid. */
-.ovl-libswitch__row--open .ovl-badge--cyan {
+.ovl-libswitch__row--open .ovl-badge--cyan,
+.ovl-libswitch__row--checked .ovl-badge--cyan {
   background: var(--accent-iris);
   color: var(--text-on-accent);
 }
