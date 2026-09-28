@@ -17,7 +17,8 @@ from the list never touches its files.
 
 ## Moving a library (relocation)
 
-**Move library…** in the library switcher relocates one or more libraries —
+**Move…** in a library's ⋯ menu in the library switcher relocates it, and
+**Move several…** below the list picks more than one to move together —
 to an external disk, another folder, anywhere writable. The whole folder
 moves intact: encrypted database, keys, originals, thumbnails, settings,
 journals. The ID does not change, so provider connections, backup history,

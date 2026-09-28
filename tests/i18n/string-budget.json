@@ -188,8 +188,8 @@
     },
     {
       "file": "src/renderer/src/shell/LibrarySwitcher.tsx",
-      "count": 30,
-      "issues": [403]
+      "count": 25,
+      "issues": [403, 1299]
     },
     {
       "file": "src/renderer/src/shell/Shell.tsx",

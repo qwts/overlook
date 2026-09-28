@@ -231,7 +231,8 @@ test('ACCEPTANCE: the wizard moves a library end to end — Review probe, Progre
 
   await page.getByTestId('library-trigger').click();
   await page.getByTestId('library-switcher').waitFor();
-  await page.getByTestId('move-library-Second').click();
+  await page.getByRole('button', { name: 'Actions for Second' }).click();
+  await page.getByRole('menuitem', { name: 'Move…' }).click();
   await page.getByTestId('move-pick-destination').click();
   // The Review probe resolves the honest method chip before Start.
   await page.getByTestId('move-method-chip').waitFor();
@@ -265,8 +266,9 @@ test('ACCEPTANCE: multi-select moves several libraries into one root with indepe
 
   await page.getByTestId('library-trigger').click();
   await page.getByTestId('library-switcher').waitFor();
-  await page.getByLabel('Select Alpha2 to move').click();
-  await page.getByLabel('Select Beta2 to move').click();
+  await page.getByTestId('move-several').click();
+  await page.getByRole('checkbox', { name: /^Alpha2/u }).click();
+  await page.getByRole('checkbox', { name: /^Beta2/u }).click();
   await page.getByTestId('move-selected').click();
   await page.getByTestId('move-pick-destination').click();
   await page.getByTestId('move-start').click();

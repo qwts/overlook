@@ -2018,6 +2018,12 @@
   "librename.title": {
     "defaultMessage": "Rename library folder"
   },
+  "libswitch.actions": {
+    "defaultMessage": "Actions for {name}"
+  },
+  "libswitch.actions.duplicate": {
+    "defaultMessage": "Actions for {name} ({hint})"
+  },
   "libswitch.displayName.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -2042,9 +2048,6 @@
   "libswitch.displayName.label": {
     "defaultMessage": "Display name"
   },
-  "libswitch.displayName.one": {
-    "defaultMessage": "Edit display name of {name}…"
-  },
   "libswitch.displayName.reset": {
     "defaultMessage": "Reset to folder name"
   },
@@ -2060,17 +2063,65 @@
   "libswitch.displayName.title": {
     "defaultMessage": "Edit display name"
   },
-  "libswitch.move.one": {
-    "defaultMessage": "Move {name}…"
+  "libswitch.menu.displayName": {
+    "defaultMessage": "Edit display name…"
   },
-  "libswitch.move.select": {
-    "defaultMessage": "Select {name} to move"
+  "libswitch.menu.move": {
+    "defaultMessage": "Move…"
+  },
+  "libswitch.menu.rename": {
+    "defaultMessage": "Rename folder…"
+  },
+  "libswitch.move.banner": {
+    "defaultMessage": "Choose libraries to move. The open library moves last."
+  },
+  "libswitch.move.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "libswitch.move.canceled": {
+    "defaultMessage": "Move canceled. Nothing was moved."
+  },
+  "libswitch.move.count": {
+    "defaultMessage": "{count} selected."
+  },
+  "libswitch.move.keys": {
+    "defaultMessage": "Space select · esc cancel"
+  },
+  "libswitch.move.modeOn": {
+    "defaultMessage": "Choose libraries to move. Press Space to select, Escape to cancel."
+  },
+  "libswitch.move.none": {
+    "defaultMessage": "Select at least one library"
   },
   "libswitch.move.selected": {
     "defaultMessage": "Move {count} selected…"
   },
-  "libswitch.rename.one": {
-    "defaultMessage": "Rename folder of {name}…"
+  "libswitch.move.several": {
+    "defaultMessage": "Move several…"
+  },
+  "libswitch.reason.elsewhere": {
+    "defaultMessage": "Close it on {host} first."
+  },
+  "libswitch.reason.missing": {
+    "defaultMessage": "Reconnect the volume first."
+  },
+  "libswitch.reason.open": {
+    "defaultMessage": "This library is open. Switch to another library first."
+  },
+  "libswitch.remove.done": {
+    "defaultMessage": "{name} removed from this list. Its files were not changed."
+  },
+  "libswitch.row.missing": {
+    "defaultMessage": "Missing"
+  },
+  "libswitch.row.open": {
+    "defaultMessage": "Open now"
+  },
+  "libswitch.row.openOn": {
+    "defaultMessage": "Open on {host}"
+  },
+  "libswitch.row.reconnect": {
+    "defaultMessage": "Reconnect the volume to open this library"
   },
   "lightbox.animation.play": {
     "defaultMessage": "Play animation"

@@ -679,6 +679,8 @@ export const en = {
   "librename.renamed": "The folder now appears with its new name in Finder or Explorer.",
   "librename.renaming": "Renaming…",
   "librename.title": "Rename library folder",
+  "libswitch.actions": "Actions for {name}",
+  "libswitch.actions.duplicate": "Actions for {name} ({hint})",
   "libswitch.displayName.cancel": "Cancel",
   "libswitch.displayName.changed": "Display name changed to {name}",
   "libswitch.displayName.duplicateHint": "Location: {location} · ID ending {id}",
@@ -687,16 +689,31 @@ export const en = {
   "libswitch.displayName.help": "Only the name shown in Overlook changes. The folder, library ID, keys, and backups stay unchanged.",
   "libswitch.displayName.invalid": "Enter a name without path separators or control characters, up to 120 characters.",
   "libswitch.displayName.label": "Display name",
-  "libswitch.displayName.one": "Edit display name of {name}…",
   "libswitch.displayName.reset": "Reset to folder name",
   "libswitch.displayName.resetting": "Resetting…",
   "libswitch.displayName.save": "Save",
   "libswitch.displayName.saving": "Saving…",
   "libswitch.displayName.title": "Edit display name",
-  "libswitch.move.one": "Move {name}…",
-  "libswitch.move.select": "Select {name} to move",
+  "libswitch.menu.displayName": "Edit display name…",
+  "libswitch.menu.move": "Move…",
+  "libswitch.menu.rename": "Rename folder…",
+  "libswitch.move.banner": "Choose libraries to move. The open library moves last.",
+  "libswitch.move.cancel": "Cancel",
+  "libswitch.move.canceled": "Move canceled. Nothing was moved.",
+  "libswitch.move.count": "{count} selected.",
+  "libswitch.move.keys": "Space select · esc cancel",
+  "libswitch.move.modeOn": "Choose libraries to move. Press Space to select, Escape to cancel.",
+  "libswitch.move.none": "Select at least one library",
   "libswitch.move.selected": "Move {count} selected…",
-  "libswitch.rename.one": "Rename folder of {name}…",
+  "libswitch.move.several": "Move several…",
+  "libswitch.reason.elsewhere": "Close it on {host} first.",
+  "libswitch.reason.missing": "Reconnect the volume first.",
+  "libswitch.reason.open": "This library is open. Switch to another library first.",
+  "libswitch.remove.done": "{name} removed from this list. Its files were not changed.",
+  "libswitch.row.missing": "Missing",
+  "libswitch.row.open": "Open now",
+  "libswitch.row.openOn": "Open on {host}",
+  "libswitch.row.reconnect": "Reconnect the volume to open this library",
   "lightbox.animation.play": "Play animation",
   "lightbox.animation.stop": "Show static poster",
   "lightbox.edit.cropApply": "Apply crop (Enter)",
@@ -1340,13 +1357,15 @@ interface InterpolatedMessageArguments {
   "library.trash.purge.partial": { "purged": MessageValue; "remoteFailures": MessageValue };
   "library.trash.retentionPolicy.days": { "days": MessageValue };
   "librename.pathArrow": { "from": MessageValue; "to": MessageValue };
+  "libswitch.actions": { "name": MessageValue };
+  "libswitch.actions.duplicate": { "hint": MessageValue; "name": MessageValue };
   "libswitch.displayName.changed": { "name": MessageValue };
   "libswitch.displayName.duplicateHint": { "id": MessageValue; "location": MessageValue };
-  "libswitch.displayName.one": { "name": MessageValue };
-  "libswitch.move.one": { "name": MessageValue };
-  "libswitch.move.select": { "name": MessageValue };
+  "libswitch.move.count": { "count": MessageValue };
   "libswitch.move.selected": { "count": MessageValue };
-  "libswitch.rename.one": { "name": MessageValue };
+  "libswitch.reason.elsewhere": { "host": MessageValue };
+  "libswitch.remove.done": { "name": MessageValue };
+  "libswitch.row.openOn": { "host": MessageValue };
   "lightbox.locked": { "id": MessageValue };
   "lightbox.video.player": { "name": MessageValue };
   "lightbox.video.preservedBody": { "codec": MessageValue };
