@@ -2769,7 +2769,7 @@
     "defaultMessage": "None — show every size"
   },
   "settings.general.allPhotos.showUnavailable": {
-    "defaultMessage": "Show unavailable items in All Photos"
+    "defaultMessage": "Show unavailable items"
   },
   "settings.general.appearance": {
     "defaultMessage": "Appearance"

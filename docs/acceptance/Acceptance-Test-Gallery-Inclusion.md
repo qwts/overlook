@@ -54,11 +54,13 @@ user-visible action is delivered.
 
 ## Inclusion rules
 
-1. In **Settings → General → All Photos**, set **Minimum size** to 1 MP.
+1. In **Settings → General**, the **All Photos** group sits under its own
+   heading, its two rows at the pane's indent with no nested row (#1296). With
+   VoiceOver, entering it reads "All Photos, region". Set **Minimum size** to 1 MP.
    Confirm All Photos and its sidebar count shrink immediately, the status bar
    shows "N photos hidden by All Photos rules", and clicking it opens the rule.
    Items with unknown dimensions stay visible with their indicator.
-2. Turn off **Show unavailable items in All Photos**. Confirm those items leave
+2. Turn off **Show unavailable items** in the All Photos group. Confirm those items leave
    All Photos, remain in Unavailable, in albums, in search results, and in
    export, and that the disclosure count includes them.
 3. Set Minimum size back to **None — show every size** and re-enable

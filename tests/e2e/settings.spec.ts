@@ -253,10 +253,10 @@ test('settings keeps stable modal geometry and content-only scrolling in a short
   }
 });
 
-// #1295 (Pass C spec, Invariants): across dialog widths 448 to 760 in 16px
-// steps, every auto row's label column keeps at least min(220, row width) —
-// a control that would squeeze it narrower wraps below it instead — and the
-// pane never scrolls sideways.
+// #1295, #1296 (Pass C spec, Invariants): across dialog widths 448 to 760 in
+// 16px steps, every auto row's label column keeps at least min(220, row
+// width) — a control that would squeeze it narrower wraps below it instead —
+// no Field sits inside another, and the pane never scrolls sideways.
 test('settings rows keep a 220px label column and never scroll sideways across dialog widths', async () => {
   const userData = mkE2eTmpDir('overlook-e2e-settings-rows-');
   const app = await electron.launch({
@@ -289,6 +289,7 @@ test('settings rows keep a 220px label column and never scroll sideways across d
           const pane = document.querySelector('[data-testid="settings-pane"]');
           const problems = [];
           if (pane.scrollWidth > pane.clientWidth) problems.push('pane scrolls sideways: ' + pane.scrollWidth + ' > ' + pane.clientWidth);
+          if (pane.querySelector('.ovl-settings__field .ovl-settings__field') !== null) problems.push('a Field is nested in another Field');
           for (const row of pane.querySelectorAll('.ovl-settings__field--auto')) {
             const rowWidth = row.getBoundingClientRect().width;
             const label = row.querySelector('.ovl-settings__fieldText').getBoundingClientRect().width;
