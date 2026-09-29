@@ -158,7 +158,7 @@ export function AlbumTree({
                   );
                 }}
               >
-                <Icon name="sliders-horizontal" size={12} />
+                <Icon name="ellipsis" size={12} />
               </button>
             )}
           </li>
