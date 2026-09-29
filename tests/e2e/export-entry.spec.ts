@@ -25,19 +25,22 @@ test('export entry points: pill opens with the selection count, lightbox with co
     await page.locator('.ovl-grid__cell').nth(1).getByRole('button', { name: 'Select' }).click();
     await page.locator('.ovl-grid__cell').nth(2).getByRole('button', { name: 'Select' }).click();
     await page.getByTestId('selection-pill').getByRole('button', { name: 'Export' }).click();
-    await expect(page.getByText('2 photos selected')).toBeVisible();
+    // Scoped to the dialog: the selection announcer can still be saying the
+    // same words in its live region.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('2 photos selected')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Export 2 photos' })).toBeVisible();
 
     // Cancel: the dialog closes and the selection is preserved.
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByText('2 photos selected')).toBeHidden();
+    await expect(dialog).toBeHidden();
     await expect(page.getByTestId('selection-pill')).toContainText('2 selected');
 
     // Lightbox entry: the share icon opens with count=1 (the focused photo).
     await page.locator('.ovl-grid__cell').first().click();
     await expect(page.getByTestId('lightbox')).toBeVisible();
     await page.getByTestId('lightbox').getByRole('button', { name: 'Export' }).click();
-    await expect(page.getByText('1 photo selected')).toBeVisible();
+    await expect(dialog.getByText('1 photo selected')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Export 1 photo', exact: true })).toBeVisible();
   } finally {
     await app.close();
