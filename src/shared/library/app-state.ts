@@ -79,6 +79,8 @@ export interface AppState {
     /** Serializable action marker — the shell maps it to a handler (#89). */
     readonly action?: 'show-recent' | 'retry-backup' | 'undo-offload' | undefined;
     readonly actionPhotoIds?: readonly string[] | undefined;
+    /** False when the surface that raised it announces the outcome itself. */
+    readonly announce?: boolean | undefined;
   } | null;
   readonly pendingCount: number;
   readonly lastBackupLabel: string;

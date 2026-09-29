@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, useState, type Dispatch, type ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { OverlookApi } from '../../../shared/ipc/api.js';
@@ -10,6 +10,7 @@ import type { PhotoRecord } from '../../../shared/library/types.js';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
+import { Icon } from '../components/Icon';
 import { useAnnouncer } from '../components/LiveAnnouncer';
 import { useFormats } from '../i18n/use-formats.js';
 import { useDuplicateReview, type DuplicateReviewView } from './use-duplicate-review';
@@ -39,8 +40,11 @@ const messages = defineMessages({
   emptyIndexing: { id: 'duplicates.empty.indexing', defaultMessage: 'Still comparing previews — nothing to review yet.' },
   emptyClean: { id: 'duplicates.empty.clean', defaultMessage: 'No possible duplicates found.' },
   groups: { id: 'duplicates.groups', defaultMessage: '{count, plural, one {# group} other {# groups}}' },
-  groupLabel: { id: 'duplicates.group.label', defaultMessage: 'Possible duplicates, {count} photos' },
-  original: { id: 'duplicates.photo.original', defaultMessage: 'Original' },
+  groupLabel: {
+    id: 'duplicates.group.label',
+    defaultMessage:
+      'Possible duplicates, {count} photos{originals, plural, =0 {} one {, # protected Original} other {, # protected Originals}}',
+  },
   nearIdentical: { id: 'duplicates.evidence.nearIdentical', defaultMessage: 'Near-identical' },
   verySimilar: { id: 'duplicates.evidence.verySimilar', defaultMessage: 'Very similar' },
   similar: { id: 'duplicates.evidence.similar', defaultMessage: 'Similar' },
@@ -49,8 +53,14 @@ const messages = defineMessages({
   size: { id: 'duplicates.photo.size', defaultMessage: '{width}×{height}' },
   trash: { id: 'duplicates.photo.trash', defaultMessage: 'Move to Trash' },
   trashLabel: { id: 'duplicates.photo.trashLabel', defaultMessage: 'Move {name} to Trash' },
-  protectedHint: { id: 'duplicates.photo.protected', defaultMessage: 'Protected Original — Shift+Delete in the library overrides' },
+  moving: { id: 'duplicates.photo.moving', defaultMessage: 'Moving…' },
+  protectedKept: { id: 'duplicates.photo.protectedKept', defaultMessage: 'Protected Original — kept' },
+  protectedHow: { id: 'duplicates.photo.protectedHow', defaultMessage: 'To remove it, use Shift+Delete in the library' },
   trashed: { id: 'duplicates.toast.trashed', defaultMessage: 'Moved {name} to Trash' },
+  movedLeft: {
+    id: 'duplicates.announce.moved',
+    defaultMessage: 'Moved {name} to Trash. {groups, plural, =0 {No groups left.} one {# group left.} other {# groups left.}}',
+  },
   preserved: { id: 'duplicates.toast.preserved', defaultMessage: 'Preserved {name}: protected Original' },
   missing: { id: 'duplicates.toast.missing', defaultMessage: '{name} is no longer in the library' },
   privacy: {
@@ -88,13 +98,14 @@ function GroupCard({
 }): ReactElement {
   const intl = useIntl();
   const { formatBytes, formatCalendarDate } = useFormats();
+  const originals = group.photos.filter((photo) => photo.isOriginal).length;
   return (
     <section
       className="ovl-duplicates__group"
       data-testid="duplicate-group"
       data-group-id={group.id}
       data-count={group.photos.length}
-      aria-label={intl.formatMessage(messages.groupLabel, { count: group.photos.length })}
+      aria-label={intl.formatMessage(messages.groupLabel, { count: group.photos.length, originals })}
     >
       <ul className="ovl-duplicates__photos">
         {group.photos.map((photo) => {
@@ -131,22 +142,33 @@ function GroupCard({
                 </span>
                 <span className="ovl-duplicates__evidence">{facts.join(' · ')}</span>
                 {photo.isOriginal ? (
-                  <Badge tone="cyan" icon="shield-check">
-                    {intl.formatMessage(messages.original)}
-                  </Badge>
+                  // A protected Original keeps its reason as text, with no
+                  // button to explain (#1305, Pass E spec).
+                  <>
+                    <span className="ovl-duplicates__protected">
+                      <Icon name="shield-check" size={14} />
+                      {intl.formatMessage(messages.protectedKept)}
+                    </span>
+                    <span className="ovl-duplicates__protectedHow">{intl.formatMessage(messages.protectedHow)}</span>
+                  </>
                 ) : null}
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon="trash-2"
-                aria-label={intl.formatMessage(messages.trashLabel, { name: photo.fileName })}
-                title={photo.isOriginal ? intl.formatMessage(messages.protectedHint) : undefined}
-                disabled={photo.isOriginal || busyId !== null}
-                onClick={() => onTrash(photo)}
-              >
-                {intl.formatMessage(messages.trash)}
-              </Button>
+              {photo.isOriginal ? null : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="trash-2"
+                  data-trash-photo={photo.id}
+                  aria-label={intl.formatMessage(messages.trashLabel, { name: photo.fileName })}
+                  // Unavailable during a move, not disabled, so focus stays put.
+                  aria-disabled={busyId !== null ? true : undefined}
+                  onClick={() => {
+                    if (busyId === null) onTrash(photo);
+                  }}
+                >
+                  {intl.formatMessage(busyId === photo.id ? messages.moving : messages.trash)}
+                </Button>
+              )}
             </li>
           );
         })}
@@ -155,14 +177,47 @@ function GroupCard({
   );
 }
 
+interface PendingMove {
+  readonly photo: PhotoRecord;
+  readonly groupId: string;
+  readonly groupIndex: number;
+  readonly rowIndex: number;
+}
+
+function candidates(group: Element | undefined): HTMLElement[] {
+  return group === undefined ? [] : Array.from(group.querySelectorAll<HTMLElement>('[data-trash-photo]'));
+}
+
+// Where focus goes once a moved photo leaves the list (#1305, Pass E spec):
+// the same row in its group, the previous candidate there, the first
+// candidate of the group now at that index, the last candidate of the
+// previous group, and finally Rescan — never the dialog or <body>.
+function focusAfterMove(body: HTMLElement, move: PendingMove): void {
+  const groups = Array.from(body.querySelectorAll<HTMLElement>('[data-testid="duplicate-group"]'));
+  const same = candidates(groups.find((group) => group.dataset['groupId'] === move.groupId));
+  const target =
+    same[move.rowIndex] ??
+    same[move.rowIndex - 1] ??
+    candidates(groups[move.groupIndex])[0] ??
+    candidates(groups[move.groupIndex - 1]).at(-1) ??
+    body.querySelector<HTMLElement>('[data-rescan]');
+  target?.focus();
+}
+
 export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDialogProps): ReactElement | null {
   const intl = useIntl();
   const { announce } = useAnnouncer();
   const { status, review, rescan } = useDuplicateReview(api?.duplicates);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const pendingMoveRef = useRef<PendingMove | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const library = api?.library ?? window.overlook.library;
 
-  const trash = async (photo: PhotoRecord): Promise<void> => {
+  const trash = async (photo: PhotoRecord, groupId: string): Promise<void> => {
+    const body = bodyRef.current;
+    const groupElements = body === null ? [] : Array.from(body.querySelectorAll<HTMLElement>('[data-testid="duplicate-group"]'));
+    const groupIndex = groupElements.findIndex((group) => group.dataset['groupId'] === groupId);
+    const rowIndex = candidates(groupElements[groupIndex]).findIndex((button) => button.dataset['trashPhoto'] === photo.id);
     setBusyId(photo.id);
     try {
       const result = await library.delete({ photoIds: [photo.id] });
@@ -170,12 +225,27 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
         result.deleted > 0 ? messages.trashed : result.protected > 0 ? messages.preserved : messages.missing,
         { name: photo.fileName },
       );
-      dispatch({ type: 'toast/shown', toast: { title, tone: result.deleted > 0 ? 'neutral' : 'amber' } });
-      announce(title, 'polite', TEST_ID);
+      // The dialog owns the announcement, so the toast stays silent: a move is
+      // announced once, with what's left, after the review reloads.
+      dispatch({ type: 'toast/shown', toast: { title, tone: result.deleted > 0 ? 'neutral' : 'amber', announce: false } });
+      if (result.deleted > 0) pendingMoveRef.current = { photo, groupId, groupIndex, rowIndex };
+      else announce(title, 'polite', TEST_ID);
     } finally {
       setBusyId(null);
     }
   };
+
+  // Once the reloaded review no longer lists the moved photo, hand focus on
+  // and say how many groups are left.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const move = pendingMoveRef.current;
+    if (move === null || body === null || review === null) return;
+    if (review.groups.some((group) => group.photos.some((photo) => photo.id === move.photo.id))) return;
+    pendingMoveRef.current = null;
+    focusAfterMove(body, move);
+    announce(intl.formatMessage(messages.movedLeft, { name: move.photo.fileName, groups: review.groups.length }), 'polite', TEST_ID);
+  }, [announce, intl, review]);
 
   const groups = review?.groups ?? [];
   const indexing = review !== null && review.status.pending > 0;
@@ -184,6 +254,7 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
     <Dialog open={open} title={intl.formatMessage(messages.title)} icon="copy" width={640} onClose={onClose} bodyClassName="ovl-duplicates">
       <div
         className="ovl-duplicates__body"
+        ref={bodyRef}
         data-testid={TEST_ID}
         data-state={state}
         data-groups={groups.length}
@@ -202,10 +273,10 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
                   pending: review.status.pending,
                 })}
               </span>
-              <Badge tone={groups.length === 0 ? 'neutral' : 'amber'} icon="copy">
+              <Badge tone="neutral" icon="copy">
                 {intl.formatMessage(messages.groups, { count: groups.length })}
               </Badge>
-              <Button size="sm" variant="ghost" icon="rotate-cw" onClick={() => void rescan()}>
+              <Button size="sm" variant="ghost" icon="rotate-cw" data-rescan onClick={() => void rescan()}>
                 {intl.formatMessage(messages.rescan)}
               </Button>
             </div>
@@ -215,7 +286,9 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
             {groups.length === 0 ? (
               <p className="ovl-duplicates__state">{intl.formatMessage(indexing ? messages.emptyIndexing : messages.emptyClean)}</p>
             ) : (
-              groups.map((group) => <GroupCard key={group.id} group={group} busyId={busyId} onTrash={(photo) => void trash(photo)} />)
+              groups.map((group) => (
+                <GroupCard key={group.id} group={group} busyId={busyId} onTrash={(photo) => void trash(photo, group.id)} />
+              ))
             )}
             <p className="ovl-duplicates__privacy">{intl.formatMessage(messages.privacy)}</p>
           </>
