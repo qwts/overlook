@@ -241,7 +241,7 @@ export function PhotoTile({
           }}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          <Icon name="sliders-horizontal" size={14} />
+          <Icon name="ellipsis" size={14} />
         </button>
       )}
       {showStatus && status !== 'local' ? (
