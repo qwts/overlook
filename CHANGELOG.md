@@ -1,5 +1,11 @@
 # photos
 
+## 0.76.40
+
+### Patch Changes
+
+- 39fd23a: More and overflow buttons (selection pill, photo tiles, feed cards, list rows, album rows) now use the ellipsis glyph instead of the filter-like sliders icon (#1303).
+
 ## 0.76.39
 
 ### Patch Changes
