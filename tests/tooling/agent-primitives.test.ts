@@ -46,7 +46,7 @@ interface ClaudeSettings {
 // .claude/settings.json wholesale and silently dropped a repo-specific hook.
 // What stays here is what is specific to this repo's primitives.
 describe('agent primitives (#718, ENG-0006)', () => {
-  test('the worktree-identity hook survives harness synchronization', () => {
+  test('the worktree-identity hook stays wired', () => {
     const settings = json('.claude/settings.json') as ClaudeSettings;
     const commands = (settings.hooks?.['WorktreeCreate'] ?? []).flatMap((entry) => (entry.hooks ?? []).map((hook) => hook.command ?? ''));
     assert.ok(

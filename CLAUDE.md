@@ -3,7 +3,7 @@
 Start with **[`AGENTS.md`](AGENTS.md)**. It is the canonical agent-context file
 and holds everything shared: communication rules, pre-edit checkpoints, the
 working agreement, architecture and design-token invariants, GitHub hygiene, the
-validation gates, and the memory guard. Do not restate any of it here — a
+validation gates, and the memory budget. Do not restate any of it here — a
 shared fact in two agent files is a bug
 ([ENG-0006](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0006-agentic-primitives-governance.md)).
 
@@ -11,23 +11,16 @@ This file carries only what is specific to Claude Code.
 
 ## Checked-in Claude configuration
 
-`.claude/settings.json` registers two hooks, both load-bearing:
+`.claude/settings.json` wires every hook event to `agent-bot`'s `agent-hook`,
+which enforces the bot identity on commits and GitHub writes; each entry exits
+cleanly when `agent-bot` is not installed. **`WorktreeCreate`** runs
+`agent-bot claude-worktree-create` to mint the per-worktree bot identity.
+Because project settings are checked in, this applies to terminal, IDE, and
+headless runs alike.
 
-- **`PreToolUse` on `Bash`** runs the shared guard with `--protocol=claude`,
-  denying direct `electron --test`, `node --test`, `.test-dist`/`.test-dist-dom`
-  execution, `playwright test`, `test-storybook`, `c8`, and `:run`/`:inner`
-  scripts, and steering you to the guarded entrypoints. Because project settings
-  are checked in, this applies to terminal, IDE, and headless runs alike.
-- **`WorktreeCreate`** mints the per-worktree bot identity from
-  `qwts/agent-sop`.
-
-The guard itself lives in `tools/agent-guard/`, which is governance-owned and
-arrives by harness sync — never edit it from here.
-`tools/agent-guard/tests/conformance.test.mjs` locks the hook wiring and
-`tests/tooling/agent-primitives.test.ts` locks the rest of the primitives. They
-exist because a governance sync once replaced `.claude/settings.json` wholesale
-and silently removed the guard hook — if you are editing that file, expect both
-tests to have an opinion.
+`tests/tooling/agent-primitives.test.ts` locks the worktree-identity hook and
+the permission shape — if you are editing that file, expect it to have an
+opinion.
 
 ## Slash commands
 

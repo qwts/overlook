@@ -24,10 +24,8 @@ THIRD-PARTY-NOTICES.md
 src/shared/i18n/generated/
 src/main/i18n/generated/
 
-# governed:agent-harness-format:start
-# These paths are synchronized by agent-sop. Their lint and syntax
-# contract runs at the governance source; consumer formatters must not rewrite
-# the managed bytes and start a format-versus-sync loop.
+# Agent harness configs keep the bytes their tools write (agent-bot installs the
+# hook entries); reformatting them only churns the diff.
 .codex/config.toml
 .codex/environments/environment.toml
 .codex/rules/environment.rules
@@ -35,4 +33,3 @@ src/main/i18n/generated/
 .claude/settings.json
 .cursor/hooks.json
 .windsurf/hooks.json
-# governed:agent-harness-format:end
