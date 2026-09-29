@@ -87,7 +87,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow step 2 of the 200% zoom pass in docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds: the toolbar stays one row at the collapsed level, and every control is reachable by Tab in order with a screen reader running."
+          "reason": "Follow step 2 of the 200% zoom pass in docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds: the toolbar stays one row at the collapsed level (settled by the shared collapse helper, `components/collapse-level.ts`), and every control is reachable by Tab in order with a screen reader running."
         }
       ]
     },
