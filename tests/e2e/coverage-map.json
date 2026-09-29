@@ -1161,7 +1161,11 @@
         },
         {
           "type": "unit-dom",
-          "paths": ["tests/commands/registry.test.ts", "tests/library/grid-keyboard.test.ts"]
+          "paths": [
+            "tests/commands/registry.test.ts",
+            "tests/library/grid-keyboard.test.ts",
+            "tests/dom/command-dispatcher-commit.test.tsx"
+          ]
         }
       ]
     },
