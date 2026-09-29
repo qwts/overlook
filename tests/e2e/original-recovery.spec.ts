@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sampleJpeg } from '../../src/main/library/seed.js';
 import type { PhotoRecord } from '../../src/shared/library/types.js';
+import { armShortcutProbe, reportShortcutProbe } from './support/shortcut-probe.js';
 import { mkE2eTmpDir } from './support/tmp-dir.js';
 
 test('matching-file recovery leaves Unavailable immediately while transient sync errors stay visible (#1101)', async () => {
@@ -23,6 +24,8 @@ test('matching-file recovery leaves Unavailable immediately while transient sync
   try {
     const page = await app.firstWindow();
     await page.getByTestId('virtual-grid').waitFor();
+    // Armed early so it adds no round-trip between the Lightbox and the key.
+    await armShortcutProbe(page, 'i');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('tab', { name: 'General', exact: true }).click();
     await page.getByRole('switch', { name: 'Show unavailable items' }).click();
@@ -38,14 +41,26 @@ test('matching-file recovery leaves Unavailable immediately while transient sync
     await expect(page.getByRole('button', { name: 'Back to library (Esc)' })).toBeVisible();
     await page.keyboard.press('i');
     const inspector = page.getByRole('complementary', { name: 'Inspector' });
-    await expect(inspector).toBeVisible();
+    try {
+      await expect(inspector).toBeVisible();
+    } catch (error) {
+      // #1279: on Linux CI the first `i` after the Lightbox opens is sometimes
+      // lost (a later `i` works). Record where it went; do not retry it.
+      await reportShortcutProbe(page, test.info());
+      throw error;
+    }
     await inspector.getByRole('button', { name: 'Recover original…', exact: true }).click();
-    await expect(missing).toHaveCount(0);
+    // Recovery streams, publishes and verifies the original before the facet
+    // refetches: 5.7–7.6s measured under 8–10 parallel workers (#1279), past
+    // the default 5s expect timeout.
+    await expect(missing).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Unavailable', exact: false })).toHaveCount(0);
     await page.getByRole('button', { name: 'All Photos 3', exact: true }).click();
     const result = await page.evaluate<{ photo: PhotoRecord | null }>('window.overlook.library.get({id:"01J8SEEDPHOTO0001"})');
     expect(result.photo?.originalFailure).toBeNull();
-    expect(result.photo?.syncState).toBe('local');
+    // Held locally again. Backup may already be uploading it, so `syncing` or
+    // `synced` also pass; `offloaded` and `error` do not (#1279).
+    expect(['local', 'syncing', 'synced']).toContain(result.photo?.syncState);
     await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
   } finally {
     await app.close();

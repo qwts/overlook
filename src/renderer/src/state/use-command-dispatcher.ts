@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { useIntl } from 'react-intl';
 
 import { resolveCommand, type CommandId, type CommandPlatform, type CommandSurface } from '../../../shared/commands/registry.js';
@@ -27,7 +27,11 @@ export function useCommandDispatcher(
   const dispatch = useAppDispatch();
   const direction = directionOf(useIntl().locale);
 
-  useEffect(() => {
+  // A layout effect, not a passive one (#1279): the listener must match the
+  // committed state before the browser can deliver another key. A passive
+  // effect runs after paint, so a key pressed as a dialog closes or the
+  // Lightbox opens was judged by the previous render and could be dropped.
+  useLayoutEffect(() => {
     const dialogOpen =
       helpOpen || state.importOpen || state.exportOpen || state.settingsOpen || state.librariesOpen || state.duplicatesOpen;
     const surface: CommandSurface = state.lightboxId === null ? 'grid' : 'lightbox';
