@@ -821,6 +821,9 @@
   "disclosure.preview.withheld": {
     "defaultMessage": "Withheld"
   },
+  "duplicates.announce.moved": {
+    "defaultMessage": "Moved {name} to Trash. {groups, plural, =0 {No groups left.} one {# group left.} other {# groups left.}}"
+  },
   "duplicates.deferred": {
     "defaultMessage": "{deferred, plural, one {# photo has no preview to compare yet} other {# photos have no preview to compare yet}}"
   },
@@ -849,7 +852,7 @@
     "defaultMessage": "Possible duplicates could not be loaded."
   },
   "duplicates.group.label": {
-    "defaultMessage": "Possible duplicates, {count} photos"
+    "defaultMessage": "Possible duplicates, {count} photos{originals, plural, =0 {} one {, # protected Original} other {, # protected Originals}}"
   },
   "duplicates.groups": {
     "defaultMessage": "{count, plural, one {# group} other {# groups}}"
@@ -857,11 +860,14 @@
   "duplicates.loading": {
     "defaultMessage": "Loading…"
   },
-  "duplicates.photo.original": {
-    "defaultMessage": "Original"
+  "duplicates.photo.moving": {
+    "defaultMessage": "Moving…"
   },
-  "duplicates.photo.protected": {
-    "defaultMessage": "Protected Original — Shift+Delete in the library overrides"
+  "duplicates.photo.protectedHow": {
+    "defaultMessage": "To remove it, use Shift+Delete in the library"
+  },
+  "duplicates.photo.protectedKept": {
+    "defaultMessage": "Protected Original — kept"
   },
   "duplicates.photo.size": {
     "defaultMessage": "{width}×{height}"

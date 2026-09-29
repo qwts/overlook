@@ -79,11 +79,24 @@ test('duplicates: review groups the copies, Trash and the Original policy reshap
   await expect(turned).toContainText(/rotated (90|270)°/u);
   await expect(dialog.getByText(/of 64 bits differ/u).first()).toBeVisible();
 
-  // Move to Trash is the ordinary delete: the copy leaves the group.
-  await dialog.getByRole('button', { name: 'Move landscape-web.jpg to Trash' }).click();
+  // Move to Trash is the ordinary delete: the copy leaves the group. From the
+  // keyboard, focus moves on to the next candidate in the dialog, and the
+  // groups left are announced (#1305).
+  await dialog.getByRole('button', { name: 'Move landscape-web.jpg to Trash' }).focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.ovl-toast-host')).toContainText('Moved landscape-web.jpg to Trash');
   await expect(group).toHaveAttribute('data-count', '2');
   await expect(group).not.toContainText('landscape-web.jpg');
+  await expect(page.getByTestId('screen-reader-announcer-polite')).toHaveText('Moved landscape-web.jpg to Trash. 1 group left.', {
+    timeout: 20_000,
+  });
+  await expect
+    .poll(() =>
+      page.evaluate<string | null>(
+        `(() => { const el = document.activeElement; return el && el.closest('[role="dialog"]') ? el.getAttribute('aria-label') : null; })()`,
+      ),
+    )
+    .toMatch(/^Move landscape(-turned)?\.jpg to Trash$/u);
 
   // #482: an Original never pairs with a non-Original — the group is gone
   // the moment the marker lands, with no rescan.
@@ -94,11 +107,15 @@ test('duplicates: review groups the copies, Trash and the Original policy reshap
   await expect(body).toHaveAttribute('data-groups', '0');
   await expect(body).toContainText('No possible duplicates found.');
 
-  // Both Originals: eligible again, and the protected member's Trash control is disabled.
+  // Both Originals: eligible again. A protected Original has no Trash
+  // button; its row says why (#1305).
   const turnedId = await page.evaluate<string>(
     `window.overlook.library.page({ source: 'all', limit: 10 }).then((r) => r.photos.find((p) => p.fileName === 'landscape-turned.jpg').id)`,
   );
   await page.evaluate(`window.overlook.library.setOriginal({ photoIds: ['${turnedId}'], isOriginal: true })`);
   await expect(body).toHaveAttribute('data-groups', '1');
-  await expect(dialog.getByRole('button', { name: 'Move landscape.jpg to Trash' })).toBeDisabled();
+  await expect(dialog.getByRole('region', { name: 'Possible duplicates, 2 photos, 2 protected Originals' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /^Move .* to Trash$/u })).toHaveCount(0);
+  await expect(dialog.getByText('Protected Original — kept')).toHaveCount(2);
+  await expect(dialog.getByText('To remove it, use Shift+Delete in the library').first()).toBeVisible();
 });
