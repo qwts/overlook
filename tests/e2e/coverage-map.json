@@ -110,6 +110,28 @@
       ]
     },
     {
+      "id": "1304-selection-pill-collapse",
+      "wiki": "Acceptance-Test-Visual-Accessibility",
+      "coverage": [
+        {
+          "type": "playwright-e2e",
+          "path": "tests/e2e/selection-pill-collapse.spec.ts"
+        },
+        {
+          "type": "storybook",
+          "path": "src/renderer/src/grid/SelectionPill.stories.tsx"
+        },
+        {
+          "type": "unit-dom",
+          "path": "tests/dom/selection-pill-overflow.test.ts"
+        },
+        {
+          "type": "manual",
+          "reason": "Follow the 200% zoom pass in docs/acceptance/Acceptance-Test-Visual-Accessibility.md in packaged macOS and Windows builds with a selection: the pill stays one line, ⋯ holds exactly the actions missing from the pill, and a screen reader announces an unavailable Export with its reason."
+        }
+      ]
+    },
+    {
       "id": "context-menu-command-projections",
       "wiki": "Acceptance-Test-Context-Menus",
       "coverage": [
