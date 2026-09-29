@@ -100,8 +100,8 @@ export function useCollapseLevel(ref: RefObject<HTMLElement>, maxLevel: number, 
     // A content-sized element keeps its box while its container grows, so
     // the container's width is what tells it to step back down.
     if (element.parentElement !== null) observer.observe(element.parentElement);
-    // Web fonts change label widths once they load.
-    void document.fonts.ready.then(settleIfLive);
+    // Web fonts change label widths once they load (absent under jsdom).
+    if ('fonts' in document) void document.fonts.ready.then(settleIfLive);
     return () => {
       live = false;
       observer.disconnect();

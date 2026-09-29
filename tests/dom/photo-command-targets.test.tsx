@@ -376,96 +376,133 @@ function PillProbe({ onExport }: { readonly onExport: () => void }) {
   );
 }
 
-test('both pill layouts disable Export while preserving metadata actions (#1235)', async () => {
-  setup();
-  query = () => Promise.resolve({ photoIds: [], locked: 1, missing: 0 });
-  let exports = 0;
-  act(() =>
-    root?.render(
-      <IntlProvider locale="en">
-        <PillProbe
-          onExport={() => {
-            exports++;
-          }}
-        />
-      </IntlProvider>,
-    ),
-  );
-  await flush();
-  const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')];
-  const wide = buttons.find((button) => button.textContent?.includes('Export'));
-  assert.equal(wide?.disabled, true);
-  assert.match(wide?.title ?? '', /keys that are not on this device/);
-  assert.equal(buttons.find((button) => button.textContent?.includes('Add to album'))?.disabled, false);
-  const more = buttons.find((button) => button.getAttribute('aria-label') === 'More selection actions');
-  act(() => more?.click());
-  const overflow = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) =>
-    button.textContent?.includes('Export'),
-  );
-  assert.equal(overflow?.disabled, true);
-  act(() => {
-    wide?.click();
-    overflow?.click();
+// The pill shows each action once: inline while it fits, in ⋯ once it
+// collapses (#1304). jsdom has no layout, so the collapsed layout is forced by
+// making the pill report more content than room at every level.
+type PillLayout = 'inline' | 'collapsed';
+function forcePillLayout(layout: PillLayout): () => void {
+  if (layout === 'inline') return () => {};
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+  Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains('ovl-pill') ? 1 : 0;
+    },
   });
-  assert.equal(exports, 0);
-  query = (ids) => Promise.resolve({ photoIds: ids, locked: 0, missing: 0 });
-  act(() => changed());
-  await flush();
-  assert.equal(wide?.disabled, false);
-  assert.equal(overflow?.disabled, false);
-  act(() => wide?.click());
-  assert.equal(exports, 1);
-});
+  // scrollWidth is inherited from Element.prototype, so there is usually no own
+  // descriptor to restore: delete the stub instead of leaking it.
+  return () => {
+    if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth');
+    else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', descriptor);
+  };
+}
 
-test('both pill layouts expose failure and recover through an explicit custody retry (#1235)', async () => {
-  setup();
-  query = () => Promise.reject(new Error('temporary lookup failure'));
-  let exports = 0;
-  act(() =>
-    root?.render(
-      <IntlProvider locale="en">
-        <PillProbe
-          onExport={() => {
-            exports++;
-          }}
-        />
-      </IntlProvider>,
-    ),
-  );
-  await flush();
-  const wideRetry = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Retry photo keys');
-  assert.ok(wideRetry);
-  assert.equal(wideRetry.disabled, false);
-  assert.equal(
-    document.getElementById(wideRetry.getAttribute('aria-describedby') ?? '')?.textContent,
-    'Could not verify photo keys. Try again.',
-  );
-  const more = document.querySelector<HTMLButtonElement>('button[aria-label="More selection actions"]');
-  act(() => more?.click());
-  const menuRetry = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (button) => button.textContent === 'Retry photo keys',
-  );
-  assert.ok(menuRetry);
-  assert.equal(menuRetry.disabled, false);
-  let finish: ((result: PhotoKeySelection) => void) | undefined;
-  query = () =>
-    new Promise((resolve) => {
-      finish = resolve;
-    });
-  act(() => menuRetry.click());
-  assert.equal(wideRetry.disabled, true);
-  assert.equal(wideRetry.title, 'Checking photo keys…');
-  assert.equal(exports, 0);
-  await act(async () => {
-    finish?.({ photoIds: ['offscreen'], locked: 0, missing: 0 });
-    await Promise.resolve();
+function exportControl(layout: PillLayout, label: RegExp): HTMLButtonElement | undefined {
+  if (layout === 'collapsed' && document.querySelector('[role="menu"]') === null) {
+    act(() => document.querySelector<HTMLButtonElement>('button[aria-label="More selection actions"]')?.click());
+  }
+  const selector = layout === 'inline' ? '.ovl-pill__action button' : '[role="menuitem"]';
+  return [...document.querySelectorAll<HTMLButtonElement>(selector)].find((button) => label.test(button.textContent ?? ''));
+}
+
+function description(button: HTMLElement | undefined): string {
+  return (button?.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
+}
+
+for (const layout of ['inline', 'collapsed'] as const) {
+  test(`the ${layout} pill Export stays focusable with its reason while keys are missing (#1235, #1304)`, async () => {
+    const restoreLayout = forcePillLayout(layout);
+    try {
+      setup();
+      query = () => Promise.resolve({ photoIds: [], locked: 1, missing: 0 });
+      let exports = 0;
+      act(() =>
+        root?.render(
+          <IntlProvider locale="en">
+            <PillProbe
+              onExport={() => {
+                exports++;
+              }}
+            />
+          </IntlProvider>,
+        ),
+      );
+      await flush();
+      let exportButton = exportControl(layout, /Export/);
+      assert.equal(exportButton?.getAttribute('aria-disabled'), 'true');
+      assert.equal(exportButton?.disabled, false);
+      assert.equal(exportButton?.hasAttribute('title'), false);
+      assert.match(description(exportButton), /keys that are not on this device/);
+      if (layout === 'inline') {
+        // Focus shows the tooltip, but the reason is described once, not twice.
+        act(() => exportButton?.focus());
+        assert.equal(exportButton?.getAttribute('aria-describedby')?.split(' ').length, 1);
+        assert.equal(description(exportButton).match(/keys that are not on this device/g)?.length, 1);
+        act(() => exportButton?.blur());
+      }
+      assert.equal(exportControl(layout, /Add to album/)?.getAttribute('aria-disabled'), null);
+      act(() => exportButton?.click());
+      assert.equal(exports, 0);
+      query = (ids) => Promise.resolve({ photoIds: ids, locked: 0, missing: 0 });
+      act(() => changed());
+      await flush();
+      exportButton = exportControl(layout, /Export/);
+      assert.equal(exportButton?.getAttribute('aria-disabled'), null);
+      act(() => exportButton?.click());
+      assert.equal(exports, 1);
+    } finally {
+      restoreLayout();
+    }
   });
-  assert.equal(wideRetry.disabled, false);
-  assert.equal(menuRetry.disabled, false);
-  assert.match(wideRetry.textContent ?? '', /Export/);
-  act(() => wideRetry.click());
-  assert.equal(exports, 1);
-});
+
+  test(`the ${layout} pill exposes a failed lookup and recovers through an explicit custody retry (#1235, #1304)`, async () => {
+    const restoreLayout = forcePillLayout(layout);
+    try {
+      setup();
+      query = () => Promise.reject(new Error('temporary lookup failure'));
+      let exports = 0;
+      act(() =>
+        root?.render(
+          <IntlProvider locale="en">
+            <PillProbe
+              onExport={() => {
+                exports++;
+              }}
+            />
+          </IntlProvider>,
+        ),
+      );
+      await flush();
+      const retry = exportControl(layout, /^Retry photo keys/);
+      assert.ok(retry);
+      assert.equal(retry.getAttribute('aria-disabled'), null);
+      assert.match(description(retry), /Could not verify photo keys\. Try again\./);
+      let finish: ((result: PhotoKeySelection) => void) | undefined;
+      query = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
+      act(() => retry.click());
+      const checking = exportControl(layout, /Export/);
+      assert.equal(checking?.getAttribute('aria-disabled'), 'true');
+      assert.match(description(checking), /Checking photo keys…/);
+      assert.equal(exports, 0);
+      await act(async () => {
+        finish?.({ photoIds: ['offscreen'], locked: 0, missing: 0 });
+        await Promise.resolve();
+      });
+      const exportButton = exportControl(layout, /Export/);
+      assert.equal(exportButton?.getAttribute('aria-disabled'), null);
+      act(() => exportButton?.click());
+      assert.equal(exports, 1);
+    } finally {
+      restoreLayout();
+    }
+  });
+}
 
 let nativeCanRetry = false;
 function NativeMenuProbe() {

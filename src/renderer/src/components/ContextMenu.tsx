@@ -39,14 +39,18 @@ export interface ContextMenuProps {
   readonly onClose: () => void;
   readonly closeOnSelect?: boolean | undefined;
   /** Which item takes focus on open — `last` for keyboard opens via ↑/End,
-   *  `checked` for a radio menu's current choice. */
-  readonly initialFocus?: 'first' | 'last' | 'checked' | undefined;
+   *  `checked` for a radio menu's current choice, `first-enabled` to pass
+   *  over unavailable items (the selection pill, #1304). */
+  readonly initialFocus?: 'first' | 'first-enabled' | 'last' | 'checked' | undefined;
   /** Tab closes the menu (focus goes wherever `onClose` puts it) instead of
    *  leaving it open behind the next control. */
   readonly closeOnTab?: boolean | undefined;
   /** Which menu edge sits at `x`: `left` (default) or `right`, for a menu
    *  anchored to a control's inline start in RTL. */
   readonly anchorEdge?: 'left' | 'right' | undefined;
+  /** Which menu edge sits at `y`: `top` (default) or `bottom`, for a menu
+   *  that opens upward from a control at the bottom of the window. */
+  readonly blockEdge?: 'top' | 'bottom' | undefined;
 }
 
 const ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]';
@@ -69,6 +73,19 @@ function moveItemFocus(event: ReactKeyboardEvent<HTMLDivElement>): void {
   target?.focus();
 }
 
+function initialItem(
+  menuItems: readonly HTMLButtonElement[],
+  initialFocus: NonNullable<ContextMenuProps['initialFocus']>,
+): HTMLButtonElement | undefined {
+  const preferred =
+    initialFocus === 'checked'
+      ? menuItems.find((item) => item.getAttribute('aria-checked') === 'true')
+      : initialFocus === 'first-enabled'
+        ? menuItems.find((item) => item.getAttribute('aria-disabled') !== 'true')
+        : undefined;
+  return preferred ?? (initialFocus === 'last' ? menuItems.at(-1) : menuItems[0]);
+}
+
 export function ContextMenu({
   label,
   x,
@@ -79,6 +96,7 @@ export function ContextMenu({
   initialFocus = 'first',
   closeOnTab = false,
   anchorEdge = 'left',
+  blockEdge = 'top',
 }: ContextMenuProps): ReactElement {
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -88,11 +106,10 @@ export function ContextMenu({
     if (menu === null) return;
     const left = anchorEdge === 'right' ? x - menu.offsetWidth : x;
     menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
-    const menuItems = Array.from(menu.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR));
-    const checked = initialFocus === 'checked' ? menuItems.find((item) => item.getAttribute('aria-checked') === 'true') : undefined;
-    (checked ?? (initialFocus === 'last' ? menuItems.at(-1) : menuItems[0]))?.focus();
-  }, [x, y, initialFocus, anchorEdge]);
+    const top = blockEdge === 'bottom' ? y - menu.offsetHeight : y;
+    menu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - menu.offsetHeight - 8))}px`;
+    initialItem(Array.from(menu.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR)), initialFocus)?.focus();
+  }, [x, y, initialFocus, anchorEdge, blockEdge]);
 
   useEffect(() => {
     const close = (): void => onClose();
