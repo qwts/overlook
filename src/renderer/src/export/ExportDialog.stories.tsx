@@ -291,7 +291,7 @@ export const BlockedByDisclosure: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
-    await userEvent.click(await body.findByRole('switch', { name: 'Publishing to a public destination' }));
+    await userEvent.click(await body.findByRole('radio', { name: 'Public' }));
     const exportButton = body.getByRole('button', { name: /Export 3 photos/u });
     await waitFor(() => expect(exportButton).toHaveAttribute('aria-disabled', 'true'));
     await expect(body.getByTestId('export-reason')).toHaveTextContent('Include the withheld field, or export Baked.');
