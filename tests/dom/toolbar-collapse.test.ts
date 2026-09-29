@@ -2,18 +2,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import {
-  COLLAPSE_STEP_DOWN_SPARE_PX,
-  settleCollapseLevel,
-  type ToolbarCollapseLevel,
-} from '../../src/renderer/src/shell/toolbar-collapse.js';
+import { COLLAPSE_STEP_DOWN_SPARE_PX, settleCollapseLevel as settleAt } from '../../src/renderer/src/components/collapse-level.js';
+import { MAX_COLLAPSE_LEVEL } from '../../src/renderer/src/shell/toolbar-collapse.js';
 
 // #1290: the collapse levels' settle rule, against a row whose content needs
 // these widths at levels 0–4 (roughly this build's, with Back up and Lock).
 const NEEDS = [1066, 936, 764, 700, 470] as const;
 
-function rowAt(width: number): (level: ToolbarCollapseLevel, spare: number) => boolean {
-  return (level, spare) => width >= NEEDS[level] + spare;
+type Fits = (level: number, spare: number) => boolean;
+
+function rowAt(width: number, needs: readonly number[] = NEEDS): Fits {
+  return (level, spare) => width >= (needs[level] ?? 0) + spare;
+}
+
+function settleCollapseLevel(level: number, fits: Fits): number {
+  return settleAt(level, MAX_COLLAPSE_LEVEL, fits);
 }
 
 test('a row that fits at level 0 stays expanded', () => {
@@ -51,7 +54,7 @@ test('holding within ±8px of a step does not flicker', () => {
 
 test('a sweep moves through every level in order and back', () => {
   const down: number[] = [];
-  let level: ToolbarCollapseLevel = 0;
+  let level = 0;
   for (let width = 1440; width >= 480; width -= 40) {
     level = settleCollapseLevel(level, rowAt(width));
     if (down.at(-1) !== level) down.push(level);
@@ -63,6 +66,18 @@ test('a sweep moves through every level in order and back', () => {
     if (up.at(-1) !== level) up.push(level);
   }
   assert.deepEqual(up, [4, 3, 2, 1, 0]);
+});
+
+test('the shared helper settles any number of levels, as the selection pill needs (#1304)', () => {
+  const pill = [620, 560, 500, 440, 380, 320, 260];
+  assert.equal(settleAt(0, 6, rowAt(1100, pill)), 0);
+  assert.equal(settleAt(0, 6, rowAt(430, pill)), 4);
+  assert.equal(settleAt(0, 6, rowAt(100, pill)), 6);
+  assert.equal(settleAt(6, 6, rowAt(1100, pill)), 0);
+});
+
+test('a level above a shrunken maximum clamps to it', () => {
+  assert.equal(settleAt(6, 2, rowAt(100, NEEDS)), 2);
 });
 
 test('no toolbar rule lets the row wrap', () => {
