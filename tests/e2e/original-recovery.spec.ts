@@ -50,12 +50,17 @@ test('matching-file recovery leaves Unavailable immediately while transient sync
       throw error;
     }
     await inspector.getByRole('button', { name: 'Recover original…', exact: true }).click();
-    await expect(missing).toHaveCount(0);
+    // Recovery streams, publishes and verifies the original before the facet
+    // refetches: 5.7–7.6s measured under 8–10 parallel workers (#1279), past
+    // the default 5s expect timeout.
+    await expect(missing).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Unavailable', exact: false })).toHaveCount(0);
     await page.getByRole('button', { name: 'All Photos 3', exact: true }).click();
     const result = await page.evaluate<{ photo: PhotoRecord | null }>('window.overlook.library.get({id:"01J8SEEDPHOTO0001"})');
     expect(result.photo?.originalFailure).toBeNull();
-    expect(result.photo?.syncState).toBe('local');
+    // Held locally again. Backup may already be uploading it, so `syncing` or
+    // `synced` also pass; `offloaded` and `error` do not (#1279).
+    expect(['local', 'syncing', 'synced']).toContain(result.photo?.syncState);
     await expect(page.getByTestId('virtual-grid').locator('.ovl-grid__cell')).toHaveCount(3);
   } finally {
     await app.close();
