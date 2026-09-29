@@ -10,6 +10,10 @@ export interface TooltipProps {
   /** Suppresses the bubble without re-parenting `children`, so a control that
    *  only needs a tooltip at some sizes keeps its focus when that changes. */
   readonly disabled?: boolean | undefined;
+  /** False when `children` is already described by a persistent element
+   *  carrying the same text: the bubble is then visual only, so a screen
+   *  reader doesn't hear the description twice (#1304). */
+  readonly describe?: boolean | undefined;
 }
 
 /** The mock's own bubble offset from the anchor. */
@@ -25,7 +29,7 @@ const GAP = 6;
 // measured on show, so an overflow/scroll ancestor can never clip it — the
 // collapsed sidebar rail relies on that for its right-side tooltips — and
 // adds the left/right sides.
-export function Tooltip({ label, side = 'top', children, disabled = false }: TooltipProps): ReactElement {
+export function Tooltip({ label, side = 'top', children, disabled = false, describe = true }: TooltipProps): ReactElement {
   const ref = useRef<HTMLSpanElement>(null);
   const tooltipId = useId();
   const [coords, setCoords] = useState<CSSProperties | null>(null);
@@ -56,7 +60,8 @@ export function Tooltip({ label, side = 'top', children, disabled = false }: Too
     setCoords(null);
   };
   const visible = coords !== null && !disabled;
-  const describedBy = [children.props['aria-describedby'], visible ? tooltipId : undefined].filter(Boolean).join(' ') || undefined;
+  const describedBy =
+    [children.props['aria-describedby'], visible && describe ? tooltipId : undefined].filter(Boolean).join(' ') || undefined;
   return (
     // A passive wrapper, not the control: the interactive element is `children`, and the
     // mouse handlers are already mirrored by onFocus/onBlur, so the keyboard path this
@@ -79,7 +84,13 @@ export function Tooltip({ label, side = 'top', children, disabled = false }: Too
     >
       {cloneElement(children, { 'aria-describedby': describedBy })}
       {!visible ? null : (
-        <span id={tooltipId} role="tooltip" className="ovl-tooltip__bubble" style={coords}>
+        <span
+          id={tooltipId}
+          role={describe ? 'tooltip' : undefined}
+          aria-hidden={describe ? undefined : true}
+          className="ovl-tooltip__bubble"
+          style={coords}
+        >
           {label}
         </span>
       )}

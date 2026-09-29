@@ -10,16 +10,24 @@
   pointer-events: none;
 }
 
+/* The pill fits its content area less a gutter each side, and collapses
+   rather than wrap or shrink its controls (#1304, Pass E spec). */
 .ovl-pill {
   pointer-events: auto;
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  max-inline-size: calc(100% - 2 * var(--space-4));
+  white-space: nowrap;
   background: var(--gray-3);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-2);
   box-shadow: var(--shadow-2);
   padding: 6px 10px; /* the mock's own pill padding */
+}
+
+.ovl-pill > * {
+  flex-shrink: 0;
 }
 
 .ovl-pill__count {
@@ -28,64 +36,56 @@
   padding: 0 var(--space-1);
 }
 
-.ovl-pill__wide-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+/* An action's slot: its buttons lay out as the pill's own items. */
+.ovl-pill__action {
+  display: contents;
 }
 
 .ovl-pill__more {
-  position: relative;
+  display: flex;
+}
+
+/* Level n hides the n lowest-priority actions; each slot carries the level
+   it leaves at (`collapseLevels`). ⋯ shows only while it holds something. */
+.ovl-pill:is([data-collapse='1'], [data-collapse='2'], [data-collapse='3'], [data-collapse='4'], [data-collapse='5'], [data-collapse='6'])
+  [data-collapse-at='1'] {
   display: none;
 }
 
-.ovl-pill__more--visible {
-  display: block;
+.ovl-pill:is([data-collapse='2'], [data-collapse='3'], [data-collapse='4'], [data-collapse='5'], [data-collapse='6'])
+  [data-collapse-at='2'] {
+  display: none;
 }
 
-.ovl-pill__menu {
-  position: absolute;
-  inset-inline-end: 0;
-  bottom: calc(100% + var(--space-2));
-  z-index: 2;
-  min-width: 160px;
-  padding: var(--space-1);
-  background: var(--gray-2);
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-1);
-  box-shadow: var(--shadow-2);
+.ovl-pill:is([data-collapse='3'], [data-collapse='4'], [data-collapse='5'], [data-collapse='6']) [data-collapse-at='3'] {
+  display: none;
 }
 
-.ovl-pill__menu button {
-  min-height: var(--interactive-target-min);
-  display: block;
-  width: 100%;
-  padding: var(--space-2);
-  border: 0;
-  border-radius: var(--radius-1);
-  background: transparent;
-  color: var(--text-body);
-  text-align: start;
+.ovl-pill:is([data-collapse='4'], [data-collapse='5'], [data-collapse='6']) [data-collapse-at='4'] {
+  display: none;
 }
 
-.ovl-pill__menu button:hover,
-.ovl-pill__menu button:focus-visible {
-  background: var(--gray-4);
-  outline: none;
+.ovl-pill:is([data-collapse='5'], [data-collapse='6']) [data-collapse-at='5'] {
+  display: none;
 }
 
-.ovl-pill__menu .ovl-pill__menuDanger {
-  color: var(--accent-red);
+.ovl-pill:is([data-collapse='6']) [data-collapse-at='6'] {
+  display: none;
 }
 
-@media (max-width: 860px) {
-  .ovl-pill__wide-actions {
-    display: none;
-  }
+.ovl-pill[data-collapse='0'] .ovl-pill__more {
+  display: none;
+}
 
-  .ovl-pill__more {
-    display: block;
-  }
+/* The collapse hook's measuring pass: a level fits only with
+   `--collapse-probe` of room to spare, as a trailing item that cancels its
+   own gap. */
+.ovl-pill[data-collapse-probe]::after {
+  content: '';
+  flex: none;
+  inline-size: var(--collapse-probe, 0px);
+  block-size: 1px; /* an empty box adds no scrollable overflow */
+  margin-inline-start: calc(var(--space-3) * -1);
 }
 
 .ovl-albumpicker {
