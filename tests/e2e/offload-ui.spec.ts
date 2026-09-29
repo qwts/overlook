@@ -36,17 +36,26 @@ test('selection Offload and Undo complete verified transitions', async ({ launch
   await prepareBackedUpPhoto(page);
   const firstCell = page.locator('.ovl-grid__cell').first();
 
-  // Minimum-width selection layout keeps Offload visible and moves the
-  // secondary actions into the keyboard-accessible overflow.
+  // At the minimum window width the pill collapses by priority (#1304):
+  // Export and Move to Trash stay inline, and Offload is one of the actions
+  // ⋯ holds — reached from the keyboard.
   await page.setViewportSize({ width: 720, height: 640 });
   await firstCell.getByRole('button', { name: 'Select' }).click();
   const pill = page.getByTestId('selection-pill');
-  await expect(pill.getByRole('button', { name: 'Offload' })).toBeVisible();
-  await expect(pill.getByRole('button', { name: 'More selection actions' })).toBeVisible();
-  await expect(pill.getByRole('button', { name: 'Export' })).toBeHidden();
+  const more = pill.getByRole('button', { name: 'More selection actions' });
+  await expect(pill.getByRole('button', { name: 'Export' })).toBeVisible();
+  await expect(more).toBeVisible();
+  await expect(pill.getByRole('button', { name: 'Offload' })).toBeHidden();
+  const offloadFromMenu = async (): Promise<void> => {
+    await more.focus();
+    await page.keyboard.press('ArrowDown');
+    const menu = page.getByRole('menu', { name: 'Selection actions' });
+    await expect(menu.getByRole('menuitem', { name: 'Offload' })).toBeFocused();
+    await page.keyboard.press('Enter');
+  };
 
   // Cancel is read-only and preserves the selection.
-  await pill.getByRole('button', { name: 'Offload' }).click();
+  await offloadFromMenu();
   const dialog = page.getByRole('dialog', { name: 'Offload originals' });
   await expect(dialog.getByText('1 original')).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -55,7 +64,7 @@ test('selection Offload and Undo complete verified transitions', async ({ launch
 
   // Selection entry: verified eviction, targeted update, clear-on-success,
   // and Undo's verified download/status restoration.
-  await pill.getByRole('button', { name: 'Offload' }).click();
+  await offloadFromMenu();
   await confirmOffload(page);
   await expect(pill).toBeHidden();
   await expect(page.locator('.ovl-toast-host')).toContainText('Offloaded 1 · Freed');
