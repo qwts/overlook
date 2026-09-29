@@ -657,7 +657,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check."
+          "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check; with a screen reader, Edits and JPEG quality are each read as one named radio group, the mode's hint as its description (#1306)."
         }
       ]
     },
