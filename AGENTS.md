@@ -116,11 +116,6 @@ Machine data renders with `.mono-data`; prose sentences with `.prose-note`.
 
 - Development is trunk-based: short-lived branches cut from latest `main`, merged
   back via PR. No separate integration branch.
-- **Merge only into `main`. Do not stack branches.** Every branch is cut from the
-  current `main` tip and every PR bases on `main`. Multiple agents run here in
-  parallel: a stacked branch breaks the moment the branch below it merges. If
-  your work genuinely depends on an unmerged change, wait for that PR to merge,
-  then branch from the updated `main`.
 - Check `git status` before changing anything; preserve unrelated user work.
 - Open PRs with explicit closing references (`Closes #N`) when the PR completes
   an issue — the close-linked-issues workflow parses the merged PR body.
