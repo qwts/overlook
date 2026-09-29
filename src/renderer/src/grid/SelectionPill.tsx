@@ -145,7 +145,7 @@ export function SelectionPill({
             >
               <IconButton
                 ref={moreTriggerRef}
-                icon="sliders-horizontal"
+                icon="ellipsis"
                 label="More selection actions"
                 size="sm"
                 aria-haspopup="menu"
