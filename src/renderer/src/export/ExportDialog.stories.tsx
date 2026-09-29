@@ -185,7 +185,7 @@ export const AllUnencrypted: Story = {
     await expect(body.getByText('Unencrypted originals')).toBeVisible();
     await expect(body.queryByRole('switch', { name: 'Decrypt originals' })).toBeNull();
     // #497: Export all declares its payload mode like a selection does.
-    await expect(body.getByRole('group', { name: 'Edits' })).toBeVisible();
+    await expect(body.getByRole('radiogroup', { name: 'Edits' })).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: /Choose folder/u }));
     await expect(body.getByRole('button', { name: 'Export all photos' })).toBeEnabled();
   },
@@ -239,6 +239,6 @@ export const EditLossReport: Story = {
     await expect(body.queryByTestId('export-edits-losses')).toBeNull();
     // Bake shows its explicit quality.
     await userEvent.click(body.getByRole('radio', { name: 'Bake' }));
-    await expect(body.getByRole('group', { name: 'JPEG quality' })).toBeVisible();
+    await expect(body.getByRole('radiogroup', { name: 'JPEG quality' })).toBeVisible();
   },
 };

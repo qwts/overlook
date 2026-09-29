@@ -63,7 +63,7 @@ test('edited export: Original + XMP names the rotation beside the original; Bake
   // Bake: a new JPEG with the quarter turn rendered — edges swapped, no EXIF.
   await lightbox.getByRole('button', { name: 'Export' }).click();
   await page.getByRole('radio', { name: 'Bake', exact: true }).click();
-  await expect(page.getByRole('group', { name: 'JPEG quality' })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'JPEG quality' })).toBeVisible();
   await page.getByRole('radio', { name: 'Small · 80' }).click();
   await page.getByRole('button', { name: /Choose folder/u }).click();
   await page.getByRole('button', { name: 'Export 1 photo', exact: true }).click();
