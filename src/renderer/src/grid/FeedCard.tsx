@@ -250,7 +250,7 @@ export function FeedCard({
             }}
             onKeyDown={(event) => event.stopPropagation()}
           >
-            <Icon name="sliders-horizontal" size={14} />
+            <Icon name="ellipsis" size={14} />
           </button>
         )}
         <span className="ovl-feedcard__status">
