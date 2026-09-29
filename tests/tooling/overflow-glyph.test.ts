@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { test } from 'node:test';
 
 // UI-19 (#1303): `ellipsis` is the only More/overflow glyph app-wide. `sliders-horizontal`
@@ -18,7 +18,8 @@ function sourceFiles(dir: string): string[] {
 test('sliders-horizontal appears only on settings controls, never on More/overflow (#1303)', () => {
   const root = process.cwd();
   const offenders = sourceFiles(join(root, 'src/renderer/src'))
-    .map((path) => relative(root, path))
+    // Forward slashes on every platform, so the allowlist matches on Windows.
+    .map((path) => relative(root, path).split(sep).join('/'))
     .filter((file) => !file.endsWith('components/Icon.tsx') && !SETTINGS_ONLY.has(file))
     .filter((file) => readFileSync(join(root, file), 'utf8').includes('sliders-horizontal'));
   assert.deepEqual(offenders, []);
