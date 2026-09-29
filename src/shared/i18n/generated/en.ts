@@ -312,12 +312,14 @@ export const en = {
   "export.destination.folder": "Folder",
   "export.destination.kind": "Export to",
   "export.destination.label": "Export destination",
-  "export.edits.acknowledge": "Continue with these losses",
+  "export.edits.acknowledge": "Export without {count, plural, one {this edit} other {these # edits}}",
   "export.edits.bake": "Bake",
   "export.edits.bakeHint": "Render the saved rotation, flip, and crop into a new JPEG. Embedded metadata is not carried over.",
   "export.edits.label": "Edits",
   "export.edits.lossItem": "{fileName}: {reason}",
-  "export.edits.losses": "{count, plural, one {# edit} other {# edits}} cannot travel in this mode:",
+  "export.edits.lossMore": "and {count} more",
+  "export.edits.losses": "{count, plural, one {# edit} other {# edits}} can’t travel in this mode:",
+  "export.edits.lossesAnnounce": "{count, plural, one {# edit} other {# edits}} can’t travel in this mode. Confirm to export without {count, plural, one {it} other {them}}, or choose another mode.",
   "export.edits.omitted": "{count, plural, one {# photo has} other {# photos have}} presentation edits that will not be exported.",
   "export.edits.originalOnly": "Original only",
   "export.edits.originalOnlyHint": "Write the byte-identical original and nothing beside it. Presentation edits and companion sidecars are omitted.",
@@ -340,6 +342,8 @@ export const en = {
   "export.photoKit.decryptHint": "Apple Photos receives plain originals and may retain them after Overlook locks. Only this reviewed selection is sent.",
   "export.photoKit.done": "{count} {count, plural, one {photo} other {photos}} exported and decrypted to Apple Photos.",
   "export.photoKit.metadataHint": "The original bytes, embedded metadata, creation date, and location are preserved where PhotoKit supports them.",
+  "export.reason.blocked": "Include the withheld field, or export Baked.",
+  "export.reason.edits": "Confirm the edits that won’t be exported, or choose another mode.",
   "export.unencryptedOriginals": "Unencrypted originals",
   "facets.additive": "Add to selection",
   "facets.additive.hint": "Shift-click also adds a value",
@@ -1290,8 +1294,11 @@ interface InterpolatedMessageArguments {
   "duplicates.toast.missing": { "name": MessageValue };
   "duplicates.toast.preserved": { "name": MessageValue };
   "duplicates.toast.trashed": { "name": MessageValue };
+  "export.edits.acknowledge": { "count": number };
   "export.edits.lossItem": { "fileName": MessageValue; "reason": MessageValue };
+  "export.edits.lossMore": { "count": MessageValue };
   "export.edits.losses": { "count": number };
+  "export.edits.lossesAnnounce": { "count": number };
   "export.edits.omitted": { "count": number };
   "export.photoKit.done": { "count": number };
   "facets.chip": { "count": number; "facet": MessageValue };
