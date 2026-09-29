@@ -681,7 +681,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check; with a screen reader, Edits and JPEG quality are each read as one named radio group, the mode's hint as its description (#1306)."
+          "reason": "Follow docs/acceptance/Acceptance-Test-Edited-Export.md for the loss report over a newer-build revision, the mid-batch cancel of a baked export, and the library-wide mode check; with a screen reader, Edits and JPEG quality are each read as one named radio group, the mode's hint as its description (#1306). The loss list is announced politely rather than as an alert, and a screen reader hears why Export is unavailable (confirm the edits, or include the withheld field) from the button's description (#1307)."
         }
       ]
     },

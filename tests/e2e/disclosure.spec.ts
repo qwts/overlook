@@ -54,7 +54,9 @@ test('disclosure: §6 defaults, a persisted class change, and the pre-export pre
     // time now private, an Original export is blocked until it is included.
     await expect(page.getByTestId('disclosure-row-captureTime')).toHaveAttribute('data-disclosed', '0');
     await expect(page.getByTestId('disclosure-blocked')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export 1 photo' })).toBeDisabled();
+    // Unavailable, and saying why (#1307).
+    await expect(page.getByRole('button', { name: 'Export 1 photo' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId('export-reason')).toHaveText('Include the withheld field, or export Baked.');
     await page.getByTestId('disclosure-widen-captureTime').getByRole('checkbox').click();
     await expect(page.getByTestId('disclosure-blocked')).toHaveCount(0);
     await expect(page.getByTestId('disclosure-row-captureTime')).toHaveAttribute('data-disclosed', '1');
