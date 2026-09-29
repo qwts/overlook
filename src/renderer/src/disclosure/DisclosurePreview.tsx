@@ -80,11 +80,11 @@ export function DisclosurePreview({
       </div>
       <DestinationField destination={destination} onChange={onDestinationChange} disabled={disabled} />
       {preview === null ? (
-        <p className="ovl-disclosure__hint" data-testid="disclosure-preview-loading">
+        <p className="ovl-disclosure__hint ovl-disclosure__hint--faint prose-note" data-testid="disclosure-preview-loading">
           {intl.formatMessage(disclosureMessages.previewLoading)}
         </p>
       ) : rows.length === 0 ? (
-        <p className="ovl-disclosure__hint" data-testid="disclosure-preview-empty">
+        <p className="ovl-disclosure__hint ovl-disclosure__hint--faint prose-note" data-testid="disclosure-preview-empty">
           {intl.formatMessage(disclosureMessages.previewNothing)}
         </p>
       ) : (
@@ -113,14 +113,14 @@ export function DisclosurePreview({
         </ul>
       )}
       {preview !== null && preview.embedded.length > 0 ? (
-        <p className="ovl-disclosure__hint" data-testid="disclosure-embedded">
+        <p className="ovl-disclosure__note prose-note" data-testid="disclosure-embedded">
           {intl.formatMessage(disclosureMessages.previewEmbedded, {
             fields: preview.embedded.map((field) => fieldLabel(intl, field)).join(', '),
           })}
         </p>
       ) : null}
       {preview !== null && preview.blocked.length > 0 ? (
-        <div className="ovl-disclosure__blocked" data-testid="disclosure-blocked">
+        <div className="ovl-disclosure__blocked prose-note" data-testid="disclosure-blocked">
           <Icon name="triangle-alert" size={14} />
           {intl.formatMessage(disclosureMessages.previewBlocked)}
         </div>
@@ -129,11 +129,11 @@ export function DisclosurePreview({
         <WidenChoices fields={[...new Set([...preview.blocked, ...widen])]} widen={widen} onChange={onWidenChange} disabled={disabled} />
       )}
       {preview !== null && preview.retainedSidecars > 0 ? (
-        <p className="ovl-disclosure__hint" data-testid="disclosure-sidecars">
+        <p className="ovl-disclosure__note prose-note" data-testid="disclosure-sidecars">
           {intl.formatMessage(disclosureMessages.previewSidecars, { count: preview.retainedSidecars })}
         </p>
       ) : null}
-      <p className="ovl-disclosure__hint">{intl.formatMessage(disclosureMessages.previewDecline)}</p>
+      <p className="ovl-disclosure__hint ovl-disclosure__hint--faint prose-note">{intl.formatMessage(disclosureMessages.previewDecline)}</p>
     </section>
   );
 }
