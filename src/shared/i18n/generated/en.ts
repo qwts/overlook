@@ -269,10 +269,14 @@ export const en = {
   "disclosure.pinned": "Always private",
   "disclosure.pinned.hint": "These never cross any boundary and no setting can change that.",
   "disclosure.preview.blocked": "The originals cannot leave while a withheld field is embedded in them. Include it for this export, or export Baked, which strips embedded metadata.",
+  "disclosure.preview.blocked.announce": "{count, plural, one {The originals can’t leave while {fields} is withheld.} other {The originals can’t leave while {fields} are withheld.}}",
   "disclosure.preview.crosses": "{disclosed, plural, one {# photo} other {# photos}} of {present}",
   "disclosure.preview.decline": "Cancel leaves the library unchanged; nothing has crossed yet.",
-  "disclosure.preview.destination": "Publishing to a public destination",
-  "disclosure.preview.destination.hint": "Only Public fields cross. Off means a named recipient: Shared fields cross too.",
+  "disclosure.preview.destination.label": "Destination",
+  "disclosure.preview.destination.public": "Public",
+  "disclosure.preview.destination.public.hint": "Anyone with the link or address. Only Public fields cross.",
+  "disclosure.preview.destination.shared": "Named recipient",
+  "disclosure.preview.destination.shared.hint": "A folder you choose, Apple Photos, or a keyed provider. Shared and Public fields cross.",
   "disclosure.preview.embedded": "Embedded in the original bytes and cannot be filtered: {fields}.",
   "disclosure.preview.heading": "What leaves",
   "disclosure.preview.loading": "Checking what would leave…",
@@ -1281,6 +1285,7 @@ interface InterpolatedMessageArguments {
   "custody.state.unavailable": { "provider": MessageValue };
   "custody.state.wrongAccount": { "account": MessageValue; "provider": MessageValue };
   "disclosure.classFor": { "field": MessageValue };
+  "disclosure.preview.blocked.announce": { "count": number; "fields": MessageValue };
   "disclosure.preview.crosses": { "disclosed": number; "present": MessageValue };
   "disclosure.preview.embedded": { "fields": MessageValue };
   "disclosure.preview.sidecars": { "count": number };
