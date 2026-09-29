@@ -1,5 +1,13 @@
 # photos
 
+## 0.76.41
+
+### Patch Changes
+
+- 6bc1ca2: The selection pill now collapses one action at a time, in a fixed priority order, as its content area narrows, and ⋯ holds exactly the actions missing from the pill, using the shared menu. An unavailable Export stays focusable with its reason visible (#1304).
+- 0b65e95: Review Duplicates: a protected Original now explains itself in its row instead of showing a disabled button with a tooltip. Trash buttons stay focusable while a move runs, focus moves to the next candidate afterwards, and the move is announced once, with the groups left (#1305).
+- e4a9f75: The Export dialog's Edits and JPEG quality settings are now standard field rows: each control is named by its label, the Edits choice is described by the selected mode's hint, and both wrap cleanly in narrow windows and longer languages (#1306).
+
 ## 0.76.40
 
 ### Patch Changes
