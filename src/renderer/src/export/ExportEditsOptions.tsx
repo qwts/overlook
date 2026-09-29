@@ -1,4 +1,4 @@
-import { useId, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { ExportPayloadMode } from '../../../shared/ipc/export-channels.js';
@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/Switch';
 import { useFormats } from '../i18n/use-formats.js';
+import { Field } from '../settings/Field';
 import type { ExportPreflightReport } from './use-export-preflight.js';
 
 // Edits control (#497, ADR-0031 §6): one declared payload mode — Bake, Original
@@ -73,15 +74,22 @@ export function ExportEditsOptions({
 }: ExportEditsOptionsProps): ReactElement {
   const intl = useIntl();
   const { formatCount } = useFormats();
-  const labelId = useId();
-  const qualityId = useId();
   const losses = preflight?.losses ?? [];
+  const modeHint = disabled
+    ? undefined
+    : intl.formatMessage(
+        mode === 'baked' ? messages.bakeHint : mode === 'original-sidecars' ? messages.originalXmpHint : messages.originalOnlyHint,
+      );
+  // Pass C Field rows (#1306): the label names each Segmented, and the mode's
+  // hint describes it, so there's no wrapper group or second label.
   return (
     <>
-      <div className="ovl-export__row" role="group" aria-labelledby={labelId}>
-        <span id={labelId}>{intl.formatMessage(messages.label)}</span>
+      <Field
+        label={intl.formatMessage(messages.label)}
+        hint={modeHint === undefined ? undefined : <span data-testid="export-edits-hint">{modeHint}</span>}
+        testId="export-edits-mode"
+      >
         <Segmented
-          label={intl.formatMessage(messages.label)}
           value={disabled ? 'original' : mode}
           disabled={disabled}
           onChange={onModeChange}
@@ -91,19 +99,10 @@ export function ExportEditsOptions({
             { value: 'original', label: intl.formatMessage(messages.originalOnly) },
           ]}
         />
-      </div>
-      {disabled ? null : (
-        <div className="ovl-export__metadataHint" data-testid="export-edits-hint">
-          {intl.formatMessage(
-            mode === 'baked' ? messages.bakeHint : mode === 'original-sidecars' ? messages.originalXmpHint : messages.originalOnlyHint,
-          )}
-        </div>
-      )}
+      </Field>
       {disabled || mode !== 'baked' ? null : (
-        <div className="ovl-export__row" role="group" aria-labelledby={qualityId}>
-          <span id={qualityId}>{intl.formatMessage(messages.quality)}</span>
+        <Field label={intl.formatMessage(messages.quality)} testId="export-edits-quality">
           <Segmented
-            label={intl.formatMessage(messages.quality)}
             value={quality}
             onChange={onQualityChange}
             options={[
@@ -112,7 +111,7 @@ export function ExportEditsOptions({
               { value: 'small', label: intl.formatMessage(messages.qualitySmall) },
             ]}
           />
-        </div>
+        </Field>
       )}
       {disabled || preflight === null || mode !== 'original' || preflight.edited === 0 ? null : (
         <div className="ovl-export__photosNotice prose-note" data-testid="export-edits-omitted">
