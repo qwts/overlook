@@ -1,31 +1,15 @@
-# Agent memory guard — overlook baselines
+# Agent memory budget — overlook baselines
 
-The guard itself is governance-owned and shared across repos. Its budget
-formula, admission rules, lane policy, owner grants, environment variables and
-refusal handling are documented once, in
-[machine memory guard](https://github.com/qwts/agent-sop/blob/master/docs/reference/agent-memory-guard.md)
-(decision record:
-[ENG-0138](https://github.com/qwts/agent-sop/blob/master/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md)).
-Read that page for anything about how the guard behaves.
-
-The tooling arrives here by harness sync as `tools/agent-guard/`. **Never edit
-it in this repo** — a local edit is overwritten by the next sync and breaks the
-machine-wide protocol the copies coordinate on. Fixes go to
-`qwts/agent-sop`. `tools/agent-guard/tests/conformance.test.mjs` runs
-as part of `npm test` here and fails if the hook wiring is ever dropped, which
-is how `e1d86f6a` silently disarmed the previous guard.
-
-The agent-facing rules are in [`AGENTS.md`](../AGENTS.md) → **Memory Guard**.
-This page carries only what is specific to overlook: what its lanes actually
-cost, and one platform caveat that changes how those numbers read.
+The machine memory guard that once wrapped every test entrypoint
+(`tools/agent-guard/`) was removed in `e4bc20c6`; nothing enforces a budget
+locally now. These measurements are kept because they are still the evidence
+for which lanes are heavy and why they belong to CI. The agent-facing rule is in
+[`AGENTS.md`](../AGENTS.md) → **Memory Budget**.
 
 ## Measured per-lane RSS
 
-Ceilings are no longer per-lane constants — they derive from the machine and are
-clamped to it. These peaks are kept because they are still the evidence for
-which lanes are heavy, how much a lane's cost varies run to run, and whether a
-kill was a real regression or a lane that has always sat near the line. Current
-numbers for a working checkout are in `.guard/history.jsonl`.
+These peaks show which lanes are heavy and how much a lane's cost varies run to
+run.
 
 - **`npm test`** (typecheck + compile + Electron-hosted unit + happy-dom DOM):
   peak 1845–2071 MB across 19 processes locally (macOS, Apple Silicon, Node
@@ -43,8 +27,8 @@ numbers for a working checkout are in `.guard/history.jsonl`.
   locally — the lane pops real Electron windows and is CI-only in practice.
 - **`npm run test:perf`** (single worker, 200K-photo synthetic seed): still
   unmeasured, and not measurable from CI — `perf.yml` invokes `test:perf:inner`
-  directly on a runner, so the guard never runs there and writes no record. A
-  baseline for this lane needs an owner-granted local run.
+  directly on a runner and records no peak. A baseline for this lane needs an
+  owner-approved local run.
 
 ## macOS and Linux do not agree
 
@@ -55,6 +39,4 @@ clearest case (8067 MB local vs 3849 MB on CI for the same work). So:
 - A local (macOS) peak and a CI (Linux) peak for the same lane are not
   comparable, and a lane that fits comfortably in CI can still exhaust a local
   machine. CI passing is not evidence that a lane is safe to run locally.
-- The guard's own limits are derived from the machine it runs on, so this gap no
-  longer has to be hand-compensated in a ceiling — but it does still change how
-  the numbers above should be read.
+- Read the numbers above with that gap in mind.

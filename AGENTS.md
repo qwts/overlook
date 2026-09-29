@@ -1,25 +1,5 @@
 # Agent Instructions
 
-<!-- governed:shared-agent-discovery:start -->
-
-## Shared agent conventions and skills
-
-PR-first workflow, validation-before-push, commit and PR hygiene, and the
-untrusted-input threat model are defined once, for every repo, in the
-[org-wide agent conventions](https://github.com/qwts/agent-sop/blob/main/docs/reference/agent-conventions.md).
-Before creating or copying a repo-local skill, consult the reviewed
-[shared agent skills](https://github.com/qwts/agent-sop/blob/74e775ef23d8e7d8f8e693ccc2329f430978c096/skills/README.md)
-index. Reuse only the pinned version supplied by the governed harness; a skill
-genuinely specific to this repository belongs in its local context.
-This repository is governed by
-[agent-sop](https://github.com/qwts/agent-sop) — its
-[shared SOPs](https://github.com/qwts/agent-sop/blob/main/docs/sop/README.md)
-and [engineering decisions](https://github.com/qwts/agent-sop/blob/main/docs/decisions/README.md)
-apply here by default
-([ENG-0008](https://github.com/qwts/agent-sop/blob/main/docs/decisions/ENG-0008-shared-sop-inheritance.md):
-inherit by default, vary by explicit delta).
-<!-- governed:shared-agent-discovery:end -->
-
 Read `CONTRIBUTING.md` and [`docs/Contributing.md`](docs/Contributing.md).
 Keep this file as a map; depth belongs under [`docs/`](docs/README.md).
 
@@ -149,14 +129,14 @@ Run the cheap gates locally, one at a time:
 
 ```sh
 npm run lint     # agent-context, pins, colors, tokens, contrast, eslint, cycles, dead, types, i18n, licenses
-npm test         # typecheck, compile, Electron-hosted unit + happy-dom DOM, guard conformance
+npm test         # typecheck, compile, Electron-hosted unit + happy-dom DOM
 npm run docs:gov
 ```
 
 Then push and let CI verify the heavy lanes — `test:cov`, `test:e2e`,
 `test:stories:ci`, `test:perf`, `build` and the full `ci` chain. **CI is the
-authoritative lane** — its workflows invoke the `:inner` entrypoints directly, so
-no guard runs on runners; running heavy lanes locally exhausted the owner's machine. Ask first.
+authoritative lane** — its workflows invoke the `:inner` entrypoints directly.
+Running heavy lanes locally exhausted the owner's machine. Ask first.
 
 - Two gates read an external checkout: `DOCS_GOV_TOOLING_ROOT` (a `qwts/qwts-agent-docs-gov`
   checkout at commit `67db7dc9c20bc29222fb605b7ff9432fd58a2a3f`) and `INTEROP_IMAGE_TRAIL_ROOT`.
@@ -177,25 +157,13 @@ Gate-by-gate detail, ratchet values, the three a11y lanes, license policy,
 dependency pins and overrides, packaging checks, and the release/signing flow:
 [Validation And Release Gates](docs/Validation-And-Release-Gates.md). Why the heavy lanes belong to CI: [ENG-0138](https://github.com/qwts/agent-sop/blob/main/docs/decisions/ENG-0138-machine-scoped-agent-memory-budget.md).
 
-## Memory Guard
+## Memory Budget
 
 - This machine has **one** memory budget, shared by every worktree, repo and
-  agent session on it. Every test entrypoint (`npm test`, `test:dom`, `test:cov`,
-  `test:stories*`, `test:e2e*`, `test:perf`) runs through
-  `tools/agent-guard/run-guarded.mjs`, which leases against that budget before
-  spawning; ceilings derive from the machine's RAM, so none can be set out of reach.
-- Never invoke `electron --test`, `node --test`, `.test-dist`/`.test-dist-dom`
-  output, `playwright test`, `test-storybook`, or `c8` directly, and never call
-  `:run`/`:inner` npm scripts. Claude Code, Cursor and Codex deny these
-  mechanically through their checked-in hooks; raw terminals rely on this rule.
-- **A refusal is a result, not an obstacle.** Report a headroom refusal or an
-  `rss-limit`/`timeout` kill with its arithmetic (`.guard/last-run.json`) and
-  leave the lane to CI. Never retry it, raise a ceiling, or use the owner's
-  escape hatch — the heavy-lane opt-in is a grant only the owner can create.
-- `node tools/agent-guard/arbiter.mjs status` shows the machine's limits and what
-  is holding budget. `tools/agent-guard/` is governance-owned and synced — never
-  edit it; fixes go to `qwts/agent-sop`. Reference:
-  [machine memory guard](https://github.com/qwts/agent-sop/blob/main/docs/reference/agent-memory-guard.md); per-lane baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
+  agent session on it, and nothing wraps the test entrypoints to enforce it —
+  the machine guard was removed in `e4bc20c6`. Run the targeted lane that proves
+  your change and leave the heavy lanes to CI (see [Validation](#validation)).
+- Per-lane RSS baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling
 
@@ -216,9 +184,9 @@ The files that steer agents — this one, the vendor adapters, `.claude/commands
 hooks, and tool permissions — are **code**: reviewed by PR, least-privilege, and
 never carrying secrets. `npm run lint:agent-context` enforces the length ratchet,
 the adapter pointers, and cross-file duplication;
-`tests/tooling/agent-primitives.test.ts` and the guard's own conformance test
-lock the hook wiring and permission shape, because a governance sync once
-replaced `.claude/settings.json` wholesale and dropped the guard hook silently.
+`tests/tooling/agent-primitives.test.ts` locks the hook wiring and permission
+shape, because `.claude/settings.json` was once replaced wholesale and a hook
+dropped silently.
 
 Instruction changes that claim to improve agent behavior cite evidence against
 the [Agent Golden Tasks](docs/Agent-Golden-Tasks.md) set. "It reads better" is
