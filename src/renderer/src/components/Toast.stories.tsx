@@ -73,6 +73,24 @@ export const AutoDismiss: Story = {
   },
 };
 
+// A surface that announces its own outcome (Review Duplicates, #1305) raises a
+// silent toast: shown, but not put in the live region a second time.
+export const SilentToast: Story = {
+  render: () => (
+    <ToastHost
+      toasts={[{ id: 'silent', title: 'Moved IMG_4021.JPG to Trash', announce: false }]}
+      autoDismissMs={60_000}
+      onDismiss={() => undefined}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Moved IMG_4021.JPG to Trash')).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await expect(canvas.getByTestId('screen-reader-announcer-polite')).toBeEmptyDOMElement();
+  },
+};
+
 function AnnouncementQueueDemo(): ReactElement {
   const [toast, setToast] = useState<ToastItem | null>(null);
   return (

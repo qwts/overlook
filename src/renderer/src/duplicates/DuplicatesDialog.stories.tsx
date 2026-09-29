@@ -154,7 +154,8 @@ export const TrashRoutesThroughTheLibrary: Story = {
     await expect(remove).toHaveBeenCalledWith({ photoIds: ['IMG_0001-web'] });
     await expect(args.dispatch).toHaveBeenCalledWith({
       type: 'toast/shown',
-      toast: { title: 'Moved IMG_0001-web.jpg to Trash', tone: 'neutral' },
+      // Silent: the dialog announces the move itself, once, after the reload (#1305).
+      toast: { title: 'Moved IMG_0001-web.jpg to Trash', tone: 'neutral', announce: false },
     });
   },
 };

@@ -225,8 +225,9 @@ export function DuplicatesDialog({ open, onClose, dispatch, api }: DuplicatesDia
         result.deleted > 0 ? messages.trashed : result.protected > 0 ? messages.preserved : messages.missing,
         { name: photo.fileName },
       );
-      dispatch({ type: 'toast/shown', toast: { title, tone: result.deleted > 0 ? 'neutral' : 'amber' } });
-      // A move is announced with what's left once the review reloads.
+      // The dialog owns the announcement, so the toast stays silent: a move is
+      // announced once, with what's left, after the review reloads.
+      dispatch({ type: 'toast/shown', toast: { title, tone: result.deleted > 0 ? 'neutral' : 'amber', announce: false } });
       if (result.deleted > 0) pendingMoveRef.current = { photo, groupId, groupIndex, rowIndex };
       else announce(title, 'polite', TEST_ID);
     } finally {

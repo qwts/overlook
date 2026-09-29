@@ -182,7 +182,8 @@ export function ToastHost({ toasts, onDismiss, className, autoDismissMs = 4000 }
       ? latest?.title
       : intl.formatMessage(messages.announcement, { title: latest.title, detail: latest.detail });
   useEffect(() => {
-    if (announcement !== undefined) {
+    // A surface that announces its own outcome raises a silent toast (#1305).
+    if (announcement !== undefined && latest?.announce !== false) {
       announce(announcement, latest?.tone === 'red' ? 'assertive' : 'polite');
     }
   }, [announce, announcement, latest]);
