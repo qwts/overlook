@@ -280,6 +280,7 @@ export const en = {
   "disclosure.preview.sidecars": "{count, plural, one {# retained source sidecar travels} other {# retained source sidecars travel}} unfiltered.",
   "disclosure.preview.widen": "Include {field} in this export (recorded in activity)",
   "disclosure.preview.withheld": "Withheld",
+  "duplicates.announce.moved": "Moved {name} to Trash. {groups, plural, =0 {No groups left.} one {# group left.} other {# groups left.}}",
   "duplicates.deferred": "{deferred, plural, one {# photo has no preview to compare yet} other {# photos have no preview to compare yet}}",
   "duplicates.empty.clean": "No possible duplicates found.",
   "duplicates.empty.indexing": "Still comparing previews — nothing to review yet.",
@@ -289,11 +290,12 @@ export const en = {
   "duplicates.evidence.similar": "Similar",
   "duplicates.evidence.verySimilar": "Very similar",
   "duplicates.failed": "Possible duplicates could not be loaded.",
-  "duplicates.group.label": "Possible duplicates, {count} photos",
+  "duplicates.group.label": "Possible duplicates, {count} photos{originals, plural, =0 {} one {, # protected Original} other {, # protected Originals}}",
   "duplicates.groups": "{count, plural, one {# group} other {# groups}}",
   "duplicates.loading": "Loading…",
-  "duplicates.photo.original": "Original",
-  "duplicates.photo.protected": "Protected Original — Shift+Delete in the library overrides",
+  "duplicates.photo.moving": "Moving…",
+  "duplicates.photo.protectedHow": "To remove it, use Shift+Delete in the library",
+  "duplicates.photo.protectedKept": "Protected Original — kept",
   "duplicates.photo.size": "{width}×{height}",
   "duplicates.photo.trash": "Move to Trash",
   "duplicates.photo.trashLabel": "Move {name} to Trash",
@@ -1279,10 +1281,11 @@ interface InterpolatedMessageArguments {
   "disclosure.preview.embedded": { "fields": MessageValue };
   "disclosure.preview.sidecars": { "count": number };
   "disclosure.preview.widen": { "field": MessageValue };
+  "duplicates.announce.moved": { "groups": number; "name": MessageValue };
   "duplicates.deferred": { "deferred": number };
   "duplicates.evidence.distance": { "bits": MessageValue; "distance": MessageValue };
   "duplicates.evidence.rotated": { "degrees": MessageValue };
-  "duplicates.group.label": { "count": MessageValue };
+  "duplicates.group.label": { "count": MessageValue; "originals": number };
   "duplicates.groups": { "count": number };
   "duplicates.photo.size": { "height": MessageValue; "width": MessageValue };
   "duplicates.photo.trashLabel": { "name": MessageValue };

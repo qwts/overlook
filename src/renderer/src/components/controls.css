@@ -22,6 +22,13 @@
   cursor: default;
 }
 
+/* Unavailable but still focusable, so its reason can be read (Pass E): the
+   pointer stays live for the reason's Tooltip; the owner ignores the click. */
+.ovl-button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .ovl-button--sm {
   height: var(--control-h-sm);
   padding: 0 var(--space-3);
