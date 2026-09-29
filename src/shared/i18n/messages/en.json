@@ -924,7 +924,7 @@
     "defaultMessage": "Export destination"
   },
   "export.edits.acknowledge": {
-    "defaultMessage": "Continue with these losses"
+    "defaultMessage": "Export without {count, plural, one {this edit} other {these # edits}}"
   },
   "export.edits.bake": {
     "defaultMessage": "Bake"
@@ -938,8 +938,14 @@
   "export.edits.lossItem": {
     "defaultMessage": "{fileName}: {reason}"
   },
+  "export.edits.lossMore": {
+    "defaultMessage": "and {count} more"
+  },
   "export.edits.losses": {
-    "defaultMessage": "{count, plural, one {# edit} other {# edits}} cannot travel in this mode:"
+    "defaultMessage": "{count, plural, one {# edit} other {# edits}} can’t travel in this mode:"
+  },
+  "export.edits.lossesAnnounce": {
+    "defaultMessage": "{count, plural, one {# edit} other {# edits}} can’t travel in this mode. Confirm to export without {count, plural, one {it} other {them}}, or choose another mode."
   },
   "export.edits.omitted": {
     "defaultMessage": "{count, plural, one {# photo has} other {# photos have}} presentation edits that will not be exported."
@@ -1006,6 +1012,12 @@
   },
   "export.photoKit.metadataHint": {
     "defaultMessage": "The original bytes, embedded metadata, creation date, and location are preserved where PhotoKit supports them."
+  },
+  "export.reason.blocked": {
+    "defaultMessage": "Include the withheld field, or export Baked."
+  },
+  "export.reason.edits": {
+    "defaultMessage": "Confirm the edits that won’t be exported, or choose another mode."
   },
   "export.unencryptedOriginals": {
     "defaultMessage": "Unencrypted originals"
