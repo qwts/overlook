@@ -87,3 +87,17 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+/* A protected Original says why it has no button (#1305, Pass E spec). */
+.ovl-duplicates__protected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-body);
+  font-size: var(--text-sm);
+}
+
+.ovl-duplicates__protectedHow {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
