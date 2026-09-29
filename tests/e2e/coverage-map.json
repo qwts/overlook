@@ -536,7 +536,7 @@
         },
         {
           "type": "manual",
-          "reason": "Follow docs/acceptance/Acceptance-Test-Perceptual-Duplicates.md for the offloaded-original, missing-preview and interruption checks."
+          "reason": "Follow docs/acceptance/Acceptance-Test-Perceptual-Duplicates.md for the offloaded-original, missing-preview and interruption checks, and with a screen reader running, move each candidate to Trash from the keyboard: focus lands on the next candidate and the groups left are announced (#1305)."
         }
       ]
     },

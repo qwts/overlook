@@ -5,9 +5,9 @@ import type { PhotoRecord } from '../../../shared/library/types.js';
 import { DuplicatesDialog } from './DuplicatesDialog';
 
 // Review Duplicates (#650): a group with a recompressed copy and a rotated
-// copy of one photo, one member marked Original (its Trash control is
-// disabled — #482 protection, surfaced rather than hidden), and the empty
-// and still-indexing states.
+// copy of one photo, one member marked Original (no Trash button — its row
+// says why, #482 / #1305), the moving and resolved states, and the empty and
+// still-indexing states.
 
 function photo(id: string, overrides: Partial<PhotoRecord> = {}): PhotoRecord {
   return {
@@ -97,15 +97,50 @@ export const Group: Story = {
     const body = await canvas.findByTestId('duplicates-dialog');
     await waitFor(() => expect(body).toHaveAttribute('data-state', 'ready'));
     await expect(body).toHaveAttribute('data-groups', '1');
-    const group = canvas.getByTestId('duplicate-group');
+    const group = canvas.getByRole('region', { name: 'Possible duplicates, 3 photos, 1 protected Original' });
     await expect(group).toHaveAttribute('data-count', '3');
     // Each row names its closest pair, so the original and its web copy share this evidence.
     const nearIdentical = canvas.getAllByText('Near-identical · 1 of 64 bits differ');
     await expect(nearIdentical).toHaveLength(2);
     for (const evidence of nearIdentical) await expect(evidence).toBeVisible();
     await expect(canvas.getByText('Very similar · rotated 90° · 4 of 64 bits differ')).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Move IMG_0001.jpg to Trash' })).toBeDisabled();
-    await expect(canvas.getByText('Original')).toBeVisible();
+  },
+};
+
+// The protected Original has no button: its reason is the row's own text.
+export const ProtectedOriginal: Story = {
+  render: (args) => <DuplicatesDialog {...args} api={apiFor(REVIEW)} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId('duplicate-group');
+    await expect(canvas.queryByRole('button', { name: 'Move IMG_0001.jpg to Trash' })).toBeNull();
+    await expect(canvas.getByText('Protected Original — kept')).toBeVisible();
+    await expect(canvas.getByText('To remove it, use Shift+Delete in the library')).toBeVisible();
+    await expect(canvasElement.querySelector('[title]')).toBeNull();
+    await expect(canvas.getAllByRole('button', { name: /^Move .* to Trash$/ })).toHaveLength(2);
+  },
+};
+
+// While a move runs, its row reads Moving… and every Trash button is
+// unavailable but keeps focus.
+export const Moving: Story = {
+  render: (args) => {
+    const api = apiFor(REVIEW);
+    const pending = { ...api, library: { ...api.library, delete: () => new Promise(() => undefined) } } as DuplicatesDialogApi;
+    return <DuplicatesDialog {...args} api={pending} />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId('duplicate-group');
+    const web = canvas.getByRole('button', { name: 'Move IMG_0001-web.jpg to Trash' });
+    web.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(web).toHaveTextContent('Moving…'));
+    await expect(web).toHaveFocus();
+    for (const button of canvas.getAllByRole('button', { name: /^Move .* to Trash$/ })) {
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await expect(button).toBeEnabled();
+    }
   },
 };
 
@@ -141,5 +176,95 @@ export const StillIndexing: Story = {
     await waitFor(() => expect(body).toHaveAttribute('data-state', 'indexing'));
     await expect(canvas.getByText('Still comparing previews — nothing to review yet.')).toBeVisible();
     await expect(canvas.getByTestId('duplicates-progress')).toHaveTextContent('2 of 6 photos compared · 4 pending');
+  },
+};
+
+// A library whose Trash really removes rows, so the review reloads the way
+// main's does: a group left with one photo is no longer a group.
+function liveApi(groups: typeof REVIEW.groups): DuplicatesDialogApi {
+  let current = groups.map((group) => ({ ...group, photos: [...group.photos] }));
+  const listeners = new Set<() => void>();
+  const review = () => Promise.resolve({ ...REVIEW, groups: current });
+  return {
+    duplicates: {
+      review,
+      rescan: () => Promise.resolve(REVIEW.status),
+      onChanged: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+    library: {
+      delete: ({ photoIds }: { photoIds: string[] }) => {
+        current = current
+          .map((group) => ({ ...group, photos: group.photos.filter((entry) => !photoIds.includes(entry.id)) }))
+          .filter((group) => group.photos.length > 1);
+        setTimeout(() => {
+          for (const listener of listeners) listener();
+        }, 20);
+        return Promise.resolve({ deleted: 1, protected: 0, missing: 0 });
+      },
+      onChanged: subscribe,
+      onOriginalClassificationChanged: subscribe,
+    },
+  } as unknown as DuplicatesDialogApi;
+}
+
+const TWO_GROUPS = [
+  REVIEW.groups[0],
+  {
+    id: 'IMG_0200',
+    photos: [photo('IMG_0200'), photo('IMG_0200-copy')],
+    pairs: [{ left: 'IMG_0200', right: 'IMG_0200-copy', distance: 0, rotation: 0 as const }],
+  },
+] as typeof REVIEW.groups;
+
+// A keyboard-only run to the end: after each move focus lands on the next
+// candidate (never the dialog or <body>), and the count left is announced.
+export const Resolved: Story = {
+  render: (args) => <DuplicatesDialog {...args} api={liveApi(TWO_GROUPS)} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const announcer = within(document.body).getByTestId('screen-reader-announcer-polite');
+    await canvas.findByRole('region', { name: 'Possible duplicates, 3 photos, 1 protected Original' });
+    canvas.getByRole('button', { name: 'Move IMG_0001-web.jpg to Trash' }).focus();
+
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move IMG_0001-turned.jpg to Trash' })).toHaveFocus());
+    await expect(announcer).toHaveTextContent('Moved IMG_0001-web.jpg to Trash. 2 groups left.');
+
+    // The last candidate leaves only the Original, so that group resolves and
+    // focus moves to the group now in its place.
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move IMG_0200.jpg to Trash' })).toHaveFocus());
+    await expect(announcer).toHaveTextContent('Moved IMG_0001-turned.jpg to Trash. 1 group left.');
+
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Rescan' })).toHaveFocus());
+    await expect(announcer).toHaveTextContent('Moved IMG_0200.jpg to Trash. No groups left.');
+    await expect(canvas.getByText('No possible duplicates found.')).toBeVisible();
+  },
+};
+
+// Originals pair only with each other (#482), so a group of them has no
+// button at all — each row carries its own reason.
+const ORIGINALS_ONLY = {
+  ...REVIEW,
+  groups: [
+    {
+      id: 'IMG_0300',
+      photos: [photo('IMG_0300', { isOriginal: true }), photo('IMG_0300-edit', { isOriginal: true })],
+      pairs: [{ left: 'IMG_0300', right: 'IMG_0300-edit', distance: 3, rotation: 0 as const }],
+    },
+  ],
+} as typeof REVIEW;
+
+export const OriginalsOnly: Story = {
+  render: (args) => <DuplicatesDialog {...args} api={apiFor(ORIGINALS_ONLY)} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('region', { name: 'Possible duplicates, 2 photos, 2 protected Originals' });
+    await expect(canvas.queryAllByRole('button', { name: /^Move .* to Trash$/ })).toHaveLength(0);
+    await expect(canvas.getAllByText('Protected Original — kept')).toHaveLength(2);
   },
 };
