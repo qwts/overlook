@@ -39,7 +39,7 @@
 }
 
 /* The collapse hook's measuring pass (#1290): a level fits only if the
-   search field keeps its basis, with `--toolbar-collapse-probe` of room to
+   search field keeps its basis, with `--collapse-probe` of room to
    spare. The spare is a trailing item that cancels its own gap, since the
    row's end padding doesn't count toward its scroll width. */
 .ovl-toolbar__row[data-collapse-probe] > .ovl-search {
@@ -49,7 +49,7 @@
 .ovl-toolbar__row[data-collapse-probe]::after {
   content: '';
   flex: none;
-  inline-size: var(--toolbar-collapse-probe, 0px);
+  inline-size: var(--collapse-probe, 0px);
   block-size: 1px; /* an empty box adds no scrollable overflow */
   margin-inline-start: calc(var(--space-4) * -1);
 }
