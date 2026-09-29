@@ -162,7 +162,7 @@ dependency pins and overrides, packaging checks, and the release/signing flow:
 - This machine has **one** memory budget, shared by every worktree, repo and
   agent session on it, and nothing wraps the test entrypoints to enforce it —
   the machine guard was removed in `e4bc20c6`. Run the targeted lane that proves
-  your change and leave the heavy lanes to CI, as above.
+  your change and leave the heavy lanes to CI (see [Validation](#validation)).
 - Per-lane RSS baselines: [`docs/agent-process-guard.md`](docs/agent-process-guard.md).
 
 ## Tooling
