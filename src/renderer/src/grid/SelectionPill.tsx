@@ -240,7 +240,8 @@ function inlineButton(
   );
   if (!unavailable) return button;
   return (
-    <Tooltip key={action.id} label={action.unavailableReason}>
+    // The hidden reason span already describes the button; the bubble is visual only.
+    <Tooltip key={action.id} label={action.unavailableReason} describe={action.id !== 'export'}>
       {button}
     </Tooltip>
   );

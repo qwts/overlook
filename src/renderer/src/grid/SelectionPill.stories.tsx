@@ -150,7 +150,11 @@ export const LockedSelection: Story = {
     await expect(args.onExport).not.toHaveBeenCalled();
     await userEvent.tab({ shift: true });
     await userEvent.tab();
-    await expect(await within(document.body).findByRole('tooltip')).toHaveTextContent('keys that are not on this device');
+    // Focus shows the reason visually; it's described once, by the reason span,
+    // so the bubble is hidden from assistive tech (#1304).
+    await waitFor(() => expect(document.querySelector('.ovl-tooltip__bubble')).toHaveTextContent('keys that are not on this device'));
+    await expect(document.querySelector('.ovl-tooltip__bubble')).toHaveAttribute('aria-hidden', 'true');
+    await expect(exportButton).toHaveAccessibleDescription('The selected photos need keys that are not on this device.');
     await expect(canvas.getByRole('button', { name: 'Add to album' })).toBeEnabled();
   },
 };

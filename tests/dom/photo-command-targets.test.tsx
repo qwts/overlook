@@ -389,8 +389,11 @@ function forcePillLayout(layout: PillLayout): () => void {
       return this.classList.contains('ovl-pill') ? 1 : 0;
     },
   });
+  // scrollWidth is inherited from Element.prototype, so there is usually no own
+  // descriptor to restore: delete the stub instead of leaking it.
   return () => {
-    if (descriptor !== undefined) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', descriptor);
+    if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth');
+    else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', descriptor);
   };
 }
 
@@ -433,6 +436,13 @@ for (const layout of ['inline', 'collapsed'] as const) {
       assert.equal(exportButton?.disabled, false);
       assert.equal(exportButton?.hasAttribute('title'), false);
       assert.match(description(exportButton), /keys that are not on this device/);
+      if (layout === 'inline') {
+        // Focus shows the tooltip, but the reason is described once, not twice.
+        act(() => exportButton?.focus());
+        assert.equal(exportButton?.getAttribute('aria-describedby')?.split(' ').length, 1);
+        assert.equal(description(exportButton).match(/keys that are not on this device/g)?.length, 1);
+        act(() => exportButton?.blur());
+      }
       assert.equal(exportControl(layout, /Add to album/)?.getAttribute('aria-disabled'), null);
       act(() => exportButton?.click());
       assert.equal(exports, 0);
