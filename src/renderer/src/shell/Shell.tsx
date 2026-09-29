@@ -487,6 +487,7 @@ export function Shell({
               id: 'shell-toast',
               tone: toast.tone,
               title: toast.title,
+              ...(toast.announce === false ? { announce: false } : {}),
               ...(toast.action === undefined ? {} : { action: <ToastAction toast={toast} /> }),
             } satisfies ToastItem,
           ]),
